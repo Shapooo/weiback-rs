@@ -38,7 +38,6 @@ impl Persister {
     rid VARCHAR,
     cardid VARCHAR,
     pic_ids VARCHAR,
-    pic_infos json,
     geo json,
     pic_num INT,
     pic_focus_point json,

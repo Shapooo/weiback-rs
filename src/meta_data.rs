@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::anyhow;
 use log::{info, trace};
 use serde::{Deserialize, Deserializer};
@@ -45,7 +47,7 @@ pub struct Post {
     pub cardid: Option<String>,
     pub pic_ids: Option<Vec<String>>,
     #[serde(default)]
-    pub pic_infos: Value,
+    pub pic_infos: HashMap<String, Value>,
     #[serde(default)]
     pub geo: Value,
     pub pic_num: Option<i64>,
@@ -175,9 +177,6 @@ impl Post {
             tmp_str.push('\'');
             values.push_str(tmp_str.as_str());
         }
-        sql.push_str(",pic_infos");
-        values.push(',');
-        values.push_str(&to_sql_str(self.pic_infos.to_string().as_str()));
         sql.push_str(",geo");
         values.push(',');
         values.push_str(&to_sql_str(self.geo.to_string().as_str()));
