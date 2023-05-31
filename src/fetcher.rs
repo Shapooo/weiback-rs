@@ -111,7 +111,7 @@ impl Fetcher {
         unimplemented!()
     }
 
-    pub async fn get_fav_page_sum(&self) -> Result<u64> {
+    pub async fn get_fav_total_num(&self) -> Result<u64> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
         let res = self.fetch(FAVORITES_TAGS_API, &self.post_client).await?;
         let fav_tag = res.json::<FavTag>().await?;

@@ -7,8 +7,6 @@ use anyhow::Result;
 use log::{debug, info};
 use tokio::time::sleep;
 
-const POST_PER_PAGE: u64 = 20;
-
 #[derive(Debug)]
 pub struct TaskHandler {
     fetcher: Fetcher,
@@ -28,25 +26,29 @@ impl TaskHandler {
     }
 
     pub async fn fetch_all_page(&self) -> Result<()> {
-        let mut page_sum = self.fetcher.get_fav_page_sum().await?;
-        page_sum = (page_sum + POST_PER_PAGE - 1) / POST_PER_PAGE;
-        debug!("total page num is {}", page_sum);
-        info!("start to fetch all page");
-        // self.fetch_page((1, page_sum)).await
-        self.fetch_page((1, 10)).await
-    }
-
-    async fn fetch_page(&self, range: (u64, u64)) -> Result<()> {
-        for i in (range.0..=range.1).rev() {
+        let fav_total_num = self.fetcher.get_fav_total_num().await?;
+        info!("there are {fav_total_num} fav posts in total");
+        let mut page = 1;
+        let mut total_posts_sum = 0;
+        loop {
             let posts = self
                 .fetcher
-                .fetch_posts_meta(self.config.uid.as_str(), i)
+                .fetch_posts_meta(self.config.uid.as_str(), page)
                 .await?;
+            let posts_sum = posts.len();
+            total_posts_sum += posts_sum;
+            debug!("fetched {} posts in {}th page", posts_sum, page);
+            if posts_sum == 0 {
+                info!("no more posts in {}th page, finish work", page);
+                break;
+            }
             posts
                 .iter()
                 .for_each(|post| self.persister.insert_post(post).unwrap());
+            page += 1;
             sleep(Duration::from_secs(5)).await;
         }
+        info!("fetched {total_posts_sum} posts in total");
         Ok(())
     }
 }

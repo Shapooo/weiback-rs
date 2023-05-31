@@ -24,8 +24,7 @@ impl Persister {
         conn.execute_batch(
             "CREATE TABLE
   IF NOT EXISTS fav_post(
-    primary_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    id INT NOT NULL UNIQUE,
+    id INTEGER PRIMARY KEY NOT NULL UNIQUE,
     visible json,
     created_at VARCHAR,
     mblogid VARCHAR,
