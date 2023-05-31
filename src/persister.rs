@@ -1,7 +1,7 @@
 use anyhow::Result;
 // use log::{debug, info, trace};
 use log::{info, trace};
-use rusqlite::{params, Connection};
+use rusqlite::{named_params, params, Connection};
 use std::path::PathBuf;
 
 // use serde_json::Value;
@@ -103,7 +103,7 @@ CREATE TABLE
   CREATE TABLE
   IF NOT EXISTS pic_blob(
     url VARCHAR PRIMARY KEY NOT NULL,
-    pic_binary BLOB
+    pic_blob BLOB
   );
   ",
         )?;
@@ -119,8 +119,8 @@ CREATE TABLE
     pub fn insert_img(&self, url: &str, img: &[u8]) -> Result<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT OR IGNORE INTO pic_blob (url, pic_binary) VALUES (?1 ?2)")?;
-        stmt.execute(params![url, img])?;
+            .prepare("INSERT OR IGNORE INTO pic_blob (url, pic_blob) VALUES (:url, :blob)")?;
+        stmt.execute(named_params! {":blob":img, ":url": url})?;
         Ok(())
     }
 
@@ -149,6 +149,7 @@ mod tests {
         let txt = include_str!("../.tmp/one.json");
         let post: Post = serde_json::from_str(txt).unwrap();
         pster.insert_post(&post).unwrap();
+        std::fs::remove_file("insert_post.db").unwrap();
     }
 
     #[test]
@@ -160,6 +161,7 @@ mod tests {
             .data
             .iter()
             .for_each(|p| pster.insert_post(p).unwrap());
+        std::fs::remove_file("insert_posts.db").unwrap();
     }
 
     #[test]
@@ -172,5 +174,14 @@ mod tests {
                 pster.insert_user(&p.user.clone().unwrap()).unwrap()
             }
         });
+        std::fs::remove_file("insert_user.db").unwrap();
+    }
+
+    #[test]
+    fn insert_img() {
+        let img = include_bytes!("../.tmp/example.jpg");
+        let p = Persister::build("insert_img.db".into()).unwrap();
+        p.insert_img("https://test_url/example.jpg", img).unwrap();
+        std::fs::remove_file("insert_img.db").unwrap();
     }
 }
