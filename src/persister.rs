@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow;
+use bytes::Bytes;
 // use log::{debug, info, trace};
 use log::{info, trace};
 use rusqlite::{named_params, params, Connection};
@@ -14,7 +15,7 @@ pub struct Persister {
 }
 
 impl Persister {
-    pub fn build(db: PathBuf) -> Result<Self> {
+    pub fn build(db: PathBuf) -> anyhow::Result<Self> {
         if db.is_file() {
             info!("db file {} exists", db.display());
         } else {
@@ -100,7 +101,7 @@ CREATE TABLE
   );
 
   CREATE TABLE
-  IF NOT EXISTS pic_blob(
+  IF NOT EXISTS picture(
     url VARCHAR PRIMARY KEY NOT NULL,
     pic_blob BLOB
   );
@@ -109,24 +110,34 @@ CREATE TABLE
         Ok(Persister { conn })
     }
 
-    pub fn insert_post(&self, post: &Post) -> Result<()> {
+    pub fn insert_post(&self, post: &Post) -> anyhow::Result<()> {
         self.conn.execute_batch(&post.to_sql())?;
         trace!("insert {}", post.to_sql());
         Ok(())
     }
 
-    pub fn insert_img(&self, url: &str, img: &[u8]) -> Result<()> {
+    pub fn insert_img(&self, url: &str, img: &[u8]) -> anyhow::Result<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT OR IGNORE INTO pic_blob (url, pic_blob) VALUES (:url, :blob)")?;
+            .prepare("INSERT OR IGNORE INTO picture (url, pic_blob) VALUES (:url, :blob)")?;
         stmt.execute(named_params! {":blob":img, ":url": url})?;
         Ok(())
     }
 
-    pub fn insert_user(&self, user: &PostUser) -> Result<()> {
+    pub fn insert_user(&self, user: &PostUser) -> anyhow::Result<()> {
         self.conn.execute_batch(&user.to_sql())?;
         trace!("insert {}", user.to_sql());
         Ok(())
+    }
+
+    pub fn query_img(&self, url: &str) -> anyhow::Result<Bytes> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT pic_blob FROM picture WHERE url=?1")?;
+        let img = stmt.query_row([url], |row| {
+            row.get(0).map(|blob: Vec<u8>| bytes::Bytes::from(blob))
+        })?;
+        Ok(img)
     }
 }
 
