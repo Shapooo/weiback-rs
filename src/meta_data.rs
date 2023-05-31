@@ -34,47 +34,63 @@ pub struct Post {
     // rc_list: Vec<String>,
     // tags: String,
     pub source: String,
-    pub favorited: Option<bool>,
-    pub can_edit: Option<bool>,
-    pub annotations: Option<Value>,
+    #[serde(default)]
+    pub favorited: bool,
+    #[serde(default)]
+    pub can_edit: bool,
+    #[serde(default)]
+    pub annotations: Value,
     pub rid: Option<String>,
     pub cardid: Option<String>,
     pub pic_ids: Option<Vec<String>>,
-    pub pic_infos: Option<Value>,
-    pub geo: Option<Value>,
+    #[serde(default)]
+    pub pic_infos: Value,
+    #[serde(default)]
+    pub geo: Value,
     pub pic_num: Option<i64>,
-    pub pic_focus_point: Option<Value>,
-    pub is_paid: Option<bool>,
+    #[serde(default)]
+    pub pic_focus_point: Value,
+    #[serde(default)]
+    pub is_paid: bool,
     pub pic_bg_new: Option<String>,
-    pub topic_struct: Option<Value>,
-    pub page_info: Option<Value>,
+    #[serde(default)]
+    pub topic_struct: Value,
+    #[serde(default)]
+    pub page_info: Value,
     #[serde(deserialize_with = "deserialize_str_bool")]
     #[serde(default)]
     pub deleted: bool,
     pub mark: Option<String>,
-    pub tag_struct: Option<Value>,
-    pub title: Option<Value>,
+    #[serde(default)]
+    pub tag_struct: Value,
+    #[serde(default)]
+    pub title: Value,
     pub mblog_vip_type: Option<i64>,
-    pub number_display_strategy: Option<Value>,
+    #[serde(default)]
+    pub number_display_strategy: Value,
     pub reposts_count: Option<i64>,
     pub comments_count: Option<i64>,
     pub attitudes_count: Option<i64>,
-    pub continue_tag: Option<Value>,
+    #[serde(default)]
+    pub continue_tag: Value,
     pub mlevel: Option<i64>,
     pub content_auth: Option<i64>,
     pub is_show_bulletin: Option<i64>,
-    pub comment_manage_info: Option<Value>,
+    #[serde(default)]
+    pub comment_manage_info: Value,
     pub repost_type: Option<i64>,
-    pub url_struct: Option<Value>,
+    #[serde(default)]
+    pub url_struct: Value,
     pub retweeted_status: Option<Box<Post>>,
     pub edit_count: Option<i64>,
     pub mblogtype: Option<i64>,
     pub region_name: Option<String>,
-    pub mix_media_info: Option<Value>,
+    #[serde(default)]
+    pub mix_media_info: Value,
     #[serde(rename = "textLength")]
     pub text_length: Option<i64>,
-    #[serde(rename = "isLongText")]
-    pub is_long_text: Option<bool>,
+    #[serde(default, rename = "isLongText")]
+    pub is_long_text: bool,
 }
 
 impl Post {
@@ -128,21 +144,15 @@ impl Post {
         sql.push_str(",source");
         values.push(',');
         values.push_str(to_sql_str(&self.source).as_str());
-        if let Some(favorited) = self.favorited {
-            sql.push_str(",favorited");
-            values.push(',');
-            values.push_str(favorited.to_string().as_str());
-        }
-        if let Some(can_edit) = self.can_edit {
-            sql.push_str(",can_edit");
-            values.push(',');
-            values.push_str(can_edit.to_string().as_str());
-        }
-        if let Some(annotations) = &self.annotations {
-            sql.push_str(",annotations");
-            values.push(',');
-            values.push_str(&to_sql_str(annotations.to_string().as_str()));
-        }
+        sql.push_str(",favorited");
+        values.push(',');
+        values.push_str(self.favorited.to_string().as_str());
+        sql.push_str(",can_edit");
+        values.push(',');
+        values.push_str(self.can_edit.to_string().as_str());
+        sql.push_str(",annotations");
+        values.push(',');
+        values.push_str(&to_sql_str(self.annotations.to_string().as_str()));
         if let Some(rid) = &self.rid {
             sql.push_str(",rid");
             values.push(',');
@@ -164,46 +174,34 @@ impl Post {
             tmp_str.push('\'');
             values.push_str(tmp_str.as_str());
         }
-        if let Some(pic_infos) = &self.pic_infos {
-            sql.push_str(",pic_infos");
-            values.push(',');
-            values.push_str(&to_sql_str(pic_infos.to_string().as_str()));
-        }
-        if let Some(geo) = &self.geo {
-            sql.push_str(",geo");
-            values.push(',');
-            values.push_str(&to_sql_str(geo.to_string().as_str()));
-        }
+        sql.push_str(",pic_infos");
+        values.push(',');
+        values.push_str(&to_sql_str(self.pic_infos.to_string().as_str()));
+        sql.push_str(",geo");
+        values.push(',');
+        values.push_str(&to_sql_str(self.geo.to_string().as_str()));
         if let Some(pic_num) = self.pic_num {
             sql.push_str(",pic_num");
             values.push(',');
             values.push_str(pic_num.to_string().as_str());
         }
-        if let Some(pic_focus_point) = &self.pic_focus_point {
-            sql.push_str(",pic_focus_point");
-            values.push(',');
-            values.push_str(&to_sql_str(pic_focus_point.to_string().as_str()));
-        }
-        if let Some(is_paid) = self.is_paid {
-            sql.push_str(",is_paid");
-            values.push(',');
-            values.push_str(is_paid.to_string().as_str());
-        }
+        sql.push_str(",pic_focus_point");
+        values.push(',');
+        values.push_str(&to_sql_str(self.pic_focus_point.to_string().as_str()));
+        sql.push_str(",is_paid");
+        values.push(',');
+        values.push_str(self.is_paid.to_string().as_str());
         if let Some(pic_bg_new) = &self.pic_bg_new {
             sql.push_str(",pic_bg_new");
             values.push(',');
             values.push_str(to_sql_str(pic_bg_new).as_str());
         }
-        if let Some(topic_struct) = &self.topic_struct {
-            sql.push_str(",topic_struct");
-            values.push(',');
-            values.push_str(&to_sql_str(topic_struct.to_string().as_str()));
-        }
-        if let Some(page_info) = &self.page_info {
-            sql.push_str(",page_info");
-            values.push(',');
-            values.push_str(&to_sql_str(page_info.to_string().as_str()));
-        }
+        sql.push_str(",topic_struct");
+        values.push(',');
+        values.push_str(&to_sql_str(self.topic_struct.to_string().as_str()));
+        sql.push_str(",page_info");
+        values.push(',');
+        values.push_str(&to_sql_str(self.page_info.to_string().as_str()));
         sql.push_str(",deleted");
         values.push(',');
         values.push_str(self.deleted.to_string().as_str());
@@ -212,26 +210,20 @@ impl Post {
             values.push(',');
             values.push_str(to_sql_str(mark).as_str());
         }
-        if let Some(tag_struct) = &self.tag_struct {
-            sql.push_str(",tag_struct");
-            values.push(',');
-            values.push_str(&to_sql_str(tag_struct.to_string().as_str()));
-        }
-        if let Some(title) = &self.title {
-            sql.push_str(",title");
-            values.push(',');
-            values.push_str(&to_sql_str(title.to_string().as_str()));
-        }
+        sql.push_str(",tag_struct");
+        values.push(',');
+        values.push_str(&to_sql_str(self.tag_struct.to_string().as_str()));
+        sql.push_str(",title");
+        values.push(',');
+        values.push_str(&to_sql_str(self.title.to_string().as_str()));
         if let Some(mblog_vip_type) = self.mblog_vip_type {
             sql.push_str(",mblog_vip_type");
             values.push(',');
             values.push_str(mblog_vip_type.to_string().as_str());
         }
-        if let Some(number_display_strategy) = &self.number_display_strategy {
-            sql.push_str(",number_display_strategy");
-            values.push(',');
-            values.push_str(&to_sql_str(number_display_strategy.to_string().as_str()));
-        }
+        sql.push_str(",number_display_strategy");
+        values.push(',');
+        values.push_str(&to_sql_str(self.number_display_strategy.to_string().as_str()));
         if let Some(reposts_count) = self.reposts_count {
             sql.push_str(",reposts_count");
             values.push(',');
@@ -247,11 +239,9 @@ impl Post {
             values.push(',');
             values.push_str(attitudes_count.to_string().as_str());
         }
-        if let Some(continue_tag) = &self.continue_tag {
-            sql.push_str(",continue_tag");
-            values.push(',');
-            values.push_str(&to_sql_str(continue_tag.to_string().as_str()));
-        }
+        sql.push_str(",continue_tag");
+        values.push(',');
+        values.push_str(&to_sql_str(self.continue_tag.to_string().as_str()));
         if let Some(mlevel) = self.mlevel {
             sql.push_str(",mlevel");
             values.push(',');
@@ -267,21 +257,17 @@ impl Post {
             values.push(',');
             values.push_str(is_show_bulletin.to_string().as_str());
         }
-        if let Some(comment_manage_info) = &self.comment_manage_info {
-            sql.push_str(",comment_manage_info");
-            values.push(',');
-            values.push_str(&to_sql_str(comment_manage_info.to_string().as_str()));
-        }
+        sql.push_str(",comment_manage_info");
+        values.push(',');
+        values.push_str(&to_sql_str(self.comment_manage_info.to_string().as_str()));
         if let Some(repost_type) = self.repost_type {
             sql.push_str(",repost_type");
             values.push(',');
             values.push_str(repost_type.to_string().as_str());
         }
-        if let Some(url_struct) = &self.url_struct {
-            sql.push_str(",url_struct");
-            values.push(',');
-            values.push_str(&to_sql_str(url_struct.to_string().as_str()));
-        }
+        sql.push_str(",url_struct");
+        values.push(',');
+        values.push_str(&to_sql_str(self.url_struct.to_string().as_str()));
         if let Some(retweeted_status) = &self.retweeted_status {
             sql.push_str(",retweeted_status");
             values.push(',');
@@ -302,21 +288,17 @@ impl Post {
             values.push(',');
             values.push_str(to_sql_str(region_name).as_str());
         }
-        if let Some(mix_media_info) = &self.mix_media_info {
-            sql.push_str(",mix_media_info");
-            values.push(',');
-            values.push_str(&to_sql_str(mix_media_info.to_string().as_str()));
-        }
+        sql.push_str(",mix_media_info");
+        values.push(',');
+        values.push_str(&to_sql_str(self.mix_media_info.to_string().as_str()));
         if let Some(text_length) = self.text_length {
             sql.push_str(",textLength");
             values.push(',');
             values.push_str(text_length.to_string().as_str());
         }
-        if let Some(is_long_text) = self.is_long_text {
-            sql.push_str(",isLongText");
-            values.push(',');
-            values.push_str(is_long_text.to_string().as_str());
-        }
+        sql.push_str(",isLongText");
+        values.push(',');
+        values.push_str(self.is_long_text.to_string().as_str());
 
         sql.push_str(&values);
         sql.push(')');
