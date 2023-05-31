@@ -1,7 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused)]
-use std::mem::swap;
-
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use log::{debug, error, info, trace};
@@ -9,9 +5,9 @@ use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, IntoUrl, Response,
 };
-use serde_json::{value::Number, Value};
+use serde_json::Value;
 
-use crate::meta_data::{FavTag, Posts, Post};
+use crate::meta_data::{FavTag, LongText, Post, Posts};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
@@ -194,7 +190,11 @@ impl Fetcher {
         return Ok(fav_tag.fav_total_num);
     }
 
-    pub async fn get_long_text(&self) -> Result<String> {
-        unimplemented!()
+    pub async fn fetch_long_text_content(&self, mblogid: &str) -> Result<String> {
+        let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
+        debug!("fetch long text, url: {url}");
+        let res = self.fetch(url, &self.web_client).await?;
+        let long_text_meta = res.json::<LongText>().await?;
+        Ok(long_text_meta.get_content()?)
     }
 }
