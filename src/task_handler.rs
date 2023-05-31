@@ -16,7 +16,14 @@ pub struct TaskHandler {
 
 impl TaskHandler {
     pub fn build(config: Config) -> Result<Self> {
-        let fetcher = Fetcher::new(config.web_cookie.clone(), None);
+        let fetcher = Fetcher::build(
+            config.web_cookie.clone(),
+            if !config.mobile_cookie.is_empty() {
+                Some(config.mobile_cookie.clone())
+            } else {
+                None
+            },
+        );
         let persister = Persister::build(config.db.clone())?;
         Ok(TaskHandler {
             fetcher,
