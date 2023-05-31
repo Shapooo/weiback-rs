@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn insert_post() {
         let pster = Persister::build("insert_post.db".into()).unwrap();
-        let txt = include_str!("../.tmp/one.json");
+        let txt = include_str!("../res/one.json");
         let post: Post = serde_json::from_str(txt).unwrap();
         pster.insert_post(&post).unwrap();
         std::fs::remove_file("insert_post.db").unwrap();
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn insert_posts() {
         let pster = Persister::build("insert_posts.db".into()).unwrap();
-        let txt = include_str!("../.tmp/full.json");
+        let txt = include_str!("../res/full.json");
         let posts: Posts = serde_json::from_str(txt).unwrap();
         posts
             .data
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn insert_users() {
         let pster = Persister::build("insert_user.db".into()).unwrap();
-        let txt = include_str!("../.tmp/full.json");
+        let txt = include_str!("../res/full.json");
         let posts: Posts = serde_json::from_str(txt).unwrap();
         posts.data.iter().for_each(|p| {
             if p.user.is_some() {
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn insert_img() {
-        let img = include_bytes!("../.tmp/example.jpg");
+        let img = include_bytes!("../res/example.jpg");
         let p = Persister::build("insert_img.db".into()).unwrap();
         p.insert_img("https://test_url/example.jpg", img).unwrap();
         std::fs::remove_file("insert_img.db").unwrap();

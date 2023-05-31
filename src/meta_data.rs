@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn parse_post() {
-        let txt = include_str!("../.tmp/one.json");
+        let txt = include_str!("../res/one.json");
         serde_json::from_str::<Post>(txt).unwrap();
         // dbg!(a);
         // assert!(a.is_ok());
@@ -512,21 +512,21 @@ mod tests {
 
     #[test]
     fn parse_posts() {
-        let txt = include_str!("../.tmp/full.json");
+        let txt = include_str!("../res/full.json");
         serde_json::from_str::<Posts>(txt).unwrap();
         // assert!(a.is_ok());
     }
 
     #[test]
     fn post_sql() {
-        let txt = include_str!("../.tmp/one.json");
+        let txt = include_str!("../res/one.json");
         let post = serde_json::from_str::<Post>(txt).unwrap();
         print!("{}", post.to_sql());
     }
 
     #[test]
     fn posts_sql() {
-        let txt = include_str!("../.tmp/full.json");
+        let txt = include_str!("../res/full.json");
         let posts = serde_json::from_str::<Posts>(txt).unwrap();
         posts.data.iter().for_each(|p| {
             p.to_sql();
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn user_sql() {
-        let txt = include_str!("../.tmp/one.json");
+        let txt = include_str!("../res/one.json");
         let post = serde_json::from_str::<Post>(txt).unwrap();
         print!("{}", post.user.unwrap().to_sql());
         // assert!(a.is_ok());

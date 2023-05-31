@@ -1,0 +1,292 @@
+{
+    "visible": {
+        "type": 0,
+        "list_id": 0
+    },
+    "created_at": "Thu May 11 18:25:07 +0800 2023",
+    "id": 4900277691877266,
+    "idstr": "4900277691877266",
+    "mid": "4900277691877266",
+    "mblogid": "N07dT7Smu",
+    "user": {
+        "id": 1240212845,
+        "idstr": "1240212845",
+        "pc_new": 7,
+        "screen_name": "Maeiee",
+        "profile_image_url": "https://tva3.sinaimg.cn/crop.0.0.1080.1080.50/49ec256djw8eumfjtsc6rj20u00u0jug.jpg?KID=imgbed,tva&Expires=1683874949&ssig=PXXMmVAOP3",
+        "profile_url": "/u/1240212845",
+        "verified": true,
+        "verified_type": 0,
+        "domain": "maxiee",
+        "weihao": "",
+        "verified_type_ext": 0,
+        "avatar_large": "https://tva3.sinaimg.cn/crop.0.0.1080.1080.180/49ec256djw8eumfjtsc6rj20u00u0jug.jpg?KID=imgbed,tva&Expires=1683874949&ssig=CF%2BDoDPWAd",
+        "avatar_hd": "https://tva3.sinaimg.cn/crop.0.0.1080.1080.1024/49ec256djw8eumfjtsc6rj20u00u0jug.jpg?KID=imgbed,tva&Expires=1683874949&ssig=M5QB3XAxuT",
+        "follow_me": false,
+        "following": true,
+        "mbrank": 7,
+        "mbtype": 12,
+        "v_plus": 0,
+        "planet_video": false,
+        "icon_list": [
+            {
+                "type": "vip",
+                "data": {
+                    "mbrank": 7,
+                    "mbtype": 12,
+                    "svip": 0
+                }
+            }
+        ]
+    },
+    "can_edit": false,
+    "text_raw": "//@李富强Jason:转发微博",
+    "text": "//<a href=/n/李富强Jason usercard=\"name=@李富强Jason\">@李富强Jason</a>:转发微博",
+    "annotations": [
+        {
+            "client_mblogid": "1c2bb598-0908-48ff-a692-033ccf3183c9"
+        },
+        {
+            "mapi_request": true
+        }
+    ],
+    "source": "<a target=\"_blank\" href=\"https://app.weibo.com/t/feed/6lxOmf\" rel=\"nofollow\">K30 至尊纪念版</a>",
+    "favorited": true,
+    "rid": "0_0_0_165118093549642180_0_0_0",
+    "cardid": "vip_007",
+    "pic_ids": [],
+    "geo": null,
+    "pic_num": 0,
+    "is_paid": false,
+    "pic_bg_new": "https://img.t.sinajs.cn/t6/skin/public/feed_cover/vip_007_mobile_new.png?version=2021091501",
+    "mblog_vip_type": 0,
+    "number_display_strategy": {
+        "apply_scenario_flag": 3,
+        "display_text_min_number": 1000000,
+        "display_text": "100万+"
+    },
+    "reposts_count": 20,
+    "comments_count": 0,
+    "attitudes_count": 2,
+    "attitudes_status": 0,
+    "isLongText": false,
+    "mlevel": 0,
+    "content_auth": 0,
+    "is_show_bulletin": 2,
+    "comment_manage_info": {
+        "comment_permission_type": -1,
+        "approval_comment_type": 0,
+        "comment_sort_type": 0
+    },
+    "repost_type": 1,
+    "share_repost_type": 0,
+    "url_struct": [
+        {
+            "url_title": "网页链接",
+            "url_type_pic": "https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web.png",
+            "ori_url": "https://weibo.cn/sinaurl?toasturl=https%3A%2F%2Fblog.brachiosoft.com%2Fredis",
+            "short_url": "http://t.cn/A6NnfWeF",
+            "long_url": "https://blog.brachiosoft.com/redis",
+            "url_type": 0,
+            "result": true,
+            "actionlog": {
+                "act_type": 1,
+                "act_code": 300,
+                "oid": "",
+                "uuid": "",
+                "cardid": "",
+                "lcardid": "",
+                "uicode": "20000420",
+                "luicode": "",
+                "fid": "",
+                "lfid": "",
+                "ext": "mid:4900166660784184|rid:0_0_0_165118093549642180_0_0_0|short_url:http://t.cn/A6NnfWeF|long_url:https://blog.brachiosoft.com/redis|comment_id:|miduid:1240212845|rootmid:4900166660784184|rootuid:3219474004|authorid:|uuid:|is_ad_weibo:0|analysis_card:url_struct"
+            },
+            "storage_type": "",
+            "hide": 0,
+            "position": 2,
+            "need_save_obj": 1,
+            "log": "su=A6NnfWeF&mark=&mid=4900166660784184"
+        }
+    ],
+    "mblogtype": 0,
+    "showFeedRepost": false,
+    "showFeedComment": false,
+    "pictureViewerSign": false,
+    "showPictureViewer": false,
+    "rcList": [],
+    "region_name": "发布于 北京",
+    "customIcons": [],
+    "retweeted_status": {
+        "visible": {
+            "type": 0,
+            "list_id": 0
+        },
+        "created_at": "Thu May 11 11:03:54 +0800 2023",
+        "id": 4900166660784184,
+        "idstr": "4900166660784184",
+        "mid": "4900166660784184",
+        "mblogid": "N04kO3i08",
+        "user": {
+            "id": 3219474004,
+            "idstr": "3219474004",
+            "pc_new": 7,
+            "screen_name": "黄健宏_huangz",
+            "profile_image_url": "https://tvax1.sinaimg.cn/crop.0.0.600.600.50/bfe54654ly8h46elouydhj20go0gomys.jpg?KID=imgbed,tva&Expires=1683874949&ssig=QexcvjdhYy",
+            "profile_url": "/u/3219474004",
+            "verified": false,
+            "verified_type": -1,
+            "domain": "huangz1990",
+            "weihao": "",
+            "avatar_large": "https://tvax1.sinaimg.cn/crop.0.0.600.600.180/bfe54654ly8h46elouydhj20go0gomys.jpg?KID=imgbed,tva&Expires=1683874949&ssig=br0haTyt3S",
+            "avatar_hd": "https://tvax1.sinaimg.cn/crop.0.0.600.600.1024/bfe54654ly8h46elouydhj20go0gomys.jpg?KID=imgbed,tva&Expires=1683874949&ssig=%2ByJjAhs7yI",
+            "follow_me": false,
+            "following": false,
+            "mbrank": 0,
+            "mbtype": 0,
+            "v_plus": null,
+            "planet_video": true,
+            "icon_list": []
+        },
+        "can_edit": false,
+        "text_raw": "Redis与作者antirez的故事\nhttp://t.cn/A6NnfWeF ​​​",
+        "text": "Redis与作者antirez的故事<br /><a target=\"_blank\" href=\"//weibo.cn/sinaurl?u=https%3A%2F%2Fblog.brachiosoft.com%2Fredis\"><img class=\"icon-link\" src=\"https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png\"/>网页链接</a> ​​​",
+        "textLength": 45,
+        "annotations": [
+            {
+                "photo_sub_type": "0"
+            },
+            [],
+            {
+                "source_text": "",
+                "phone_id": ""
+            },
+            {
+                "mapi_request": true
+            }
+        ],
+        "source": "微博网页版",
+        "favorited": false,
+        "buttons": [
+            {
+                "type": "follow",
+                "name": "加关注",
+                "params": {
+                    "uid": 3219474004,
+                    "disable_group": 1,
+                    "extparams": {
+                        "followcardid": "1008080010_"
+                    }
+                },
+                "actionlog": {
+                    "act_code": "92",
+                    "oid": "4900166660784184"
+                }
+            }
+        ],
+        "rid": "0_0_0_165118093549642180_0_0_0",
+        "pic_ids": [
+            "bfe54654gy1hdu9h87kglj218b0n61fx"
+        ],
+        "pic_focus_point": [
+            {
+                "focus_point": {
+                    "left": 0.5260869860649109,
+                    "top": 0.16620498895645142,
+                    "width": 0.17536231875419617,
+                    "height": 0.4653739631175995
+                },
+                "pic_id": "bfe54654gy1hdu9h87kglj218b0n61fx"
+            }
+        ],
+        "geo": null,
+        "pic_num": 1,
+        "pic_infos": {
+            "bfe54654gy1hdu9h87kglj218b0n61fx": {
+                "thumbnail": {
+                    "url": "https://wx3.sinaimg.cn/wap180/bfe54654gy1hdu9h87kglj218b0n61fx.jpg",
+                    "width": 180,
+                    "height": 93,
+                    "cut_type": 1,
+                    "type": null
+                },
+                "bmiddle": {
+                    "url": "https://wx3.sinaimg.cn/wap360/bfe54654gy1hdu9h87kglj218b0n61fx.jpg",
+                    "width": 360,
+                    "height": 187,
+                    "cut_type": 1,
+                    "type": null
+                },
+                "large": {
+                    "url": "https://wx3.sinaimg.cn/orj960/bfe54654gy1hdu9h87kglj218b0n61fx.jpg",
+                    "width": 1595,
+                    "height": 834,
+                    "cut_type": 1,
+                    "type": null
+                },
+                "original": {
+                    "url": "https://wx3.sinaimg.cn/orj1080/bfe54654gy1hdu9h87kglj218b0n61fx.jpg",
+                    "width": 1595,
+                    "height": 834,
+                    "cut_type": 1,
+                    "type": null
+                },
+                "largest": {
+                    "url": "https://wx3.sinaimg.cn/large/bfe54654gy1hdu9h87kglj218b0n61fx.jpg",
+                    "width": 1595,
+                    "height": 834,
+                    "cut_type": 1,
+                    "type": null
+                },
+                "mw2000": {
+                    "url": "https://wx3.sinaimg.cn/mw2000/bfe54654gy1hdu9h87kglj218b0n61fx.jpg",
+                    "width": 1595,
+                    "height": 834,
+                    "cut_type": 1,
+                    "type": null
+                },
+                "focus_point": {
+                    "left": 0.5260869860649109,
+                    "top": 0.16620498895645142,
+                    "width": 0.17536231875419617,
+                    "height": 0.4653739631175995
+                },
+                "object_id": "1042018:4336f58beb5886d936f0b2bd34d1482b",
+                "pic_id": "bfe54654gy1hdu9h87kglj218b0n61fx",
+                "photo_tag": 0,
+                "type": "pic",
+                "pic_status": 1
+            }
+        },
+        "is_paid": false,
+        "mblog_vip_type": 0,
+        "number_display_strategy": {
+            "apply_scenario_flag": 3,
+            "display_text_min_number": 1000000,
+            "display_text": "100万+"
+        },
+        "reposts_count": 30,
+        "comments_count": 0,
+        "attitudes_count": 13,
+        "attitudes_status": 0,
+        "isLongText": false,
+        "mlevel": 0,
+        "content_auth": 0,
+        "is_show_bulletin": 2,
+        "comment_manage_info": {
+            "comment_permission_type": -1,
+            "approval_comment_type": 0,
+            "comment_sort_type": 0,
+            "ai_play_picture_type": 0
+        },
+        "mblogtype": 0,
+        "showFeedRepost": false,
+        "showFeedComment": false,
+        "pictureViewerSign": false,
+        "showPictureViewer": false,
+        "rcList": [],
+        "region_name": "发布于 广东",
+        "customIcons": []
+    },
+    "tags": []
+}
