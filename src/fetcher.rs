@@ -177,11 +177,11 @@ impl Fetcher {
         Ok(res_bytes)
     }
 
-    pub async fn fetch_mobile_page(&self, url: impl IntoUrl) -> Result<Value> {
+    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
         unimplemented!()
     }
 
-    pub async fn get_fav_total_num(&self) -> Result<u64> {
+    pub async fn fetch_fav_total_num(&self) -> Result<u64> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
         let res = self.fetch(FAVORITES_TAGS_API, &self.web_client).await?;
         let fav_tag = res.json::<FavTag>().await?;
