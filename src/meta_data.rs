@@ -60,7 +60,7 @@ pub struct Post {
     pub topic_struct: Value,
     #[serde(default)]
     pub page_info: Value,
-    #[serde(deserialize_with = "deserialize_str_bool")]
+    #[serde(deserialize_with = "deserialize_deleted")]
     #[serde(default)]
     pub deleted: bool,
     pub mark: Option<String>,
@@ -515,12 +515,12 @@ where
     }
 }
 
-fn deserialize_str_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+fn deserialize_deleted<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    if s.is_none() {
+    let s = <&str>::deserialize(deserializer)?;
+    if s == "1" {
         Ok(true)
     } else {
         Ok(false)
