@@ -1,8 +1,9 @@
 pub mod args;
 pub mod config;
+pub mod fetched_data;
 pub mod fetcher;
-pub mod meta_data;
 pub mod persister;
+pub mod sql_data;
 pub mod task_handler;
 
 use anyhow::Result;

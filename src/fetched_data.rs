@@ -5,19 +5,19 @@ use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
 #[derive(Deserialize, Debug)]
-pub struct Posts {
-    pub data: Vec<Post>,
+pub struct FetchedPosts {
+    pub data: Vec<FetchedPost>,
     pub ok: u8,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Post {
+pub struct FetchedPost {
     pub id: u64,
     pub visible: Value,
     pub created_at: String,
     pub mblogid: String,
     #[serde(deserialize_with = "deserialize_post_user")]
-    pub user: Option<User>,
+    pub user: Option<FetchedUser>,
     pub text_raw: String,
     pub text: String,
     pub attitudes_status: i64,
@@ -56,7 +56,7 @@ pub struct Post {
     pub content_auth: Option<i64>,
     pub is_show_bulletin: Option<i64>,
     pub repost_type: Option<i64>,
-    pub retweeted_status: Option<Box<Post>>,
+    pub retweeted_status: Option<Box<FetchedPost>>,
     pub edit_count: Option<i64>,
     pub mblogtype: Option<i64>,
     pub region_name: Option<String>,
@@ -122,7 +122,7 @@ pub struct PicResource {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct User {
+pub struct FetchedUser {
     pub profile_url: String,
     pub planet_video: bool,
     #[serde(deserialize_with = "deserialize_null_default")]
@@ -199,11 +199,11 @@ where
     Ok(opt.unwrap_or_default())
 }
 
-fn deserialize_post_user<'de, D>(deserializer: D) -> Result<Option<User>, D::Error>
+fn deserialize_post_user<'de, D>(deserializer: D) -> Result<Option<FetchedUser>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let mut user: Option<User> = Option::deserialize(deserializer)?;
+    let mut user: Option<FetchedUser> = Option::deserialize(deserializer)?;
     if let Some(user) = user.take() {
         if user.id == 0 {
             return Ok(None);
@@ -229,20 +229,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::meta_data::{Post, Posts};
+    use crate::fetched_data::{FetchedPost, FetchedPosts};
 
     use super::{LongText, Picture};
 
     #[test]
     fn parse_post() {
         let txt = include_str!("../res/one.json");
-        serde_json::from_str::<Post>(txt).unwrap();
+        serde_json::from_str::<FetchedPost>(txt).unwrap();
     }
 
     #[test]
     fn parse_posts() {
         let txt = include_str!("../res/full.json");
-        serde_json::from_str::<Posts>(txt).unwrap();
+        serde_json::from_str::<FetchedPosts>(txt).unwrap();
     }
 
     #[test]

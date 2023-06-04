@@ -7,7 +7,7 @@ use reqwest::{
 };
 use serde_json::Value;
 
-use crate::meta_data::{FavTag, LongText, Post, Posts};
+use crate::fetched_data::{FavTag, LongText, FetchedPost, FetchedPosts};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
@@ -156,11 +156,11 @@ impl Fetcher {
         Ok(client.get(url).send().await?)
     }
 
-    pub async fn fetch_posts_meta(&self, uid: &str, page: u64) -> Result<Vec<Post>> {
+    pub async fn fetch_posts_meta(&self, uid: &str, page: u64) -> Result<Vec<FetchedPost>> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
         let res = self.fetch(url, &self.web_client).await?;
-        let posts = res.json::<Posts>().await?;
+        let posts = res.json::<FetchedPosts>().await?;
         trace!("get json: {posts:?}");
         if posts.ok != 1 {
             Err(anyhow!("fetched data is not ok"))

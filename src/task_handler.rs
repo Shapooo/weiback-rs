@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use crate::config::Config;
+use crate::fetched_data::FetchedPost;
 use crate::fetcher::Fetcher;
-use crate::meta_data::Post;
 use crate::persister::Persister;
+use crate::sql_data::{SqlPost, SqlUser};
 use anyhow::Result;
 use log::{debug, info};
 use tokio::time::sleep;
@@ -58,7 +59,7 @@ impl TaskHandler {
         Ok(())
     }
 
-    async fn process_post(&self, post: &mut Post) -> Result<()> {
+    async fn process_post(&self, post: &mut FetchedPost) -> Result<()> {
         self.process_post_non_rec(post).await?;
         if let Some(mut post) = post.retweeted_status.take() {
             self.process_post_non_rec(post.as_mut()).await?;
@@ -77,7 +78,7 @@ impl TaskHandler {
         Ok(())
     }
 
-    async fn process_post_non_rec(&self, post: &mut Post) -> Result<()> {
+    async fn process_post_non_rec(&self, post: &mut FetchedPost) -> Result<()> {
         if let Some(user) = &post.user {
             self.persister.insert_user(user)?;
         }
