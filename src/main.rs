@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     let conf = get_config()?;
     debug!("config is {:?}", conf);
 
-    let task_handler = TaskHandler::build(conf)?;
+    let task_handler = TaskHandler::build(conf).await?;
     task_handler.fetch_all_page().await?;
 
     info!("done");
