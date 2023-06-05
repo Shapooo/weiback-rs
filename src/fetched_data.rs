@@ -35,6 +35,7 @@ pub struct FetchedPost {
     pub can_edit: bool,
     pub rid: Option<String>,
     pub cardid: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_pic_ids")]
     pub pic_ids: Option<Vec<String>>,
     #[serde(default)]
     pub pic_infos: Value,
@@ -191,6 +192,22 @@ where
         Ok(true)
     } else {
         Ok(false)
+    }
+}
+
+fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let op: Option<Vec<String>> = Option::deserialize(deserializer)?;
+    if let Some(vec) = op {
+        if vec.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(vec))
+        }
+    } else {
+        Ok(None)
     }
 }
 
