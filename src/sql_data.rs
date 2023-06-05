@@ -90,6 +90,72 @@ pub struct SqlPost {
     pub comment_manage_info: Option<String>,
 }
 
+impl From<FetchedPost> for SqlPost {
+    fn from(p: FetchedPost) -> Self {
+        SqlPost {
+            id: p.id as i64,
+            created_at: p.created_at,
+            mblogid: p.mblogid,
+            text_raw: p.text_raw,
+            source: p.source,
+            region_name: p.region_name,
+            deleted: p.deleted,
+            uid: p.user.map(|user| user.id as i64),
+            pic_ids: p.pic_ids.map(|ids| ids.join("|")),
+            pic_num: p.pic_num,
+            retweeted_status: p.retweeted_status.map(|r| r.id as i64),
+            url_struct: value_to_option_string(&p.url_struct),
+            topic_struct: value_to_option_string(&p.topic_struct),
+            tag_struct: value_to_option_string(&p.tag_struct),
+            number_display_strategy: value_to_option_string(&p.number_display_strategy),
+            mix_media_info: value_to_option_string(&p.mix_media_info),
+            visible: p.visible.to_string(),
+            text: p.text,
+            attitudes_status: p.attitudes_status,
+            show_feed_repost: p.show_feed_repost,
+            show_feed_comment: p.show_feed_comment,
+            picture_viewer_sign: p.picture_viewer_sign,
+            show_picture_viewer: p.show_picture_viewer,
+            favorited: p.favorited,
+            can_edit: p.can_edit,
+            is_paid: p.is_paid,
+            share_repost_type: p.share_repost_type,
+            rid: p.rid,
+            pic_infos: value_to_option_string(&p.pic_infos),
+            cardid: p.cardid,
+            pic_bg_new: p.pic_bg_new,
+            mark: p.mark,
+            mblog_vip_type: p.mblog_vip_type,
+            reposts_count: p.reposts_count,
+            comments_count: p.comments_count,
+            attitudes_count: p.attitudes_count,
+            mlevel: p.mlevel,
+            content_auth: p.content_auth,
+            is_show_bulletin: p.is_show_bulletin,
+            repost_type: p.share_repost_type,
+            edit_count: p.edit_count,
+            mblogtype: p.mblogtype,
+            text_length: p.text_length,
+            is_long_text: p.is_long_text,
+            annotations: value_to_option_string(&p.annotations),
+            geo: value_to_option_string(&p.geo),
+            pic_focus_point: value_to_option_string(&p.pic_focus_point),
+            page_info: value_to_option_string(&p.page_info),
+            title: value_to_option_string(&p.title),
+            continue_tag: value_to_option_string(&p.continue_tag),
+            comment_manage_info: value_to_option_string(&p.comment_manage_info),
+        }
+    }
+}
+
+fn value_to_option_string(value: &serde_json::Value) -> Option<String> {
+    if value.is_null() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
 #[derive(Debug, Clone, FromRow)]
 pub struct SqlUser {
     pub id: i64,
@@ -124,6 +190,32 @@ pub struct SqlUser {
     pub mbtype: i64,
     #[sqlx(default)]
     pub icon_list: String,
+}
+
+impl From<FetchedUser> for SqlUser {
+    fn from(u: FetchedUser) -> Self {
+        SqlUser {
+            id: u.id as i64,
+            profile_url: u.profile_url,
+            screen_name: u.screen_name,
+            profile_image_url: u.profile_image_url,
+            avatar_large: u.avatar_large,
+            avatar_hd: u.avatar_hd,
+            planet_video: u.planet_video,
+            v_plus: u.v_plus,
+            pc_new: u.pc_new,
+            verified: u.verified,
+            verified_type: u.verified_type,
+            domain: u.domain,
+            weihao: u.weihao,
+            verified_type_ext: u.verified_type_ext,
+            follow_me: u.follow_me,
+            following: u.following,
+            mbrank: u.mbrank,
+            mbtype: u.mbtype,
+            icon_list: u.icon_list.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, FromRow)]
