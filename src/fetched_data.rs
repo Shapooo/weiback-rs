@@ -171,16 +171,8 @@ fn deserialize_post_user<'de, D>(deserializer: D) -> Result<Option<FetchedUser>,
 where
     D: Deserializer<'de>,
 {
-    let mut user: Option<FetchedUser> = Option::deserialize(deserializer)?;
-    if let Some(user) = user.take() {
-        if user.id == 0 {
-            return Ok(None);
-        } else {
-            return Ok(Some(user));
-        }
-    } else {
-        return Ok(None);
-    }
+    let user: Option<FetchedUser> = Option::deserialize(deserializer)?;
+    Ok(user.and_then(|user| (user.id != 0).then_some(user)))
 }
 
 fn deserialize_deleted<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -188,11 +180,7 @@ where
     D: Deserializer<'de>,
 {
     let s: Option<&str> = Option::deserialize(deserializer)?;
-    if s.is_some() && s.unwrap() == "1" {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    Ok(s.is_some() && s.unwrap() == "1")
 }
 
 fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
@@ -200,15 +188,7 @@ where
     D: Deserializer<'de>,
 {
     let op: Option<Vec<String>> = Option::deserialize(deserializer)?;
-    if let Some(vec) = op {
-        if vec.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(vec))
-        }
-    } else {
-        Ok(None)
-    }
+    Ok(op.and_then(|vec| (!vec.is_empty()).then_some(vec)))
 }
 
 #[cfg(test)]

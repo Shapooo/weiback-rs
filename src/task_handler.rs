@@ -24,11 +24,7 @@ impl TaskHandler {
     pub async fn build(config: Config) -> Result<Self> {
         let fetcher = Fetcher::build(
             config.web_cookie.clone(),
-            if !config.mobile_cookie.is_empty() {
-                Some(config.mobile_cookie.clone())
-            } else {
-                None
-            },
+            (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
         );
         let persister = Persister::build(&config.db).await?;
         Ok(TaskHandler {

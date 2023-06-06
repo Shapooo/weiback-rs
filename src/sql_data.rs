@@ -149,11 +149,7 @@ impl From<FetchedPost> for SqlPost {
 }
 
 fn value_to_option_string(value: &serde_json::Value) -> Option<String> {
-    if value.is_null() {
-        None
-    } else {
-        Some(value.to_string())
-    }
+    (!value.is_null()).then_some(value.to_string())
 }
 
 #[derive(Debug, Clone, FromRow)]
