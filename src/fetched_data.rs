@@ -10,7 +10,7 @@ pub struct FetchedPosts {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct FetchedPost {
-    pub id: u64,
+    pub id: i64,
     pub visible: Value,
     pub created_at: String,
     pub mblogid: String,
@@ -96,7 +96,7 @@ pub struct FetchedUser {
     #[serde(deserialize_with = "deserialize_null_default")]
     pub v_plus: i64,
     #[serde(default)]
-    pub id: u64,
+    pub id: i64,
     #[serde(default)]
     pub pc_new: i64,
     #[serde(default)]
