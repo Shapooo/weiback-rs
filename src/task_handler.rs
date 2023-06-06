@@ -7,6 +7,7 @@ use crate::generator::{HTMLGenerator, HTMLPosts};
 use crate::persister::Persister;
 
 use anyhow::Result;
+use chrono;
 use log::{debug, info};
 use tokio::time::sleep;
 
@@ -62,8 +63,13 @@ impl TaskHandler {
             sleep(Duration::from_secs(5)).await;
         }
         let html_page = self.generator.generate_page(posts).await?;
+        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
         self.exporter
-            .export_page(html_page, std::path::PathBuf::from("./").as_path())
+            .export_page(
+                task_name,
+                html_page,
+                std::path::PathBuf::from("./").as_path(),
+            )
             .await?;
         info!("fetched {total_posts_sum} posts in total");
         Ok(())
