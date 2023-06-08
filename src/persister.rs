@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow;
 use bytes::Bytes;
 use log::{info, trace};
@@ -5,7 +7,6 @@ use sqlx::{
     migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Connection, Sqlite, SqliteConnection,
     SqlitePool,
 };
-use std::path::Path;
 
 use crate::sql_data::{PictureBlob, SqlPost, SqlUser};
 
@@ -19,13 +20,14 @@ pub struct Persister {
 impl Persister {
     pub async fn build<P>(db: P) -> anyhow::Result<Self>
     where
-        P: AsRef<Path>,
+        P: AsRef<str>,
     {
-        let url = String::from("sqlite:") + db.as_ref().to_str().unwrap();
-        if db.as_ref().is_file() {
-            info!("db file {:?} exists", db.as_ref());
+        let url = String::from("sqlite:") + db.as_ref();
+        let db = PathBuf::from("db");
+        if db.is_file() {
+            info!("db file {:?} exists", db);
         } else {
-            info!("db file {:?} not exists, create it", db.as_ref());
+            info!("db file {:?} not exists, create it", db);
             Sqlite::create_database(&url).await?;
             let mut db = SqliteConnection::connect(&url).await?;
             use futures::stream::StreamExt;
@@ -172,17 +174,13 @@ mod tests {
     use std::path::PathBuf;
     #[tokio::test]
     async fn post_build() {
-        Persister::build(PathBuf::from("post_build.db").as_path())
-            .await
-            .unwrap();
+        Persister::build("post_build.db").await.unwrap();
         std::fs::remove_file("post_build.db").unwrap();
     }
 
     #[tokio::test]
     async fn insert_post() {
-        let pster = Persister::build(PathBuf::from("insert_post.db").as_path())
-            .await
-            .unwrap();
+        let pster = Persister::build("insert_post.db").await.unwrap();
         let txt = include_str!("../res/one.json");
         let post: SqlPost = SqlPost::from(serde_json::from_str::<FetchedPost>(txt).unwrap());
         pster.insert_post(&post).await.unwrap();
@@ -193,9 +191,7 @@ mod tests {
 
     #[tokio::test]
     async fn insert_posts() {
-        let pster = Persister::build(PathBuf::from("insert_posts.db").as_path())
-            .await
-            .unwrap();
+        let pster = Persister::build("insert_posts.db").await.unwrap();
         let txt = include_str!("../res/full.json");
         let posts: Vec<SqlPost> = serde_json::from_str::<FetchedPosts>(txt)
             .unwrap()
@@ -213,9 +209,7 @@ mod tests {
 
     #[tokio::test]
     async fn insert_users() {
-        let pster = Persister::build(PathBuf::from("insert_users.db").as_path())
-            .await
-            .unwrap();
+        let pster = Persister::build("insert_users.db").await.unwrap();
         let txt = include_str!("../res/full.json");
         let users: Vec<SqlUser> = serde_json::from_str::<FetchedPosts>(txt)
             .unwrap()
@@ -237,9 +231,7 @@ mod tests {
         let img = include_bytes!("../res/example.jpg");
         let id = "example";
         let url = "https://test_url/example.jpg";
-        let p = Persister::build(PathBuf::from("insert_img.db").as_path())
-            .await
-            .unwrap();
+        let p = Persister::build("insert_img.db").await.unwrap();
         p.insert_img(url, id, img).await.unwrap();
         std::fs::write("./examp.jpg", p.query_img(url).await.unwrap()).unwrap();
         std::fs::remove_file("insert_img.db").unwrap();

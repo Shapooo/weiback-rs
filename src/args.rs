@@ -8,5 +8,5 @@ pub struct Args {
     pub config: Option<PathBuf>,
     /// location of database file
     #[arg(short, long)]
-    pub db: Option<PathBuf>,
+    pub db: Option<String>,
 }
