@@ -162,6 +162,22 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             .await?;
         Ok(result.blob.into())
     }
+
+    pub async fn query_post(&self, id: i64) -> anyhow::Result<SqlPost> {
+        let result = sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info FROM fav_post WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.db_pool)
+            .await?;
+        Ok(result)
+    }
+
+    pub async fn query_user(&self, id: i64) -> anyhow::Result<SqlUser> {
+        let result: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.db_pool)
+            .await?;
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -171,7 +187,6 @@ mod tests {
 
     use super::*;
     use serde_json;
-    use std::path::PathBuf;
     #[tokio::test]
     async fn post_build() {
         Persister::build("post_build.db").await.unwrap();
@@ -237,5 +252,37 @@ mod tests {
         std::fs::remove_file("insert_img.db").unwrap();
         std::fs::remove_file("insert_img.db-shm").unwrap();
         std::fs::remove_file("insert_img.db-wal").unwrap();
+    }
+
+    #[tokio::test]
+    async fn query_post() {
+        let post = SqlPost::from(
+            serde_json::from_str::<FetchedPost>(include_str!("../res/one.json")).unwrap(),
+        );
+        // dbg!(&post);
+        let pr = Persister::build("query_post.db").await.unwrap();
+        pr.insert_post(&post).await.unwrap();
+        let result = pr.query_post(post.id).await.unwrap();
+        dbg!(result);
+        std::fs::remove_file("query_post.db").unwrap();
+        std::fs::remove_file("query_post.db-shm").unwrap();
+        std::fs::remove_file("query_post.db-wal").unwrap();
+    }
+
+    #[tokio::test]
+    async fn query_user() {
+        let user = SqlUser::from(
+            serde_json::from_str::<FetchedPost>(include_str!("../res/one.json"))
+                .unwrap()
+                .user
+                .unwrap(),
+        );
+        let pr = Persister::build("query_user.db").await.unwrap();
+        pr.insert_user(&user).await.unwrap();
+        let result = pr.query_user(user.id).await.unwrap();
+        dbg!(result);
+        std::fs::remove_file("query_user.db").unwrap();
+        std::fs::remove_file("query_user.db-shm").unwrap();
+        std::fs::remove_file("query_user.db-wal").unwrap();
     }
 }
