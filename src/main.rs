@@ -1,20 +1,9 @@
-pub mod args;
-pub mod config;
-pub mod data;
-pub mod exporter;
-pub mod fetched_data;
-pub mod fetcher;
-pub mod generator;
-pub mod persister;
-pub mod sql_data;
-pub mod task_handler;
-
 use anyhow::Result;
 use log::{debug, info};
 use simple_logger::SimpleLogger;
 
-use config::get_config;
-use task_handler::TaskHandler;
+use weiback_rs::config::get_config;
+use weiback_rs::task_handler::TaskHandler;
 
 #[tokio::main]
 async fn main() -> Result<()> {
