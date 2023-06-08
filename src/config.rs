@@ -88,18 +88,6 @@ pub fn get_config() -> Result<Config> {
         }
     }
 
-    if let Some(p) = args.web_cookie {
-        debug!("cli set web_cookie: {}", p);
-        conf.web_cookie = p;
-    }
-    if let Some(p) = args.mobile_cookie {
-        debug!("cli set mobile cookie: {}", p);
-        conf.mobile_cookie = p;
-    }
-    if let Some(p) = args.uid {
-        debug!("cli set uid: {}", p);
-        conf.uid = p;
-    }
     if let Some(p) = args.db {
         debug!("cli set db file path to {}", p.display());
         if p.is_relative() {
