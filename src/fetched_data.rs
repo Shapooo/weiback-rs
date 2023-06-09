@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 #[derive(Deserialize, Debug)]
@@ -8,7 +8,7 @@ pub struct FetchedPosts {
     pub ok: u8,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct FetchedPost {
     pub id: i64,
     pub visible: Value,
@@ -89,7 +89,7 @@ pub struct FetchedPost {
     pub mix_media_info: Value,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct FetchedUser {
     pub profile_url: String,
     pub planet_video: bool,
