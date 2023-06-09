@@ -1,6 +1,10 @@
-use crate::fetched_data::{FetchedPost, FetchedUser};
+use serde::Serialize;
+use serde_json::{from_str, Value};
 use sqlx::FromRow;
-#[derive(Debug, Clone, FromRow)]
+
+use crate::fetched_data::{FetchedPost, FetchedUser};
+
+#[derive(Serialize, Debug, Clone, FromRow)]
 pub struct SqlPost {
     pub id: i64,
     pub created_at: String,
@@ -101,7 +105,7 @@ impl From<FetchedPost> for SqlPost {
             region_name: p.region_name,
             deleted: p.deleted,
             uid: p.user.map(|user| user.id as i64),
-            pic_ids: p.pic_ids.map(|ids| ids.join("|")),
+            pic_ids: value_to_option_string(&p.pic_ids),
             pic_num: p.pic_num,
             retweeted_status: p.retweeted_status.map(|r| r.id as i64),
             url_struct: value_to_option_string(&p.url_struct),
@@ -148,11 +152,125 @@ impl From<FetchedPost> for SqlPost {
     }
 }
 
-fn value_to_option_string(value: &serde_json::Value) -> Option<String> {
+fn value_to_option_string(value: &Value) -> Option<String> {
     (!value.is_null()).then_some(value.to_string())
 }
 
-#[derive(Debug, Clone, FromRow)]
+impl Into<FetchedPost> for SqlPost {
+    fn into(self) -> FetchedPost {
+        FetchedPost {
+            id: self.id,
+            visible: from_str::<Value>(&self.visible).unwrap_or_default(),
+            created_at: self.created_at,
+            mblogid: self.mblogid,
+            user: None,
+            text_raw: self.text_raw,
+            text: self.text,
+            attitudes_status: self.attitudes_status,
+            share_repost_type: self.share_repost_type,
+            show_feed_repost: self.show_feed_repost,
+            show_feed_comment: self.show_feed_comment,
+            picture_viewer_sign: self.picture_viewer_sign,
+            show_picture_viewer: self.show_picture_viewer,
+            source: self.source,
+            favorited: self.favorited,
+            can_edit: self.can_edit,
+            rid: self.rid,
+            cardid: self.cardid,
+            pic_ids: self
+                .pic_ids
+                .map(|ids| from_str(ids.as_str()).ok())
+                .flatten()
+                .unwrap_or_default(),
+            pic_infos: self
+                .pic_infos
+                .map(|pic_infos| from_str(&pic_infos).ok())
+                .flatten()
+                .unwrap_or_default(),
+            pic_num: self.pic_num,
+            is_paid: self.is_paid,
+            pic_bg_new: self.pic_bg_new,
+            deleted: self.deleted,
+            mark: self.mark,
+            mblog_vip_type: self.mblog_vip_type,
+            reposts_count: self.reposts_count,
+            comments_count: self.comments_count,
+            attitudes_count: self.attitudes_count,
+            mlevel: self.mlevel,
+            content_auth: self.content_auth,
+            is_show_bulletin: self.is_show_bulletin,
+            repost_type: self.repost_type,
+            retweeted_status: None,
+            edit_count: self.edit_count,
+            mblogtype: self.mblogtype,
+            region_name: self.region_name,
+            text_length: self.text_length,
+            is_long_text: self.is_long_text,
+            annotations: self
+                .annotations
+                .map(|ann| from_str(&ann).ok())
+                .flatten()
+                .unwrap_or_default(),
+            geo: self
+                .geo
+                .map(|geo| from_str(&geo).ok())
+                .flatten()
+                .unwrap_or_default(),
+            pic_focus_point: self
+                .pic_focus_point
+                .map(|p| from_str(&p).ok())
+                .flatten()
+                .unwrap_or_default(),
+            topic_struct: self
+                .topic_struct
+                .map(|t| from_str(&t).ok())
+                .flatten()
+                .unwrap_or_default(),
+            page_info: self
+                .page_info
+                .map(|p| from_str(&p).ok())
+                .flatten()
+                .unwrap_or_default(),
+            tag_struct: self
+                .tag_struct
+                .map(|t| from_str(&t).ok())
+                .flatten()
+                .unwrap_or_default(),
+            title: self
+                .title
+                .map(|t| from_str(&t).ok())
+                .flatten()
+                .unwrap_or_default(),
+            number_display_strategy: self
+                .number_display_strategy
+                .map(|n| from_str(&n).ok())
+                .flatten()
+                .unwrap_or_default(),
+            continue_tag: self
+                .continue_tag
+                .map(|c| from_str(&c).ok())
+                .flatten()
+                .unwrap_or_default(),
+            comment_manage_info: self
+                .comment_manage_info
+                .map(|c| from_str(&c).ok())
+                .flatten()
+                .unwrap_or_default(),
+            url_struct: self
+                .url_struct
+                .map(|u| from_str(&u).ok())
+                .flatten()
+                .unwrap_or_default(),
+            mix_media_info: self
+                .mix_media_info
+                .map(|m| from_str(&m).ok())
+                .flatten()
+                .unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone, FromRow)]
 pub struct SqlUser {
     pub id: i64,
     pub profile_url: String,
