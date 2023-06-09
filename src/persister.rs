@@ -182,7 +182,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 
 #[cfg(test)]
 mod tests {
-    use crate::fetched_data::{FetchedPost, FetchedPosts};
+    use crate::data::{Post, Posts};
     use crate::sql_data::{SqlPost, SqlUser};
 
     use super::*;
@@ -197,7 +197,7 @@ mod tests {
     async fn insert_post() {
         let pster = Persister::build("insert_post.db").await.unwrap();
         let txt = include_str!("../res/one.json");
-        let post: SqlPost = SqlPost::from(serde_json::from_str::<FetchedPost>(txt).unwrap());
+        let post: SqlPost = SqlPost::from(serde_json::from_str::<Post>(txt).unwrap());
         pster.insert_post(&post).await.unwrap();
         std::fs::remove_file("insert_post.db").unwrap();
         std::fs::remove_file("insert_post.db-shm").unwrap();
@@ -208,7 +208,7 @@ mod tests {
     async fn insert_posts() {
         let pster = Persister::build("insert_posts.db").await.unwrap();
         let txt = include_str!("../res/full.json");
-        let posts: Vec<SqlPost> = serde_json::from_str::<FetchedPosts>(txt)
+        let posts: Vec<SqlPost> = serde_json::from_str::<Posts>(txt)
             .unwrap()
             .data
             .into_iter()
@@ -226,7 +226,7 @@ mod tests {
     async fn insert_users() {
         let pster = Persister::build("insert_users.db").await.unwrap();
         let txt = include_str!("../res/full.json");
-        let users: Vec<SqlUser> = serde_json::from_str::<FetchedPosts>(txt)
+        let users: Vec<SqlUser> = serde_json::from_str::<Posts>(txt)
             .unwrap()
             .data
             .into_iter()
@@ -256,9 +256,8 @@ mod tests {
 
     #[tokio::test]
     async fn query_post() {
-        let post = SqlPost::from(
-            serde_json::from_str::<FetchedPost>(include_str!("../res/one.json")).unwrap(),
-        );
+        let post =
+            SqlPost::from(serde_json::from_str::<Post>(include_str!("../res/one.json")).unwrap());
         // dbg!(&post);
         let pr = Persister::build("query_post.db").await.unwrap();
         pr.insert_post(&post).await.unwrap();
@@ -272,7 +271,7 @@ mod tests {
     #[tokio::test]
     async fn query_user() {
         let user = SqlUser::from(
-            serde_json::from_str::<FetchedPost>(include_str!("../res/one.json"))
+            serde_json::from_str::<Post>(include_str!("../res/one.json"))
                 .unwrap()
                 .user
                 .unwrap(),

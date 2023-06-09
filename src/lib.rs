@@ -1,7 +1,7 @@
 pub mod args;
 pub mod config;
+pub mod data;
 pub mod exporter;
-pub mod fetched_data;
 pub mod fetcher;
 pub mod generator;
 pub mod persister;

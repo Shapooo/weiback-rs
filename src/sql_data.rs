@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde_json::{from_str, Value};
 use sqlx::FromRow;
 
-use crate::fetched_data::{FetchedPost, FetchedUser};
+use crate::data::{Post, User};
 
 #[derive(Serialize, Debug, Clone, FromRow)]
 pub struct SqlPost {
@@ -94,8 +94,8 @@ pub struct SqlPost {
     pub comment_manage_info: Option<String>,
 }
 
-impl From<FetchedPost> for SqlPost {
-    fn from(p: FetchedPost) -> Self {
+impl From<Post> for SqlPost {
+    fn from(p: Post) -> Self {
         SqlPost {
             id: p.id as i64,
             created_at: p.created_at,
@@ -156,9 +156,9 @@ fn value_to_option_string(value: &Value) -> Option<String> {
     (!value.is_null()).then_some(value.to_string())
 }
 
-impl Into<FetchedPost> for SqlPost {
-    fn into(self) -> FetchedPost {
-        FetchedPost {
+impl Into<Post> for SqlPost {
+    fn into(self) -> Post {
+        Post {
             id: self.id,
             visible: from_str::<Value>(&self.visible).unwrap_or_default(),
             created_at: self.created_at,
@@ -306,8 +306,8 @@ pub struct SqlUser {
     pub icon_list: String,
 }
 
-impl From<FetchedUser> for SqlUser {
-    fn from(u: FetchedUser) -> Self {
+impl From<User> for SqlUser {
+    fn from(u: User) -> Self {
         SqlUser {
             id: u.id as i64,
             profile_url: u.profile_url,
