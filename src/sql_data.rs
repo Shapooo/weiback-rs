@@ -332,6 +332,32 @@ impl From<User> for SqlUser {
     }
 }
 
+impl Into<User> for SqlUser {
+    fn into(self) -> User {
+        User {
+            id: self.id,
+            profile_url: self.profile_url,
+            screen_name: self.screen_name,
+            profile_image_url: self.profile_image_url,
+            avatar_large: self.avatar_large,
+            avatar_hd: self.avatar_hd,
+            planet_video: self.planet_video,
+            v_plus: self.v_plus,
+            pc_new: self.pc_new,
+            verified: self.verified,
+            verified_type: self.verified_type,
+            domain: self.domain,
+            weihao: self.weihao,
+            verified_type_ext: self.verified_type_ext,
+            follow_me: self.follow_me,
+            following: self.following,
+            mbrank: self.mbrank,
+            mbtype: self.mbtype,
+            icon_list: from_str(&self.icon_list).unwrap_or_default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, FromRow)]
 pub struct PictureBlob {
     pub url: String,
