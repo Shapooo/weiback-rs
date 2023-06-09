@@ -35,8 +35,8 @@ pub struct FetchedPost {
     pub can_edit: bool,
     pub rid: Option<String>,
     pub cardid: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_pic_ids")]
-    pub pic_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub pic_ids: Value,
     #[serde(default)]
     pub pic_infos: Value,
     pub pic_num: Option<i64>,
@@ -183,13 +183,13 @@ where
     Ok(s.is_some() && s.unwrap() == "1")
 }
 
-fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let op: Option<Vec<String>> = Option::deserialize(deserializer)?;
-    Ok(op.and_then(|vec| (!vec.is_empty()).then_some(vec)))
-}
+// fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+// where
+//     D: Deserializer<'de>,
+// {
+//     let op: Option<Vec<String>> = Option::deserialize(deserializer)?;
+//     Ok(op.and_then(|vec| (!vec.is_empty()).then_some(vec)))
+// }
 
 #[cfg(test)]
 mod tests {
