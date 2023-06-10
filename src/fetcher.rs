@@ -5,9 +5,10 @@ use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, IntoUrl, Response,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::data::{FavTag, LongText, Post, Posts};
+use crate::data::{FavTag, LongText};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
@@ -16,6 +17,12 @@ const STATUSES_LIKE_LIST_API: &str = "https://weibo.com/ajax/statuses/likelist";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const PROFILE_INFO_API: &str = "https://weibo.com/ajax/profile/info";
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct Post(Value);
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct Posts(Vec<Value>);
 
 #[derive(Debug)]
 pub struct Fetcher {
@@ -156,16 +163,20 @@ impl Fetcher {
         Ok(client.get(url).send().await?)
     }
 
-    pub async fn fetch_posts_meta(&self, uid: &str, page: u64) -> Result<Vec<Post>> {
+    pub async fn fetch_posts_meta(&self, uid: &str, page: u64) -> Result<Posts> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
         let res = self.fetch(url, &self.web_client).await?;
-        let posts = res.json::<Posts>().await?;
+        let mut posts = res.json::<Value>().await?;
         trace!("get json: {posts:?}");
-        if posts.ok != 1 {
+        if posts["ok"] != 1 {
             Err(anyhow!("fetched data is not ok"))
         } else {
-            Ok(posts.data)
+            if let Value::Array(v) = posts["data"].take() {
+                Ok(Posts(v))
+            } else {
+                panic!("it should be a array, or weibo API has changed!")
+            }
         }
     }
 
