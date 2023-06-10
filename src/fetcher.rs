@@ -8,7 +8,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::data::{FavTag, LongText};
+use crate::data::{FavTag, LongText, Post, Posts, User};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
@@ -17,12 +17,6 @@ const STATUSES_LIKE_LIST_API: &str = "https://weibo.com/ajax/statuses/likelist";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const PROFILE_INFO_API: &str = "https://weibo.com/ajax/profile/info";
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Post(Value);
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Posts(Vec<Value>);
 
 #[derive(Debug)]
 pub struct Fetcher {

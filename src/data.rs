@@ -1,133 +1,15 @@
 use anyhow::anyhow;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Deserialize, Debug)]
-pub struct Posts {
-    pub data: Vec<Post>,
-    pub ok: u8,
-}
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct Post(pub Value);
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Post {
-    pub id: i64,
-    pub visible: Value,
-    pub created_at: String,
-    pub mblogid: String,
-    #[serde(deserialize_with = "deserialize_post_user")]
-    pub user: Option<User>,
-    pub text_raw: String,
-    pub text: String,
-    pub attitudes_status: i64,
-    pub share_repost_type: Option<i64>,
-    #[serde(rename = "showFeedRepost")]
-    pub show_feed_repost: bool,
-    #[serde(rename = "showFeedComment")]
-    pub show_feed_comment: bool,
-    #[serde(rename = "pictureViewerSign")]
-    pub picture_viewer_sign: bool,
-    #[serde(rename = "showPictureViewer")]
-    pub show_picture_viewer: bool,
-    pub source: String,
-    #[serde(default)]
-    pub favorited: bool,
-    #[serde(default)]
-    pub can_edit: bool,
-    pub rid: Option<String>,
-    pub cardid: Option<String>,
-    #[serde(default)]
-    pub pic_ids: Value,
-    #[serde(default)]
-    pub pic_infos: Value,
-    pub pic_num: Option<i64>,
-    #[serde(default)]
-    pub is_paid: bool,
-    pub pic_bg_new: Option<String>,
-    #[serde(deserialize_with = "deserialize_deleted")]
-    #[serde(default)]
-    pub deleted: bool,
-    pub mark: Option<String>,
-    pub mblog_vip_type: Option<i64>,
-    pub reposts_count: Option<i64>,
-    pub comments_count: Option<i64>,
-    pub attitudes_count: Option<i64>,
-    pub mlevel: Option<i64>,
-    pub content_auth: Option<i64>,
-    pub is_show_bulletin: Option<i64>,
-    pub repost_type: Option<i64>,
-    pub retweeted_status: Option<Box<Post>>,
-    pub edit_count: Option<i64>,
-    pub mblogtype: Option<i64>,
-    pub region_name: Option<String>,
-    #[serde(rename = "textLength")]
-    pub text_length: Option<i64>,
-    #[serde(default, rename = "isLongText")]
-    pub is_long_text: bool,
-    #[serde(default)]
-    pub annotations: Value,
-    #[serde(default)]
-    pub geo: Value,
-    #[serde(default)]
-    pub pic_focus_point: Value,
-    #[serde(default)]
-    pub topic_struct: Value,
-    #[serde(default)]
-    pub page_info: Value,
-    #[serde(default)]
-    pub tag_struct: Value,
-    #[serde(default)]
-    pub title: Value,
-    #[serde(default)]
-    pub number_display_strategy: Value,
-    #[serde(default)]
-    pub continue_tag: Value,
-    #[serde(default)]
-    pub comment_manage_info: Value,
-    #[serde(default)]
-    pub url_struct: Value,
-    #[serde(default)]
-    pub mix_media_info: Value,
-}
+pub struct Posts(pub Vec<Value>);
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct User {
-    pub profile_url: String,
-    pub planet_video: bool,
-    #[serde(deserialize_with = "deserialize_null_default")]
-    pub v_plus: i64,
-    #[serde(default)]
-    pub id: i64,
-    #[serde(default)]
-    pub pc_new: i64,
-    #[serde(default)]
-    pub screen_name: String,
-    #[serde(default)]
-    pub profile_image_url: String,
-    #[serde(default)]
-    pub verified: bool,
-    #[serde(default)]
-    pub verified_type: i64,
-    #[serde(default)]
-    pub domain: String,
-    #[serde(default)]
-    pub weihao: String,
-    #[serde(default)]
-    pub verified_type_ext: Option<i64>,
-    #[serde(default)]
-    pub avatar_large: String,
-    #[serde(default)]
-    pub avatar_hd: String,
-    #[serde(default)]
-    pub follow_me: bool,
-    #[serde(default)]
-    pub following: bool,
-    #[serde(default)]
-    pub mbrank: i64,
-    #[serde(default)]
-    pub mbtype: i64,
-    #[serde(default)]
-    pub icon_list: Value,
-}
+pub struct User(pub Value);
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct LongText {
@@ -158,44 +40,9 @@ pub struct FavTag {
     pub ok: u8,
 }
 
-fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    T: Default + Deserialize<'de>,
-    D: Deserializer<'de>,
-{
-    let opt = Option::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_default())
-}
-
-fn deserialize_post_user<'de, D>(deserializer: D) -> Result<Option<User>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let user: Option<User> = Option::deserialize(deserializer)?;
-    Ok(user.and_then(|user| (user.id != 0).then_some(user)))
-}
-
-fn deserialize_deleted<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<&str> = Option::deserialize(deserializer)?;
-    Ok(s.is_some() && s.unwrap() == "1")
-}
-
-// fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//     let op: Option<Vec<String>> = Option::deserialize(deserializer)?;
-//     Ok(op.and_then(|vec| (!vec.is_empty()).then_some(vec)))
-// }
-
 #[cfg(test)]
 mod tests {
-    use crate::data::{Post, Posts};
-
-    use super::LongText;
+    use super::{LongText, Post, Posts};
 
     #[test]
     fn parse_post() {
