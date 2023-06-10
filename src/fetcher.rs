@@ -177,6 +177,18 @@ impl Fetcher {
         Ok(res_bytes)
     }
 
+    pub async fn fetch_emoticon(&self) -> Result<Value> {
+        let url = STATUSES_CONFIG_API;
+        debug!("fetch emoticon, url: {url}");
+        let res = self.fetch(url, &self.web_client).await?;
+        let mut json: Value = res.json().await?;
+        if json["ok"] != 1 {
+            Err(anyhow!("fetched emoticon is not ok"))
+        } else {
+            Ok(json["data"]["emoticon"].take())
+        }
+    }
+
     pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
         unimplemented!()
     }
