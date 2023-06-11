@@ -8,6 +8,12 @@ pub struct Post(pub Value);
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Posts(pub Vec<Value>);
 
+impl Posts {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct User(pub Value);
 
