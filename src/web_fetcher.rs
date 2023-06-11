@@ -166,7 +166,7 @@ impl WebFetcher {
             Err(anyhow!("fetched data is not ok"))
         } else {
             if let Value::Array(v) = posts["data"].take() {
-                Ok(Posts(v))
+                Ok(Posts { data: v })
             } else {
                 panic!("it should be a array, or weibo API has changed!")
             }

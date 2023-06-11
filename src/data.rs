@@ -6,11 +6,13 @@ use serde_json::Value;
 pub struct Post(pub Value);
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Posts(pub Vec<Value>);
+pub struct Posts {
+    pub data: Vec<Value>,
+}
 
 impl Posts {
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.data.len()
     }
 }
 
@@ -19,7 +21,7 @@ impl IntoIterator for Posts {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0
+        self.data
             .into_iter()
             .map(|v| Post(v))
             .collect::<Vec<_>>()
@@ -60,7 +62,7 @@ pub struct FavTag {
 }
 
 #[cfg(test)]
-mod tests {
+mod data_test {
     use super::{LongText, Post, Posts};
 
     #[test]
