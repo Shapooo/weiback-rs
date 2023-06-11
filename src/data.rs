@@ -2,12 +2,30 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Post(pub Value);
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+impl Serialize for Post {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct Posts {
     pub data: Vec<Value>,
+}
+
+impl Serialize for Posts {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.data.serialize(serializer)
+    }
 }
 
 impl Posts {
