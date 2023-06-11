@@ -14,6 +14,19 @@ impl Posts {
     }
 }
 
+impl IntoIterator for Posts {
+    type Item = Post;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0
+            .into_iter()
+            .map(|v| Post(v))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct User(pub Value);
 
