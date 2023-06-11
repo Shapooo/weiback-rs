@@ -5,10 +5,9 @@ use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, IntoUrl, Response,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::data::{FavTag, LongText, Post, Posts, User};
+use crate::data::{FavTag, LongText, Posts};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
@@ -19,13 +18,13 @@ const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&i
 const PROFILE_INFO_API: &str = "https://weibo.com/ajax/profile/info";
 
 #[derive(Debug)]
-pub struct Fetcher {
+pub struct WebFetcher {
     web_client: Client,
     pic_client: Client,
     mobile_client: Option<Client>,
 }
 
-impl Fetcher {
+impl WebFetcher {
     pub fn build(web_cookie: String, mobile_cookie: Option<String>) -> Self {
         let mut web_headers: HeaderMap = HeaderMap::new();
         web_headers.insert(
@@ -146,7 +145,7 @@ impl Fetcher {
             client
         });
 
-        return Fetcher {
+        return WebFetcher {
             web_client,
             pic_client,
             mobile_client,
