@@ -63,7 +63,6 @@ impl ResourceManager {
     }
 
     pub async fn get_emoticon(&self) -> anyhow::Result<HashMap<String, String>> {
-        let res = self.web_fetcher.fetch_emoticon().await?;
-        todo!()
+        self.web_fetcher.fetch_emoticon().await
     }
 }

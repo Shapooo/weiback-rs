@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use log::{debug, trace};
@@ -10,17 +12,22 @@ use serde_json::Value;
 use crate::data::{FavTag, LongText, Posts};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
+#[allow(unused)]
 const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
+#[allow(unused)]
 const STATUSES_LIKE_LIST_API: &str = "https://weibo.com/ajax/statuses/likelist";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
+#[allow(unused)]
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
+#[allow(unused)]
 const PROFILE_INFO_API: &str = "https://weibo.com/ajax/profile/info";
 
 #[derive(Debug)]
 pub struct WebFetcher {
     web_client: Client,
     pic_client: Client,
+    #[allow(unused)]
     mobile_client: Option<Client>,
 }
 
@@ -162,8 +169,8 @@ impl WebFetcher {
         let res = self.fetch(url, &self.web_client).await?;
         let mut posts = res.json::<Value>().await?;
         trace!("get json: {posts:?}");
-        if posts["ok"] != 1 {
-            Err(anyhow!("fetched data is not ok"))
+        if posts["ok"].as_i64().unwrap() != 1 {
+            Err(anyhow!("fetched data is not ok: {:?}", posts))
         } else {
             if let Value::Array(v) = posts["data"].take() {
                 Ok(Posts { data: v })
@@ -181,19 +188,45 @@ impl WebFetcher {
         Ok(res_bytes)
     }
 
-    pub async fn fetch_emoticon(&self) -> Result<Value> {
+    pub async fn fetch_emoticon(&self) -> Result<HashMap<String, String>> {
         let url = STATUSES_CONFIG_API;
         debug!("fetch emoticon, url: {url}");
         let res = self.fetch(url, &self.web_client).await?;
         let mut json: Value = res.json().await?;
         if json["ok"] != 1 {
-            Err(anyhow!("fetched emoticon is not ok"))
-        } else {
-            Ok(json["data"]["emoticon"].take())
+            return Err(anyhow!("fetched emoticon is not ok"));
         }
+        let mut res = HashMap::new();
+        if let Value::Object(emoticon) = json["data"]["emoticon"].take() {
+            for (_, groups) in emoticon {
+                if let Value::Object(group) = groups {
+                    for (_, emojis) in group {
+                        if let Value::Array(emojis) = emojis {
+                            for mut emoji in emojis {
+                                if let (Value::String(phrase), Value::String(url)) =
+                                    (emoji["phrase"].take(), emoji["url"].take())
+                                {
+                                    res.insert(phrase, url);
+                                } else {
+                                    return Err(anyhow!("the format of emoticon is unexpected"));
+                                }
+                            }
+                        } else {
+                            return Err(anyhow!("the format of emoticon is unexpected"));
+                        }
+                    }
+                } else {
+                    return Err(anyhow!("the format of emoticon is unexpected"));
+                }
+            }
+        } else {
+            return Err(anyhow!("the format of emoticon is unexpected"));
+        }
+
+        Ok(res)
     }
 
-    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
+    pub async fn fetch_mobile_page(&self, _mblogid: &str) -> Result<Value> {
         unimplemented!()
     }
 
@@ -212,5 +245,16 @@ impl WebFetcher {
         let res = self.fetch(url, &self.web_client).await?;
         let long_text_meta = res.json::<LongText>().await?;
         Ok(long_text_meta.get_content()?)
+    }
+}
+
+#[cfg(test)]
+mod web_fetcher_test {
+    use super::*;
+    #[tokio::test]
+    async fn fetch_emoticon() {
+        let f = WebFetcher::build("[privacy]".into(), None);
+        let res = f.fetch_emoticon().await.unwrap();
+        println!("{:?}", res);
     }
 }
