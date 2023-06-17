@@ -3,14 +3,17 @@ use std::path::PathBuf;
 use anyhow;
 use bytes::Bytes;
 use log::{info, trace};
+use serde::Serialize;
+use serde_json::{from_str, to_value, Value};
+use sqlx::FromRow;
 use sqlx::{
     migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Connection, Sqlite, SqliteConnection,
     SqlitePool,
 };
 
-use crate::sql_data::{PictureBlob, SqlPost, SqlUser};
+use crate::data::{Post, User};
 
-const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, text_length INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json); CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
+const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, textLength INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json); CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
 
 #[derive(Debug)]
 pub struct Persister {
@@ -50,74 +53,96 @@ impl Persister {
         Ok(Persister { db_pool: pool })
     }
 
-    pub async fn insert_post(&self, post: &SqlPost) -> anyhow::Result<()> {
+    pub async fn insert_post(&self, post: &Post) -> Result<(), sqlx::Error> {
+        self._insert_post(post).await?;
+        if post["user"]["id"].is_number() {
+            self.insert_user(&post["user"]).await?;
+        }
+        if post["retweeted_status"].is_object() {
+            self._insert_post(&post["retweeted_status"]).await?;
+            if post["retweeted_status"]["user"]["id"].is_number() {
+                self.insert_user(&post["retweeted_status"]["user"]).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn _insert_post(&self, post: &Value) -> Result<(), sqlx::Error> {
         let result = sqlx::query(
             r#"INSERT OR IGNORE INTO
 fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 ?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
-        .bind(&post.id)
-        .bind(&post.created_at)
-        .bind(&post.mblogid)
-        .bind(&post.text_raw)
-        .bind(&post.source)
-        .bind(&post.region_name)
-        .bind(&post.deleted)
-        .bind(&post.uid)
-        .bind(&post.pic_ids)
-        .bind(&post.pic_num)
-        .bind(&post.retweeted_status)
-        .bind(&post.url_struct)
-        .bind(&post.topic_struct)
-        .bind(&post.tag_struct)
-        .bind(&post.number_display_strategy)
-        .bind(&post.mix_media_info)
-        .bind(&post.visible)
-        .bind(&post.text)
-        .bind(&post.attitudes_status)
-        .bind(&post.show_feed_repost)
-        .bind(&post.show_feed_comment)
-        .bind(&post.picture_viewer_sign)
-        .bind(&post.show_picture_viewer)
-        .bind(&post.favorited)
-        .bind(&post.can_edit)
-        .bind(&post.is_paid)
-        .bind(&post.share_repost_type)
-        .bind(&post.rid)
-        .bind(&post.pic_infos)
-        .bind(&post.cardid)
-        .bind(&post.pic_bg_new)
-        .bind(&post.mark)
-        .bind(&post.mblog_vip_type)
-        .bind(&post.reposts_count)
-        .bind(&post.comments_count)
-        .bind(&post.attitudes_count)
-        .bind(&post.mlevel)
-        .bind(&post.content_auth)
-        .bind(&post.is_show_bulletin)
-        .bind(&post.repost_type)
-        .bind(&post.edit_count)
-        .bind(&post.mblogtype)
-        .bind(&post.text_length)
-        .bind(&post.is_long_text)
-        .bind(&post.annotations)
-        .bind(&post.geo)
-        .bind(&post.pic_focus_point)
-        .bind(&post.page_info)
-        .bind(&post.title)
-        .bind(&post.continue_tag)
-        .bind(&post.comment_manage_info)
+        .bind(post["id"].as_i64().unwrap())
+        .bind(post["created_at"].as_str().unwrap())
+        .bind(post["mblogid"].as_str().unwrap())
+        .bind(post["text_raw"].as_str().unwrap())
+        .bind(post["source"].as_str().unwrap())
+        .bind(post["region_name"].as_str())
+        .bind(post["deleted"].as_bool().unwrap_or_default())
+        .bind(post["user"]["id"].as_i64())
+        .bind((post["pic_ids"].is_object()).then_some(post["pic_ids"].to_string()))
+        .bind(post["pic_num"].as_i64())
+        .bind(post["retweeted_status"]["id"].as_i64())
+        .bind((post["url_struct"].is_object()).then_some(post["url_struct"].to_string()))
+        .bind((post["topic_struct"].is_object()).then_some(post["topic_struct"].to_string()))
+        .bind((post["tag_struct"].is_object()).then_some(post["tag_struct"].to_string()))
+        .bind(
+            (post["number_display_strategy"].is_object())
+                .then_some(post["number_display_strategy"].to_string()),
+        )
+        .bind((post["mix_media_info"].is_object()).then_some(post["mix_media_info"].to_string()))
+        .bind((post["visible"].is_object()).then_some(post["visible"].to_string()))
+        .bind(post["text"].as_str().unwrap())
+        .bind(post["attitudes_status"].as_i64().unwrap())
+        .bind(post["showFeedRepost"].as_bool().unwrap())
+        .bind(post["showFeedComment"].as_bool().unwrap())
+        .bind(post["pictureViewerSign"].as_bool().unwrap())
+        .bind(post["showPictureViewer"].as_bool().unwrap())
+        .bind(post["favorited"].as_bool().unwrap_or_default())
+        .bind(post["can_edit"].as_bool().unwrap_or_default())
+        .bind(post["is_paid"].as_bool().unwrap_or_default())
+        .bind(post["share_repost_type"].as_i64())
+        .bind(post["rid"].as_str().unwrap_or_default())
+        .bind((post["pic_infos"].is_object()).then_some(post["pic_infos"].to_string()))
+        .bind(post["cardid"].as_str().unwrap_or_default())
+        .bind(post["pic_bg_new"].as_str().unwrap_or_default())
+        .bind(post["mark"].as_str().unwrap_or_default())
+        .bind(post["mblog_vip_type"].as_i64())
+        .bind(post["reposts_count"].as_i64())
+        .bind(post["comments_count"].as_i64())
+        .bind(post["attitudes_count"].as_i64())
+        .bind(post["mlevel"].as_i64())
+        .bind(post["content_auth"].as_i64())
+        .bind(post["is_show_bulletin"].as_i64())
+        .bind(post["repost_type"].as_i64())
+        .bind(post["edit_count"].as_i64())
+        .bind(post["mblogtype"].as_i64())
+        .bind(post["textLength"].as_i64())
+        .bind(post["isLongText"].as_bool().unwrap_or_default())
+        .bind((post["annotations"].is_object()).then_some(post["annotations"].to_string()))
+        .bind((post["geo"].is_object()).then_some(post["geo"].to_string()))
+        .bind((post["pic_focus_point"].is_object()).then_some(post["pic_focus_point"].to_string()))
+        .bind((post["page_info"].is_object()).then_some(post["page_info"].to_string()))
+        .bind(post["title"].as_str())
+        .bind((post["continue_tag"].is_object()).then_some(post["continue_tag"].to_string()))
+        .bind(
+            (post["comment_manage_info"].is_object())
+                .then_some(post["comment_manage_info"].to_string()),
+        )
         .execute(&self.db_pool)
         .await?;
         trace!("insert post {post:?} \nresult: {result:?}");
         Ok(())
     }
 
-    pub async fn insert_img(&self, url: &str, id: &str, img: &[u8]) -> anyhow::Result<()> {
+    pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<(), sqlx::Error> {
+        use crate::utils;
+        let id = utils::pic_url_to_id(url);
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
             .bind(url)
-            .bind(id)
+            .bind(&id)
             .bind(img)
             .execute(&self.db_pool)
             .await?;
@@ -125,37 +150,37 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         Ok(())
     }
 
-    pub async fn insert_user(&self, user: &SqlUser) -> anyhow::Result<()> {
+    pub async fn insert_user(&self, user: &User) -> Result<(), sqlx::Error> {
         let result = sqlx::query(
             r#"INSERT OR IGNORE INTO user VALUES
  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
-        .bind(&user.id)
-        .bind(&user.profile_url)
-        .bind(&user.screen_name)
-        .bind(&user.profile_image_url)
-        .bind(&user.avatar_large)
-        .bind(&user.avatar_hd)
-        .bind(&user.planet_video)
-        .bind(&user.v_plus)
-        .bind(&user.pc_new)
-        .bind(&user.verified)
-        .bind(&user.verified_type)
-        .bind(&user.domain)
-        .bind(&user.weihao)
-        .bind(&user.verified_type_ext)
-        .bind(&user.follow_me)
-        .bind(&user.following)
-        .bind(&user.mbrank)
-        .bind(&user.mbtype)
-        .bind(&user.icon_list)
+        .bind(user["id"].as_i64().unwrap())
+        .bind(user["profile_url"].as_str().unwrap())
+        .bind(user["screen_name"].as_str().unwrap())
+        .bind(user["profile_image_url"].as_str().unwrap())
+        .bind(user["avatar_large"].as_str().unwrap())
+        .bind(user["avatar_hd"].as_str().unwrap())
+        .bind(user["planet_video"].as_bool().unwrap())
+        .bind(user["v_plus"].as_i64())
+        .bind(user["pc_new"].as_i64().unwrap())
+        .bind(user["verified"].as_bool().unwrap())
+        .bind(user["verified_type"].as_i64().unwrap())
+        .bind(user["domain"].as_str().unwrap())
+        .bind(user["weihao"].as_str().unwrap())
+        .bind(user["verified_type_ext"].as_i64())
+        .bind(user["follow_me"].as_bool().unwrap())
+        .bind(user["following"].as_bool().unwrap())
+        .bind(user["mbrank"].as_i64().unwrap())
+        .bind(user["mbtype"].as_i64().unwrap())
+        .bind(user["icon_list"].to_string())
         .execute(&self.db_pool)
         .await?;
         trace!("insert user {user:?}, result {result:?}");
         Ok(())
     }
 
-    pub async fn query_img(&self, url: &str) -> anyhow::Result<Bytes> {
+    pub async fn query_img(&self, url: &str) -> Result<Bytes, sqlx::Error> {
         let result: PictureBlob = sqlx::query_as("SELECT * FROM picture_blob WHERE url = ?")
             .bind(url)
             .fetch_one(&self.db_pool)
@@ -163,30 +188,234 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         Ok(result.blob.into())
     }
 
-    pub async fn query_post(&self, id: i64) -> anyhow::Result<SqlPost> {
-        let result = sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info FROM fav_post WHERE id = ?")
-            .bind(id)
-            .fetch_one(&self.db_pool)
-            .await?;
-        Ok(result)
+    pub async fn query_post(&self, id: i64) -> Result<Post, sqlx::Error> {
+        let sql_post = self._query_post(id).await?;
+        let user = if let Some(uid) = sql_post.uid {
+            self.query_user(uid).await?
+        } else {
+            Value::Null
+        };
+        let retweet = if let Some(ret_id) = sql_post.retweeted_status {
+            let sql_retweet = self._query_post(ret_id).await?;
+            let user = if let Some(uid) = sql_retweet.uid {
+                self.query_user(uid).await?
+            } else {
+                Value::Null
+            };
+            let mut ret = sql_post_to_post(sql_retweet);
+            ret["user"] = user;
+            ret
+        } else {
+            Value::Null
+        };
+
+        let mut post = sql_post_to_post(sql_post);
+        post["user"] = user;
+        post["retweeted_status"] = retweet;
+
+        Ok(post)
     }
 
-    pub async fn query_user(&self, id: i64) -> anyhow::Result<SqlUser> {
-        let result: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
+    async fn _query_post(&self, id: i64) -> Result<SqlPost, sqlx::Error> {
+        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.db_pool)
+            .await
+    }
+
+    pub async fn query_user(&self, id: i64) -> Result<User, sqlx::Error> {
+        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
             .bind(id)
             .fetch_one(&self.db_pool)
             .await?;
+
+        let result = serde_json::to_value(sql_user).unwrap();
+        // TODO: conv icon_list to Value
         Ok(result)
     }
 }
 
+fn sql_post_to_post(sql_post: SqlPost) -> Post {
+    dbg!(&sql_post);
+    let mut map = serde_json::Map::new();
+    map.insert("id".into(), serde_json::to_value(sql_post.id).unwrap());
+    map.insert("created_at".into(), to_value(sql_post.created_at).unwrap());
+    map.insert("mblogid".into(), to_value(sql_post.mblogid).unwrap());
+    map.insert("text_raw".into(), to_value(sql_post.text_raw).unwrap());
+    map.insert("source".into(), to_value(sql_post.source).unwrap());
+    if let Some(v) = sql_post.region_name {
+        map.insert("region_name".into(), to_value(v).unwrap());
+    }
+    map.insert("deleted".into(), to_value(sql_post.deleted).unwrap());
+    if let Some(v) = sql_post.pic_ids {
+        map.insert("pic_ids".into(), from_str(&v).unwrap());
+    }
+    if let Some(v) = sql_post.pic_num {
+        map.insert("pic_num".into(), to_value(v).unwrap());
+    }
+    if let Some(v) = sql_post.url_struct {
+        map.insert("url_struct".into(), from_str(&v).unwrap());
+    }
+    if let Some(v) = sql_post.topic_struct {
+        map.insert("topic_struct".into(), from_str(&v).unwrap());
+    }
+    if let Some(v) = sql_post.tag_struct {
+        map.insert("tag_struct".into(), from_str(&v).unwrap());
+    }
+    if let Some(v) = sql_post.number_display_strategy {
+        map.insert("number_display_strategy".into(), from_str(&v).unwrap());
+    }
+    if let Some(v) = sql_post.mix_media_info {
+        map.insert("mix_media_info".into(), from_str(&v).unwrap());
+    }
+    map.insert(
+        "isLongText".into(),
+        to_value(sql_post.is_long_text).unwrap(),
+    );
+
+    Value::Object(map)
+}
+
+#[derive(Serialize, Debug, Clone, FromRow)]
+pub struct SqlPost {
+    pub id: i64,
+    pub created_at: String,
+    pub mblogid: String,
+    pub text_raw: String,
+    pub source: String,
+    pub region_name: Option<String>,
+    pub deleted: bool,
+    pub uid: Option<i64>,
+    pub pic_ids: Option<String>,
+    pub pic_num: Option<i64>,
+    pub retweeted_status: Option<i64>,
+    pub url_struct: Option<String>,
+    pub topic_struct: Option<String>,
+    pub tag_struct: Option<String>,
+    pub number_display_strategy: Option<String>,
+    pub mix_media_info: Option<String>,
+    #[sqlx(default)]
+    pub visible: String,
+    #[sqlx(default)]
+    pub text: String,
+    #[sqlx(default)]
+    pub attitudes_status: i64,
+    #[sqlx(default, rename = "showFeedRepost")]
+    pub show_feed_repost: bool,
+    #[sqlx(default, rename = "showFeedComment")]
+    pub show_feed_comment: bool,
+    #[sqlx(default, rename = "pictureViewerSign")]
+    pub picture_viewer_sign: bool,
+    #[sqlx(default, rename = "showPictureViewer")]
+    pub show_picture_viewer: bool,
+    #[sqlx(default)]
+    pub favorited: bool,
+    #[sqlx(default)]
+    pub can_edit: bool,
+    #[sqlx(default)]
+    pub is_paid: bool,
+    #[sqlx(default)]
+    pub share_repost_type: Option<i64>,
+    #[sqlx(default)]
+    pub rid: Option<String>,
+    #[sqlx(default)]
+    pub pic_infos: Option<String>,
+    #[sqlx(default)]
+    pub cardid: Option<String>,
+    #[sqlx(default)]
+    pub pic_bg_new: Option<String>,
+    #[sqlx(default)]
+    pub mark: Option<String>,
+    #[sqlx(default)]
+    pub mblog_vip_type: Option<i64>,
+    #[sqlx(default)]
+    pub reposts_count: Option<i64>,
+    #[sqlx(default)]
+    pub comments_count: Option<i64>,
+    #[sqlx(default)]
+    pub attitudes_count: Option<i64>,
+    #[sqlx(default)]
+    pub mlevel: Option<i64>,
+    #[sqlx(default)]
+    pub content_auth: Option<i64>,
+    #[sqlx(default)]
+    pub is_show_bulletin: Option<i64>,
+    #[sqlx(default)]
+    pub repost_type: Option<i64>,
+    #[sqlx(default)]
+    pub edit_count: Option<i64>,
+    #[sqlx(default)]
+    pub mblogtype: Option<i64>,
+    #[sqlx(default, rename = "textLength")]
+    pub text_length: Option<i64>,
+    #[sqlx(default, rename = "isLongText")]
+    pub is_long_text: bool,
+    #[sqlx(default)]
+    pub annotations: Option<String>,
+    #[sqlx(default)]
+    pub geo: Option<String>,
+    #[sqlx(default)]
+    pub pic_focus_point: Option<String>,
+    #[sqlx(default)]
+    pub page_info: Option<String>,
+    #[sqlx(default)]
+    pub title: Option<String>,
+    #[sqlx(default)]
+    pub continue_tag: Option<String>,
+    #[sqlx(default)]
+    pub comment_manage_info: Option<String>,
+}
+
+#[derive(Serialize, Debug, Clone, FromRow)]
+pub struct SqlUser {
+    pub id: i64,
+    pub profile_url: String,
+    pub screen_name: String,
+    pub profile_image_url: String,
+    pub avatar_large: String,
+    pub avatar_hd: String,
+    #[sqlx(default)]
+    pub planet_video: bool,
+    #[sqlx(default)]
+    pub v_plus: i64,
+    #[sqlx(default)]
+    pub pc_new: i64,
+    #[sqlx(default)]
+    pub verified: bool,
+    #[sqlx(default)]
+    pub verified_type: i64,
+    #[sqlx(default)]
+    pub domain: String,
+    #[sqlx(default)]
+    pub weihao: String,
+    #[sqlx(default)]
+    pub verified_type_ext: Option<i64>,
+    #[sqlx(default)]
+    pub follow_me: bool,
+    #[sqlx(default)]
+    pub following: bool,
+    #[sqlx(default)]
+    pub mbrank: i64,
+    #[sqlx(default)]
+    pub mbtype: i64,
+    #[sqlx(default)]
+    pub icon_list: String,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct PictureBlob {
+    pub url: String,
+    pub id: String,
+    pub blob: Vec<u8>,
+}
+
 #[cfg(test)]
-mod tests {
-    use crate::data::{Post, Posts};
-    use crate::sql_data::{SqlPost, SqlUser};
+mod persister_test {
+    use serde_json::from_str;
 
     use super::*;
-    use serde_json;
+    use crate::data::{Post, Posts};
+
     #[tokio::test]
     async fn post_build() {
         Persister::build("post_build.db").await.unwrap();
@@ -197,7 +426,7 @@ mod tests {
     async fn insert_post() {
         let pster = Persister::build("insert_post.db").await.unwrap();
         let txt = include_str!("../res/one.json");
-        let post: SqlPost = SqlPost::from(serde_json::from_str::<Post>(txt).unwrap());
+        let post = from_str::<Post>(txt).unwrap();
         pster.insert_post(&post).await.unwrap();
         std::fs::remove_file("insert_post.db").unwrap();
         std::fs::remove_file("insert_post.db-shm").unwrap();
@@ -208,11 +437,10 @@ mod tests {
     async fn insert_posts() {
         let pster = Persister::build("insert_posts.db").await.unwrap();
         let txt = include_str!("../res/full.json");
-        let posts: Vec<SqlPost> = serde_json::from_str::<Posts>(txt)
+        let posts: Vec<_> = from_str::<Posts>(txt)
             .unwrap()
-            .data
             .into_iter()
-            .map(SqlPost::from)
+            // .map(SqlPost::from)
             .collect();
         for post in posts.iter() {
             pster.insert_post(post).await.unwrap();
@@ -226,12 +454,18 @@ mod tests {
     async fn insert_users() {
         let pster = Persister::build("insert_users.db").await.unwrap();
         let txt = include_str!("../res/full.json");
-        let users: Vec<SqlUser> = serde_json::from_str::<Posts>(txt)
+        let users: Vec<_> = from_str::<Posts>(txt)
             .unwrap()
-            .data
             .into_iter()
-            .filter_map(|p| p.user)
-            .map(|user| SqlUser::from(user))
+            .filter_map(|mut p| {
+                let a = p["user"].take();
+                if !a["id"].is_null() {
+                    Some(a)
+                } else {
+                    None
+                }
+            })
+            // .map(|user| SqlUser::from(user))
             .collect();
         for user in users.iter() {
             pster.insert_user(user).await.unwrap();
@@ -244,10 +478,9 @@ mod tests {
     #[tokio::test]
     async fn insert_img() {
         let img = include_bytes!("../res/example.jpg");
-        let id = "example";
         let url = "https://test_url/example.jpg";
         let p = Persister::build("insert_img.db").await.unwrap();
-        p.insert_img(url, id, img).await.unwrap();
+        p.insert_img(url, img).await.unwrap();
         std::fs::write("./examp.jpg", p.query_img(url).await.unwrap()).unwrap();
         std::fs::remove_file("insert_img.db").unwrap();
         std::fs::remove_file("insert_img.db-shm").unwrap();
@@ -256,12 +489,10 @@ mod tests {
 
     #[tokio::test]
     async fn query_post() {
-        let post =
-            SqlPost::from(serde_json::from_str::<Post>(include_str!("../res/one.json")).unwrap());
-        // dbg!(&post);
+        let post = from_str::<Post>(include_str!("../res/one.json")).unwrap();
         let pr = Persister::build("query_post.db").await.unwrap();
         pr.insert_post(&post).await.unwrap();
-        let result = pr.query_post(post.id).await.unwrap();
+        let result = pr.query_post(post["id"].as_i64().unwrap()).await.unwrap();
         dbg!(result);
         std::fs::remove_file("query_post.db").unwrap();
         std::fs::remove_file("query_post.db-shm").unwrap();
@@ -270,15 +501,10 @@ mod tests {
 
     #[tokio::test]
     async fn query_user() {
-        let user = SqlUser::from(
-            serde_json::from_str::<Post>(include_str!("../res/one.json"))
-                .unwrap()
-                .user
-                .unwrap(),
-        );
+        let user = from_str::<Post>(include_str!("../res/one.json")).unwrap()["user"].take();
         let pr = Persister::build("query_user.db").await.unwrap();
         pr.insert_user(&user).await.unwrap();
-        let result = pr.query_user(user.id).await.unwrap();
+        let result = pr.query_user(user["id"].as_i64().unwrap()).await.unwrap();
         dbg!(result);
         std::fs::remove_file("query_user.db").unwrap();
         std::fs::remove_file("query_user.db-shm").unwrap();

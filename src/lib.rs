@@ -5,6 +5,6 @@ pub mod exporter;
 pub mod generator;
 pub mod persister;
 pub mod resource_manager;
-pub mod sql_data;
 pub mod task_handler;
+mod utils;
 pub mod web_fetcher;
