@@ -41,11 +41,11 @@ impl Config {
 pub fn get_config() -> Result<Config> {
     let mut conf = Config::new();
     let args = Args::parse();
-    let config_file: Option<PathBuf> = args.config.or(current_exe().ok()).map(|mut exe| {
+    let config_file: Option<PathBuf> = args.config.or(current_exe().ok().map(|mut exe| {
         exe.pop();
         exe.push("config.yaml");
         exe
-    });
+    }));
 
     if config_file.is_none() {
         panic!("config file must be set!");
