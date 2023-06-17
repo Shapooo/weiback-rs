@@ -8,9 +8,9 @@ use weiback_rs::task_handler::TaskHandler;
 #[tokio::main]
 async fn main() -> Result<()> {
     SimpleLogger::new()
-        .env()
         .with_colors(true)
         .with_level(log::LevelFilter::Warn)
+        .env()
         .init()
         .unwrap();
     info!("start running...");
