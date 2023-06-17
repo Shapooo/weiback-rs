@@ -2,17 +2,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct Post(pub Value);
-
-impl Serialize for Post {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
+pub type Post = Value;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Posts {
@@ -39,16 +29,11 @@ impl IntoIterator for Posts {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.data
-            .into_iter()
-            .map(|v| Post(v))
-            .collect::<Vec<_>>()
-            .into_iter()
+        self.data.into_iter()
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct User(pub Value);
+pub type User = Value;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct LongText {
