@@ -1,4 +1,4 @@
-pub fn pic_url_to_file(url: &str) -> String {
+pub fn pic_url_to_file(url: &str) -> &str {
     url.rsplit('/')
         .next()
         .expect("it is not a valid picture url")
@@ -8,11 +8,14 @@ pub fn pic_url_to_file(url: &str) -> String {
         .into()
 }
 
-pub fn pic_url_to_id(url: &str) -> String {
-    let mut file = pic_url_to_file(url);
+pub fn pic_url_to_id(url: &str) -> &str {
+    let file = pic_url_to_file(url);
     let i = file.rfind('.').expect("it is not a valid picture url");
-    file.truncate(i);
-    file
+    &file[..i]
+}
+
+pub fn strip_url_queries(url: &str) -> &str {
+    url.split('?').next().unwrap()
 }
 
 #[cfg(test)]

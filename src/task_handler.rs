@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::Result;
 use chrono;
 use log::{debug, info};
-use serde_json::Value;
+use serde_json::{to_value, Value};
 use tokio::time::sleep;
 
 use crate::config::Config;
@@ -14,6 +14,7 @@ use crate::exporter::{Exporter, HTMLPage, Picture};
 use crate::generator::HTMLGenerator;
 use crate::persister::Persister;
 use crate::resource_manager::ResourceManager;
+use crate::utils::{pic_url_to_file, pic_url_to_id, strip_url_queries};
 use crate::web_fetcher::WebFetcher;
 
 #[derive(Debug)]
@@ -83,8 +84,8 @@ impl TaskHandler {
             }
 
             if with_pic {
-                for post in posts_meta.into_iter() {
-                    let post = self.process_post(post, &mut pic_to_fetch).await?;
+                for mut post in posts_meta {
+                    self.process_post(&mut post, &mut pic_to_fetch)?;
                     if export {
                         html.push_str(self.generator.generate_post(post).await?.as_str());
                     }
@@ -96,7 +97,7 @@ impl TaskHandler {
         if export {
             let mut pics = Vec::new();
             for pic_url in pic_to_fetch {
-                let name = crate::utils::pic_url_to_file(&pic_url);
+                let name = pic_url_to_file(&pic_url).into();
                 let blob = self.resource_manager.get_pic(&pic_url).await?;
                 pics.push(Picture { name, blob });
             }
@@ -111,7 +112,56 @@ impl TaskHandler {
         Ok(())
     }
 
-    async fn process_post(&self, post: Post, pics: &mut HashSet<Picture>) -> Result<Post> {
+    fn process_post(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
+        if post["retweeted_status"].is_object() {
+            self.process_post_non_rec(post, pics, true)?;
+        }
+        self.process_post_non_rec(post, pics, false)?;
+        Ok(())
+    }
+
+    fn process_post_non_rec(
+        &self,
+        post: &mut Post,
+        pics: &mut HashSet<String>,
+        is_retweet: bool,
+    ) -> Result<()> {
+        if let Value::Array(pic_ids) = post["pic_ids"].take() {
+            let pic_infos = &post["pic_infos"];
+            let mut pic_locs = Vec::new();
+            for id in pic_ids {
+                let url = strip_url_queries(
+                    pic_infos[id.as_str().unwrap()]["mw2000"]["url"]
+                        .as_str()
+                        .expect("cannot get pic info"),
+                );
+                let name = String::from("resources/") + pic_url_to_file(url);
+                pic_locs.push(name);
+                pics.insert(url.into());
+            }
+            if let Value::Object(obj) = post {
+                let key = if is_retweet { "retweet_pics" } else { "pics" };
+                obj.insert(key.into(), to_value(pic_locs).unwrap());
+            } else {
+                panic!("")
+            }
+        }
+        let text_raw = post["text_raw"].as_str().unwrap();
+        let topic_struct = &post["topic_struct"];
+        let url_struct = &post["url_struct"];
+        let text = self.trans_text(text_raw, topic_struct, url_struct, pics)?;
+        post["text_raw"] = to_value(text).unwrap();
+
+        Ok(())
+    }
+
+    fn trans_text(
+        &self,
+        text: &str,
+        topic_struct: &Value,
+        url_struct: &Value,
+        pic_urls: &mut HashSet<String>,
+    ) -> Result<String> {
         todo!()
     }
 }
