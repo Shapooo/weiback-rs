@@ -1,3 +1,4 @@
+use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 use std::time::Duration;
@@ -5,6 +6,7 @@ use std::time::Duration;
 use anyhow::Result;
 use chrono;
 use log::{debug, info};
+use regex::Regex;
 use serde_json::{to_value, Value};
 use tokio::time::sleep;
 
@@ -14,7 +16,7 @@ use crate::exporter::{Exporter, HTMLPage, Picture};
 use crate::generator::HTMLGenerator;
 use crate::persister::Persister;
 use crate::resource_manager::ResourceManager;
-use crate::utils::{pic_url_to_file, pic_url_to_id, strip_url_queries};
+use crate::utils::{pic_url_to_file, strip_url_queries};
 use crate::web_fetcher::WebFetcher;
 
 #[derive(Debug)]
@@ -158,10 +160,106 @@ impl TaskHandler {
     fn trans_text(
         &self,
         text: &str,
-        topic_struct: &Value,
-        url_struct: &Value,
+        _topic_struct: &Value,
+        _url_struct: &Value,
         pic_urls: &mut HashSet<String>,
     ) -> Result<String> {
+        let newline_expr = Regex::new("\\n").unwrap();
+        let single_quote = Regex::new("&#39;").unwrap();
+        let url_expr = Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}").unwrap();
+        let at_expr = Regex::new(r#"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+"#).unwrap();
+        let emoji_expr = Regex::new(r#"(\[.*?\])(?!#)"#).unwrap();
+        let email_expr =
+            Regex::new(r#"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}"#)
+                .unwrap();
+        let topic_expr = Regex::new(r#"#([^#]+)#"#).unwrap();
+
+        let text = single_quote.replace_all(text, "'");
+        let text = newline_expr.replace_all(&text, "<br />");
+        let emails_suffixes = email_expr
+            .find_iter(&text)
+            .filter_map(|m| at_expr.find(m.as_str()).map(|m| m.as_str()))
+            .collect::<HashSet<_>>();
+        let text = match at_expr
+            .find_iter(&text)
+            .filter_map(|m| emails_suffixes.contains(m.as_str()).then_some(m))
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + Borrowed(&text[i..m.start()])
+                        + self.trans_user(&text[m.start()..m.end()]),
+                    m.end(),
+                )
+            }) {
+            (_, 0) => text,
+            (res, _) => res,
+        };
+        let text = match topic_expr
+            .find_iter(&text)
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + &text[i..m.start()] + self.trans_topic(&text[m.start()..m.end()]),
+                    m.end(),
+                )
+            }) {
+            (_, 0) => text,
+            (res, _) => res,
+        };
+        let text = match url_expr
+            .find_iter(&text)
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + &text[i..m.start()] + self.trans_url(&text[m.start()..m.end()]),
+                    m.end(),
+                )
+            }) {
+            (_, 0) => text,
+            (res, _) => res,
+        };
+        let text = match emoji_expr
+            .find_iter(&text)
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + &text[i..m.start()]
+                        + self.trans_emoji(&text[m.start()..m.end()], pic_urls),
+                    m.end(),
+                )
+            }) {
+            (_, 0) => text,
+            (res, _) => res,
+        };
+
+        Ok(text.to_string())
+    }
+
+    fn trans_emoji<'a>(&self, s: &'a str, pic_urls: &mut HashSet<String>) -> Cow<'a, str> {
+        if let Some(url) = self.emoticon.get(s) {
+            pic_urls.insert(url.into());
+            let loc = pic_url_to_file(url).to_owned();
+            Borrowed(r#"<img class="bk-emoji" alt="["#)
+                + Borrowed(s)
+                + Borrowed(r#"]" title="["#)
+                + Borrowed(s)
+                + Borrowed(r#"]" src="resources/"#)
+                + Owned(loc)
+                + Borrowed(r#"" />"#)
+        } else {
+            Borrowed(s)
+        }
+    }
+
+    fn trans_user<'a>(&self, s: &'a str) -> Cow<'a, str> {
+        Borrowed(r#"<a class="bk-user" href=https://weibo.com/n/"#)
+            + Borrowed(&s[1..])
+            + Borrowed(">")
+            + Borrowed(s)
+            + Borrowed("</a>")
+    }
+
+    fn trans_topic<'a>(&self, _s: &'a str) -> Cow<'a, str> {
+        todo!()
+    }
+
+    fn trans_url<'a>(&self, _s: &'a str) -> Cow<'a, str> {
         todo!()
     }
 }

@@ -2390,6 +2390,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "log",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
