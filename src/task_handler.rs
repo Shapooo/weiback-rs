@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
@@ -22,6 +22,7 @@ pub struct TaskHandler {
     generator: HTMLGenerator,
     exporter: Exporter,
     config: Config,
+    emoticon: HashMap<String, String>,
 }
 
 impl TaskHandler {
@@ -32,11 +33,13 @@ impl TaskHandler {
         );
         let persister = Persister::build(&config.db).await?;
         let resource_manager = ResourceManager::build(fetcher, persister);
+        let emoticon = resource_manager.get_emoticon().await?;
         Ok(TaskHandler {
             resource_manager,
             generator: HTMLGenerator::new(),
             exporter: Exporter::new(),
             config,
+            emoticon,
         })
     }
 
@@ -64,7 +67,7 @@ impl TaskHandler {
 
         info!("pages download range is {range:?}");
         let mut total_posts_sum = 0;
-        let mut pic_cache: HashSet<Picture> = HashSet::new();
+        let mut pic_to_fetch: HashSet<String> = HashSet::new();
         let mut html = String::new();
         for page in range {
             let posts_meta = self
@@ -81,7 +84,7 @@ impl TaskHandler {
 
             if with_pic {
                 for post in posts_meta.into_iter() {
-                    let post = self.process_post(post, &mut pic_cache).await?;
+                    let post = self.process_post(post, &mut pic_to_fetch).await?;
                     if export {
                         html.push_str(self.generator.generate_post(post).await?.as_str());
                     }
@@ -91,11 +94,14 @@ impl TaskHandler {
         }
 
         if export {
+            let mut pics = Vec::new();
+            for pic_url in pic_to_fetch {
+                let name = crate::utils::pic_url_to_file(&pic_url);
+                let blob = self.resource_manager.get_pic(&pic_url).await?;
+                pics.push(Picture { name, blob });
+            }
             let html = self.generator.generate_page(&html).await?;
-            let page = HTMLPage {
-                html,
-                pics: pic_cache,
-            };
+            let page = HTMLPage { html, pics };
             let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
             self.exporter
                 .export_page(task_name, page, std::path::PathBuf::from("./").as_path())
