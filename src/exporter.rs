@@ -1,8 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use crate::generator::HTMLPage;
-
 use anyhow;
+use bytes::Bytes;
 use tokio::fs::{DirBuilder, File};
 use tokio::io::AsyncWriteExt;
 
@@ -49,20 +48,33 @@ impl Exporter {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HTMLPage {
+    pub html: String,
+    pub pics: Vec<Picture>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Picture {
+    pub name: String,
+    pub blob: Bytes,
+}
+
 #[cfg(test)]
 mod exporter_test {
-
-    use crate::*;
+    use super::{Exporter, HTMLPage, Picture};
     #[tokio::test]
     async fn export_page() {
-        let e = exporter::Exporter::new();
+        let e = Exporter::new();
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
-        let page = generator::HTMLPage {
+        let page = HTMLPage {
             html: "testtesttest".into(),
-            pics: vec![generator::Picture {
+            pics: vec![Picture {
                 name: "example.jpg".into(),
                 blob: pic_blob.into(),
-            }],
+            }]
+            .into_iter()
+            .collect(),
         };
         e.export_page("test_task", page, ".").await.unwrap();
         std::fs::remove_dir_all("test_task").unwrap();
