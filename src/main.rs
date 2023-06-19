@@ -10,6 +10,7 @@ async fn main() -> Result<()> {
     SimpleLogger::new()
         .with_colors(true)
         .with_level(log::LevelFilter::Warn)
+        .with_module_level("sqlx", log::LevelFilter::Error)
         .env()
         .init()
         .unwrap();
