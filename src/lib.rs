@@ -1,10 +1,11 @@
-pub mod args;
 pub mod config;
-pub mod data;
-pub mod exporter;
-pub mod generator;
-pub mod persister;
-pub mod resource_manager;
 pub mod task_handler;
+
+mod args;
+mod data;
+mod exporter;
+mod generator;
+mod persister;
+mod resource_manager;
 mod utils;
-pub mod web_fetcher;
+mod web_fetcher;
