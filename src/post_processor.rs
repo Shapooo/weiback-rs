@@ -2,6 +2,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
+use lazy_static::lazy_static;
 use log::trace;
 use regex::Regex;
 use serde_json::{to_value, Value};
@@ -9,6 +10,17 @@ use urlencoding::encode;
 
 use crate::data::Post;
 use crate::utils::{pic_url_to_file, strip_url_queries};
+
+lazy_static! {
+    static ref NEWLINE_EXPR: Regex = Regex::new("\\n").unwrap();
+    static ref URL_EXPR: Regex =
+        Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}").unwrap();
+    static ref AT_EXPR: Regex = Regex::new(r#"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+"#).unwrap();
+    static ref EMOJI_EXPR: Regex = Regex::new(r#"(\[.*?\])"#).unwrap();
+    static ref EMAIL_EXPR: Regex =
+        Regex::new(r#"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}"#).unwrap();
+    static ref TOPIC_EXPR: Regex = Regex::new(r#"#([^#]+)#"#).unwrap();
+}
 
 #[derive(Debug)]
 pub struct PostProcessor {
@@ -76,22 +88,13 @@ impl PostProcessor {
         pic_urls: &mut HashSet<String>,
         pic_folder: &str,
     ) -> Result<String> {
-        let newline_expr = Regex::new("\\n").unwrap();
-        let url_expr = Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}").unwrap();
-        let at_expr = Regex::new(r#"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+"#).unwrap();
-        let emoji_expr = Regex::new(r#"(\[.*?\])"#).unwrap();
-        let email_expr =
-            Regex::new(r#"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}"#)
-                .unwrap();
-        let topic_expr = Regex::new(r#"#([^#]+)#"#).unwrap();
-
-        let emails_suffixes = email_expr
+        let emails_suffixes = EMAIL_EXPR
             .find_iter(text)
-            .filter_map(|m| at_expr.find(m.as_str()).map(|m| m.as_str()))
+            .filter_map(|m| AT_EXPR.find(m.as_str()).map(|m| m.as_str()))
             .collect::<HashSet<_>>();
-        let text = newline_expr.replace_all(text, "<br />");
+        let text = NEWLINE_EXPR.replace_all(text, "<br />");
         let text = {
-            let res = url_expr
+            let res = URL_EXPR
                 .find_iter(&text)
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
@@ -103,7 +106,7 @@ impl PostProcessor {
             res.0 + Borrowed(&text[res.1..])
         };
         let text = {
-            let res = at_expr
+            let res = AT_EXPR
                 .find_iter(&text)
                 .filter_map(|m| (!emails_suffixes.contains(m.as_str())).then_some(m))
                 .fold((Borrowed(""), 0), |(acc, i), m| {
@@ -116,7 +119,7 @@ impl PostProcessor {
             res.0 + Borrowed(&text[res.1..])
         };
         let text = {
-            let res = topic_expr
+            let res = TOPIC_EXPR
                 .find_iter(&text)
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
@@ -127,7 +130,7 @@ impl PostProcessor {
             res.0 + Borrowed(&text[res.1..])
         };
         let text = {
-            let res = emoji_expr
+            let res = EMOJI_EXPR
                 .find_iter(&text)
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
@@ -209,7 +212,19 @@ mod post_processor {
     use super::*;
     #[tokio::test]
     async fn trans_text() {
-        let pcr = PostProcessor::new(HashMap::new());
+        let emoticon = serde_json::from_str::<Vec<Value>>(include_str!("../.tmp/emo.json"))
+            .unwrap()
+            .into_iter()
+            .map(|mut v| {
+                if let (Value::String(k), Value::String(v)) = (v["phrase"].take(), v["url"].take())
+                {
+                    (k, v)
+                } else {
+                    ("".into(), "".into())
+                }
+            })
+            .collect();
+        let pcr = PostProcessor::new(emoticon);
         let text = &["教纳德拉做一个产品。\n\n产品可以理解为软件行业的ODM，客户可以象订购Dell电脑一样订购定制化的软件。\n\n当然这个本身不稀奇，稀奇的是，微软只出需求管理、项目管理、和代码审查人员，并不出开发人员和测试人员。\n\n软件要求开源。管理人员整理好需求后面向GitHub开发者征求开发人员，管理人员可以根据 ​​​", "一种可以作恶的安全感//@闫昊佳:现实中接触过不少被“霸凌”的案例，轻重不一，共同点是：其中的霸凌者们会精准识别出“谁可以被霸凌”且自己大概率不会受到惩罚。一个人的主体性塑造和自我边界建立太重要了，尤其对于未成年人。", "//@李富强Jason:转发微博" , "Redis与作者antirez的故事\nhttp://t.cn/A6NnfWeF", "除了折腾内核从没用过[二哈]", "#如何控制自己的情绪# \n\n最近真的很烦恼。我是一个很容易被别人挑拨，情绪控制不住的人，本来想好好解决一件事，被别人一挑就啥话都说出来。感觉自己很幼稚，怎么才能控制住情绪，能更好的处理人际关系呢？\n\n答：\n\n如何控制好自己的情绪？\n\n那就要了解情绪是如何产生的。\n\n心理学上有一个情绪abc ​​"];
         let mut set = HashSet::new();
         text.into_iter().for_each(|s| {
