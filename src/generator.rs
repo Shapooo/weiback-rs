@@ -1,12 +1,25 @@
+#![allow(unused)]
 use std::collections::HashSet;
 use std::hash::Hash;
 
 use anyhow;
 use bytes::Bytes;
-use tera;
+use lazy_static::lazy_static;
+use tera::{Context, Tera};
 
-use crate::data::Post;
-use crate::fetcher::Fetcher;
+use crate::data::{Post, Posts};
+use crate::persister::Persister;
+
+lazy_static! {
+    pub static ref TEMPLATES: Tera = {
+        let mut tera = match Tera::new("res/templates/*.html") {
+            Ok(t) => t,
+            Err(e) => panic!("tera template parse err: {e}"),
+        };
+        tera.autoescape_on(Vec::new());
+        tera
+    };
+}
 
 #[derive(Debug, Clone)]
 pub struct HTMLGenerator();
@@ -16,71 +29,60 @@ impl HTMLGenerator {
         Self()
     }
 
-    pub async fn generate_post<'a, P: Post<'a>>(
-        &self,
-        post: P,
-        fetcher: &Fetcher,
-    ) -> anyhow::Result<HTMLPosts> {
-        todo!()
+    pub async fn generate_post(&self, mut post: Post) -> anyhow::Result<String> {
+        let mut context = Context::new();
+        context.insert("post", &post);
+        let html = TEMPLATES.render("post.html", &context)?;
+
+        Ok(html)
     }
 
-    pub async fn generate_page(&self, posts: HTMLPosts) -> anyhow::Result<HTMLPage> {
-        todo!()
+    pub async fn generate_posts(&self, posts: Posts) -> anyhow::Result<String> {
+        let mut context = Context::new();
+        context.insert("posts", &posts.data);
+        let html = TEMPLATES.render("posts.html", &context)?;
+        Ok(html)
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct HTMLPosts {
-    pub html: String,
-    pub pics: HashSet<Picture>,
-}
-
-impl HTMLPosts {
-    pub fn new() -> Self {
-        HTMLPosts {
-            html: String::new(),
-            pics: HashSet::new(),
-        }
-    }
-    pub fn join(self, rhs: Self) -> Self {
-        todo!()
-    }
-    pub fn merge(&mut self, rhs: Self) {
-        self.html.push_str(&rhs.html);
-        rhs.pics.into_iter().for_each(|p| {
-            self.pics.insert(p);
-        });
+    pub async fn generate_page(&self, posts: &str) -> anyhow::Result<String> {
+        let mut context = Context::new();
+        context.insert("html", &posts);
+        let html = TEMPLATES.render("page.html", &context).unwrap();
+        Ok(html)
     }
 }
 
-impl Default for HTMLPosts {
-    fn default() -> Self {
-        Self::new()
+#[cfg(test)]
+mod generator_test {
+    use super::HTMLGenerator;
+    use crate::data::{Post, Posts};
+    use serde_json::from_str;
+
+    #[tokio::test]
+    async fn generate_post() {
+        let s = include_str!("../res/one.json");
+        let post = from_str::<Post>(s).unwrap();
+        let gen = HTMLGenerator::new();
+        let s = gen.generate_post(post).await.unwrap();
+        println!("{}", s);
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct HTMLPage {
-    pub html: String,
-    pub pics: Vec<Picture>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Picture {
-    pub name: String,
-    pub blob: Bytes,
-}
-
-impl PartialEq for Picture {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
+    #[tokio::test]
+    async fn generate_posts() {
+        let s = include_str!("../res/full.json");
+        let posts = from_str::<Posts>(s).unwrap();
+        let gen = HTMLGenerator::new();
+        let s = gen.generate_posts(posts).await.unwrap();
+        println!("{}", s);
     }
-}
 
-impl Eq for Picture {}
-
-impl Hash for Picture {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
+    #[tokio::test]
+    async fn generate_page() {
+        let s = include_str!("../res/one.json");
+        let post = from_str::<Post>(s).unwrap();
+        let gen = HTMLGenerator::new();
+        let s = gen.generate_post(post).await.unwrap();
+        let s = gen.generate_page(&s).await.unwrap();
+        println!("{}", s);
     }
 }
