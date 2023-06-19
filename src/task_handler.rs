@@ -14,7 +14,7 @@ use urlencoding::encode;
 use crate::config::Config;
 use crate::data::Post;
 use crate::exporter::{Exporter, HTMLPage, Picture};
-use crate::generator::HTMLGenerator;
+use crate::html_generator::HTMLGenerator;
 use crate::persister::Persister;
 use crate::resource_manager::ResourceManager;
 use crate::utils::{pic_url_to_file, strip_url_queries};
