@@ -65,10 +65,11 @@ impl TaskHandler {
         with_pic: bool,
         export: bool,
     ) -> Result<()> {
+        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
+
         if range.start() == &0 {
             range = RangeInclusive::new(1, *range.end());
         }
-
         info!("pages download range is {range:?}");
         let mut total_posts_sum = 0;
         let mut pic_to_fetch: HashSet<String> = HashSet::new();
@@ -106,7 +107,6 @@ impl TaskHandler {
             }
             let html = self.generator.generate_page(&html).await?;
             let page = HTMLPage { html, pics };
-            let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
             self.exporter
                 .export_page(task_name, page, std::path::PathBuf::from("./").as_path())
                 .await?;
@@ -116,14 +116,20 @@ impl TaskHandler {
     }
 
     fn process_post(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
+        let pic_folder = "./weiback_files/";
         if post["retweeted_status"].is_object() {
-            self.process_post_non_rec(&mut post["retweeted_status"], pics)?;
+            self.process_post_non_rec(&mut post["retweeted_status"], pics, pic_folder)?;
         }
-        self.process_post_non_rec(post, pics)?;
+        self.process_post_non_rec(post, pics, &pic_folder)?;
         Ok(())
     }
 
-    fn process_post_non_rec(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
+    fn process_post_non_rec(
+        &self,
+        post: &mut Post,
+        pic_urls: &mut HashSet<String>,
+        pic_folder: &str,
+    ) -> Result<()> {
         if let Value::Array(pic_ids) = post["pic_ids"].take() {
             if pic_ids.len() > 0 {
                 let pic_infos = &post["pic_infos"];
@@ -135,9 +141,9 @@ impl TaskHandler {
                             .expect("cannot get pic info"),
                     );
                     // TODO: wrong location
-                    let name = String::from("resources/") + pic_url_to_file(url);
+                    let name = String::from(pic_folder) + pic_url_to_file(url);
                     pic_locs.push(name);
-                    pics.insert(url.into());
+                    pic_urls.insert(url.into());
                 }
                 if let Value::Object(obj) = post {
                     obj.insert("pics".into(), to_value(pic_locs).unwrap());
@@ -148,14 +154,13 @@ impl TaskHandler {
         }
         let text_raw = post["text_raw"].as_str().unwrap();
         let url_struct = &post["url_struct"];
-        let text = self.trans_text(text_raw, url_struct, pics)?;
+        let text = self.trans_text(text_raw, url_struct, pic_urls, pic_folder)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
-        post["poster_avatar"] = to_value(
-            Borrowed("resources/")
-                + Borrowed(pic_url_to_file(post["user"]["avatar_hd"].as_str().unwrap())),
-        )
-        .unwrap();
+        let avatar_url = post["user"]["avatar_hd"].as_str().unwrap();
+        pic_urls.insert(avatar_url.into());
+        let avatar_loc = Borrowed(pic_folder) + Borrowed(pic_url_to_file(avatar_url));
+        post["poster_avatar"] = to_value(avatar_loc).unwrap();
 
         Ok(())
     }
@@ -165,6 +170,7 @@ impl TaskHandler {
         text: &str,
         url_struct: &Value,
         pic_urls: &mut HashSet<String>,
+        pic_folder: &str,
     ) -> Result<String> {
         let newline_expr = Regex::new("\\n").unwrap();
         let url_expr = Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}").unwrap();
@@ -222,7 +228,7 @@ impl TaskHandler {
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
                         acc + &text[i..m.start()]
-                            + self.trans_emoji(&text[m.start()..m.end()], pic_urls),
+                            + self.trans_emoji(&text[m.start()..m.end()], pic_urls, pic_folder),
                         m.end(),
                     )
                 });
@@ -232,16 +238,22 @@ impl TaskHandler {
         Ok(text.to_string())
     }
 
-    fn trans_emoji<'a>(&self, s: &'a str, pic_urls: &mut HashSet<String>) -> Cow<'a, str> {
+    fn trans_emoji<'a>(
+        &self,
+        s: &'a str,
+        pic_urls: &mut HashSet<String>,
+        pic_folder: &'a str,
+    ) -> Cow<'a, str> {
         if let Some(url) = self.emoticon.get(s) {
             pic_urls.insert(url.into());
-            let loc = pic_url_to_file(url).to_owned();
+            let pic_name = pic_url_to_file(url).to_owned();
             Borrowed(r#"<img class="bk-emoji" alt=""#)
                 + Borrowed(s)
                 + Borrowed(r#"" title=""#)
                 + Borrowed(s)
-                + Borrowed(r#"" src="resources/"#) // TODO wrong loc
-                + Owned(loc)
+                + Borrowed(r#"" src=""#)
+                + Borrowed(pic_folder)
+                + Owned(pic_name)
                 + Borrowed(r#"" />"#)
         } else {
             Borrowed(s)
@@ -296,7 +308,12 @@ mod task_handler {
         let tsk = TaskHandler::build(Config::new()).await.unwrap();
         let text = &["教纳德拉做一个产品。\n\n产品可以理解为软件行业的ODM，客户可以象订购Dell电脑一样订购定制化的软件。\n\n当然这个本身不稀奇，稀奇的是，微软只出需求管理、项目管理、和代码审查人员，并不出开发人员和测试人员。\n\n软件要求开源。管理人员整理好需求后面向GitHub开发者征求开发人员，管理人员可以根据 ​​​", "一种可以作恶的安全感//@闫昊佳:现实中接触过不少被“霸凌”的案例，轻重不一，共同点是：其中的霸凌者们会精准识别出“谁可以被霸凌”且自己大概率不会受到惩罚。一个人的主体性塑造和自我边界建立太重要了，尤其对于未成年人。", "//@李富强Jason:转发微博" , "Redis与作者antirez的故事\nhttp://t.cn/A6NnfWeF", "除了折腾内核从没用过[二哈]", "#如何控制自己的情绪# \n\n最近真的很烦恼。我是一个很容易被别人挑拨，情绪控制不住的人，本来想好好解决一件事，被别人一挑就啥话都说出来。感觉自己很幼稚，怎么才能控制住情绪，能更好的处理人际关系呢？\n\n答：\n\n如何控制好自己的情绪？\n\n那就要了解情绪是如何产生的。\n\n心理学上有一个情绪abc ​​"];
         let mut set = HashSet::new();
-        text.into_iter()
-            .for_each(|s| println!("{}", tsk.trans_text(s, &Value::Null, &mut set).unwrap()));
+        text.into_iter().for_each(|s| {
+            println!(
+                "{}",
+                tsk.trans_text(s, &Value::Null, &mut set, "resources/")
+                    .unwrap()
+            )
+        });
     }
 }
