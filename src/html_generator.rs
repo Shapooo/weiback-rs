@@ -29,7 +29,7 @@ impl HTMLGenerator {
         Self()
     }
 
-    pub async fn generate_post(&self, mut post: Post) -> anyhow::Result<String> {
+    pub fn generate_post(&self, mut post: Post) -> anyhow::Result<String> {
         let mut context = Context::new();
         context.insert("post", &post);
         let html = TEMPLATES.render("post.html", &context)?;
@@ -37,14 +37,14 @@ impl HTMLGenerator {
         Ok(html)
     }
 
-    pub async fn generate_posts(&self, posts: Posts) -> anyhow::Result<String> {
+    pub fn generate_posts(&self, posts: Posts) -> anyhow::Result<String> {
         let mut context = Context::new();
         context.insert("posts", &posts.data);
         let html = TEMPLATES.render("posts.html", &context)?;
         Ok(html)
     }
 
-    pub async fn generate_page(&self, posts: &str) -> anyhow::Result<String> {
+    pub fn generate_page(&self, posts: &str) -> anyhow::Result<String> {
         let mut context = Context::new();
         context.insert("html", &posts);
         let html = TEMPLATES.render("page.html", &context).unwrap();
@@ -63,7 +63,7 @@ mod generator_test {
         let s = include_str!("../res/one.json");
         let post = from_str::<Post>(s).unwrap();
         let gen = HTMLGenerator::new();
-        let s = gen.generate_post(post).await.unwrap();
+        let s = gen.generate_post(post).unwrap();
         println!("{}", s);
     }
 
@@ -72,7 +72,7 @@ mod generator_test {
         let s = include_str!("../res/full.json");
         let posts = from_str::<Posts>(s).unwrap();
         let gen = HTMLGenerator::new();
-        let s = gen.generate_posts(posts).await.unwrap();
+        let s = gen.generate_posts(posts).unwrap();
         println!("{}", s);
     }
 
@@ -81,8 +81,8 @@ mod generator_test {
         let s = include_str!("../res/one.json");
         let post = from_str::<Post>(s).unwrap();
         let gen = HTMLGenerator::new();
-        let s = gen.generate_post(post).await.unwrap();
-        let s = gen.generate_page(&s).await.unwrap();
+        let s = gen.generate_post(post).unwrap();
+        let s = gen.generate_page(&s).unwrap();
         println!("{}", s);
     }
 }
