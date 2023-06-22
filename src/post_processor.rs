@@ -58,12 +58,12 @@ impl PostProcessor {
         todo!()
     }
 
-    pub fn generate_html(&self, posts: Posts) -> Result<String> {
+    pub fn generate_html(&self, mut posts: Posts) -> Result<String> {
         let mut pic_to_fetch = HashSet::new();
         posts
             .data
             .iter_mut()
-            .map(|post| self.process_post(&mut post, &mut pic_to_fetch))
+            .map(|mut post| self.process_post(&mut post, &mut pic_to_fetch))
             .collect::<Result<_>>()?;
         let inner_html = self.html_generator.generate_posts(posts)?;
         self.html_generator.generate_page(&inner_html)

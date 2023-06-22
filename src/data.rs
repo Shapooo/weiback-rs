@@ -22,6 +22,16 @@ impl Posts {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn new() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+
+    pub fn append(&mut self, mut appendee: Posts) {
+        self.data.append(&mut appendee.data);
+    }
 }
 
 impl IntoIterator for Posts {
