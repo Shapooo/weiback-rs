@@ -8,7 +8,9 @@ use regex::Regex;
 use serde_json::{to_value, Value};
 use urlencoding::encode;
 
-use crate::data::Post;
+use crate::data::{Post, Posts};
+use crate::html_generator::HTMLGenerator;
+use crate::resource_manager::ResourceManager;
 use crate::utils::{pic_url_to_file, strip_url_queries};
 
 lazy_static! {
@@ -24,15 +26,50 @@ lazy_static! {
 
 #[derive(Debug)]
 pub struct PostProcessor {
+    html_generator: HTMLGenerator,
+    resource_manager: ResourceManager,
     emoticon: HashMap<String, String>,
 }
 
 impl PostProcessor {
-    pub fn new(emoticon: HashMap<String, String>) -> Self {
-        Self { emoticon }
+    pub async fn build(resource_manager: ResourceManager) -> Result<Self> {
+        let emoticon = resource_manager.get_emoticon().await?;
+        Ok(Self {
+            html_generator: HTMLGenerator::new(),
+            resource_manager,
+            emoticon,
+        })
     }
 
-    pub fn process_post(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
+    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u64) -> anyhow::Result<Posts> {
+        self.resource_manager
+            .get_fav_posts_from_web(uid, page)
+            .await
+    }
+
+    pub async fn get_fav_post_from_db(
+        &self,
+        range: std::ops::RangeInclusive<u64>,
+    ) -> anyhow::Result<Posts> {
+        self.resource_manager.get_fav_post_from_db(range).await
+    }
+
+    pub fn save_post_pictures(&self, post: Post) -> Result<()> {
+        todo!()
+    }
+
+    pub fn generate_html(&self, posts: Posts) -> Result<String> {
+        let mut pic_to_fetch = HashSet::new();
+        posts
+            .data
+            .iter_mut()
+            .map(|post| self.process_post(&mut post, &mut pic_to_fetch))
+            .collect::<Result<_>>()?;
+        let inner_html = self.html_generator.generate_posts(posts)?;
+        self.html_generator.generate_page(&inner_html)
+    }
+
+    fn process_post(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
         let pic_folder = "./weiback_files/";
         if post["retweeted_status"].is_object() {
             self.process_post_non_rec(&mut post["retweeted_status"], pics, pic_folder)?;
@@ -204,35 +241,5 @@ impl PostProcessor {
             )
             + url_title
             + Borrowed("</a>")
-    }
-}
-
-#[cfg(test)]
-mod post_processor {
-    use super::*;
-    #[tokio::test]
-    async fn trans_text() {
-        let emoticon = serde_json::from_str::<Vec<Value>>(include_str!("../.tmp/emo.json"))
-            .unwrap()
-            .into_iter()
-            .map(|mut v| {
-                if let (Value::String(k), Value::String(v)) = (v["phrase"].take(), v["url"].take())
-                {
-                    (k, v)
-                } else {
-                    ("".into(), "".into())
-                }
-            })
-            .collect();
-        let pcr = PostProcessor::new(emoticon);
-        let text = &["教纳德拉做一个产品。\n\n产品可以理解为软件行业的ODM，客户可以象订购Dell电脑一样订购定制化的软件。\n\n当然这个本身不稀奇，稀奇的是，微软只出需求管理、项目管理、和代码审查人员，并不出开发人员和测试人员。\n\n软件要求开源。管理人员整理好需求后面向GitHub开发者征求开发人员，管理人员可以根据 ​​​", "一种可以作恶的安全感//@闫昊佳:现实中接触过不少被“霸凌”的案例，轻重不一，共同点是：其中的霸凌者们会精准识别出“谁可以被霸凌”且自己大概率不会受到惩罚。一个人的主体性塑造和自我边界建立太重要了，尤其对于未成年人。", "//@李富强Jason:转发微博" , "Redis与作者antirez的故事\nhttp://t.cn/A6NnfWeF", "除了折腾内核从没用过[二哈]", "#如何控制自己的情绪# \n\n最近真的很烦恼。我是一个很容易被别人挑拨，情绪控制不住的人，本来想好好解决一件事，被别人一挑就啥话都说出来。感觉自己很幼稚，怎么才能控制住情绪，能更好的处理人际关系呢？\n\n答：\n\n如何控制好自己的情绪？\n\n那就要了解情绪是如何产生的。\n\n心理学上有一个情绪abc ​​"];
-        let mut set = HashSet::new();
-        text.into_iter().for_each(|s| {
-            println!(
-                "{}",
-                pcr.trans_text(s, &Value::Null, &mut set, "resources/")
-                    .unwrap()
-            )
-        });
     }
 }
