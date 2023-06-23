@@ -9,9 +9,10 @@ use serde_json::{to_value, Value};
 use urlencoding::encode;
 
 use crate::data::{Post, Posts};
+use crate::exporter::{HTMLPage, Picture};
 use crate::html_generator::HTMLGenerator;
 use crate::resource_manager::ResourceManager;
-use crate::utils::{pic_url_to_file, strip_url_queries};
+use crate::utils::pic_url_to_file;
 
 lazy_static! {
     static ref NEWLINE_EXPR: Regex = Regex::new("\\n").unwrap();
@@ -54,11 +55,25 @@ impl PostProcessor {
         self.resource_manager.get_fav_post_from_db(range).await
     }
 
-    pub fn save_post_pictures(&self, post: Post) -> Result<()> {
-        todo!()
+    pub async fn save_post_pictures(&self, posts: Posts) -> Result<()> {
+        let mut pics = posts
+            .data
+            .iter()
+            .flat_map(|ref post| self.extract_emoji_from_text(&post["text_raw"].as_str().unwrap()))
+            .collect::<HashSet<_>>();
+        posts
+            .into_iter()
+            .flat_map(|post| self.extract_pics_from_post(&post))
+            .for_each(|url| {
+                pics.insert(url);
+            });
+        for pic in pics {
+            self.resource_manager.get_pic(&pic).await?;
+        }
+        Ok(())
     }
 
-    pub fn generate_html(&self, mut posts: Posts) -> Result<String> {
+    pub async fn generate_html(&self, mut posts: Posts, name: &str) -> Result<HTMLPage> {
         let mut pic_to_fetch = HashSet::new();
         posts
             .data
@@ -66,7 +81,44 @@ impl PostProcessor {
             .map(|mut post| self.process_post(&mut post, &mut pic_to_fetch))
             .collect::<Result<_>>()?;
         let inner_html = self.html_generator.generate_posts(posts)?;
-        self.html_generator.generate_page(&inner_html)
+        let html = self.html_generator.generate_page(&inner_html)?;
+        let mut pics = Vec::new();
+        for pic in pic_to_fetch {
+            let blob = self.resource_manager.get_pic(&pic).await?;
+            pics.push(Picture {
+                name: pic_url_to_file(&pic).into(),
+                blob,
+            });
+        }
+        Ok(HTMLPage { html, pics })
+    }
+
+    fn extract_pics_from_post(&self, post: &Post) -> Vec<String> {
+        if let Value::Array(pic_ids) = &post["pic_ids"] {
+            if pic_ids.len() > 0 {
+                let pic_infos = &post["pic_infos"];
+                pic_ids
+                    .into_iter()
+                    .map(|id| {
+                        pic_infos[id.as_str().unwrap()]["mw2000"]["url"]
+                            .as_str()
+                            .expect("url of pics should be str")
+                            .into()
+                    })
+                    .collect()
+            } else {
+                Default::default()
+            }
+        } else {
+            Default::default()
+        }
+    }
+
+    fn extract_emoji_from_text(&self, text: &str) -> Vec<String> {
+        EMOJI_EXPR
+            .find_iter(text)
+            .flat_map(|e| self.emoticon.get(e.as_str()).map(|url| url.into()))
+            .collect()
     }
 
     fn process_post(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
@@ -84,27 +136,22 @@ impl PostProcessor {
         pic_urls: &mut HashSet<String>,
         pic_folder: &str,
     ) -> Result<()> {
-        if let Value::Array(pic_ids) = post["pic_ids"].take() {
-            if pic_ids.len() > 0 {
-                let pic_infos = &post["pic_infos"];
-                let mut pic_locs = Vec::new();
-                for id in pic_ids {
-                    let url = strip_url_queries(
-                        pic_infos[id.as_str().unwrap()]["mw2000"]["url"]
-                            .as_str()
-                            .expect("cannot get pic info"),
-                    );
-                    let name = String::from(pic_folder) + pic_url_to_file(url);
-                    pic_locs.push(name);
-                    pic_urls.insert(url.into());
-                }
-                if let Value::Object(obj) = post {
-                    obj.insert("pics".into(), to_value(pic_locs).unwrap());
-                } else {
-                    panic!("unexpected post format")
-                }
-            }
+        let urls = self.extract_pics_from_post(post);
+        let pic_locs: Vec<_> = urls
+            .iter()
+            .map(|url| Borrowed(pic_folder) + Borrowed(pic_url_to_file(url)))
+            .collect();
+
+        if let Value::Object(obj) = post {
+            obj.insert("pics".into(), to_value(pic_locs).unwrap());
+        } else {
+            panic!("unexpected post format")
         }
+
+        urls.into_iter().for_each(|url| {
+            pic_urls.insert(url);
+        });
+
         let text_raw = post["text_raw"].as_str().unwrap();
         let url_struct = &post["url_struct"];
         let text = self.trans_text(text_raw, url_struct, pic_urls, pic_folder)?;
