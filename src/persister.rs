@@ -12,6 +12,7 @@ use sqlx::{
 };
 
 use crate::data::{Post, User};
+use crate::utils::{pic_url_to_id, strip_url_queries};
 
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, textLength INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json); CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
 
@@ -138,8 +139,8 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<(), sqlx::Error> {
-        use crate::utils;
-        let id = utils::pic_url_to_id(url);
+        let id = pic_url_to_id(url);
+        let url = strip_url_queries(url);
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
             .bind(url)
             .bind(&id)
@@ -188,6 +189,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         Ok(result.blob.into())
     }
 
+    #[allow(unused)]
     pub async fn query_post(&self, id: i64) -> Result<Post, sqlx::Error> {
         let sql_post = self._query_post(id).await?;
         let user = if let Some(uid) = sql_post.uid {
