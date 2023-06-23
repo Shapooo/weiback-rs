@@ -51,15 +51,20 @@ impl ResourceManager {
         Ok(Posts { data: res })
     }
 
+    #[allow(unused)]
     pub async fn get_fav_total_num(&self) -> anyhow::Result<u64> {
         self.web_fetcher.fetch_fav_total_num().await
     }
 
+    #[allow(unused)]
     pub async fn get_fav_post_from_db(
         &self,
-        _range: std::ops::RangeInclusive<u64>,
+        range: std::ops::RangeInclusive<u64>,
+        reverse: bool,
     ) -> anyhow::Result<Posts> {
-        todo!()
+        let limit = (range.end() - range.start()) as u32 + 1;
+        let offset = *range.start() as u32 - 1;
+        Ok(self.persister.query_posts(limit, offset, reverse).await?)
     }
 
     pub async fn get_emoticon(&self) -> anyhow::Result<HashMap<String, String>> {

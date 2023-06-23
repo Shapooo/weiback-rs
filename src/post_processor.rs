@@ -51,8 +51,11 @@ impl PostProcessor {
     pub async fn get_fav_post_from_db(
         &self,
         range: std::ops::RangeInclusive<u64>,
+        reverse: bool,
     ) -> anyhow::Result<Posts> {
-        self.resource_manager.get_fav_post_from_db(range).await
+        self.resource_manager
+            .get_fav_post_from_db(range, reverse)
+            .await
     }
 
     pub async fn save_post_pictures(&self, posts: Posts) -> Result<()> {
