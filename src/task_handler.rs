@@ -53,12 +53,33 @@ impl TaskHandler {
     }
 
     #[allow(unused)]
-    pub async fn export_from_local(
-        &self,
-        _range: RangeInclusive<u64>,
-        _reverse: bool,
-    ) -> Result<()> {
-        todo!()
+    pub async fn export_from_local(&self, range: RangeInclusive<u64>, reverse: bool) -> Result<()> {
+        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
+        let target_dir = std::env::current_dir()?.join(task_name);
+
+        let mut post_acc = Vec::new();
+        for (i, post) in self
+            .processer
+            .get_fav_post_from_db(range, reverse)
+            .await?
+            .into_iter()
+            .enumerate()
+        {
+            post_acc.push(post);
+            if i % SAVING_PERIOD == SAVING_PERIOD - 1 {
+                let subtask_name = format!("weiback-{}", i);
+                let html = self
+                    .processer
+                    .generate_html(Posts { data: post_acc }, &subtask_name)
+                    .await?;
+                post_acc = Vec::new();
+
+                self.exporter
+                    .export_page(&subtask_name, html, &target_dir)
+                    .await?;
+            }
+        }
+        Ok(())
     }
 
     async fn download_posts(
