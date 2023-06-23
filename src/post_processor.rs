@@ -73,12 +73,18 @@ impl PostProcessor {
         Ok(())
     }
 
-    pub async fn generate_html(&self, mut posts: Posts, name: &str) -> Result<HTMLPage> {
+    pub async fn generate_html(&self, mut posts: Posts, html_name: &str) -> Result<HTMLPage> {
         let mut pic_to_fetch = HashSet::new();
         posts
             .data
             .iter_mut()
-            .map(|mut post| self.process_post(&mut post, &mut pic_to_fetch))
+            .map(|mut post| {
+                self.process_post(
+                    &mut post,
+                    &mut pic_to_fetch,
+                    &(String::from(html_name) + "_files"),
+                )
+            })
             .collect::<Result<_>>()?;
         let inner_html = self.html_generator.generate_posts(posts)?;
         let html = self.html_generator.generate_page(&inner_html)?;
@@ -121,12 +127,16 @@ impl PostProcessor {
             .collect()
     }
 
-    fn process_post(&self, post: &mut Post, pics: &mut HashSet<String>) -> Result<()> {
-        let pic_folder = "./weiback_files/";
+    fn process_post(
+        &self,
+        post: &mut Post,
+        pics: &mut HashSet<String>,
+        resource_dir: &str,
+    ) -> Result<()> {
         if post["retweeted_status"].is_object() {
-            self.process_post_non_rec(&mut post["retweeted_status"], pics, pic_folder)?;
+            self.process_post_non_rec(&mut post["retweeted_status"], pics, resource_dir)?;
         }
-        self.process_post_non_rec(post, pics, &pic_folder)?;
+        self.process_post_non_rec(post, pics, &resource_dir)?;
         Ok(())
     }
 
@@ -134,12 +144,12 @@ impl PostProcessor {
         &self,
         post: &mut Post,
         pic_urls: &mut HashSet<String>,
-        pic_folder: &str,
+        resource_dir: &str,
     ) -> Result<()> {
         let urls = self.extract_pics_from_post(post);
         let pic_locs: Vec<_> = urls
             .iter()
-            .map(|url| Borrowed(pic_folder) + Borrowed(pic_url_to_file(url)))
+            .map(|url| Borrowed(resource_dir) + Borrowed(pic_url_to_file(url)))
             .collect();
 
         if let Value::Object(obj) = post {
@@ -154,12 +164,12 @@ impl PostProcessor {
 
         let text_raw = post["text_raw"].as_str().unwrap();
         let url_struct = &post["url_struct"];
-        let text = self.trans_text(text_raw, url_struct, pic_urls, pic_folder)?;
+        let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
         let avatar_url = post["user"]["avatar_hd"].as_str().unwrap();
         pic_urls.insert(avatar_url.into());
-        let avatar_loc = Borrowed(pic_folder) + Borrowed(pic_url_to_file(avatar_url));
+        let avatar_loc = Borrowed(resource_dir) + Borrowed(pic_url_to_file(avatar_url));
         post["poster_avatar"] = to_value(avatar_loc).unwrap();
 
         Ok(())
