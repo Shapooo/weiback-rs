@@ -15,7 +15,7 @@ impl Exporter {
 
     pub async fn export_page<N, P>(
         &self,
-        task_name: N,
+        html_name: N,
         page: HTMLPage,
         path: P,
     ) -> anyhow::Result<()>
@@ -23,19 +23,22 @@ impl Exporter {
         N: AsRef<str>,
         P: AsRef<Path>,
     {
-        // TODO: handle condition files and folders exist
-        if !path.as_ref().is_dir() {
+        let mut dir_builder = DirBuilder::new();
+        dir_builder.recursive(true);
+        if !path.as_ref().exists() {
+            dir_builder.create(path.as_ref()).await?;
+        } else if !path.as_ref().is_dir() {
             return Err(anyhow::anyhow!("export path is not a valid dir"));
         }
+        let html_file_name = String::from(html_name.as_ref()) + ".html";
+        let resources_dir_name = String::from(html_name.as_ref()) + "_files";
+
         let mut operating_path = PathBuf::from(path.as_ref());
-        operating_path.push(task_name.as_ref());
-        let dir_builder = DirBuilder::new();
-        dir_builder.create(operating_path.as_path()).await?;
-        operating_path.push("weiback.html");
+        operating_path.push(html_file_name);
         let mut html_file = File::create(operating_path.as_path()).await?;
         html_file.write_all(page.html.as_bytes()).await?;
         operating_path.pop();
-        operating_path.push("weiback_files");
+        operating_path.push(resources_dir_name);
         dir_builder.create(operating_path.as_path()).await?;
         for pic in page.pics.into_iter() {
             operating_path.push(pic.name);
