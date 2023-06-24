@@ -3,10 +3,9 @@ use log::{debug, info};
 use simple_logger::SimpleLogger;
 
 use weiback_rs::config::get_config;
-use weiback_rs::task_handler::TaskHandler;
+use weiback_rs::gui::WbApp;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     SimpleLogger::new()
         .with_colors(true)
         .with_level(log::LevelFilter::Warn)
@@ -19,8 +18,8 @@ async fn main() -> Result<()> {
     let conf = get_config()?;
     debug!("config is {:?}", conf);
 
-    let task_handler = TaskHandler::build(conf).await?;
-    task_handler.fetch_all_page().await?;
+    let gui = WbApp::new(conf);
+    gui.run();
 
     info!("done");
     Ok(())

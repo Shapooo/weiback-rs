@@ -1,5 +1,6 @@
 use std::ops::RangeInclusive;
 
+#[derive(Debug)]
 pub enum Message {
     DownloadMeta(RangeInclusive<u32>),
     DownloadWithPic(RangeInclusive<u32>),

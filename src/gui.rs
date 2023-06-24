@@ -3,32 +3,30 @@ use eframe::{
     NativeOptions,
 };
 
-pub struct WbGui {
+use crate::config::Config;
+use crate::executor::Executor;
+
+pub struct WbApp {
     options: NativeOptions,
-    status: GuiStatus,
+    gui: Gui,
 }
 
-impl WbGui {
-    pub fn new() -> Self {
+impl WbApp {
+    pub fn new(config: Config) -> Self {
         Self {
             options: NativeOptions {
                 initial_window_size: Some(vec2(300.0, 300.0)),
                 ..Default::default()
             },
-            status: Default::default(),
+            gui: Gui::new(config),
         }
     }
     pub fn run(self) {
-        eframe::run_native(
-            "weiback",
-            self.options,
-            Box::new(|_cc| Box::<GuiStatus>::default()),
-        )
-        .unwrap();
+        eframe::run_native("weiback", self.options, Box::new(|_cc| Box::new(self.gui))).unwrap();
     }
 }
 
-struct GuiStatus {
+struct Gui {
     start_page: String,
     end_page: String,
     message: String,
@@ -36,17 +34,19 @@ struct GuiStatus {
     with_pic: bool,
     task_ongoing: bool,
     period: u32,
+    executor: Executor,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum TaskType {
     Download,
+    DownloadWithPic,
     DownloadExport,
     ExportFromLocal,
 }
 
-impl Default for GuiStatus {
-    fn default() -> Self {
+impl Gui {
+    fn new(config: Config) -> Self {
         Self {
             start_page: "".into(),
             end_page: "".into(),
@@ -55,11 +55,12 @@ impl Default for GuiStatus {
             with_pic: true,
             task_ongoing: false,
             period: 10,
+            executor: Executor::new(config),
         }
     }
 }
 
-impl eframe::App for GuiStatus {
+impl eframe::App for Gui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("WeiBack");
@@ -70,6 +71,7 @@ impl eframe::App for GuiStatus {
                     .show_ui(ui, |ui| {
                         for task_type in [
                             TaskType::Download,
+                            TaskType::DownloadWithPic,
                             TaskType::DownloadExport,
                             TaskType::ExportFromLocal,
                         ] {
@@ -98,8 +100,24 @@ impl eframe::App for GuiStatus {
                     ui.add(egui::TextEdit::singleline(&mut self.end_page).desired_width(50.0));
                 });
             });
+            let start = self.start_page.parse::<u32>().unwrap_or(1);
+            let end = self.end_page.parse::<u32>().unwrap_or(2);
             if ui.button("start").clicked() {
-                self.task_ongoing = true;
+                // self.task_ongoing = true;
+                match self.task_type {
+                    TaskType::Download => {
+                        self.executor.download_meta(start..=end);
+                    }
+                    TaskType::DownloadWithPic => {
+                        self.executor.download_with_pic(start..=end);
+                    }
+                    TaskType::DownloadExport => {
+                        self.executor.export_from_net(start..=end);
+                    }
+                    TaskType::ExportFromLocal => {
+                        self.executor.export_from_local(start..=end, false);
+                    }
+                }
             }
         });
     }
