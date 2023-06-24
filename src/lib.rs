@@ -1,4 +1,5 @@
 pub mod config;
+pub mod gui;
 pub mod task_handler;
 
 mod args;
