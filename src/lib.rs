@@ -4,6 +4,7 @@ pub mod task_handler;
 
 mod args;
 mod data;
+mod executor;
 mod exporter;
 mod html_generator;
 mod message;
