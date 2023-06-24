@@ -1,5 +1,6 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
+use std::ops::RangeInclusive;
 
 use anyhow::Result;
 use lazy_static::lazy_static;
@@ -42,7 +43,7 @@ impl PostProcessor {
         })
     }
 
-    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u64) -> anyhow::Result<Posts> {
+    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> anyhow::Result<Posts> {
         self.resource_manager
             .get_fav_posts_from_web(uid, page)
             .await
@@ -50,7 +51,7 @@ impl PostProcessor {
 
     pub async fn get_fav_post_from_db(
         &self,
-        range: std::ops::RangeInclusive<u64>,
+        range: RangeInclusive<u32>,
         reverse: bool,
     ) -> anyhow::Result<Posts> {
         self.resource_manager

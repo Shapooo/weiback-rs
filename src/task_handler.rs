@@ -39,21 +39,21 @@ impl TaskHandler {
     }
 
     #[allow(unused)]
-    pub async fn download_meta_only(&self, range: RangeInclusive<u64>) -> Result<()> {
+    pub async fn download_meta_only(&self, range: RangeInclusive<u32>) -> Result<()> {
         self.download_posts(range, false, false).await
     }
 
     #[allow(unused)]
-    pub async fn download_with_pic(&self, range: RangeInclusive<u64>) -> Result<()> {
+    pub async fn download_with_pic(&self, range: RangeInclusive<u32>) -> Result<()> {
         self.download_posts(range, true, false).await
     }
 
-    pub async fn export_from_net(&self, range: RangeInclusive<u64>) -> Result<()> {
+    pub async fn export_from_net(&self, range: RangeInclusive<u32>) -> Result<()> {
         self.download_posts(range, true, true).await
     }
 
     #[allow(unused)]
-    pub async fn export_from_local(&self, range: RangeInclusive<u64>, reverse: bool) -> Result<()> {
+    pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
@@ -84,7 +84,7 @@ impl TaskHandler {
 
     async fn download_posts(
         &self,
-        range: RangeInclusive<u64>,
+        range: RangeInclusive<u32>,
         with_pic: bool,
         export: bool,
     ) -> Result<()> {

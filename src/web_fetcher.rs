@@ -163,7 +163,7 @@ impl WebFetcher {
         Ok(client.get(url).send().await?)
     }
 
-    pub async fn fetch_posts_meta(&self, uid: &str, page: u64) -> Result<Posts> {
+    pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
         let res = self.fetch(url, &self.web_client).await?;
@@ -226,6 +226,7 @@ impl WebFetcher {
         Ok(res)
     }
 
+    #[allow(unused)]
     pub async fn fetch_mobile_page(&self, _mblogid: &str) -> Result<Value> {
         unimplemented!()
     }

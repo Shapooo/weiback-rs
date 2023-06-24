@@ -31,7 +31,7 @@ impl ResourceManager {
         }
     }
 
-    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u64) -> anyhow::Result<Posts> {
+    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> anyhow::Result<Posts> {
         let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?.data;
         let mut res = Vec::new();
         for mut post in posts {
@@ -59,11 +59,11 @@ impl ResourceManager {
     #[allow(unused)]
     pub async fn get_fav_post_from_db(
         &self,
-        range: std::ops::RangeInclusive<u64>,
+        range: std::ops::RangeInclusive<u32>,
         reverse: bool,
     ) -> anyhow::Result<Posts> {
-        let limit = (range.end() - range.start()) as u32 + 1;
-        let offset = *range.start() as u32 - 1;
+        let limit = (range.end() - range.start()) + 1;
+        let offset = *range.start() - 1;
         Ok(self.persister.query_posts(limit, offset, reverse).await?)
     }
 
