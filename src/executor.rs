@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
@@ -35,5 +37,27 @@ impl Executor {
             rt: Runtime::new().unwrap(),
             tx,
         }
+    }
+
+    pub fn download_meta(&self, range: RangeInclusive<u32>) {
+        self.rt
+            .block_on(self.tx.send(Message::DownloadMeta(range)))
+            .unwrap();
+    }
+
+    pub fn download_with_pic(&self, range: RangeInclusive<u32>) {
+        self.rt
+            .block_on(self.tx.send(Message::DownloadWithPic(range)))
+            .unwrap();
+    }
+    pub fn export_from_net(&self, range: RangeInclusive<u32>) {
+        self.rt
+            .block_on(self.tx.send(Message::ExportFromNet(range)))
+            .unwrap();
+    }
+    pub fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) {
+        self.rt
+            .block_on(self.tx.send(Message::ExportFromLocal(range, reverse)))
+            .unwrap();
     }
 }
