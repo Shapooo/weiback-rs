@@ -274,8 +274,16 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         offset: u32,
         reverse: bool,
     ) -> Result<Vec<SqlPost>, sqlx::Error> {
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id ? LIMIT ? OFFSET ?").bind(if reverse {"DESC"} else {"ASC"}).bind(limit).bind(offset).
-            fetch_all(self.db_pool.as_ref().unwrap()).await
+        let sql_expr = if reverse {
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+        } else {
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+        };
+        sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(self.db_pool.as_ref().unwrap())
+            .await
     }
 
     pub async fn query_user(&self, id: i64) -> Result<User, sqlx::Error> {
