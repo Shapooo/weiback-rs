@@ -1,6 +1,6 @@
 use anyhow;
 use bytes::Bytes;
-use log::{info, trace};
+use log::{debug, info, trace};
 use serde::Serialize;
 use serde_json::{from_str, to_value, Value};
 use sqlx::FromRow;
@@ -33,6 +33,7 @@ impl Persister {
     }
 
     pub async fn init(&mut self) -> Result<(), sqlx::Error> {
+        debug!("initing...");
         let path = std::path::Path::new(&self.db_url[7..]);
         if path.is_file() {
             info!("db {:?} exists", self.db_url);
@@ -63,6 +64,8 @@ impl Persister {
     }
 
     pub async fn insert_post(&self, post: &Post) -> Result<(), sqlx::Error> {
+        debug!("insert post");
+        trace!("post: {:?}", post);
         self._insert_post(post).await?;
         if post["user"]["id"].is_number() {
             self.insert_user(&post["user"]).await?;
@@ -147,6 +150,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<(), sqlx::Error> {
+        debug!("insert img: {url}");
         let id = pic_url_to_id(url);
         let url = strip_url_queries(url);
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
@@ -160,6 +164,8 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     pub async fn insert_user(&self, user: &User) -> Result<(), sqlx::Error> {
+        debug!("insert user");
+        trace!("user: {user:?}");
         let result = sqlx::query(
             r#"INSERT OR IGNORE INTO user VALUES
  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
@@ -190,6 +196,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     pub async fn query_img(&self, url: &str) -> Result<Bytes, sqlx::Error> {
+        debug!("query img: {url}");
         let result: PictureBlob = sqlx::query_as("SELECT * FROM picture_blob WHERE url = ?")
             .bind(url)
             .fetch_one(self.db_pool.as_ref().unwrap())
@@ -199,11 +206,13 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 
     #[allow(unused)]
     pub async fn query_post(&self, id: i64) -> Result<Post, sqlx::Error> {
+        debug!("query post, id: {id}");
         let sql_post = self._query_post(id).await?;
         self.sql_post_to_post(sql_post).await
     }
 
     async fn sql_post_to_post(&self, sql_post: SqlPost) -> Result<Post, sqlx::Error> {
+        trace!("convert SqlPost to Post: {:?}", sql_post);
         let user = if let Some(uid) = sql_post.uid {
             self.query_user(uid).await?
         } else {
@@ -245,7 +254,9 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         offset: u32,
         reverse: bool,
     ) -> Result<Posts, sqlx::Error> {
+        debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
         let sql_posts = self._query_posts(limit, offset, reverse).await?;
+        debug!("geted {} post from local", sql_posts.len());
         let conv_futures = sql_posts
             .into_iter()
             .map(|post| self.sql_post_to_post(post));
@@ -253,6 +264,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         for i in conv_futures {
             data.push(i.await?);
         }
+        debug!("fetched {} posts", data.len());
         Ok(Posts { data })
     }
 

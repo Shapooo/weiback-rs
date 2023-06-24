@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow;
 use bytes::Bytes;
+use log::info;
 use serde_json::Value;
 
 use crate::{data::Posts, persister::Persister, web_fetcher::WebFetcher};
@@ -67,6 +68,7 @@ impl ResourceManager {
         range: std::ops::RangeInclusive<u32>,
         reverse: bool,
     ) -> anyhow::Result<Posts> {
+        info!("get {:?} post (reverse? {}) from db", range, reverse);
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
         Ok(self.persister.query_posts(limit, offset, reverse).await?)

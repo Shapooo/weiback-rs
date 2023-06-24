@@ -2,6 +2,7 @@ use eframe::{
     egui::{self, vec2},
     NativeOptions,
 };
+use log::{debug, info};
 
 use crate::config::Config;
 use crate::executor::Executor;
@@ -22,6 +23,7 @@ impl WbApp {
         }
     }
     pub fn run(self) {
+        info!("starting gui...");
         eframe::run_native("weiback", self.options, Box::new(|_cc| Box::new(self.gui))).unwrap();
     }
 }
@@ -82,7 +84,6 @@ impl eframe::App for Gui {
                             );
                         }
                     });
-                // ui.checkbox(&mut self.with_pic, "with pic");
                 if self.task_type != TaskType::Download {
                     self.with_pic = true;
                 }

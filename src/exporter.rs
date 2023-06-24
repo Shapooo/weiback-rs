@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow;
 use bytes::Bytes;
+use log::info;
 use tokio::fs::{DirBuilder, File};
 use tokio::io::AsyncWriteExt;
 
@@ -23,6 +24,11 @@ impl Exporter {
         N: AsRef<str>,
         P: AsRef<Path>,
     {
+        info!(
+            "export {}.html to {}",
+            html_name.as_ref(),
+            path.as_ref().display()
+        );
         let mut dir_builder = DirBuilder::new();
         dir_builder.recursive(true);
         if !path.as_ref().exists() {

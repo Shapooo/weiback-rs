@@ -4,7 +4,7 @@ use std::ops::RangeInclusive;
 
 use anyhow::Result;
 use lazy_static::lazy_static;
-use log::trace;
+use log::{debug, trace};
 use regex::Regex;
 use serde_json::{to_value, Value};
 use urlencoding::encode;
@@ -43,6 +43,7 @@ impl PostProcessor {
     }
 
     pub async fn init(&mut self) -> Result<()> {
+        debug!("initing...");
         self.emoticon = self.resource_manager.get_emoticon().await?;
         self.resource_manager.init().await?;
         Ok(())
@@ -65,6 +66,7 @@ impl PostProcessor {
     }
 
     pub async fn save_post_pictures(&self, posts: Posts) -> Result<()> {
+        debug!("save pictures of posts to db...");
         let mut pics = posts
             .data
             .iter()
@@ -76,6 +78,7 @@ impl PostProcessor {
             .for_each(|url| {
                 pics.insert(url);
             });
+        debug!("extracted {} pics from posts", pics.len());
         for pic in pics {
             self.resource_manager.get_pic(&pic).await?;
         }
@@ -83,6 +86,7 @@ impl PostProcessor {
     }
 
     pub async fn generate_html(&self, mut posts: Posts, html_name: &str) -> Result<HTMLPage> {
+        debug!("generate html from {} posts", posts.len());
         let mut pic_to_fetch = HashSet::new();
         posts
             .data

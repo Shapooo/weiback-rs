@@ -44,31 +44,31 @@ impl TaskHandler {
 
     #[allow(unused)]
     pub async fn download_meta_only(&self, range: RangeInclusive<u32>) -> Result<()> {
+        info!("downloading posts meta data...");
         self.download_posts(range, false, false).await
     }
 
     #[allow(unused)]
     pub async fn download_with_pic(&self, range: RangeInclusive<u32>) -> Result<()> {
+        info!("download posts with pics...");
         self.download_posts(range, true, false).await
     }
 
     pub async fn export_from_net(&self, range: RangeInclusive<u32>) -> Result<()> {
+        info!("download posts with pic, and export...");
         self.download_posts(range, true, true).await
     }
 
     #[allow(unused)]
     pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
+        info!("fetch posts from local and export");
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
         let mut post_acc = Vec::new();
-        for (i, post) in self
-            .processer
-            .get_fav_post_from_db(range, reverse)
-            .await?
-            .into_iter()
-            .enumerate()
-        {
+        let local_posts = self.processer.get_fav_post_from_db(range, reverse).await?;
+        debug!("fetched {} posts from local", local_posts.len());
+        for (i, post) in local_posts.into_iter().enumerate() {
             post_acc.push(post);
             if i % SAVING_PERIOD == SAVING_PERIOD - 1 {
                 let subtask_name = format!("weiback-{}", i);
