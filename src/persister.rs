@@ -17,7 +17,7 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGE
 #[derive(Debug)]
 pub struct Persister {
     db_url: String,
-    db_pool: SqlitePool,
+    db_pool: Option<SqlitePool>,
 }
 
 impl Persister {
@@ -26,16 +26,13 @@ impl Persister {
         P: AsRef<str>,
     {
         let url = String::from("sqlite:") + db.as_ref();
-        let pool = SqlitePoolOptions::new()
-            .min_connections(2)
-            .connect_lazy(&url)?;
         Ok(Persister {
             db_url: url,
-            db_pool: pool,
+            db_pool: None,
         })
     }
 
-    pub async fn init(&self) -> Result<(), sqlx::Error> {
+    pub async fn init(&mut self) -> Result<(), sqlx::Error> {
         let path = std::path::Path::new(&self.db_url[7..]);
         if path.is_file() {
             info!("db {:?} exists", self.db_url);
@@ -57,6 +54,11 @@ impl Persister {
                 })
                 .await;
         }
+        self.db_pool = Some(
+            SqlitePoolOptions::new()
+                .min_connections(2)
+                .connect_lazy(&self.db_url)?,
+        );
         Ok(())
     }
 
@@ -138,7 +140,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             (post["comment_manage_info"].is_object())
                 .then_some(post["comment_manage_info"].to_string()),
         )
-        .execute(&self.db_pool)
+        .execute(self.db_pool.as_ref().unwrap())
         .await?;
         trace!("insert post {post:?} \nresult: {result:?}");
         Ok(())
@@ -151,7 +153,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             .bind(url)
             .bind(&id)
             .bind(img)
-            .execute(&self.db_pool)
+            .execute(self.db_pool.as_ref().unwrap())
             .await?;
         trace!("insert img {id}-{url}, result: {result:?}");
         Ok(())
@@ -181,7 +183,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         .bind(user["mbrank"].as_i64().unwrap())
         .bind(user["mbtype"].as_i64().unwrap())
         .bind(user["icon_list"].to_string())
-        .execute(&self.db_pool)
+        .execute(self.db_pool.as_ref().unwrap())
         .await?;
         trace!("insert user {user:?}, result {result:?}");
         Ok(())
@@ -190,7 +192,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     pub async fn query_img(&self, url: &str) -> Result<Bytes, sqlx::Error> {
         let result: PictureBlob = sqlx::query_as("SELECT * FROM picture_blob WHERE url = ?")
             .bind(url)
-            .fetch_one(&self.db_pool)
+            .fetch_one(self.db_pool.as_ref().unwrap())
             .await?;
         Ok(result.blob.into())
     }
@@ -233,7 +235,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     async fn _query_post(&self, id: i64) -> Result<SqlPost, sqlx::Error> {
         sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
             .bind(id)
-            .fetch_one(&self.db_pool)
+            .fetch_one(self.db_pool.as_ref().unwrap())
             .await
     }
 
@@ -261,13 +263,13 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         reverse: bool,
     ) -> Result<Vec<SqlPost>, sqlx::Error> {
         sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id ? LIMIT ? OFFSET ?").bind(if reverse {"DESC"} else {"ASC"}).bind(limit).bind(offset).
-            fetch_all(&self.db_pool).await
+            fetch_all(self.db_pool.as_ref().unwrap()).await
     }
 
     pub async fn query_user(&self, id: i64) -> Result<User, sqlx::Error> {
         let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
             .bind(id)
-            .fetch_one(&self.db_pool)
+            .fetch_one(self.db_pool.as_ref().unwrap())
             .await?;
 
         let result = serde_json::to_value(sql_user).unwrap();
@@ -459,14 +461,14 @@ mod persister_test {
 
     #[tokio::test]
     async fn post_new() {
-        let p = Persister::new("post_new.db").unwrap();
+        let mut p = Persister::new("post_new.db").unwrap();
         p.init().await.unwrap();
         std::fs::remove_file("post_new.db").unwrap();
     }
 
     #[tokio::test]
     async fn insert_post() {
-        let pster = Persister::new("insert_post.db").unwrap();
+        let mut pster = Persister::new("insert_post.db").unwrap();
         pster.init().await.unwrap();
         let txt = include_str!("../res/one.json");
         let post = from_str::<Post>(txt).unwrap();
@@ -478,7 +480,7 @@ mod persister_test {
 
     #[tokio::test]
     async fn insert_posts() {
-        let pster = Persister::new("insert_posts.db").unwrap();
+        let mut pster = Persister::new("insert_posts.db").unwrap();
         pster.init().await.unwrap();
         let txt = include_str!("../res/full.json");
         let posts: Vec<_> = from_str::<Posts>(txt)
@@ -496,7 +498,7 @@ mod persister_test {
 
     #[tokio::test]
     async fn insert_users() {
-        let pster = Persister::new("insert_users.db").unwrap();
+        let mut pster = Persister::new("insert_users.db").unwrap();
         pster.init().await.unwrap();
         let txt = include_str!("../res/full.json");
         let users: Vec<_> = from_str::<Posts>(txt)
@@ -524,7 +526,7 @@ mod persister_test {
     async fn insert_img() {
         let img = include_bytes!("../res/example.jpg");
         let url = "https://test_url/example.jpg";
-        let p = Persister::new("insert_img.db").unwrap();
+        let mut p = Persister::new("insert_img.db").unwrap();
         p.init().await.unwrap();
         p.insert_img(url, img).await.unwrap();
         std::fs::write("./examp.jpg", p.query_img(url).await.unwrap()).unwrap();
@@ -536,7 +538,7 @@ mod persister_test {
     #[tokio::test]
     async fn query_post() {
         let post = from_str::<Post>(include_str!("../res/one.json")).unwrap();
-        let pr = Persister::new("query_post.db").unwrap();
+        let mut pr = Persister::new("query_post.db").unwrap();
         pr.init().await.unwrap();
         pr.insert_post(&post).await.unwrap();
         let result = pr.query_post(post["id"].as_i64().unwrap()).await.unwrap();
@@ -549,7 +551,7 @@ mod persister_test {
     #[tokio::test]
     async fn query_user() {
         let user = from_str::<Post>(include_str!("../res/one.json")).unwrap()["user"].take();
-        let pr = Persister::new("query_user.db").unwrap();
+        let mut pr = Persister::new("query_user.db").unwrap();
         pr.init().await.unwrap();
         pr.insert_user(&user).await.unwrap();
         let result = pr.query_user(user["id"].as_i64().unwrap()).await.unwrap();
