@@ -34,13 +34,18 @@ pub struct PostProcessor {
 }
 
 impl PostProcessor {
-    pub async fn build(resource_manager: ResourceManager) -> Result<Self> {
-        let emoticon = resource_manager.get_emoticon().await?;
-        Ok(Self {
+    pub fn new(resource_manager: ResourceManager) -> Self {
+        Self {
             html_generator: HTMLGenerator::new(),
             resource_manager,
-            emoticon,
-        })
+            emoticon: Default::default(),
+        }
+    }
+
+    pub async fn init(&mut self) -> Result<()> {
+        self.emoticon = self.resource_manager.get_emoticon().await?;
+        self.resource_manager.init().await?;
+        Ok(())
     }
 
     pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> anyhow::Result<Posts> {

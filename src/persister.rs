@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow;
 use bytes::Bytes;
 use log::{info, trace};
@@ -18,22 +16,33 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGE
 
 #[derive(Debug)]
 pub struct Persister {
+    db_url: String,
     db_pool: SqlitePool,
 }
 
 impl Persister {
-    pub async fn build<P>(db: P) -> anyhow::Result<Self>
+    pub fn new<P>(db: P) -> anyhow::Result<Self>
     where
         P: AsRef<str>,
     {
         let url = String::from("sqlite:") + db.as_ref();
-        let db = PathBuf::from("db");
-        if db.is_file() {
-            info!("db file {:?} exists", db);
+        let pool = SqlitePoolOptions::new()
+            .min_connections(2)
+            .connect_lazy(&url)?;
+        Ok(Persister {
+            db_url: url,
+            db_pool: pool,
+        })
+    }
+
+    pub async fn init(&self) -> Result<(), sqlx::Error> {
+        let path = std::path::Path::new(&self.db_url[7..]);
+        if path.is_file() {
+            info!("db {:?} exists", self.db_url);
         } else {
-            info!("db file {:?} not exists, create it", db);
-            Sqlite::create_database(&url).await?;
-            let mut db = SqliteConnection::connect(&url).await?;
+            info!("db {:?} not exists, create it", self.db_url);
+            Sqlite::create_database(&self.db_url).await?;
+            let mut db = SqliteConnection::connect(&self.db_url).await?;
             use futures::stream::StreamExt;
             sqlx::query(DATABASE_CREATE_SQL)
                 .execute_many(&mut db)
@@ -48,10 +57,7 @@ impl Persister {
                 })
                 .await;
         }
-        let pool = SqlitePoolOptions::new()
-            .min_connections(2)
-            .connect_lazy(&url)?;
-        Ok(Persister { db_pool: pool })
+        Ok(())
     }
 
     pub async fn insert_post(&self, post: &Post) -> Result<(), sqlx::Error> {
@@ -452,14 +458,16 @@ mod persister_test {
     use crate::data::{Post, Posts};
 
     #[tokio::test]
-    async fn post_build() {
-        Persister::build("post_build.db").await.unwrap();
-        std::fs::remove_file("post_build.db").unwrap();
+    async fn post_new() {
+        let p = Persister::new("post_new.db").unwrap();
+        p.init().await.unwrap();
+        std::fs::remove_file("post_new.db").unwrap();
     }
 
     #[tokio::test]
     async fn insert_post() {
-        let pster = Persister::build("insert_post.db").await.unwrap();
+        let pster = Persister::new("insert_post.db").unwrap();
+        pster.init().await.unwrap();
         let txt = include_str!("../res/one.json");
         let post = from_str::<Post>(txt).unwrap();
         pster.insert_post(&post).await.unwrap();
@@ -470,7 +478,8 @@ mod persister_test {
 
     #[tokio::test]
     async fn insert_posts() {
-        let pster = Persister::build("insert_posts.db").await.unwrap();
+        let pster = Persister::new("insert_posts.db").unwrap();
+        pster.init().await.unwrap();
         let txt = include_str!("../res/full.json");
         let posts: Vec<_> = from_str::<Posts>(txt)
             .unwrap()
@@ -487,7 +496,8 @@ mod persister_test {
 
     #[tokio::test]
     async fn insert_users() {
-        let pster = Persister::build("insert_users.db").await.unwrap();
+        let pster = Persister::new("insert_users.db").unwrap();
+        pster.init().await.unwrap();
         let txt = include_str!("../res/full.json");
         let users: Vec<_> = from_str::<Posts>(txt)
             .unwrap()
@@ -514,7 +524,8 @@ mod persister_test {
     async fn insert_img() {
         let img = include_bytes!("../res/example.jpg");
         let url = "https://test_url/example.jpg";
-        let p = Persister::build("insert_img.db").await.unwrap();
+        let p = Persister::new("insert_img.db").unwrap();
+        p.init().await.unwrap();
         p.insert_img(url, img).await.unwrap();
         std::fs::write("./examp.jpg", p.query_img(url).await.unwrap()).unwrap();
         std::fs::remove_file("insert_img.db").unwrap();
@@ -525,7 +536,8 @@ mod persister_test {
     #[tokio::test]
     async fn query_post() {
         let post = from_str::<Post>(include_str!("../res/one.json")).unwrap();
-        let pr = Persister::build("query_post.db").await.unwrap();
+        let pr = Persister::new("query_post.db").unwrap();
+        pr.init().await.unwrap();
         pr.insert_post(&post).await.unwrap();
         let result = pr.query_post(post["id"].as_i64().unwrap()).await.unwrap();
         dbg!(result);
@@ -537,7 +549,8 @@ mod persister_test {
     #[tokio::test]
     async fn query_user() {
         let user = from_str::<Post>(include_str!("../res/one.json")).unwrap()["user"].take();
-        let pr = Persister::build("query_user.db").await.unwrap();
+        let pr = Persister::new("query_user.db").unwrap();
+        pr.init().await.unwrap();
         pr.insert_user(&user).await.unwrap();
         let result = pr.query_user(user["id"].as_i64().unwrap()).await.unwrap();
         dbg!(result);

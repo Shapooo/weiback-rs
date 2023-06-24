@@ -13,11 +13,16 @@ pub struct ResourceManager {
 }
 
 impl ResourceManager {
-    pub fn build(web_fetcher: WebFetcher, persister: Persister) -> Self {
+    pub fn new(web_fetcher: WebFetcher, persister: Persister) -> Self {
         Self {
             web_fetcher,
             persister,
         }
+    }
+
+    pub async fn init(&mut self) -> anyhow::Result<()> {
+        self.persister.init().await?;
+        Ok(())
     }
 
     pub async fn get_pic(&self, url: &str) -> anyhow::Result<Bytes> {

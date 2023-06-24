@@ -24,18 +24,22 @@ pub struct TaskHandler {
 }
 
 impl TaskHandler {
-    pub async fn build(config: Config) -> Result<Self> {
+    pub fn new(config: Config) -> Result<Self> {
         let fetcher = WebFetcher::build(
             config.web_cookie.clone(),
             (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
         );
-        let persister = Persister::build(&config.db).await?;
-        let resource_manager = ResourceManager::build(fetcher, persister);
+        let persister = Persister::new(&config.db)?;
+        let resource_manager = ResourceManager::new(fetcher, persister);
         Ok(TaskHandler {
             exporter: Exporter::new(),
             config,
-            processer: PostProcessor::build(resource_manager).await?,
+            processer: PostProcessor::new(resource_manager),
         })
+    }
+
+    pub async fn init(&mut self) -> Result<()> {
+        self.processer.init().await
     }
 
     #[allow(unused)]
