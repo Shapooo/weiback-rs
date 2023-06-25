@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
+use futures::future::join_all;
 use log::{debug, trace};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
@@ -9,7 +10,7 @@ use reqwest::{
 };
 use serde_json::{from_str, Value};
 
-use crate::data::{FavTag, LongText, Posts};
+use crate::data::{FavTag, LongText, Post, Posts};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 #[allow(unused)]
@@ -174,10 +175,29 @@ impl WebFetcher {
             Err(anyhow!("fetched data is not ok: {:?}", posts))
         } else {
             if let Value::Array(v) = posts["data"].take() {
-                Ok(Posts { data: v })
+                let v: Result<Vec<_>> =
+                    join_all(v.into_iter().map(|p| self.handle_mobile_only_post(p)))
+                        .await
+                        .into_iter()
+                        .collect();
+                Ok(Posts { data: v.unwrap() })
             } else {
                 panic!("it should be a array, or weibo API has changed!")
             }
+        }
+    }
+
+    async fn handle_mobile_only_post(&self, post: Post) -> Result<Post> {
+        if !post["user"]["id"].is_number()
+            && post["text_raw"]
+                .as_str()
+                .unwrap()
+                .starts_with("该内容请至手机客户端查看")
+        {
+            self.fetch_mobile_page(post["mblogid"].as_str().unwrap())
+                .await
+        } else {
+            Ok(post)
         }
     }
 
