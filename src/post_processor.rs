@@ -1,6 +1,7 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
+use std::path::Path;
 
 use anyhow::Result;
 use lazy_static::lazy_static;
@@ -95,7 +96,7 @@ impl PostProcessor {
                 self.process_post(
                     &mut post,
                     &mut pic_to_fetch,
-                    &(String::from(html_name) + "_files"),
+                    &Path::new((Borrowed(html_name) + "_files").as_ref()),
                 )
             })
             .collect::<Result<_>>()?;
@@ -144,12 +145,12 @@ impl PostProcessor {
         &self,
         post: &mut Post,
         pics: &mut HashSet<String>,
-        resource_dir: &str,
+        resource_dir: &Path,
     ) -> Result<()> {
         if post["retweeted_status"].is_object() {
             self.process_post_non_rec(&mut post["retweeted_status"], pics, resource_dir)?;
         }
-        self.process_post_non_rec(post, pics, &resource_dir)?;
+        self.process_post_non_rec(post, pics, resource_dir)?;
         Ok(())
     }
 
@@ -157,12 +158,12 @@ impl PostProcessor {
         &self,
         post: &mut Post,
         pic_urls: &mut HashSet<String>,
-        resource_dir: &str,
+        resource_dir: &Path,
     ) -> Result<()> {
         let urls = self.extract_pics_from_post(post);
         let pic_locs: Vec<_> = urls
             .iter()
-            .map(|url| Borrowed(resource_dir) + Borrowed(pic_url_to_file(url)))
+            .map(|url| resource_dir.join(pic_url_to_file(url)))
             .collect();
 
         if let Value::Object(obj) = post {
@@ -182,7 +183,7 @@ impl PostProcessor {
         post["text_raw"] = to_value(text).unwrap();
         let avatar_url = post["user"]["avatar_hd"].as_str().unwrap();
         pic_urls.insert(avatar_url.into());
-        let avatar_loc = Borrowed(resource_dir) + Borrowed(pic_url_to_file(avatar_url));
+        let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
         post["poster_avatar"] = to_value(avatar_loc).unwrap();
 
         Ok(())
@@ -193,7 +194,7 @@ impl PostProcessor {
         text: &str,
         url_struct: &Value,
         pic_urls: &mut HashSet<String>,
-        pic_folder: &str,
+        pic_folder: &Path,
     ) -> Result<String> {
         let emails_suffixes = EMAIL_EXPR
             .find_iter(text)
@@ -256,7 +257,7 @@ impl PostProcessor {
         &self,
         s: &'a str,
         pic_urls: &mut HashSet<String>,
-        pic_folder: &'a str,
+        pic_folder: &'a Path,
     ) -> Cow<'a, str> {
         if let Some(url) = self.emoticon.get(s) {
             pic_urls.insert(url.into());
@@ -266,7 +267,7 @@ impl PostProcessor {
                 + Borrowed(r#"" title=""#)
                 + Borrowed(s)
                 + Borrowed(r#"" src=""#)
-                + Borrowed(pic_folder)
+                + Borrowed(pic_folder.to_str().unwrap())
                 + Owned(pic_name)
                 + Borrowed(r#"" />"#)
         } else {
