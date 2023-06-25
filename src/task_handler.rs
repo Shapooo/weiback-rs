@@ -63,7 +63,7 @@ impl TaskHandler {
 
     pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
         info!("fetch posts from local and export");
-        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
+        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
         let mut post_acc = Vec::new();
@@ -95,7 +95,7 @@ impl TaskHandler {
         with_pic: bool,
         export: bool,
     ) -> Result<()> {
-        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
+        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
         assert!(range.start() != &0);
