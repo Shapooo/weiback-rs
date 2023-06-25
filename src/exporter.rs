@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow;
 use bytes::Bytes;
+use futures::future::join_all;
 use log::info;
 use tokio::fs::{DirBuilder, File};
 use tokio::io::AsyncWriteExt;
@@ -46,12 +47,12 @@ impl Exporter {
         operating_path.pop();
         operating_path.push(resources_dir_name);
         dir_builder.create(operating_path.as_path()).await?;
-        for pic in page.pics.into_iter() {
-            operating_path.push(pic.name);
-            let mut pic_file = File::create(operating_path.as_path()).await?;
-            pic_file.write_all(&pic.blob).await?;
-            operating_path.pop();
-        }
+        join_all(page.pics.into_iter().map(|pic| async {
+            let pic = pic;
+            let mut pic_file = File::create(operating_path.join(pic.name)).await?;
+            pic_file.write_all(&pic.blob).await
+        }))
+        .await;
 
         Ok(())
     }

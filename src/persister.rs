@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow;
 use bytes::Bytes;
+use futures::future::join_all;
 use log::{debug, info, trace};
 use serde::Serialize;
 use serde_json::{from_str, to_value, Value};
@@ -259,13 +260,14 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
         let sql_posts = self._query_posts(limit, offset, reverse).await?;
         debug!("geted {} post from local", sql_posts.len());
-        let conv_futures = sql_posts
-            .into_iter()
-            .map(|post| self.sql_post_to_post(post));
-        let mut data = Vec::new();
-        for i in conv_futures {
-            data.push(i.await?);
-        }
+        let data: Vec<_> = join_all(
+            sql_posts
+                .into_iter()
+                .map(|p| async { self.sql_post_to_post(p).await }),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<_, _>>()?;
         debug!("fetched {} posts", data.len());
         Ok(Posts { data })
     }
