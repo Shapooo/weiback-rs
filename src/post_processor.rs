@@ -8,7 +8,6 @@ use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
 use serde_json::{to_value, Value};
-use urlencoding::encode;
 
 use crate::data::{Post, Posts};
 use crate::exporter::{HTMLPage, Picture};
@@ -263,32 +262,28 @@ impl PostProcessor {
             pic_urls.insert(url.into());
             let pic_name = pic_url_to_file(url).to_owned();
             Borrowed(r#"<img class="bk-emoji" alt=""#)
-                + Borrowed(s)
-                + Borrowed(r#"" title=""#)
-                + Borrowed(s)
-                + Borrowed(r#"" src=""#)
-                + Borrowed(pic_folder.to_str().unwrap())
+                + s
+                + r#"" title=""#
+                + s
+                + r#"" src=""#
+                + pic_folder.to_str().unwrap()
                 + Owned(pic_name)
-                + Borrowed(r#"" />"#)
+                + r#"" />"#
         } else {
             Borrowed(s)
         }
     }
 
     fn trans_user<'a>(&self, s: &'a str) -> Cow<'a, str> {
-        Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#)
-            + Borrowed(&s[1..])
-            + Borrowed("\">")
-            + Borrowed(s)
-            + Borrowed("</a>")
+        Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#) + &s[1..] + "\">" + s + "</a>"
     }
 
     fn trans_topic<'a>(&self, s: &'a str) -> Cow<'a, str> {
         Borrowed(r#"<a class ="bk-link" href="https://s.weibo.com/weibo?q="#)
-            + encode(s)
-            + Borrowed(r#"" target="_blank">"#)
-            + Borrowed(s)
-            + Borrowed("</a>")
+            + s
+            + r#"" target="_blank">"#
+            + s
+            + "</a>"
     }
 
     fn trans_url<'a>(&self, s: &'a str, url_struct: &Value) -> Cow<'a, str> {
@@ -307,10 +302,8 @@ impl PostProcessor {
         }
         Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
             + url
-            + Borrowed(
-                r#""><img class="bk-icon-link" src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png"/>"#,
-            )
+            + r#""><img class="bk-icon-link" src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png"/>"#
             + url_title
-            + Borrowed("</a>")
+            + "</a>"
     }
 }

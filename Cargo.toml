@@ -26,4 +26,3 @@ simple_logger = "4.1.0"
 sqlx = { version = "0.6.3", features = ["sqlite", "runtime-tokio-rustls"] }
 tera = "1.19.0"
 tokio = { version = "1.28.1", features = ["macros", "rt-multi-thread", "time", "fs"] }
-urlencoding = "2.1.2"
