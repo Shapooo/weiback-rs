@@ -67,10 +67,11 @@ impl TaskHandler {
 
         let mut post_acc = Vec::new();
         let local_posts = self.processer.get_fav_post_from_db(range, reverse).await?;
-        debug!("fetched {} posts from local", local_posts.len());
+        let posts_sum = local_posts.len();
+        debug!("fetched {} posts from local", posts_sum);
         for (i, post) in local_posts.into_iter().enumerate() {
             post_acc.push(post);
-            if i % SAVING_PERIOD == SAVING_PERIOD - 1 {
+            if i % SAVING_PERIOD == SAVING_PERIOD - 1 || i == posts_sum - 1 {
                 let subtask_name = format!("weiback-{}", i);
                 let html = self
                     .processer
