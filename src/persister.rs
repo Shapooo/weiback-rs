@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow;
 use bytes::Bytes;
 use log::{debug, info, trace};
@@ -23,9 +25,9 @@ pub struct Persister {
 impl Persister {
     pub fn new<P>(db: P) -> anyhow::Result<Self>
     where
-        P: AsRef<str>,
+        P: AsRef<Path>,
     {
-        let url = String::from("sqlite:") + db.as_ref();
+        let url = String::from("sqlite:") + db.as_ref().to_str().unwrap();
         Ok(Persister {
             db_url: url,
             db_pool: None,
@@ -299,7 +301,6 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 }
 
 fn sql_post_to_post(sql_post: SqlPost) -> Post {
-    dbg!(&sql_post);
     let mut map = serde_json::Map::new();
     map.insert("id".into(), serde_json::to_value(sql_post.id).unwrap());
     map.insert("created_at".into(), to_value(sql_post.created_at).unwrap());

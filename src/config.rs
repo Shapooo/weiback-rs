@@ -1,9 +1,11 @@
-use crate::args::Args;
+use std::{env::current_exe, fs, path::PathBuf};
+
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use std::{env::current_exe, fs, path::PathBuf};
+
+use crate::args::Args;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
@@ -14,11 +16,28 @@ pub struct Config {
     #[serde(default)]
     pub uid: String,
     #[serde(default)]
-    pub db: String,
+    pub db: PathBuf,
 }
+
+const DEFAULT_DB_PATH_STR: &str = "res/weiback.db";
 
 impl Config {
     pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn load(path: &PathBuf) -> Result<Self> {
+        if path.is_file() {
+            let file = fs::read_to_string(path)?;
+            Ok(serde_yaml::from_str::<Config>(&file)?)
+        } else {
+            return Err(anyhow!("config file is invalid"));
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
         Self {
             web_cookie: Default::default(),
             mobile_cookie: Default::default(),
@@ -26,25 +45,14 @@ impl Config {
             db: Default::default(),
         }
     }
-
-    pub fn try_load(&mut self, path: &PathBuf) -> Result<()> {
-        if path.is_file() {
-            let file = fs::read_to_string(path)?;
-            *self = serde_yaml::from_str::<Config>(&file)?;
-            Ok(())
-        } else {
-            return Err(anyhow!("config file is invalid"));
-        }
-    }
 }
 
 pub fn get_config() -> Result<Config> {
-    let mut conf = Config::new();
     let args = Args::parse();
-    let config_file: Option<PathBuf> = args.config.or(current_exe().ok().map(|mut exe| {
-        exe.pop();
-        exe.push("config.yaml");
-        exe
+    let config_file: Option<PathBuf> = args.config.or(current_exe().ok().map(|mut path| {
+        path.pop();
+        path.push("config.yaml");
+        path
     }));
 
     if config_file.is_none() {
@@ -54,16 +62,15 @@ pub fn get_config() -> Result<Config> {
     let config_file = config_file.unwrap();
     info!("loading config from: {:?}", config_file);
 
-    match conf.try_load(&config_file) {
-        Ok(_) => debug!("config loaded: {:?}", conf),
-        Err(err) => panic!("cannot load config file: {err}"),
+    let mut conf = Config::load(&config_file)?;
+
+    if conf.db.as_os_str() == "" {
+        let mut exe = current_exe().unwrap();
+        exe.pop();
+        exe.push(DEFAULT_DB_PATH_STR);
+        conf.db = exe;
     }
 
-    conf.db = args.db.unwrap_or(conf.db);
-    if conf.db.is_empty() {
-        panic!("database file must be set!");
-    }
-
-    info!("conf loaded");
+    debug!("config loaded: {:?}", conf);
     Ok(conf)
 }
