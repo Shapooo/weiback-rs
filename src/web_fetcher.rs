@@ -13,23 +13,15 @@ use serde_json::{from_str, Value};
 use crate::data::{FavTag, LongText, Post, Posts};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
-#[allow(unused)]
-const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
-#[allow(unused)]
-const STATUSES_LIKE_LIST_API: &str = "https://weibo.com/ajax/statuses/likelist";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
-#[allow(unused)]
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
-#[allow(unused)]
-const PROFILE_INFO_API: &str = "https://weibo.com/ajax/profile/info";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/status";
 
 #[derive(Debug)]
 pub struct WebFetcher {
     web_client: Client,
     pic_client: Client,
-    #[allow(unused)]
     mobile_client: Option<Client>,
 }
 
@@ -254,7 +246,6 @@ impl WebFetcher {
         Ok(res)
     }
 
-    #[allow(unused)]
     pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
         if let Some(mobile_client) = &self.mobile_client {
             let url = format!("{}/{}", MOBILE_POST_API, mblogid);

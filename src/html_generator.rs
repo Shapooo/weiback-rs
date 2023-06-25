@@ -1,14 +1,8 @@
-#![allow(unused)]
-use std::collections::HashSet;
-use std::hash::Hash;
-
 use anyhow;
-use bytes::Bytes;
 use lazy_static::lazy_static;
 use tera::{Context, Tera};
 
 use crate::data::{Post, Posts};
-use crate::persister::Persister;
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
@@ -29,6 +23,7 @@ impl HTMLGenerator {
         Self()
     }
 
+    #[allow(unused)]
     pub fn generate_post(&self, mut post: Post) -> anyhow::Result<String> {
         let mut context = Context::new();
         context.insert("post", &post);

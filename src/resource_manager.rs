@@ -55,7 +55,6 @@ impl ResourceManager {
         self.web_fetcher.fetch_fav_total_num().await
     }
 
-    #[allow(unused)]
     pub async fn get_fav_post_from_db(
         &self,
         range: std::ops::RangeInclusive<u32>,

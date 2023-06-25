@@ -46,13 +46,11 @@ impl TaskHandler {
         self.processer.init().await
     }
 
-    #[allow(unused)]
     pub async fn download_meta_only(&self, range: RangeInclusive<u32>) -> Result<()> {
         info!("downloading posts meta data...");
         self.download_posts(range, false, false).await
     }
 
-    #[allow(unused)]
     pub async fn download_with_pic(&self, range: RangeInclusive<u32>) -> Result<()> {
         info!("download posts with pics...");
         self.download_posts(range, true, false).await
@@ -63,7 +61,6 @@ impl TaskHandler {
         self.download_posts(range, true, true).await
     }
 
-    #[allow(unused)]
     pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
         info!("fetch posts from local and export");
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%R"));
