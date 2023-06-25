@@ -175,11 +175,10 @@ impl WebFetcher {
             Err(anyhow!("fetched data is not ok: {:?}", posts))
         } else {
             if let Value::Array(v) = posts["data"].take() {
-                let v: Result<Vec<_>> =
-                    join_all(v.into_iter().map(|p| self.handle_mobile_only_post(p)))
-                        .await
-                        .into_iter()
-                        .collect();
+                let v: Result<Vec<_>> = join_all(v.into_iter().map(|p| self.preprocess_post(p)))
+                    .await
+                    .into_iter()
+                    .collect();
                 Ok(Posts { data: v.unwrap() })
             } else {
                 panic!("it should be a array, or weibo API has changed!")
@@ -187,18 +186,26 @@ impl WebFetcher {
         }
     }
 
-    async fn handle_mobile_only_post(&self, post: Post) -> Result<Post> {
+    async fn preprocess_post(&self, mut post: Post) -> Result<Post> {
         if !post["user"]["id"].is_number()
             && post["text_raw"]
                 .as_str()
                 .unwrap()
                 .starts_with("该内容请至手机客户端查看")
         {
-            self.fetch_mobile_page(post["mblogid"].as_str().unwrap())
-                .await
-        } else {
-            Ok(post)
+            post = self
+                .fetch_mobile_page(post["mblogid"].as_str().unwrap())
+                .await?;
         }
+        let is_long_text = &post["isLongText"];
+        if is_long_text.is_boolean() && is_long_text.as_bool().unwrap() {
+            let mblogid = &post["mblogid"];
+            let long_text = self
+                .fetch_long_text_content(mblogid.as_str().unwrap())
+                .await?;
+            post["text_raw"] = Value::String(long_text);
+        }
+        Ok(post)
     }
 
     pub async fn fetch_pic(&self, url: impl IntoUrl) -> Result<Bytes> {

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use anyhow;
 use bytes::Bytes;
+use futures::future::join_all;
 use log::info;
-use serde_json::Value;
 
 use crate::{data::Posts, persister::Persister, web_fetcher::WebFetcher};
 
@@ -38,23 +38,16 @@ impl ResourceManager {
     }
 
     pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> anyhow::Result<Posts> {
-        let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?.data;
-        let mut res = Vec::new();
-        for mut post in posts {
-            let is_long_text = &post["isLongText"];
-            if is_long_text.is_boolean() && is_long_text.as_bool().unwrap() {
-                let mblogid = &post["mblogid"];
-                let long_text = self
-                    .web_fetcher
-                    .fetch_long_text_content(mblogid.as_str().unwrap())
-                    .await?;
-                post["text_raw"] = Value::String(long_text);
-            }
+        let data = self.web_fetcher.fetch_posts_meta(uid, page).await?.data;
+        let data: Vec<serde_json::Value> = join_all(data.into_iter().map(|post| async {
             self.persister.insert_post(&post).await?;
-            res.push(post);
-        }
+            anyhow::Ok(post)
+        }))
+        .await
+        .into_iter()
+        .collect::<anyhow::Result<Vec<serde_json::Value>>>()?;
 
-        Ok(Posts { data: res })
+        Ok(Posts { data })
     }
 
     #[allow(unused)]
