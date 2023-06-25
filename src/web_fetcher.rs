@@ -7,7 +7,7 @@ use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, IntoUrl, Response,
 };
-use serde_json::Value;
+use serde_json::{from_str, Value};
 
 use crate::data::{FavTag, LongText, Posts};
 
@@ -22,6 +22,7 @@ const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 #[allow(unused)]
 const PROFILE_INFO_API: &str = "https://weibo.com/ajax/profile/info";
+const MOBILE_POST_API: &str = "https://m.weibo.cn/status";
 
 #[derive(Debug)]
 pub struct WebFetcher {
@@ -227,8 +228,18 @@ impl WebFetcher {
     }
 
     #[allow(unused)]
-    pub async fn fetch_mobile_page(&self, _mblogid: &str) -> Result<Value> {
-        unimplemented!()
+    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
+        if let Some(mobile_client) = &self.mobile_client {
+            let url = format!("{}/{}", MOBILE_POST_API, mblogid);
+            let res = self.fetch(url, mobile_client).await?;
+            let text = res.text().await?;
+            let start = text.find("\"status\":").unwrap();
+            let end = text.find("\"call\"").unwrap();
+            let end = *&text[..end].rfind(",").unwrap();
+            Ok(from_str::<Value>(&text[start + 9..end])?)
+        } else {
+            Err(anyhow!("mobile cookie have not set"))
+        }
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u64> {
