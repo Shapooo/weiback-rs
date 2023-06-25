@@ -1,4 +1,5 @@
 use std::ops::RangeInclusive;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -9,6 +10,7 @@ use tokio::time::sleep;
 use crate::config::Config;
 use crate::data::Posts;
 use crate::exporter::Exporter;
+use crate::message::Progress;
 use crate::persister::Persister;
 use crate::post_processor::PostProcessor;
 use crate::resource_manager::ResourceManager;
@@ -21,10 +23,11 @@ pub struct TaskHandler {
     exporter: Exporter,
     config: Config,
     processer: PostProcessor,
+    progress: Arc<RwLock<Progress>>,
 }
 
 impl TaskHandler {
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: Config, progress: Arc<RwLock<Progress>>) -> Result<Self> {
         let fetcher = WebFetcher::build(
             config.web_cookie.clone(),
             (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
@@ -35,6 +38,7 @@ impl TaskHandler {
             exporter: Exporter::new(),
             config,
             processer: PostProcessor::new(resource_manager),
+            progress,
         })
     }
 
@@ -72,7 +76,7 @@ impl TaskHandler {
         for (i, post) in local_posts.into_iter().enumerate() {
             post_acc.push(post);
             if i % SAVING_PERIOD == SAVING_PERIOD - 1 || i == posts_sum - 1 {
-                let subtask_name = format!("weiback-{}", i);
+                let subtask_name = format!("weiback-{}", (i + SAVING_PERIOD - 1) / SAVING_PERIOD);
                 let html = self
                     .processer
                     .generate_html(Posts { data: post_acc }, &subtask_name)
@@ -84,6 +88,7 @@ impl TaskHandler {
                     .await?;
             }
         }
+        *self.progress.write().unwrap() = Progress::Finished;
         Ok(())
     }
 
@@ -100,6 +105,7 @@ impl TaskHandler {
         info!("pages download range is {range:?}");
         let mut total_posts_sum = 0;
         let mut posts_acc = Posts::new();
+        let end = *range.end();
         for (i, page) in range.enumerate() {
             let posts = self
                 .processer
@@ -131,9 +137,14 @@ impl TaskHandler {
                     posts_acc = Posts::new();
                 }
             }
+            let _ = self
+                .progress
+                .try_write()
+                .map(|mut pro| *pro = Progress::InProgress(i as f32 / end as f32, "".into()));
             sleep(Duration::from_secs(5)).await;
         }
         info!("fetched {total_posts_sum} posts in total");
+        *self.progress.write().unwrap() = Progress::Finished;
         Ok(())
     }
 }
