@@ -28,7 +28,7 @@ pub struct TaskHandler {
 
 impl TaskHandler {
     pub fn new(config: Config, progress: Arc<RwLock<Progress>>) -> Result<Self> {
-        let fetcher = WebFetcher::build(
+        let fetcher = WebFetcher::new(
             config.web_cookie.clone(),
             (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
         );

@@ -33,7 +33,7 @@ pub struct WebFetcher {
 }
 
 impl WebFetcher {
-    pub fn build(web_cookie: String, mobile_cookie: Option<String>) -> Self {
+    pub fn new(web_cookie: String, mobile_cookie: Option<String>) -> Self {
         let mut web_headers: HeaderMap = HeaderMap::new();
         web_headers.insert(
             "Accept",
@@ -265,7 +265,7 @@ mod web_fetcher_test {
     use super::*;
     #[tokio::test]
     async fn fetch_emoticon() {
-        let f = WebFetcher::build("[privacy]".into(), None);
+        let f = WebFetcher::new("[privacy]".into(), None);
         let res = f.fetch_emoticon().await.unwrap();
         println!("{:?}", res);
     }
