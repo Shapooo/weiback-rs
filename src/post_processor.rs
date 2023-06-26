@@ -268,8 +268,13 @@ impl PostProcessor {
                 + r#"" title=""#
                 + s
                 + r#"" src=""#
-                + pic_folder.to_str().unwrap()
-                + Owned(pic_name)
+                + Owned(
+                    pic_folder
+                        .join(pic_name)
+                        .into_os_string()
+                        .into_string()
+                        .unwrap(),
+                )
                 + r#"" />"#
         } else {
             Borrowed(s)
