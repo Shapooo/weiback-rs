@@ -1,12 +1,18 @@
 use anyhow;
 use lazy_static::lazy_static;
+use log::debug;
 use tera::{Context, Tera};
 
 use crate::data::{Post, Posts};
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
-        let mut tera = match Tera::new("res/templates/*.html") {
+        let mut path = std::env::current_exe().unwrap();
+        path.pop();
+        let mut path = path.into_os_string().into_string().unwrap();
+        path.push_str("/res/templates/*.html");
+        debug!("init tera from template: {}", path);
+        let mut tera = match Tera::new(&path) {
             Ok(t) => t,
             Err(e) => panic!("tera template parse err: {e}"),
         };
@@ -44,40 +50,5 @@ impl HTMLGenerator {
         context.insert("html", &posts);
         let html = TEMPLATES.render("page.html", &context).unwrap();
         Ok(html)
-    }
-}
-
-#[cfg(test)]
-mod generator_test {
-    use super::HTMLGenerator;
-    use crate::data::{Post, Posts};
-    use serde_json::from_str;
-
-    #[tokio::test]
-    async fn generate_post() {
-        let s = include_str!("../res/one.json");
-        let post = from_str::<Post>(s).unwrap();
-        let gen = HTMLGenerator::new();
-        let s = gen.generate_post(post).unwrap();
-        println!("{}", s);
-    }
-
-    #[tokio::test]
-    async fn generate_posts() {
-        let s = include_str!("../res/full.json");
-        let posts = from_str::<Posts>(s).unwrap();
-        let gen = HTMLGenerator::new();
-        let s = gen.generate_posts(posts).unwrap();
-        println!("{}", s);
-    }
-
-    #[tokio::test]
-    async fn generate_page() {
-        let s = include_str!("../res/one.json");
-        let post = from_str::<Post>(s).unwrap();
-        let gen = HTMLGenerator::new();
-        let s = gen.generate_post(post).unwrap();
-        let s = gen.generate_page(&s).unwrap();
-        println!("{}", s);
     }
 }
