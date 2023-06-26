@@ -96,7 +96,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         .bind(post["region_name"].as_str())
         .bind(post["deleted"].as_bool().unwrap_or_default())
         .bind(post["user"]["id"].as_i64())
-        .bind((post["pic_ids"].is_object()).then_some(post["pic_ids"].to_string()))
+        .bind((post["pic_ids"].is_array()).then_some(post["pic_ids"].to_string()))
         .bind(post["pic_num"].as_i64())
         .bind(post["retweeted_status"]["id"].as_i64())
         .bind((post["url_struct"].is_object()).then_some(post["url_struct"].to_string()))
