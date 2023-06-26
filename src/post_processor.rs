@@ -164,11 +164,8 @@ impl PostProcessor {
             .iter()
             .map(|url| resource_dir.join(pic_url_to_file(url)))
             .collect();
-
-        if let Value::Object(obj) = post {
-            obj.insert("pics".into(), to_value(pic_locs).unwrap());
-        } else {
-            panic!("unexpected post format")
+        if !pic_locs.is_empty() {
+            post["pics"] = to_value(pic_locs).unwrap();
         }
 
         urls.into_iter().for_each(|url| {
