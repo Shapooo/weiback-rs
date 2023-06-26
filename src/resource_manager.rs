@@ -51,9 +51,12 @@ impl ResourceManager {
         Ok(Posts { data })
     }
 
-    #[allow(unused)]
-    pub async fn get_fav_total_num(&self) -> anyhow::Result<u64> {
+    pub async fn get_web_total_num(&self) -> anyhow::Result<u64> {
         self.web_fetcher.fetch_fav_total_num().await
+    }
+
+    pub async fn get_db_total_num(&self) -> anyhow::Result<u64> {
+        Ok(self.persister.query_db_total_num().await?)
     }
 
     pub async fn get_fav_post_from_db(

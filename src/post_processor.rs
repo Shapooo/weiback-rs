@@ -310,4 +310,12 @@ impl PostProcessor {
             + url_title
             + "</a>"
     }
+
+    pub async fn get_web_total_num(&self) -> anyhow::Result<u64> {
+        self.resource_manager.get_web_total_num().await
+    }
+
+    pub async fn get_db_total_num(&self) -> anyhow::Result<u64> {
+        self.resource_manager.get_db_total_num().await
+    }
 }

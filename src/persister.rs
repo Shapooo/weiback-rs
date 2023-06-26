@@ -301,6 +301,15 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         // TODO: conv icon_list to Value
         Ok(result)
     }
+
+    pub async fn query_db_total_num(&self) -> Result<u64, sqlx::Error> {
+        Ok(
+            sqlx::query_as::<Sqlite, (i64,)>("SELECT COUNT(1) FROM fav_post WHERE favorited")
+                .fetch_one(self.db_pool.as_ref().unwrap())
+                .await?
+                .0 as u64,
+        )
+    }
 }
 
 fn sql_post_to_post(sql_post: SqlPost) -> Post {
