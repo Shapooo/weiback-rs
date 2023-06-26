@@ -217,7 +217,6 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     async fn sql_post_to_post(&self, sql_post: SqlPost) -> Result<Post, sqlx::Error> {
-        trace!("convert SqlPost to Post: {:?}", sql_post);
         let user = if let Some(uid) = sql_post.uid {
             self.query_user(uid).await?
         } else {
@@ -247,7 +246,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     async fn _query_post(&self, id: i64) -> Result<SqlPost, sqlx::Error> {
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
+        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
             .bind(id)
             .fetch_one(self.db_pool.as_ref().unwrap())
             .await
@@ -281,9 +280,9 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         reverse: bool,
     ) -> Result<Vec<SqlPost>, sqlx::Error> {
         let sql_expr = if reverse {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
         } else {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
         };
         sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
             .bind(limit)
@@ -305,6 +304,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 }
 
 fn sql_post_to_post(sql_post: SqlPost) -> Post {
+    trace!("convert SqlPost to Post: {:?}", sql_post);
     let mut map = serde_json::Map::new();
     map.insert("id".into(), serde_json::to_value(sql_post.id).unwrap());
     map.insert("created_at".into(), to_value(sql_post.created_at).unwrap());
@@ -320,6 +320,9 @@ fn sql_post_to_post(sql_post: SqlPost) -> Post {
     }
     if let Some(v) = sql_post.pic_num {
         map.insert("pic_num".into(), to_value(v).unwrap());
+    }
+    if let Some(v) = sql_post.pic_infos {
+        map.insert("pic_infos".into(), from_str(&v).unwrap());
     }
     if let Some(v) = sql_post.url_struct {
         map.insert("url_struct".into(), from_str(&v).unwrap());
