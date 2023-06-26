@@ -8,7 +8,7 @@ use log::info;
 
 use crate::config::Config;
 use crate::executor::Executor;
-use crate::message::Progress;
+use crate::message::TaskStatus;
 
 pub struct WbApp {
     options: NativeOptions,
@@ -41,7 +41,7 @@ struct Gui {
     period: u32,
     executor: Executor,
     ratio: f32,
-    progress: Arc<RwLock<Progress>>,
+    task_status: Arc<RwLock<TaskStatus>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -54,8 +54,8 @@ enum TaskType {
 
 impl Gui {
     fn new(config: Config) -> Self {
-        let progress: Arc<RwLock<Progress>> = Arc::default();
-        let executor = Executor::new(config, progress.clone());
+        let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
+        let executor = Executor::new(config, task_status.clone());
         Self {
             start_page: Default::default(),
             end_page: Default::default(),
@@ -66,28 +66,31 @@ impl Gui {
             period: 10,
             ratio: 0.0,
             executor,
-            progress,
+            task_status,
         }
     }
 }
 
 impl eframe::App for Gui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let progress: Option<Progress> = self
-            .progress
+        let task_status: Option<TaskStatus> = self
+            .task_status
             .try_read()
             .ok()
-            .map(|progress| progress.clone());
-        if let Some(progress) = progress {
-            match &progress {
-                Progress::InProgress(ratio, msg) => {
+            .map(|task_status| task_status.clone());
+        if let Some(task_status) = task_status {
+            match &task_status {
+                TaskStatus::InProgress(ratio, msg) => {
                     self.ratio = *ratio;
                     self.message = msg.to_owned()
                 }
-                Progress::Finished => {
+                TaskStatus::Finished => {
                     self.task_ongoing = false;
                 }
-                Progress::Error(msg) => {
+                TaskStatus::Error(msg) => {
+                    self.message = msg.to_owned();
+                }
+                TaskStatus::Info(msg) => {
                     self.message = msg.to_owned();
                 }
             }
@@ -135,7 +138,7 @@ impl eframe::App for Gui {
                     });
                 });
                 let start = self.start_page.parse::<u32>().unwrap_or(1);
-                let end = self.end_page.parse::<u32>().unwrap_or(10);
+                let end = self.end_page.parse::<u32>().unwrap_or(5);
                 if ui.button("start").clicked() {
                     self.task_ongoing = true;
                     match self.task_type {

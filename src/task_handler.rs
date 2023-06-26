@@ -10,7 +10,7 @@ use tokio::time::sleep;
 use crate::config::Config;
 use crate::data::Posts;
 use crate::exporter::Exporter;
-use crate::message::Progress;
+use crate::message::TaskStatus;
 use crate::persister::Persister;
 use crate::post_processor::PostProcessor;
 use crate::resource_manager::ResourceManager;
@@ -23,11 +23,11 @@ pub struct TaskHandler {
     exporter: Exporter,
     config: Config,
     processer: PostProcessor,
-    progress: Arc<RwLock<Progress>>,
+    task_status: Arc<RwLock<TaskStatus>>,
 }
 
 impl TaskHandler {
-    pub fn new(config: Config, progress: Arc<RwLock<Progress>>) -> Result<Self> {
+    pub fn new(config: Config, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
         let fetcher = WebFetcher::new(
             config.web_cookie.clone(),
             (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
@@ -38,12 +38,19 @@ impl TaskHandler {
             exporter: Exporter::new(),
             config,
             processer: PostProcessor::new(resource_manager),
-            progress,
+            task_status,
         })
     }
 
     pub async fn init(&mut self) -> Result<()> {
-        self.processer.init().await
+        self.processer.init().await?;
+        let (web_total, db_total) = tokio::join!(
+            self.processer.get_web_total_num(),
+            self.processer.get_db_total_num()
+        );
+        *self.task_status.write().unwrap() =
+            TaskStatus::Info(format!("{}  {}", web_total?, db_total?));
+        Ok(())
     }
 
     pub async fn download_meta_only(&self, range: RangeInclusive<u32>) -> Result<()> {
@@ -85,7 +92,7 @@ impl TaskHandler {
                     .await?;
             }
         }
-        *self.progress.write().unwrap() = Progress::Finished;
+        *self.task_status.write().unwrap() = TaskStatus::Finished;
         Ok(())
     }
 
@@ -135,13 +142,13 @@ impl TaskHandler {
                 }
             }
             let _ = self
-                .progress
+                .task_status
                 .try_write()
-                .map(|mut pro| *pro = Progress::InProgress(i as f32 / end as f32, "".into()));
+                .map(|mut pro| *pro = TaskStatus::InProgress(i as f32 / end as f32, "".into()));
             sleep(Duration::from_secs(5)).await;
         }
         info!("fetched {total_posts_sum} posts in total");
-        *self.progress.write().unwrap() = Progress::Finished;
+        *self.task_status.write().unwrap() = TaskStatus::Finished;
         Ok(())
     }
 }
