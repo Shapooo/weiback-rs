@@ -27,6 +27,7 @@ impl ResourceManager {
     }
 
     pub async fn get_pic(&self, url: &str) -> anyhow::Result<Bytes> {
+        let url = crate::utils::strip_url_queries(url);
         let res = self.persister.query_img(url).await;
         if let Err(sqlx::error::Error::RowNotFound) = res {
             let pic = self.web_fetcher.fetch_pic(url).await?;
