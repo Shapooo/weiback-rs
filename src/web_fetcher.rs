@@ -249,12 +249,28 @@ impl WebFetcher {
     pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
         if let Some(mobile_client) = &self.mobile_client {
             let url = format!("{}/{}", MOBILE_POST_API, mblogid);
+            debug!("fetch mobile page, url: {}", &url);
             let res = self.fetch(url, mobile_client).await?;
             let text = res.text().await?;
             let start = text.find("\"status\":").unwrap();
             let end = text.find("\"call\"").unwrap();
             let end = *&text[..end].rfind(",").unwrap();
-            Ok(from_str::<Value>(&text[start + 9..end])?)
+            let mut post = from_str::<Value>(&text[start + 9..end])?;
+            let id = post["id"].as_str().unwrap().parse::<i64>().unwrap();
+            post["id"] = Value::Number(serde_json::Number::from(id));
+            post["mblogid"] = Value::String(mblogid.to_owned());
+            post["text_raw"] = post["text"].to_owned();
+            if post["retweeted_status"].is_object() {
+                let id = post["retweeted_status"]["id"]
+                    .as_str()
+                    .unwrap()
+                    .parse::<i64>()
+                    .unwrap();
+                post["retweeted_status"]["id"] = Value::Number(serde_json::Number::from(id));
+                post["retweeted_status"]["text_raw"] = post["retweeted_status"]["text"].to_owned();
+            }
+
+            Ok(post)
         } else {
             Err(anyhow!("mobile cookie have not set"))
         }
@@ -275,16 +291,5 @@ impl WebFetcher {
         let res = self.fetch(url, &self.web_client).await?;
         let long_text_meta = res.json::<LongText>().await?;
         Ok(long_text_meta.get_content()?)
-    }
-}
-
-#[cfg(test)]
-mod web_fetcher_test {
-    use super::*;
-    #[tokio::test]
-    async fn fetch_emoticon() {
-        let f = WebFetcher::new("[privacy]".into(), None);
-        let res = f.fetch_emoticon().await.unwrap();
-        println!("{:?}", res);
     }
 }

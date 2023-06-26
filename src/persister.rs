@@ -67,8 +67,6 @@ impl Persister {
     }
 
     pub async fn insert_post(&self, post: &Post) -> Result<(), sqlx::Error> {
-        debug!("insert post");
-        trace!("post: {:?}", post);
         self._insert_post(post).await?;
         if post["user"]["id"].is_number() {
             self.insert_user(&post["user"]).await?;
@@ -83,6 +81,7 @@ impl Persister {
     }
 
     async fn _insert_post(&self, post: &Value) -> Result<(), sqlx::Error> {
+        trace!("insert post: {:?}", post);
         let result = sqlx::query(
             r#"INSERT OR IGNORE INTO
 fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -91,7 +90,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         )
         .bind(post["id"].as_i64().unwrap())
         .bind(post["created_at"].as_str().unwrap())
-        .bind(post["mblogid"].as_str().unwrap())
+        .bind(post["mblogid"].as_str())
         .bind(post["text_raw"].as_str().unwrap())
         .bind(post["source"].as_str().unwrap())
         .bind(post["region_name"].as_str())
@@ -110,11 +109,11 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         .bind((post["mix_media_info"].is_object()).then_some(post["mix_media_info"].to_string()))
         .bind((post["visible"].is_object()).then_some(post["visible"].to_string()))
         .bind(post["text"].as_str().unwrap())
-        .bind(post["attitudes_status"].as_i64().unwrap())
-        .bind(post["showFeedRepost"].as_bool().unwrap())
-        .bind(post["showFeedComment"].as_bool().unwrap())
-        .bind(post["pictureViewerSign"].as_bool().unwrap())
-        .bind(post["showPictureViewer"].as_bool().unwrap())
+        .bind(post["attitudes_status"].as_i64())
+        .bind(post["showFeedRepost"].as_bool())
+        .bind(post["showFeedComment"].as_bool())
+        .bind(post["pictureViewerSign"].as_bool())
+        .bind(post["showPictureViewer"].as_bool())
         .bind(post["favorited"].as_bool().unwrap_or_default())
         .bind(post["can_edit"].as_bool().unwrap_or_default())
         .bind(post["is_paid"].as_bool().unwrap_or_default())
@@ -167,7 +166,6 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     pub async fn insert_user(&self, user: &User) -> Result<(), sqlx::Error> {
-        debug!("insert user");
         trace!("user: {user:?}");
         let result = sqlx::query(
             r#"INSERT OR IGNORE INTO user VALUES
@@ -177,21 +175,25 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         .bind(user["profile_url"].as_str().unwrap())
         .bind(user["screen_name"].as_str().unwrap())
         .bind(user["profile_image_url"].as_str().unwrap())
-        .bind(user["avatar_large"].as_str().unwrap())
+        .bind(user["avatar_large"].as_str())
         .bind(user["avatar_hd"].as_str().unwrap())
-        .bind(user["planet_video"].as_bool().unwrap())
+        .bind(user["planet_video"].as_bool())
         .bind(user["v_plus"].as_i64())
-        .bind(user["pc_new"].as_i64().unwrap())
+        .bind(user["pc_new"].as_i64())
         .bind(user["verified"].as_bool().unwrap())
         .bind(user["verified_type"].as_i64().unwrap())
-        .bind(user["domain"].as_str().unwrap())
-        .bind(user["weihao"].as_str().unwrap())
+        .bind(user["domain"].as_str())
+        .bind(user["weihao"].as_str())
         .bind(user["verified_type_ext"].as_i64())
         .bind(user["follow_me"].as_bool().unwrap())
         .bind(user["following"].as_bool().unwrap())
         .bind(user["mbrank"].as_i64().unwrap())
         .bind(user["mbtype"].as_i64().unwrap())
-        .bind(user["icon_list"].to_string())
+        .bind(
+            user["icon_list"]
+                .is_object()
+                .then_some(user["icon_list"].to_string()),
+        )
         .execute(self.db_pool.as_ref().unwrap())
         .await?;
         trace!("insert user {user:?}, result {result:?}");

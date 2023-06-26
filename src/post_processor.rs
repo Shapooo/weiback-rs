@@ -180,10 +180,12 @@ impl PostProcessor {
         let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
-        let avatar_url = post["user"]["avatar_hd"].as_str().unwrap();
-        pic_urls.insert(avatar_url.into());
-        let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
-        post["poster_avatar"] = to_value(avatar_loc).unwrap();
+        if post["user"]["avatar_hd"].is_string() {
+            let avatar_url = post["user"]["avatar_hd"].as_str().unwrap();
+            pic_urls.insert(avatar_url.into());
+            let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
+            post["poster_avatar"] = to_value(avatar_loc).unwrap();
+        }
 
         Ok(())
     }
