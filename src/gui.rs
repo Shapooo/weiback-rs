@@ -59,6 +59,7 @@ struct Gui {
     message: String,
     task_type: TaskType,
     with_pic: bool,
+    export: bool,
     task_ongoing: bool,
     period: u32,
     executor: Executor,
@@ -68,10 +69,8 @@ struct Gui {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum TaskType {
-    Download,
-    DownloadWithPic,
-    DownloadExport,
-    ExportFromLocal,
+    FromWeb,
+    FromLocal,
 }
 
 impl Gui {
@@ -82,8 +81,9 @@ impl Gui {
             start_page: Default::default(),
             end_page: Default::default(),
             message: Default::default(),
-            task_type: TaskType::Download,
+            task_type: TaskType::FromWeb,
             with_pic: true,
+            export: true,
             task_ongoing: false,
             period: 10,
             ratio: 0.0,
@@ -119,67 +119,68 @@ impl eframe::App for Gui {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("WeiBack");
+            ui.vertical_centered(|ui| ui.heading("WeiBack"));
             ui.group(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 ui.horizontal(|ui| {
-                    ui.label("Task type: ");
-                    egui::ComboBox::from_label("")
-                        .selected_text(format!("{:?}", self.task_type))
-                        .show_ui(ui, |ui| {
-                            for task_type in [
-                                TaskType::Download,
-                                TaskType::DownloadWithPic,
-                                TaskType::DownloadExport,
-                                TaskType::ExportFromLocal,
-                            ] {
-                                ui.selectable_value(
-                                    &mut self.task_type,
-                                    task_type,
-                                    format!("{:?}", task_type),
-                                );
-                            }
-                        });
-                    if self.task_type != TaskType::Download {
-                        self.with_pic = true;
-                    }
-                    let with_pic_cb = egui::Checkbox::new(&mut self.with_pic, "with pic");
-                    ui.add_enabled(self.task_type == TaskType::Download, with_pic_cb);
+                    ui.selectable_value(&mut self.task_type, TaskType::FromWeb, "从网络下载");
+                    ui.selectable_value(&mut self.task_type, TaskType::FromLocal, "从本地导出");
                 });
-                ui.add(egui::Slider::new(&mut self.period, 1..=20).text("period"));
-                ui.collapsing("advanced", |ui| {
+                if self.task_type == TaskType::FromWeb {
+                    let old_with_pic = self.with_pic;
+                    ui.checkbox(&mut self.with_pic, "附带图片");
+                    ui.checkbox(&mut self.export, "导出");
+                    if !self.with_pic && self.export {
+                        if old_with_pic {
+                            self.export = false;
+                        } else {
+                            self.with_pic = true;
+                        }
+                    }
+                }
+
+                ui.collapsing("高级设置", |ui| {
                     ui.horizontal(|ui| {
-                        ui.label("from");
+                        ui.label("下载范围：");
                         // ui.text_edit_singleline(&mut self.start_page);
                         ui.add(
                             egui::TextEdit::singleline(&mut self.start_page).desired_width(50.0),
-                        );
+                        )
+                        .on_hover_text("testtest");
                         ui.label("-");
                         // ui.text_edit_singleline(&mut self.end_page);
-                        ui.add(egui::TextEdit::singleline(&mut self.end_page).desired_width(50.0));
+                        ui.add(egui::TextEdit::singleline(&mut self.end_page).desired_width(50.0))
+                            .on_hover_text("testtest");
                     });
+                    ui.add(egui::Slider::new(&mut self.period, 1..=20).text("每页"));
                 });
-                let start = self.start_page.parse::<u32>().unwrap_or(1);
-                let end = self.end_page.parse::<u32>().unwrap_or(5);
-                if ui.button("start").clicked() {
+            });
+            let start = self.start_page.parse::<u32>().unwrap_or(1);
+            let end = self.end_page.parse::<u32>().unwrap_or(5);
+            ui.vertical_centered(|ui| {
+                ui.set_enabled(!self.task_ongoing);
+                if ui.button("开始").clicked() {
                     self.task_ongoing = true;
                     match self.task_type {
-                        TaskType::Download => {
-                            self.executor.download_meta(start..=end);
+                        TaskType::FromWeb => {
+                            if self.export {
+                                self.executor.export_from_net(start..=end);
+                            } else if self.with_pic {
+                                self.executor.download_with_pic(start..=end);
+                            } else {
+                                self.executor.download_meta(start..=end);
+                            }
                         }
-                        TaskType::DownloadWithPic => {
-                            self.executor.download_with_pic(start..=end);
-                        }
-                        TaskType::DownloadExport => {
-                            self.executor.export_from_net(start..=end);
-                        }
-                        TaskType::ExportFromLocal => {
+                        TaskType::FromLocal => {
                             self.executor.export_from_local(start..=end, false);
                         }
                     }
                 }
             });
-            ui.add(egui::ProgressBar::new(0.0).text(&self.message));
+            ui.add(egui::ProgressBar::new(self.ratio));
+            ui.vertical_centered(|ui| {
+                ui.label(&self.message);
+            });
         });
     }
 }
