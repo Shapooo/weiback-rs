@@ -27,8 +27,30 @@ impl WbApp {
     }
     pub fn run(self) {
         info!("starting gui...");
-        eframe::run_native("weiback", self.options, Box::new(|_cc| Box::new(self.gui))).unwrap();
+        eframe::run_native(
+            "weiback",
+            self.options,
+            Box::new(|cc| {
+                set_font(cc);
+                Box::new(self.gui)
+            }),
+        )
+        .unwrap()
     }
+}
+
+fn set_font(cc: &eframe::CreationContext) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "source".into(),
+        egui::FontData::from_static(include_bytes!("../res/fonts/SourceHanSansCN-Medium.otf")),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .push("source".into());
+    cc.egui_ctx.set_fonts(fonts);
 }
 
 struct Gui {
