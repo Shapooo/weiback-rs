@@ -24,4 +24,5 @@ serde_yaml = "0.9.21"
 simple_logger = "4.1.0"
 sqlx = { version = "0.6.3", features = ["sqlite", "runtime-tokio-rustls"] }
 tera = "1.19.0"
+thiserror = "1.0.40"
 tokio = { version = "1.28.1", features = ["macros", "rt-multi-thread", "time", "fs"] }

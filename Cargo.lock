@@ -3863,6 +3863,7 @@ dependencies = [
  "simple_logger",
  "sqlx",
  "tera",
+ "thiserror",
  "tokio",
 ]
 
