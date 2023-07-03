@@ -1,6 +1,7 @@
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::error::{Error, Result};
 
 pub type Post = Value;
 
@@ -59,11 +60,13 @@ struct LongTextContent {
 }
 
 impl LongText {
-    pub fn get_content(self) -> anyhow::Result<String> {
+    pub fn get_content(self) -> Result<String> {
         if self.ok == 1 && self.http_code == 200 {
             Ok(self.data.long_text_content)
         } else {
-            Err(anyhow!("return of weibo infers something went wrong"))
+            Err(Error::ResourceGetFailed(
+                "returned long text status is not ok",
+            ))
         }
     }
 }

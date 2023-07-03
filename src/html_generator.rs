@@ -1,9 +1,9 @@
-use anyhow;
 use lazy_static::lazy_static;
-use log::debug;
+use log::{debug, error};
 use tera::{Context, Tera};
 
 use crate::data::{Post, Posts};
+use crate::error::Result;
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
@@ -14,7 +14,10 @@ lazy_static! {
         debug!("init tera from template: {}", path);
         let mut tera = match Tera::new(&path) {
             Ok(t) => t,
-            Err(e) => panic!("tera template parse err: {e}"),
+            Err(e) => {
+                error!("tera template parse err: {e}");
+                panic!("tera template parse err: {e}")
+            }
         };
         tera.autoescape_on(Vec::new());
         tera
@@ -30,7 +33,7 @@ impl HTMLGenerator {
     }
 
     #[allow(unused)]
-    pub fn generate_post(&self, mut post: Post) -> anyhow::Result<String> {
+    pub fn generate_post(&self, mut post: Post) -> Result<String> {
         let mut context = Context::new();
         context.insert("post", &post);
         let html = TEMPLATES.render("post.html", &context)?;
@@ -38,17 +41,17 @@ impl HTMLGenerator {
         Ok(html)
     }
 
-    pub fn generate_posts(&self, posts: Posts) -> anyhow::Result<String> {
+    pub fn generate_posts(&self, posts: Posts) -> Result<String> {
         let mut context = Context::new();
         context.insert("posts", &posts.data);
         let html = TEMPLATES.render("posts.html", &context)?;
         Ok(html)
     }
 
-    pub fn generate_page(&self, posts: &str) -> anyhow::Result<String> {
+    pub fn generate_page(&self, posts: &str) -> Result<String> {
         let mut context = Context::new();
         context.insert("html", &posts);
-        let html = TEMPLATES.render("page.html", &context).unwrap();
+        let html = TEMPLATES.render("page.html", &context)?;
         Ok(html)
     }
 }

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use futures::future::join_all;
 use log::{debug, trace};
@@ -11,6 +10,7 @@ use reqwest::{
 use serde_json::{from_str, Value};
 
 use crate::data::{FavTag, LongText, Post, Posts};
+use crate::error::{Error, Result};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
@@ -153,18 +153,18 @@ impl WebFetcher {
         };
     }
 
-    async fn fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
+    async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
         Ok(client.get(url).send().await?)
     }
 
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
-        let res = self.fetch(url, &self.web_client).await?;
+        let res = self._fetch(url, &self.web_client).await?;
         let mut posts = res.json::<Value>().await?;
         trace!("get json: {posts:?}");
         if posts["ok"].as_i64().unwrap() != 1 {
-            Err(anyhow!("fetched data is not ok: {:?}", posts))
+            Err(Error::ResourceGetFailed("fetched data is not ok"))
         } else {
             if let Value::Array(v) = posts["data"].take() {
                 let v: Result<Vec<_>> = join_all(v.into_iter().map(|p| self.preprocess_post(p)))
@@ -211,10 +211,10 @@ impl WebFetcher {
     pub async fn fetch_emoticon(&self) -> Result<HashMap<String, String>> {
         let url = STATUSES_CONFIG_API;
         debug!("fetch emoticon, url: {url}");
-        let res = self.fetch(url, &self.web_client).await?;
+        let res = self._fetch(url, &self.web_client).await?;
         let mut json: Value = res.json().await?;
         if json["ok"] != 1 {
-            return Err(anyhow!("fetched emoticon is not ok"));
+            return Err(Error::ResourceGetFailed("fetched emoticon is not ok"));
         }
         let mut res = HashMap::new();
         if let Value::Object(emoticon) = json["data"]["emoticon"].take() {
@@ -228,19 +228,21 @@ impl WebFetcher {
                                 {
                                     res.insert(phrase, url);
                                 } else {
-                                    return Err(anyhow!("the format of emoticon is unexpected"));
+                                    return Err(Error::MalFormat(
+                                        "the format of emoticon is unexpected",
+                                    ));
                                 }
                             }
                         } else {
-                            return Err(anyhow!("the format of emoticon is unexpected"));
+                            return Err(Error::MalFormat("the format of emoticon is unexpected"));
                         }
                     }
                 } else {
-                    return Err(anyhow!("the format of emoticon is unexpected"));
+                    return Err(Error::MalFormat("the format of emoticon is unexpected"));
                 }
             }
         } else {
-            return Err(anyhow!("the format of emoticon is unexpected"));
+            return Err(Error::MalFormat("the format of emoticon is unexpected"));
         }
 
         Ok(res)
@@ -250,7 +252,7 @@ impl WebFetcher {
         if let Some(mobile_client) = &self.mobile_client {
             let url = format!("{}/{}", MOBILE_POST_API, mblogid);
             debug!("fetch mobile page, url: {}", &url);
-            let res = self.fetch(url, mobile_client).await?;
+            let res = self._fetch(url, mobile_client).await?;
             let text = res.text().await?;
             let start = text.find("\"status\":").unwrap();
             let end = text.find("\"call\"").unwrap();
@@ -272,13 +274,13 @@ impl WebFetcher {
 
             Ok(post)
         } else {
-            Err(anyhow!("mobile cookie have not set"))
+            Err(Error::UnexpectedError("mobile cookie have not set"))
         }
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u64> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
-        let res = self.fetch(FAVORITES_TAGS_API, &self.web_client).await?;
+        let res = self._fetch(FAVORITES_TAGS_API, &self.web_client).await?;
         let fav_tag = res.json::<FavTag>().await?;
         trace!("get fav tag data: {:?}", fav_tag);
         assert_eq!(fav_tag.ok, 1);
@@ -288,8 +290,8 @@ impl WebFetcher {
     pub async fn fetch_long_text_content(&self, mblogid: &str) -> Result<String> {
         let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
         debug!("fetch long text, url: {url}");
-        let res = self.fetch(url, &self.web_client).await?;
+        let res = self._fetch(url, &self.web_client).await?;
         let long_text_meta = res.json::<LongText>().await?;
-        Ok(long_text_meta.get_content()?)
+        long_text_meta.get_content()
     }
 }

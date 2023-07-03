@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use anyhow;
 use bytes::Bytes;
 use futures::future::join_all;
 use log::{debug, info, trace};
@@ -13,7 +12,10 @@ use sqlx::{
 };
 
 use crate::data::{Post, Posts, User};
+use crate::error::{Error, Result};
 use crate::utils::{pic_url_to_id, strip_url_queries};
+
+type DBResult<T> = std::result::Result<T, sqlx::Error>;
 
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, textLength INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json); CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
 
@@ -24,7 +26,7 @@ pub struct Persister {
 }
 
 impl Persister {
-    pub fn new<P>(db: P) -> anyhow::Result<Self>
+    pub fn new<P>(db: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
@@ -67,6 +69,7 @@ impl Persister {
     }
 
     pub async fn insert_post(&self, post: &Post) -> Result<()> {
+        trace!("insert post: {:?}", post);
         self._insert_post(post).await?;
         if post["user"]["id"].is_number() {
             self.insert_user(&post["user"]).await?;
@@ -131,17 +134,27 @@ impl Persister {
 
     pub async fn query_img(&self, url: &str) -> Result<Bytes> {
         debug!("query img: {url}");
-        let result: PictureBlob = sqlx::query_as("SELECT * FROM picture_blob WHERE url = ?")
-            .bind(url)
-            .fetch_one(self.db_pool.as_ref().unwrap())
-            .await?;
-        Ok(result.blob.into())
+        let result =
+            sqlx::query_as::<Sqlite, PictureBlob>("SELECT * FROM picture_blob WHERE url = ?")
+                .bind(url)
+                .fetch_one(self.db_pool.as_ref().unwrap())
+                .await;
+        match result {
+            Ok(res) => Ok(res.blob.into()),
+            Err(sqlx::Error::RowNotFound) => Err(Error::NotInLocal),
+            Err(e) => Err(e.into()),
+        }
     }
 
+    #[allow(unused)]
     pub async fn query_post(&self, id: i64) -> Result<Post> {
         debug!("query post, id: {id}");
-        let sql_post = self._query_post(id).await?;
-        self._sql_post_to_post(sql_post).await
+        let sql_post = self._query_post(id).await;
+        match sql_post {
+            Ok(post) => Ok(self._sql_post_to_post(post).await?),
+            Err(sqlx::Error::RowNotFound) => Err(Error::NotInLocal),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub async fn query_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Posts> {
@@ -160,15 +173,13 @@ impl Persister {
         Ok(Posts { data })
     }
 
+    #[allow(unused)]
     pub async fn query_user(&self, id: i64) -> Result<User> {
-        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
-            .bind(id)
-            .fetch_one(self.db_pool.as_ref().unwrap())
-            .await?;
-
-        let result = serde_json::to_value(sql_user).unwrap();
-        // TODO: conv icon_list to Value
-        Ok(result)
+        match self._query_user(id).await {
+            Ok(user) => Ok(user),
+            Err(sqlx::Error::RowNotFound) => Err(Error::NotInLocal),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub async fn query_db_total_num(&self) -> Result<u64> {
@@ -179,9 +190,14 @@ impl Persister {
                 .0 as u64,
         )
     }
-    async fn _insert_post(&self, post: &Value) -> Result<()> {
-        trace!("insert post: {:?}", post);
-        let result = sqlx::query(
+}
+
+// ==================================================================================
+
+// Private functions
+impl Persister {
+    async fn _insert_post(&self, post: &Value) -> DBResult<()> {
+        sqlx::query(
             r#"INSERT OR IGNORE INTO
 fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -246,20 +262,50 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         )
         .execute(self.db_pool.as_ref().unwrap())
         .await?;
-        trace!("insert post {post:?} \nresult: {result:?}");
         Ok(())
     }
 
-    async fn _sql_post_to_post(&self, sql_post: SqlPost) -> Result<Post> {
+    async fn _query_user(&self, id: i64) -> DBResult<User> {
+        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.db_pool.as_ref().unwrap())
+            .await?;
+
+        let result = serde_json::to_value(sql_user).unwrap();
+        // TODO: conv icon_list to Value
+        Ok(result)
+    }
+
+    async fn _query_post(&self, id: i64) -> DBResult<SqlPost> {
+        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.db_pool.as_ref().unwrap())
+            .await
+    }
+
+    async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> DBResult<Vec<SqlPost>> {
+        let sql_expr = if reverse {
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+        } else {
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+        };
+        sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(self.db_pool.as_ref().unwrap())
+            .await
+    }
+
+    async fn _sql_post_to_post(&self, sql_post: SqlPost) -> DBResult<Post> {
         let user = if let Some(uid) = sql_post.uid {
-            self.query_user(uid).await?
+            self._query_user(uid).await?
         } else {
             Value::Null
         };
         let retweet = if let Some(ret_id) = sql_post.retweeted_status {
             let sql_retweet = self._query_post(ret_id).await?;
             let user = if let Some(uid) = sql_retweet.uid {
-                self.query_user(uid).await?
+                self._query_user(uid).await?
             } else {
                 Value::Null
             };
@@ -277,25 +323,6 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         }
 
         Ok(post)
-    }
-
-    async fn _query_post(&self, id: i64) -> Result<SqlPost> {
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
-            .bind(id)
-            .fetch_one(self.db_pool.as_ref().unwrap())
-            .await
-    }
-    async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<SqlPost>> {
-        let sql_expr = if reverse {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
-        } else {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
-        };
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(self.db_pool.as_ref().unwrap())
-            .await
     }
 }
 

@@ -3,13 +3,13 @@ use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 use std::path::Path;
 
-use anyhow::Result;
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
 use serde_json::{to_value, Value};
 
 use crate::data::{Post, Posts};
+use crate::error::Result;
 use crate::exporter::{HTMLPage, Picture};
 use crate::html_generator::HTMLGenerator;
 use crate::resource_manager::ResourceManager;
@@ -49,7 +49,7 @@ impl PostProcessor {
         Ok(())
     }
 
-    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> anyhow::Result<Posts> {
+    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> Result<Posts> {
         self.resource_manager
             .get_fav_posts_from_web(uid, page)
             .await
@@ -59,7 +59,7 @@ impl PostProcessor {
         &self,
         range: RangeInclusive<u32>,
         reverse: bool,
-    ) -> anyhow::Result<Posts> {
+    ) -> Result<Posts> {
         self.resource_manager
             .get_fav_post_from_db(range, reverse)
             .await
@@ -311,11 +311,11 @@ impl PostProcessor {
             + "</a>"
     }
 
-    pub async fn get_web_total_num(&self) -> anyhow::Result<u64> {
+    pub async fn get_web_total_num(&self) -> Result<u64> {
         self.resource_manager.get_web_total_num().await
     }
 
-    pub async fn get_db_total_num(&self) -> anyhow::Result<u64> {
+    pub async fn get_db_total_num(&self) -> Result<u64> {
         self.resource_manager.get_db_total_num().await
     }
 }

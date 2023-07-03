@@ -2,13 +2,13 @@ use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::Result;
 use chrono;
 use log::{debug, info};
 use tokio::time::sleep;
 
 use crate::config::Config;
 use crate::data::Posts;
+use crate::error::Result;
 use crate::exporter::Exporter;
 use crate::message::TaskStatus;
 use crate::persister::Persister;
@@ -103,7 +103,7 @@ impl TaskHandler {
         export: bool,
     ) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
-        let target_dir = std::env::current_dir()?.join(task_name);
+        let target_dir = std::env::current_dir().unwrap().join(task_name);
 
         assert!(range.start() != &0);
         info!("pages download range is {range:?}");

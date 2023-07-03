@@ -1,11 +1,13 @@
+use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
-use anyhow;
 use bytes::Bytes;
 use futures::future::join_all;
 use log::info;
 use tokio::fs::{DirBuilder, File};
 use tokio::io::AsyncWriteExt;
+
+use crate::error::Result;
 
 #[derive(Debug, Clone)]
 pub struct Exporter();
@@ -15,12 +17,7 @@ impl Exporter {
         Exporter()
     }
 
-    pub async fn export_page<N, P>(
-        &self,
-        html_name: N,
-        page: HTMLPage,
-        path: P,
-    ) -> anyhow::Result<()>
+    pub async fn export_page<N, P>(&self, html_name: N, page: HTMLPage, path: P) -> Result<()>
     where
         N: AsRef<str>,
         P: AsRef<Path>,
@@ -33,9 +30,13 @@ impl Exporter {
         let mut dir_builder = DirBuilder::new();
         dir_builder.recursive(true);
         if !path.as_ref().exists() {
-            dir_builder.create(path.as_ref()).await?;
+            dir_builder.create(path.as_ref()).await?
         } else if !path.as_ref().is_dir() {
-            return Err(anyhow::anyhow!("export path is not a valid dir"));
+            return Err(Error::new(
+                ErrorKind::AlreadyExists,
+                "export folder is a already exist file",
+            )
+            .into());
         }
         let html_file_name = String::from(html_name.as_ref()) + ".html";
         let resources_dir_name = String::from(html_name.as_ref()) + "_files";
@@ -86,7 +87,9 @@ mod exporter_test {
             .into_iter()
             .collect(),
         };
-        e.export_page("test_task", page, ".").await.unwrap();
-        std::fs::remove_dir_all("test_task").unwrap();
+        e.export_page("test_task", page, "./export_page")
+            .await
+            .unwrap();
+        std::fs::remove_dir_all("export_page").unwrap();
     }
 }
