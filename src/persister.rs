@@ -35,7 +35,7 @@ impl Persister {
         })
     }
 
-    pub async fn init(&mut self) -> Result<(), sqlx::Error> {
+    pub async fn init(&mut self) -> Result<()> {
         debug!("initing...");
         let path = std::path::Path::new(&self.db_url[7..]);
         if path.is_file() {
@@ -66,7 +66,7 @@ impl Persister {
         Ok(())
     }
 
-    pub async fn insert_post(&self, post: &Post) -> Result<(), sqlx::Error> {
+    pub async fn insert_post(&self, post: &Post) -> Result<()> {
         self._insert_post(post).await?;
         if post["user"]["id"].is_number() {
             self.insert_user(&post["user"]).await?;
@@ -80,7 +80,106 @@ impl Persister {
         Ok(())
     }
 
-    async fn _insert_post(&self, post: &Value) -> Result<(), sqlx::Error> {
+    pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<()> {
+        debug!("insert img: {url}");
+        let id = pic_url_to_id(url);
+        let url = strip_url_queries(url);
+        let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
+            .bind(url)
+            .bind(&id)
+            .bind(img)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
+        trace!("insert img {id}-{url}, result: {result:?}");
+        Ok(())
+    }
+
+    pub async fn insert_user(&self, user: &User) -> Result<()> {
+        trace!("user: {user:?}");
+        let result = sqlx::query(
+            r#"INSERT OR IGNORE INTO user VALUES
+ (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        )
+        .bind(user["id"].as_i64().unwrap())
+        .bind(user["profile_url"].as_str().unwrap())
+        .bind(user["screen_name"].as_str().unwrap())
+        .bind(user["profile_image_url"].as_str().unwrap())
+        .bind(user["avatar_large"].as_str())
+        .bind(user["avatar_hd"].as_str().unwrap())
+        .bind(user["planet_video"].as_bool())
+        .bind(user["v_plus"].as_i64())
+        .bind(user["pc_new"].as_i64())
+        .bind(user["verified"].as_bool().unwrap())
+        .bind(user["verified_type"].as_i64().unwrap())
+        .bind(user["domain"].as_str())
+        .bind(user["weihao"].as_str())
+        .bind(user["verified_type_ext"].as_i64())
+        .bind(user["follow_me"].as_bool().unwrap())
+        .bind(user["following"].as_bool().unwrap())
+        .bind(user["mbrank"].as_i64().unwrap())
+        .bind(user["mbtype"].as_i64().unwrap())
+        .bind(
+            user["icon_list"]
+                .is_object()
+                .then_some(user["icon_list"].to_string()),
+        )
+        .execute(self.db_pool.as_ref().unwrap())
+        .await?;
+        trace!("insert user {user:?}, result {result:?}");
+        Ok(())
+    }
+
+    pub async fn query_img(&self, url: &str) -> Result<Bytes> {
+        debug!("query img: {url}");
+        let result: PictureBlob = sqlx::query_as("SELECT * FROM picture_blob WHERE url = ?")
+            .bind(url)
+            .fetch_one(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(result.blob.into())
+    }
+
+    pub async fn query_post(&self, id: i64) -> Result<Post> {
+        debug!("query post, id: {id}");
+        let sql_post = self._query_post(id).await?;
+        self._sql_post_to_post(sql_post).await
+    }
+
+    pub async fn query_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Posts> {
+        debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
+        let sql_posts = self._query_posts(limit, offset, reverse).await?;
+        debug!("geted {} post from local", sql_posts.len());
+        let data: Vec<_> = join_all(
+            sql_posts
+                .into_iter()
+                .map(|p| async { self._sql_post_to_post(p).await }),
+        )
+        .await
+        .into_iter()
+        .collect::<std::result::Result<_, _>>()?;
+        debug!("fetched {} posts", data.len());
+        Ok(Posts { data })
+    }
+
+    pub async fn query_user(&self, id: i64) -> Result<User> {
+        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.db_pool.as_ref().unwrap())
+            .await?;
+
+        let result = serde_json::to_value(sql_user).unwrap();
+        // TODO: conv icon_list to Value
+        Ok(result)
+    }
+
+    pub async fn query_db_total_num(&self) -> Result<u64> {
+        Ok(
+            sqlx::query_as::<Sqlite, (i64,)>("SELECT COUNT(1) FROM fav_post WHERE favorited")
+                .fetch_one(self.db_pool.as_ref().unwrap())
+                .await?
+                .0 as u64,
+        )
+    }
+    async fn _insert_post(&self, post: &Value) -> Result<()> {
         trace!("insert post: {:?}", post);
         let result = sqlx::query(
             r#"INSERT OR IGNORE INTO
@@ -151,72 +250,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         Ok(())
     }
 
-    pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<(), sqlx::Error> {
-        debug!("insert img: {url}");
-        let id = pic_url_to_id(url);
-        let url = strip_url_queries(url);
-        let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
-            .bind(url)
-            .bind(&id)
-            .bind(img)
-            .execute(self.db_pool.as_ref().unwrap())
-            .await?;
-        trace!("insert img {id}-{url}, result: {result:?}");
-        Ok(())
-    }
-
-    pub async fn insert_user(&self, user: &User) -> Result<(), sqlx::Error> {
-        trace!("user: {user:?}");
-        let result = sqlx::query(
-            r#"INSERT OR IGNORE INTO user VALUES
- (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-        )
-        .bind(user["id"].as_i64().unwrap())
-        .bind(user["profile_url"].as_str().unwrap())
-        .bind(user["screen_name"].as_str().unwrap())
-        .bind(user["profile_image_url"].as_str().unwrap())
-        .bind(user["avatar_large"].as_str())
-        .bind(user["avatar_hd"].as_str().unwrap())
-        .bind(user["planet_video"].as_bool())
-        .bind(user["v_plus"].as_i64())
-        .bind(user["pc_new"].as_i64())
-        .bind(user["verified"].as_bool().unwrap())
-        .bind(user["verified_type"].as_i64().unwrap())
-        .bind(user["domain"].as_str())
-        .bind(user["weihao"].as_str())
-        .bind(user["verified_type_ext"].as_i64())
-        .bind(user["follow_me"].as_bool().unwrap())
-        .bind(user["following"].as_bool().unwrap())
-        .bind(user["mbrank"].as_i64().unwrap())
-        .bind(user["mbtype"].as_i64().unwrap())
-        .bind(
-            user["icon_list"]
-                .is_object()
-                .then_some(user["icon_list"].to_string()),
-        )
-        .execute(self.db_pool.as_ref().unwrap())
-        .await?;
-        trace!("insert user {user:?}, result {result:?}");
-        Ok(())
-    }
-
-    pub async fn query_img(&self, url: &str) -> Result<Bytes, sqlx::Error> {
-        debug!("query img: {url}");
-        let result: PictureBlob = sqlx::query_as("SELECT * FROM picture_blob WHERE url = ?")
-            .bind(url)
-            .fetch_one(self.db_pool.as_ref().unwrap())
-            .await?;
-        Ok(result.blob.into())
-    }
-
-    #[allow(unused)]
-    pub async fn query_post(&self, id: i64) -> Result<Post, sqlx::Error> {
-        debug!("query post, id: {id}");
-        let sql_post = self._query_post(id).await?;
-        self.sql_post_to_post(sql_post).await
-    }
-
-    async fn sql_post_to_post(&self, sql_post: SqlPost) -> Result<Post, sqlx::Error> {
+    async fn _sql_post_to_post(&self, sql_post: SqlPost) -> Result<Post> {
         let user = if let Some(uid) = sql_post.uid {
             self.query_user(uid).await?
         } else {
@@ -245,40 +279,13 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         Ok(post)
     }
 
-    async fn _query_post(&self, id: i64) -> Result<SqlPost, sqlx::Error> {
+    async fn _query_post(&self, id: i64) -> Result<SqlPost> {
         sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE id = ?")
             .bind(id)
             .fetch_one(self.db_pool.as_ref().unwrap())
             .await
     }
-
-    pub async fn query_posts(
-        &self,
-        limit: u32,
-        offset: u32,
-        reverse: bool,
-    ) -> Result<Posts, sqlx::Error> {
-        debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
-        let sql_posts = self._query_posts(limit, offset, reverse).await?;
-        debug!("geted {} post from local", sql_posts.len());
-        let data: Vec<_> = join_all(
-            sql_posts
-                .into_iter()
-                .map(|p| async { self.sql_post_to_post(p).await }),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<_, _>>()?;
-        debug!("fetched {} posts", data.len());
-        Ok(Posts { data })
-    }
-
-    async fn _query_posts(
-        &self,
-        limit: u32,
-        offset: u32,
-        reverse: bool,
-    ) -> Result<Vec<SqlPost>, sqlx::Error> {
+    async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<SqlPost>> {
         let sql_expr = if reverse {
             "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
         } else {
@@ -289,26 +296,6 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             .bind(offset)
             .fetch_all(self.db_pool.as_ref().unwrap())
             .await
-    }
-
-    pub async fn query_user(&self, id: i64) -> Result<User, sqlx::Error> {
-        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
-            .bind(id)
-            .fetch_one(self.db_pool.as_ref().unwrap())
-            .await?;
-
-        let result = serde_json::to_value(sql_user).unwrap();
-        // TODO: conv icon_list to Value
-        Ok(result)
-    }
-
-    pub async fn query_db_total_num(&self) -> Result<u64, sqlx::Error> {
-        Ok(
-            sqlx::query_as::<Sqlite, (i64,)>("SELECT COUNT(1) FROM fav_post WHERE favorited")
-                .fetch_one(self.db_pool.as_ref().unwrap())
-                .await?
-                .0 as u64,
-        )
     }
 }
 
