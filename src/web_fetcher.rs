@@ -227,25 +227,31 @@ impl WebFetcher {
         }
 
         let mut res = HashMap::new();
-        let err = Err(Error::MalFormat(
-            "the format of emoticon is unexpected".into(),
-        ));
         let Value::Object(emoticon) = json["data"]["emoticon"].take() else {
-            return err;
+            return Err(Error::MalFormat(
+                "the format of emoticon is unexpected".into(),
+            ));
         };
         for (_, groups) in emoticon {
             let Value::Object(group) = groups else {
-                return err;
+                return Err(Error::MalFormat(
+                    "the format of emoticon is unexpected".into(),
+                ));
             };
             for (_, emojis) in group {
                 let Value::Array(emojis) = emojis else {
-                    return err;
+                    return Err(Error::MalFormat(
+                        "the format of emoticon is unexpected".into(),
+                    ));
                 };
                 for mut emoji in emojis {
                     let (Value::String(phrase), Value::String(url)) =
-                        (emoji["phrase"].take(), emoji["url"].take()) else {
-                            return err;
-                        };
+                        (emoji["phrase"].take(), emoji["url"].take())
+                    else {
+                        return Err(Error::MalFormat(
+                            "the format of emoticon is unexpected".into(),
+                        ));
+                    };
                     res.insert(phrase, url);
                 }
             }
@@ -265,9 +271,9 @@ impl WebFetcher {
             let Some(end) = text.find("\"call\"") else {
                 return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
             };
-            let Some( end) = *&text[..end].rfind(",") else {
+            let Some(end) = *&text[..end].rfind(",") else {
                 return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            } ;
+            };
             let mut post = from_str::<Value>(&text[start + 9..end])?;
             let id = value_as_str(&post["id"])?;
             let id = match id.parse::<i64>() {
