@@ -1,13 +1,15 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("database error")]
+    #[error("database error {0}")]
     DataBaseError(#[from] sqlx::Error),
-    #[error("reqwest error")]
+    #[error("reqwest error {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("serde_json parse error")]
+    #[error("serde_json parse error {0}")]
     JsonParseError(#[from] serde_json::Error),
-    #[error("tera error")]
+    #[error("tera error {0}")]
     TeraError(#[from] tera::Error),
+    #[error("export error {0}")]
+    ExportError(#[from] std::io::Error),
     #[error("malformatted data")]
     MalFormat(String),
     #[error("resource download failed")]
@@ -16,8 +18,6 @@ pub enum Error {
     UnexpectedError(&'static str),
     #[error("resource not in local")]
     NotInLocal,
-    #[error("export error")]
-    ExportError(#[from] std::io::Error),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
