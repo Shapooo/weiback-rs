@@ -18,6 +18,19 @@ pub fn strip_url_queries(url: &str) -> &str {
     url.split('?').next().unwrap()
 }
 
+use crate::error::{Error, Result};
+use serde_json::Value;
+pub fn value_as_str(v: &Value) -> Result<&str> {
+    if let Some(s) = v.as_str() {
+        Ok(s)
+    } else {
+        Err(Error::MalFormat(format!(
+            "{} cannot convert to str",
+            v.to_string(),
+        )))
+    }
+}
+
 #[cfg(test)]
 mod utils_test {
     #[test]

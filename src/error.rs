@@ -9,7 +9,7 @@ pub enum Error {
     #[error("tera error")]
     TeraError(#[from] tera::Error),
     #[error("malformatted data")]
-    MalFormat(&'static str),
+    MalFormat(String),
     #[error("resource download failed")]
     ResourceGetFailed(&'static str),
     #[error("unexpected error")]

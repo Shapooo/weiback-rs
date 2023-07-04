@@ -46,19 +46,20 @@ impl Persister {
             info!("db {:?} not exists, create it", self.db_url);
             Sqlite::create_database(&self.db_url).await?;
             let mut db = SqliteConnection::connect(&self.db_url).await?;
-            use futures::stream::StreamExt;
+            use futures::stream::TryStreamExt;
             sqlx::query(DATABASE_CREATE_SQL)
                 .execute_many(&mut db)
                 .await
-                .for_each_concurrent(None, |res| async move {
-                    let query_result = res.unwrap();
+                .try_for_each_concurrent(None, |res| async move {
+                    let query_result = res;
                     trace!(
                         "rows_affected {}, last_insert_rowid {}",
                         query_result.rows_affected(),
                         query_result.last_insert_rowid()
                     );
+                    Ok(())
                 })
-                .await;
+                .await?;
         }
         self.db_pool = Some(
             SqlitePoolOptions::new()

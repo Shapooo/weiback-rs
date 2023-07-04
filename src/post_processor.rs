@@ -13,7 +13,7 @@ use crate::error::Result;
 use crate::exporter::{HTMLPage, Picture};
 use crate::html_generator::HTMLGenerator;
 use crate::resource_manager::ResourceManager;
-use crate::utils::pic_url_to_file;
+use crate::utils::{pic_url_to_file, value_as_str};
 
 lazy_static! {
     static ref NEWLINE_EXPR: Regex = Regex::new("\\n").unwrap();
@@ -70,8 +70,11 @@ impl PostProcessor {
         let mut pics = posts
             .data
             .iter()
-            .flat_map(|ref post| self.extract_emoji_from_text(&post["text_raw"].as_str().unwrap()))
-            .collect::<HashSet<_>>();
+            .map(|ref post| Ok(self.extract_emoji_from_text(value_as_str(&post["text_raw"])?)))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<HashSet<String>>();
         posts
             .into_iter()
             .flat_map(|post| self.extract_pics_from_post(&post))
@@ -118,12 +121,9 @@ impl PostProcessor {
                 let pic_infos = &post["pic_infos"];
                 pic_ids
                     .into_iter()
-                    .map(|id| {
-                        pic_infos[id.as_str().unwrap()]["mw2000"]["url"]
-                            .as_str()
-                            .expect("url of pics should be str")
-                            .into()
-                    })
+                    .filter_map(|id| id.as_str())
+                    .filter_map(|id| pic_infos[id]["mw2000"]["url"].as_str())
+                    .map(|url| url.to_owned())
                     .collect()
             } else {
                 Default::default()
@@ -172,13 +172,14 @@ impl PostProcessor {
             pic_urls.insert(url);
         });
 
-        let text_raw = post["text_raw"].as_str().unwrap();
+        let text_raw = value_as_str(&post["text_raw"])?;
         let url_struct = &post["url_struct"];
         let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
         if post["user"]["avatar_hd"].is_string() {
-            let avatar_url = post["user"]["avatar_hd"].as_str().unwrap();
+            // FIXME: avatar_hd may not exists
+            let avatar_url = value_as_str(&post["user"]["avatar_hd"])?;
             pic_urls.insert(avatar_url.into());
             let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
             post["poster_avatar"] = to_value(avatar_loc).unwrap();
@@ -294,12 +295,11 @@ impl PostProcessor {
         let mut url_title = Borrowed("网页链接");
         let mut url = Borrowed(s);
         if let Value::Array(url_objs) = url_struct {
-            if let Some(obj) = url_objs.into_iter().find(|obj| {
-                obj["short_url"]
-                    .as_str()
-                    .expect("there should be 'short url' in url_struct")
-                    == s
-            }) {
+            if let Some(obj) = url_objs
+                .into_iter()
+                .find(|obj| obj["short_url"].is_string() && obj["short_url"].as_str().unwrap() == s)
+            {
+                assert!(obj["url_title"].is_string() && obj["long_url"].is_string());
                 url_title = Owned(obj["url_title"].as_str().unwrap().into());
                 url = Owned(obj["long_url"].as_str().unwrap().into());
             }
