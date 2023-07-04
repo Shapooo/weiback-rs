@@ -198,11 +198,12 @@ impl WebFetcher {
             post = self
                 .fetch_mobile_page(value_as_str(&post["mblogid"])?)
                 .await?;
-        } else {
-            if post["isLongText"] == true {
-                let mblogid = value_as_str(&post["mblogid"])?;
-                let long_text = self.fetch_long_text_content(mblogid).await?;
-                post["text_raw"] = Value::String(long_text);
+        } else if post["isLongText"] == true {
+            let mblogid = value_as_str(&post["mblogid"])?;
+            match self.fetch_long_text_content(mblogid).await {
+                Ok(long_text) => post["text_raw"] = Value::String(long_text),
+                Err(Error::ResourceGetFailed(_)) => {}
+                Err(e) => return Err(e),
             }
         }
         Ok(post)
@@ -340,7 +341,11 @@ impl WebFetcher {
         let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
         debug!("fetch long text, url: {url}");
         let res = self._fetch(url, &self.web_client).await?;
-        let long_text_meta = res.json::<LongText>().await?;
+        let long_text_meta = match res.json::<LongText>().await {
+            Ok(res) => res,
+            Err(e) if e.is_decode() => return Err(Error::ResourceGetFailed("bypass weibo's bug")),
+            Err(e) => return Err(e.into()),
+        };
         long_text_meta.get_content()
     }
 }

@@ -10,11 +10,11 @@ pub enum Error {
     TeraError(#[from] tera::Error),
     #[error("export error {0}")]
     ExportError(#[from] std::io::Error),
-    #[error("malformatted data")]
+    #[error("malformatted data {0}")]
     MalFormat(String),
-    #[error("resource download failed")]
+    #[error("resource download failed {0}")]
     ResourceGetFailed(&'static str),
-    #[error("unexpected error")]
+    #[error("unexpected error {0}")]
     UnexpectedError(&'static str),
     #[error("resource not in local")]
     NotInLocal,
