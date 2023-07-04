@@ -178,7 +178,18 @@ impl WebFetcher {
         }
     }
 
-    async fn preprocess_post(&self, mut post: Post) -> Result<Post> {
+    async fn preprocess_post(&self, post: Post) -> Result<Post> {
+        let mut post = self.preprocess_post_non_rec(post).await?;
+        if post["retweeted_status"].is_object() {
+            let retweet = self
+                .preprocess_post_non_rec(post["retweeted_status"].take())
+                .await?;
+            post["retweeted_status"] = retweet;
+        }
+        Ok(post)
+    }
+
+    async fn preprocess_post_non_rec(&self, mut post: Post) -> Result<Post> {
         if !post["user"]["id"].is_number()
             && post["text_raw"]
                 .as_str()
@@ -188,21 +199,24 @@ impl WebFetcher {
             post = self
                 .fetch_mobile_page(post["mblogid"].as_str().unwrap())
                 .await?;
-        }
-        let is_long_text = &post["isLongText"];
-        if is_long_text.is_boolean() && is_long_text.as_bool().unwrap() {
-            let mblogid = &post["mblogid"];
-            let long_text = self
-                .fetch_long_text_content(mblogid.as_str().unwrap())
-                .await?;
-            post["text_raw"] = Value::String(long_text);
+        } else {
+            let is_long_text = &post["isLongText"];
+            if is_long_text.is_boolean() && is_long_text.as_bool().unwrap() {
+                let mblogid = &post["mblogid"];
+                if mblogid.is_string() {
+                    let long_text = self
+                        .fetch_long_text_content(mblogid.as_str().unwrap())
+                        .await?;
+                    post["text_raw"] = Value::String(long_text);
+                }
+            }
         }
         Ok(post)
     }
 
     pub async fn fetch_pic(&self, url: impl IntoUrl) -> Result<Bytes> {
         debug!("fetch pic, url: {}", url.as_str());
-        let res = self.fetch(url, &self.pic_client).await?;
+        let res = self._fetch(url, &self.pic_client).await?;
         let res_bytes = res.bytes().await?;
         trace!("fetched pic size: {}", res_bytes.len());
         Ok(res_bytes)
@@ -262,6 +276,35 @@ impl WebFetcher {
             post["id"] = Value::Number(serde_json::Number::from(id));
             post["mblogid"] = Value::String(mblogid.to_owned());
             post["text_raw"] = post["text"].to_owned();
+            if post["pics"].is_array() {
+                if let Value::Array(pics) = post["pics"].take() {
+                    post["pic_ids"] = serde_json::to_value(
+                        pics.iter()
+                            .map(|pic| pic["pid"].as_str().unwrap().to_owned())
+                            .collect::<Vec<String>>(),
+                    )
+                    .unwrap();
+                    post["pic_infos"] = serde_json::to_value(
+                        pics.into_iter()
+                            .map(|mut pic| {
+                                let id = pic["pid"].as_str().unwrap().to_owned();
+                                let mut v: HashMap<String, Value> = HashMap::new();
+                                v.insert("pic_id".into(), pic["pid"].take());
+                                v.insert("type".into(), "pic".into());
+                                v.insert("large".into(), pic["large"].take());
+                                v.insert(
+                                    "bmiddle".into(),
+                                    [("url".to_string(), pic["url"].take())]
+                                        .into_iter()
+                                        .collect(),
+                                );
+                                (id, serde_json::to_value(v).unwrap())
+                            })
+                            .collect::<HashMap<String, Value>>(),
+                    )
+                    .unwrap();
+                }
+            }
             if post["retweeted_status"].is_object() {
                 let id = post["retweeted_status"]["id"]
                     .as_str()
