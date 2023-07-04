@@ -53,23 +53,32 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn download_meta_only(&self, range: RangeInclusive<u32>) -> Result<()> {
+    pub async fn download_meta_only(&self, range: RangeInclusive<u32>) {
         info!("downloading posts meta data...");
-        self.download_posts(range, false, false).await
+        self._download_posts(range, false, false).await;
     }
 
-    pub async fn download_with_pic(&self, range: RangeInclusive<u32>) -> Result<()> {
+    pub async fn download_with_pic(&self, range: RangeInclusive<u32>) {
         info!("download posts with pics...");
-        self.download_posts(range, true, false).await
+        self._download_posts(range, true, false).await;
     }
 
-    pub async fn export_from_net(&self, range: RangeInclusive<u32>) -> Result<()> {
+    pub async fn export_from_net(&self, range: RangeInclusive<u32>) {
         info!("download posts with pic, and export...");
-        self.download_posts(range, true, true).await
+        self._download_posts(range, true, true).await;
     }
 
-    pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
+    pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) {
         info!("fetch posts from local and export");
+        match self._export_from_local(range, reverse).await {
+            Err(err) => {
+                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
+            }
+            _ => {}
+        }
+    }
+
+    async fn _export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
@@ -96,7 +105,16 @@ impl TaskHandler {
         Ok(())
     }
 
-    async fn download_posts(
+    async fn _download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, export: bool) {
+        match self.__download_posts(range, with_pic, export).await {
+            Err(err) => {
+                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
+            }
+            _ => {}
+        }
+    }
+
+    async fn __download_posts(
         &self,
         range: RangeInclusive<u32>,
         with_pic: bool,

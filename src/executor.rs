@@ -21,7 +21,6 @@ impl Executor {
         let (tx, mut rx) = mpsc::channel(1);
         std::thread::spawn(move || {
             debug!("entered a new worker thread");
-            // let rt = Runtime::new().unwrap();
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -34,12 +33,10 @@ impl Executor {
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
-                        Task::DownloadMeta(range) => th.download_meta_only(range).await?,
-                        Task::DownloadWithPic(range) => th.download_with_pic(range).await?,
-                        Task::ExportFromNet(range) => th.export_from_net(range).await?,
-                        Task::ExportFromLocal(range, rev) => {
-                            th.export_from_local(range, rev).await?
-                        }
+                        Task::DownloadMeta(range) => th.download_meta_only(range).await,
+                        Task::DownloadWithPic(range) => th.download_with_pic(range).await,
+                        Task::ExportFromNet(range) => th.export_from_net(range).await,
+                        Task::ExportFromLocal(range, rev) => th.export_from_local(range, rev).await,
                     }
                 }
                 Ok::<(), anyhow::Error>(())
