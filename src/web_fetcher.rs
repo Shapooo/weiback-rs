@@ -315,6 +315,8 @@ impl WebFetcher {
                 }
             }
             if post["retweeted_status"].is_object() {
+                let bid = value_as_str(&post["retweeted_status"], "bid")?;
+                post["retweeted_status"]["mblogid"] = Value::String(bid.to_owned());
                 let id = value_as_str(&post["retweeted_status"], "id")?;
                 let id = match id.parse::<i64>() {
                     Ok(id) => id,
