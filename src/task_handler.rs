@@ -13,7 +13,6 @@ use crate::exporter::Exporter;
 use crate::message::TaskStatus;
 use crate::persister::Persister;
 use crate::post_processor::PostProcessor;
-use crate::resource_manager::ResourceManager;
 use crate::web_fetcher::WebFetcher;
 
 const SAVING_PERIOD: usize = 200;
@@ -33,11 +32,10 @@ impl TaskHandler {
             (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
         );
         let persister = Persister::new(&config.db)?;
-        let resource_manager = ResourceManager::new(fetcher, persister);
         Ok(TaskHandler {
             exporter: Exporter::new(),
             config,
-            processer: PostProcessor::new(resource_manager),
+            processer: PostProcessor::new(fetcher, persister),
             task_status,
         })
     }

@@ -3,17 +3,20 @@ use std::collections::{HashMap, HashSet};
 use std::ops::RangeInclusive;
 use std::path::Path;
 
+use bytes::Bytes;
+use futures::future::join_all;
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
 use serde_json::{to_value, Value};
 
 use crate::data::{Post, Posts};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, Picture};
 use crate::html_generator::HTMLGenerator;
-use crate::resource_manager::ResourceManager;
+use crate::persister::Persister;
 use crate::utils::{pic_url_to_file, value_as_str};
+use crate::web_fetcher::WebFetcher;
 
 lazy_static! {
     static ref NEWLINE_EXPR: Regex = Regex::new("\\n").unwrap();
@@ -29,30 +32,38 @@ lazy_static! {
 #[derive(Debug)]
 pub struct PostProcessor {
     html_generator: HTMLGenerator,
-    resource_manager: ResourceManager,
+    web_fetcher: WebFetcher,
+    persister: Persister,
     emoticon: HashMap<String, String>,
 }
 
 impl PostProcessor {
-    pub fn new(resource_manager: ResourceManager) -> Self {
+    pub fn new(web_fetcher: WebFetcher, persister: Persister) -> Self {
         Self {
             html_generator: HTMLGenerator::new(),
-            resource_manager,
+            web_fetcher,
+            persister,
             emoticon: Default::default(),
         }
     }
 
     pub async fn init(&mut self) -> Result<()> {
         debug!("initing...");
-        self.emoticon = self.resource_manager.get_emoticon().await?;
-        self.resource_manager.init().await?;
+        self.emoticon = self.web_fetcher.fetch_emoticon().await?;
+        self.persister.init().await?;
         Ok(())
     }
 
     pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> Result<Posts> {
-        self.resource_manager
-            .get_fav_posts_from_web(uid, page)
-            .await
+        let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
+        let posts: Vec<Value> = join_all(posts.into_iter().map(|post| async {
+            self.persister.insert_post(&post).await?;
+            Ok(post)
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<Value>>>()?;
+        Ok(posts)
     }
 
     pub async fn get_fav_post_from_db(
@@ -60,9 +71,9 @@ impl PostProcessor {
         range: RangeInclusive<u32>,
         reverse: bool,
     ) -> Result<Posts> {
-        self.resource_manager
-            .get_fav_post_from_db(range, reverse)
-            .await
+        let limit = (range.end() - range.start()) + 1;
+        let offset = *range.start() - 1;
+        self.persister.query_posts(limit, offset, reverse).await
     }
 
     pub async fn save_post_pictures(&self, posts: Posts) -> Result<()> {
@@ -82,7 +93,7 @@ impl PostProcessor {
             });
         debug!("extracted {} pics from posts", pics.len());
         for pic in pics {
-            self.resource_manager.get_pic(&pic).await?;
+            self.get_pic(&pic).await?;
         }
         Ok(())
     }
@@ -104,13 +115,38 @@ impl PostProcessor {
         let html = self.html_generator.generate_page(&inner_html)?;
         let mut pics = Vec::new();
         for pic in pic_to_fetch {
-            let blob = self.resource_manager.get_pic(&pic).await?;
+            let blob = self.get_pic(&pic).await?;
             pics.push(Picture {
                 name: pic_url_to_file(&pic).into(),
                 blob,
             });
         }
         Ok(HTMLPage { html, pics })
+    }
+
+    pub async fn get_web_total_num(&self) -> Result<u64> {
+        self.web_fetcher.fetch_fav_total_num().await
+    }
+
+    pub async fn get_db_total_num(&self) -> Result<u64> {
+        self.persister.query_db_total_num().await
+    }
+}
+
+// ==================================================================================
+
+// Private functions
+impl PostProcessor {
+    async fn get_pic(&self, url: &str) -> Result<Bytes> {
+        let url = crate::utils::strip_url_queries(url);
+        let res = self.persister.query_img(url).await;
+        if let Err(Error::NotInLocal) = res {
+            let pic = self.web_fetcher.fetch_pic(url).await?;
+            self.persister.insert_img(url, &pic).await?;
+            Ok(pic)
+        } else {
+            Ok(res?)
+        }
     }
 
     fn extract_pics_from_post(&self, post: &Post) -> Vec<String> {
@@ -307,13 +343,5 @@ impl PostProcessor {
             + r#""><img class="bk-icon-link" src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png"/>"#
             + url_title
             + "</a>"
-    }
-
-    pub async fn get_web_total_num(&self) -> Result<u64> {
-        self.resource_manager.get_web_total_num().await
-    }
-
-    pub async fn get_db_total_num(&self) -> Result<u64> {
-        self.resource_manager.get_db_total_num().await
     }
 }
