@@ -172,7 +172,9 @@ impl WebFetcher {
             if let Value::Array(v) = posts["data"].take() {
                 Ok(v)
             } else {
-                panic!("it should be a array, or weibo API has changed!")
+                Err(Error::MalFormat(
+                    "Posts should be a array, maybe api has changed".into(),
+                ))
             }
         }
     }
