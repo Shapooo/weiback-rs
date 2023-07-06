@@ -70,7 +70,7 @@ impl PostProcessor {
         let mut pics = posts
             .data
             .iter()
-            .map(|ref post| Ok(self.extract_emoji_from_text(value_as_str(&post["text_raw"])?)))
+            .map(|ref post| Ok(self.extract_emoji_from_text(value_as_str(&post, "text_raw")?)))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flatten()
@@ -172,14 +172,14 @@ impl PostProcessor {
             pic_urls.insert(url);
         });
 
-        let text_raw = value_as_str(&post["text_raw"])?;
+        let text_raw = value_as_str(&post, "text_raw")?;
         let url_struct = &post["url_struct"];
         let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
         if post["user"]["avatar_hd"].is_string() {
             // FIXME: avatar_hd may not exists
-            let avatar_url = value_as_str(&post["user"]["avatar_hd"])?;
+            let avatar_url = value_as_str(&post["user"], "avatar_hd")?;
             pic_urls.insert(avatar_url.into());
             let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
             post["poster_avatar"] = to_value(avatar_loc).unwrap();

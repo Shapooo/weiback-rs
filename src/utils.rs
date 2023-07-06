@@ -20,12 +20,13 @@ pub fn strip_url_queries(url: &str) -> &str {
 
 use crate::error::{Error, Result};
 use serde_json::Value;
-pub fn value_as_str(v: &Value) -> Result<&str> {
-    if let Some(s) = v.as_str() {
+pub fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
+    if let Some(s) = v[property].as_str() {
         Ok(s)
     } else {
         Err(Error::MalFormat(format!(
-            "{} cannot convert to str",
+            "property {} of {} cannot convert to str",
+            property,
             v.to_string(),
         )))
     }

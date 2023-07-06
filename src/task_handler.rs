@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use chrono;
-use log::{debug, info};
+use log::{debug, error, info};
 use tokio::time::sleep;
 
 use crate::config::Config;
@@ -72,6 +72,7 @@ impl TaskHandler {
         info!("fetch posts from local and export");
         match self._export_from_local(range, reverse).await {
             Err(err) => {
+                error!("{err}");
                 *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
             }
             _ => {}
@@ -108,6 +109,7 @@ impl TaskHandler {
     async fn _download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, export: bool) {
         match self.__download_posts(range, with_pic, export).await {
             Err(err) => {
+                error!("{err}");
                 *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
             }
             _ => {}

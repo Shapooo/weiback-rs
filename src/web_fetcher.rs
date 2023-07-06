@@ -192,14 +192,14 @@ impl WebFetcher {
 
     async fn preprocess_post_non_rec(&self, mut post: Post) -> Result<Post> {
         if !post["user"]["id"].is_number()
-            && value_as_str(&post["text_raw"])?.starts_with("该内容请至手机客户端查看")
+            && value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
             && self.mobile_client.is_some()
         {
             post = self
-                .fetch_mobile_page(value_as_str(&post["mblogid"])?)
+                .fetch_mobile_page(value_as_str(&post, "mblogid")?)
                 .await?;
         } else if post["isLongText"] == true {
-            let mblogid = value_as_str(&post["mblogid"])?;
+            let mblogid = value_as_str(&post, "mblogid")?;
             match self.fetch_long_text_content(mblogid).await {
                 Ok(long_text) => post["text_raw"] = Value::String(long_text),
                 Err(Error::ResourceGetFailed(_)) => {}
@@ -275,7 +275,7 @@ impl WebFetcher {
                 return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
             };
             let mut post = from_str::<Value>(&text[start + 9..end])?;
-            let id = value_as_str(&post["id"])?;
+            let id = value_as_str(&post, "id")?;
             let id = match id.parse::<i64>() {
                 Ok(id) => id,
                 Err(e) => {
@@ -291,14 +291,14 @@ impl WebFetcher {
                 if let Value::Array(pics) = post["pics"].take() {
                     post["pic_ids"] = serde_json::to_value(
                         pics.iter()
-                            .map(|pic| Ok(value_as_str(&pic["pid"])?))
+                            .map(|pic| Ok(value_as_str(&pic, "pid")?))
                             .collect::<Result<Vec<_>>>()?,
                     )
                     .unwrap();
                     post["pic_infos"] = serde_json::to_value(
                         pics.into_iter()
                             .map(|mut pic| {
-                                let id = value_as_str(&pic["pid"])?.to_owned();
+                                let id = value_as_str(&pic, "pid")?.to_owned();
                                 let mut v: HashMap<String, Value> = HashMap::new();
                                 v.insert("pic_id".into(), pic["pid"].take());
                                 v.insert("type".into(), "pic".into());
@@ -315,7 +315,7 @@ impl WebFetcher {
                 }
             }
             if post["retweeted_status"].is_object() {
-                let id = value_as_str(&post["retweeted_status"]["id"])?;
+                let id = value_as_str(&post["retweeted_status"], "id")?;
                 let id = match id.parse::<i64>() {
                     Ok(id) => id,
                     Err(e) => {
