@@ -43,7 +43,7 @@ impl HTMLGenerator {
 
     pub fn generate_posts(&self, posts: Posts) -> Result<String> {
         let mut context = Context::new();
-        context.insert("posts", &posts.data);
+        context.insert("posts", &posts);
         let html = TEMPLATES.render("posts.html", &context)?;
         Ok(html)
     }

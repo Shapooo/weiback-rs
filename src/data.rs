@@ -1,49 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::error::{Error, Result};
 
 pub type Post = Value;
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Posts {
-    pub data: Vec<Value>,
-}
-
-impl Serialize for Posts {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.data.serialize(serializer)
-    }
-}
-
-impl Posts {
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn new() -> Self {
-        Self {
-            data: Default::default(),
-        }
-    }
-
-    pub fn append(&mut self, mut appendee: Posts) {
-        self.data.append(&mut appendee.data);
-    }
-}
-
-impl IntoIterator for Posts {
-    type Item = Post;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}
-
+pub type Posts = Vec<Value>;
 pub type User = Value;
 
 #[derive(Deserialize, Debug, Clone)]

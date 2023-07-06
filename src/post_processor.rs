@@ -68,7 +68,6 @@ impl PostProcessor {
     pub async fn save_post_pictures(&self, posts: Posts) -> Result<()> {
         debug!("save pictures of posts to db...");
         let mut pics = posts
-            .data
             .iter()
             .map(|ref post| Ok(self.extract_emoji_from_text(value_as_str(&post, "text_raw")?)))
             .collect::<Result<Vec<_>>>()?
@@ -92,7 +91,6 @@ impl PostProcessor {
         debug!("generate html from {} posts", posts.len());
         let mut pic_to_fetch = HashSet::new();
         posts
-            .data
             .iter_mut()
             .map(|mut post| {
                 self.process_post(

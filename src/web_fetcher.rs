@@ -172,7 +172,7 @@ impl WebFetcher {
                     .await
                     .into_iter()
                     .collect();
-                Ok(Posts { data: v? })
+                Ok(v?)
             } else {
                 panic!("it should be a array, or weibo API has changed!")
             }

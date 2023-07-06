@@ -171,7 +171,7 @@ impl Persister {
         .into_iter()
         .collect::<std::result::Result<_, _>>()?;
         debug!("fetched {} posts", data.len());
-        Ok(Posts { data })
+        Ok(data)
     }
 
     #[allow(unused)]

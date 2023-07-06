@@ -93,7 +93,7 @@ impl TaskHandler {
                 let subtask_name = format!("weiback-{}", (i + SAVING_PERIOD - 1) / SAVING_PERIOD);
                 let html = self
                     .processer
-                    .generate_html(Posts { data: post_acc }, &subtask_name)
+                    .generate_html(post_acc, &subtask_name)
                     .await?;
                 post_acc = Vec::new();
 
@@ -131,7 +131,7 @@ impl TaskHandler {
         let mut posts_acc = Posts::new();
         let end = *range.end();
         for (i, page) in range.enumerate() {
-            let posts = self
+            let mut posts = self
                 .processer
                 .get_fav_posts_from_web(self.config.uid.as_str(), page)
                 .await?;
@@ -146,7 +146,7 @@ impl TaskHandler {
             if with_pic && !export {
                 self.processer.save_post_pictures(posts).await?
             } else if export {
-                posts_acc.append(posts);
+                posts_acc.append(&mut posts);
                 if i % SAVING_PERIOD == SAVING_PERIOD - 1 || posts_sum == 0 {
                     let subtask_name = format!("weiback-{}", page);
                     self.exporter

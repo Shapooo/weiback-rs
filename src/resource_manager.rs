@@ -39,8 +39,8 @@ impl ResourceManager {
     }
 
     pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> Result<Posts> {
-        let data = self.web_fetcher.fetch_posts_meta(uid, page).await?.data;
-        let data: Vec<serde_json::Value> = join_all(data.into_iter().map(|post| async {
+        let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
+        let posts: Vec<serde_json::Value> = join_all(posts.into_iter().map(|post| async {
             self.persister.insert_post(&post).await?;
             Ok(post)
         }))
@@ -48,7 +48,7 @@ impl ResourceManager {
         .into_iter()
         .collect::<Result<Vec<serde_json::Value>>>()?;
 
-        Ok(Posts { data })
+        Ok(posts)
     }
 
     pub async fn get_web_total_num(&self) -> Result<u64> {
