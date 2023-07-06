@@ -1,17 +1,15 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use futures::future::join_all;
 use log::{debug, trace};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Client, IntoUrl, Response,
 };
-use serde_json::{from_str, Value};
+use serde_json::Value;
 
-use crate::data::{FavTag, LongText, Post, Posts};
+use crate::data::{FavTag, LongText, Posts};
 use crate::error::{Error, Result};
-use crate::utils::value_as_str;
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
@@ -158,6 +156,10 @@ impl WebFetcher {
         Ok(client.get(url).send().await?)
     }
 
+    pub fn has_mobile_cookie(&self) -> bool {
+        self.mobile_client.is_some()
+    }
+
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
@@ -168,45 +170,11 @@ impl WebFetcher {
             Err(Error::ResourceGetFailed("fetched data is not ok"))
         } else {
             if let Value::Array(v) = posts["data"].take() {
-                let v: Result<Vec<_>> = join_all(v.into_iter().map(|p| self.preprocess_post(p)))
-                    .await
-                    .into_iter()
-                    .collect();
-                Ok(v?)
+                Ok(v)
             } else {
                 panic!("it should be a array, or weibo API has changed!")
             }
         }
-    }
-
-    async fn preprocess_post(&self, post: Post) -> Result<Post> {
-        let mut post = self.preprocess_post_non_rec(post).await?;
-        if post["retweeted_status"].is_object() {
-            let retweet = self
-                .preprocess_post_non_rec(post["retweeted_status"].take())
-                .await?;
-            post["retweeted_status"] = retweet;
-        }
-        Ok(post)
-    }
-
-    async fn preprocess_post_non_rec(&self, mut post: Post) -> Result<Post> {
-        if !post["user"]["id"].is_number()
-            && value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
-            && self.mobile_client.is_some()
-        {
-            post = self
-                .fetch_mobile_page(value_as_str(&post, "mblogid")?)
-                .await?;
-        } else if post["isLongText"] == true {
-            let mblogid = value_as_str(&post, "mblogid")?;
-            match self.fetch_long_text_content(mblogid).await {
-                Ok(long_text) => post["text_raw"] = Value::String(long_text),
-                Err(Error::ResourceGetFailed(_)) => {}
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(post)
     }
 
     pub async fn fetch_pic(&self, url: impl IntoUrl) -> Result<Bytes> {
@@ -259,78 +227,13 @@ impl WebFetcher {
         Ok(res)
     }
 
-    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
+    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<String> {
         if let Some(mobile_client) = &self.mobile_client {
             let url = format!("{}/{}", MOBILE_POST_API, mblogid);
             debug!("fetch mobile page, url: {}", &url);
             let res = self._fetch(url, mobile_client).await?;
             let text = res.text().await?;
-            let Some(start) = text.find("\"status\":") else {
-                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            };
-            let Some(end) = text.find("\"call\"") else {
-                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            };
-            let Some(end) = *&text[..end].rfind(",") else {
-                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            };
-            let mut post = from_str::<Value>(&text[start + 9..end])?;
-            let id = value_as_str(&post, "id")?;
-            let id = match id.parse::<i64>() {
-                Ok(id) => id,
-                Err(e) => {
-                    return Err(Error::MalFormat(format!(
-                        "failed to parse mobile post id {id}: {e}"
-                    )))
-                }
-            };
-            post["id"] = Value::Number(serde_json::Number::from(id));
-            post["mblogid"] = Value::String(mblogid.to_owned());
-            post["text_raw"] = post["text"].to_owned();
-            if post["pics"].is_array() {
-                if let Value::Array(pics) = post["pics"].take() {
-                    post["pic_ids"] = serde_json::to_value(
-                        pics.iter()
-                            .map(|pic| Ok(value_as_str(&pic, "pid")?))
-                            .collect::<Result<Vec<_>>>()?,
-                    )
-                    .unwrap();
-                    post["pic_infos"] = serde_json::to_value(
-                        pics.into_iter()
-                            .map(|mut pic| {
-                                let id = value_as_str(&pic, "pid")?.to_owned();
-                                let mut v: HashMap<String, Value> = HashMap::new();
-                                v.insert("pic_id".into(), pic["pid"].take());
-                                v.insert("type".into(), "pic".into());
-                                v.insert("large".into(), pic["large"].take());
-                                v.insert(
-                                    "bmiddle".into(),
-                                    serde_json::json!({"url":pic["url"].take()}),
-                                );
-                                Ok((id, serde_json::to_value(v).unwrap()))
-                            })
-                            .collect::<Result<HashMap<String, Value>>>()?,
-                    )
-                    .unwrap();
-                }
-            }
-            if post["retweeted_status"].is_object() {
-                let bid = value_as_str(&post["retweeted_status"], "bid")?;
-                post["retweeted_status"]["mblogid"] = Value::String(bid.to_owned());
-                let id = value_as_str(&post["retweeted_status"], "id")?;
-                let id = match id.parse::<i64>() {
-                    Ok(id) => id,
-                    Err(e) => {
-                        return Err(Error::MalFormat(format!(
-                            "failed to parse retweet id {id}: {e}"
-                        )))
-                    }
-                };
-                post["retweeted_status"]["id"] = Value::Number(serde_json::Number::from(id));
-                post["retweeted_status"]["text_raw"] = post["retweeted_status"]["text"].to_owned();
-            }
-
-            Ok(post)
+            Ok(text)
         } else {
             Err(Error::UnexpectedError("mobile cookie have not set"))
         }

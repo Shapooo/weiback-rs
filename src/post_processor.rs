@@ -8,7 +8,7 @@ use futures::future::join_all;
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use regex::Regex;
-use serde_json::{to_value, Value};
+use serde_json::{from_str, to_value, Value};
 
 use crate::data::{Post, Posts};
 use crate::error::{Error, Result};
@@ -56,13 +56,14 @@ impl PostProcessor {
 
     pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> Result<Posts> {
         let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
-        let posts: Vec<Value> = join_all(posts.into_iter().map(|post| async {
+        let posts = join_all(posts.into_iter().map(|post| async {
+            let post = self.preprocess_post(post).await?;
             self.persister.insert_post(&post).await?;
             Ok(post)
         }))
         .await
         .into_iter()
-        .collect::<Result<Vec<Value>>>()?;
+        .collect::<Result<Posts>>()?;
         Ok(posts)
     }
 
@@ -137,6 +138,106 @@ impl PostProcessor {
 
 // Private functions
 impl PostProcessor {
+    async fn preprocess_post(&self, post: Post) -> Result<Post> {
+        let mut post = self.preprocess_post_non_rec(post).await?;
+        if post["retweeted_status"].is_object() {
+            let retweet = self
+                .preprocess_post_non_rec(post["retweeted_status"].take())
+                .await?;
+            post["retweeted_status"] = retweet;
+        }
+        Ok(post)
+    }
+
+    async fn preprocess_post_non_rec(&self, mut post: Post) -> Result<Post> {
+        if !post["user"]["id"].is_number()
+            && value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
+            && self.web_fetcher.has_mobile_cookie()
+        {
+            post = self
+                .fetch_mobile_page(value_as_str(&post, "mblogid")?)
+                .await?;
+        } else if post["isLongText"] == true {
+            let mblogid = value_as_str(&post, "mblogid")?;
+            match self.web_fetcher.fetch_long_text_content(mblogid).await {
+                Ok(long_text) => post["text_raw"] = Value::String(long_text),
+                Err(Error::ResourceGetFailed(_)) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(post)
+    }
+
+    async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
+        let text = self.web_fetcher.fetch_mobile_page(mblogid).await?;
+        let Some(start) = text.find("\"status\":") else {
+                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
+            };
+        let Some(end) = text.find("\"call\"") else {
+                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
+            };
+        let Some(end) = *&text[..end].rfind(",") else {
+                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
+            };
+        let mut post = from_str::<Value>(&text[start + 9..end])?;
+        let id = value_as_str(&post, "id")?;
+        let id = match id.parse::<i64>() {
+            Ok(id) => id,
+            Err(e) => {
+                return Err(Error::MalFormat(format!(
+                    "failed to parse mobile post id {id}: {e}"
+                )))
+            }
+        };
+        post["id"] = Value::Number(serde_json::Number::from(id));
+        post["mblogid"] = Value::String(mblogid.to_owned());
+        post["text_raw"] = post["text"].to_owned();
+        if post["pics"].is_array() {
+            if let Value::Array(pics) = post["pics"].take() {
+                post["pic_ids"] = serde_json::to_value(
+                    pics.iter()
+                        .map(|pic| Ok(value_as_str(&pic, "pid")?))
+                        .collect::<Result<Vec<_>>>()?,
+                )
+                .unwrap();
+                post["pic_infos"] = serde_json::to_value(
+                    pics.into_iter()
+                        .map(|mut pic| {
+                            let id = value_as_str(&pic, "pid")?.to_owned();
+                            let mut v: HashMap<String, Value> = HashMap::new();
+                            v.insert("pic_id".into(), pic["pid"].take());
+                            v.insert("type".into(), "pic".into());
+                            v.insert("large".into(), pic["large"].take());
+                            v.insert(
+                                "bmiddle".into(),
+                                serde_json::json!({"url":pic["url"].take()}),
+                            );
+                            Ok((id, serde_json::to_value(v).unwrap()))
+                        })
+                        .collect::<Result<HashMap<String, Value>>>()?,
+                )
+                .unwrap();
+            }
+        }
+        if post["retweeted_status"].is_object() {
+            let bid = value_as_str(&post["retweeted_status"], "bid")?;
+            post["retweeted_status"]["mblogid"] = Value::String(bid.to_owned());
+            let id = value_as_str(&post["retweeted_status"], "id")?;
+            let id = match id.parse::<i64>() {
+                Ok(id) => id,
+                Err(e) => {
+                    return Err(Error::MalFormat(format!(
+                        "failed to parse retweet id {id}: {e}"
+                    )))
+                }
+            };
+            post["retweeted_status"]["id"] = Value::Number(serde_json::Number::from(id));
+            post["retweeted_status"]["text_raw"] = post["retweeted_status"]["text"].to_owned();
+        }
+
+        Ok(post)
+    }
+
     async fn get_pic(&self, url: &str) -> Result<Bytes> {
         let url = crate::utils::strip_url_queries(url);
         let res = self.persister.query_img(url).await;
