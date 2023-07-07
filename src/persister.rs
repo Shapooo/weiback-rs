@@ -147,7 +147,6 @@ impl Persister {
         }
     }
 
-    #[allow(unused)]
     pub async fn query_post(&self, id: i64) -> Result<Post> {
         debug!("query post, id: {id}");
         let sql_post = self._query_post(id).await;
@@ -224,7 +223,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         )
         .bind((post["mix_media_info"].is_object()).then_some(post["mix_media_info"].to_string()))
         .bind((post["visible"].is_object()).then_some(post["visible"].to_string()))
-        .bind(post["text"].as_str().unwrap())
+        .bind(post["text"].as_str())
         .bind(post["attitudes_status"].as_i64())
         .bind(post["showFeedRepost"].as_bool())
         .bind(post["showFeedComment"].as_bool())

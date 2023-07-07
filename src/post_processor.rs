@@ -15,7 +15,7 @@ use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, Picture};
 use crate::html_generator::HTMLGenerator;
 use crate::persister::Persister;
-use crate::utils::{pic_url_to_file, value_as_str};
+use crate::utils::pic_url_to_file;
 use crate::web_fetcher::WebFetcher;
 
 lazy_static! {
@@ -56,18 +56,12 @@ impl PostProcessor {
 
     pub async fn download_fav_posts(&self, uid: &str, page: u32, with_pic: bool) -> Result<usize> {
         let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
-        let posts = join_all(posts.into_iter().map(|post| async {
-            let post = self.preprocess_post(post).await?;
-            self.persister.insert_post(&post).await?;
-            Ok(post)
-        }))
-        .await
-        .into_iter()
-        .collect::<Result<Posts>>()?;
-        Ok(posts)
+        let result = posts.len();
+        self.persist_posts(posts, with_pic).await?;
+        Ok(result)
     }
 
-    pub async fn get_fav_post_from_db(
+    pub async fn load_fav_posts_from_db(
         &self,
         range: RangeInclusive<u32>,
         reverse: bool,
@@ -75,28 +69,6 @@ impl PostProcessor {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
         self.persister.query_posts(limit, offset, reverse).await
-    }
-
-    pub async fn save_post_pictures(&self, posts: Posts) -> Result<()> {
-        debug!("save pictures of posts to db...");
-        let mut pics = posts
-            .iter()
-            .map(|ref post| Ok(self.extract_emoji_from_text(value_as_str(&post, "text_raw")?)))
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect::<HashSet<String>>();
-        posts
-            .into_iter()
-            .flat_map(|post| self.extract_pics_from_post(&post))
-            .for_each(|url| {
-                pics.insert(url);
-            });
-        debug!("extracted {} pics from posts", pics.len());
-        for pic in pics {
-            self.get_pic(&pic).await?;
-        }
-        Ok(())
     }
 
     pub async fn generate_html(&self, mut posts: Posts, html_name: &str) -> Result<HTMLPage> {
@@ -138,26 +110,116 @@ impl PostProcessor {
 
 // Private functions
 impl PostProcessor {
-    async fn preprocess_post(&self, post: Post) -> Result<Post> {
-        let mut post = self.preprocess_post_non_rec(post).await?;
-        if post["retweeted_status"].is_object() {
-            let retweet = self
-                .preprocess_post_non_rec(post["retweeted_status"].take())
-                .await?;
-            post["retweeted_status"] = retweet;
+    async fn persist_posts(&self, posts: Posts, with_pic: bool) -> Result<()> {
+        let posts = join_all(
+            posts
+                .into_iter()
+                .map(|post| async { self.preprocess_post(post).await }),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+        if with_pic {
+            self.persist_post_pictures(&posts).await?;
         }
-        Ok(post)
+        Ok(())
+    }
+
+    async fn persist_post_pictures(&self, posts: &Posts) -> Result<()> {
+        debug!("save pictures of posts to db...");
+        let mut pics = posts
+            .iter()
+            .map(|ref post| {
+                Ok(self.extract_emoji_from_text(
+                    (Borrowed(value_as_str(&post, "text_raw")?)
+                        + post["retweeted_status"]["text_raw"]
+                            .as_str()
+                            .unwrap_or_default())
+                    .as_ref(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<HashSet<String>>();
+        posts
+            .into_iter()
+            .flat_map(|post| self.extract_pics_from_post(&post))
+            .for_each(|url| {
+                pics.insert(url);
+            });
+        debug!("extracted {} pics from posts", pics.len());
+        for pic in pics {
+            self.get_pic(&pic).await?;
+        }
+        Ok(())
+    }
+
+    async fn preprocess_post(&self, post: Post) -> Result<Post> {
+        let id = value_as_i64(&post, "id")?;
+        match self.persister.query_post(id).await {
+            Ok(post) => Ok(post),
+            Err(Error::NotInLocal) => {
+                let mut post = self.preprocess_post_non_rec(post).await?;
+                self.persister.insert_post(&post).await?;
+
+                if let Some(id) = post["retweeted_status"]["id"].as_i64() {
+                    match self.persister.query_post(id).await {
+                        Ok(retweet) => {
+                            post["retweeted_status"] = retweet;
+                            return Ok(post);
+                        }
+                        Err(Error::NotInLocal) => {
+                            let mut retweet = self
+                                .preprocess_post_non_rec(post["retweeted_status"].take())
+                                .await?;
+                            if let Value::Array(url_struct) = post["url_struct"].take() {
+                                let mut url_struct = url_struct
+                                    .into_iter()
+                                    .map(|st| Ok((value_as_str(&st, "short_url")?.to_owned(), st)))
+                                    .collect::<Result<HashMap<String, Value>>>()?;
+                                retweet["url_struct"] = Value::Array(
+                                    extract_urls(value_as_str(&retweet, "text_raw")?)
+                                        .into_iter()
+                                        .filter_map(|url| url_struct.remove(url))
+                                        .collect(),
+                                );
+                                post["url_struct"] = Value::Array(
+                                    extract_urls(value_as_str(&post, "text_raw")?)
+                                        .into_iter()
+                                        .filter_map(|url| url_struct.remove(url))
+                                        .collect(),
+                                )
+                            }
+                            if post["page_info"].is_object() {
+                                retweet["page_info"] = post["page_info"].take();
+                            }
+                            post["retweeted_status"] = retweet;
+                        }
+                        e => return e,
+                    }
+                }
+
+                Ok(post)
+            }
+            e => e,
+        }
     }
 
     async fn preprocess_post_non_rec(&self, mut post: Post) -> Result<Post> {
-        if !post["user"]["id"].is_number()
-            && value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
-            && self.web_fetcher.has_mobile_cookie()
-        {
-            post = self
-                .fetch_mobile_page(value_as_str(&post, "mblogid")?)
-                .await?;
-        } else if post["isLongText"] == true {
+        if !post["user"]["id"].is_number() {
+            return Ok(
+                if value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
+                    && self.web_fetcher.has_mobile_cookie()
+                {
+                    self.handle_mobile_only_post(value_as_str(&post, "mblogid")?)
+                        .await?
+                } else {
+                    post
+                },
+            );
+        }
+        if post["isLongText"] == true {
             let mblogid = value_as_str(&post, "mblogid")?;
             match self.web_fetcher.fetch_long_text_content(mblogid).await {
                 Ok(long_text) => post["text_raw"] = Value::String(long_text),
@@ -168,18 +230,26 @@ impl PostProcessor {
         Ok(post)
     }
 
-    async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
+    async fn handle_mobile_only_post(&self, mblogid: &str) -> Result<Value> {
         let text = self.web_fetcher.fetch_mobile_page(mblogid).await?;
         let Some(start) = text.find("\"status\":") else {
-                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            };
+            return Err(Error::MalFormat(format!("mobile post: {text}")));
+        };
         let Some(end) = text.find("\"call\"") else {
-                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            };
+            return Err(Error::MalFormat(format!("mobile post: {text}")));
+        };
         let Some(end) = *&text[..end].rfind(",") else {
-                return Err(Error::MalFormat(format!("malformed mobile post: {text}")));
-            };
+            return Err(Error::MalFormat(format!("mobile post: {text}")));
+        };
         let mut post = from_str::<Value>(&text[start + 9..end])?;
+        self.handle_mobile_only_post_non_rec(&mut post)?;
+        if post["retweeted_status"].is_object() {
+            self.handle_mobile_only_post_non_rec(&mut post["retweeted_status"])?;
+        }
+        Ok(post)
+    }
+
+    fn handle_mobile_only_post_non_rec(&self, post: &mut Value) -> Result<()> {
         let id = value_as_str(&post, "id")?;
         let id = match id.parse::<i64>() {
             Ok(id) => id,
@@ -190,7 +260,7 @@ impl PostProcessor {
             }
         };
         post["id"] = Value::Number(serde_json::Number::from(id));
-        post["mblogid"] = Value::String(mblogid.to_owned());
+        post["mblogid"] = post["bid"].take();
         post["text_raw"] = post["text"].to_owned();
         if post["pics"].is_array() {
             if let Value::Array(pics) = post["pics"].take() {
@@ -219,23 +289,7 @@ impl PostProcessor {
                 .unwrap();
             }
         }
-        if post["retweeted_status"].is_object() {
-            let bid = value_as_str(&post["retweeted_status"], "bid")?;
-            post["retweeted_status"]["mblogid"] = Value::String(bid.to_owned());
-            let id = value_as_str(&post["retweeted_status"], "id")?;
-            let id = match id.parse::<i64>() {
-                Ok(id) => id,
-                Err(e) => {
-                    return Err(Error::MalFormat(format!(
-                        "failed to parse retweet id {id}: {e}"
-                    )))
-                }
-            };
-            post["retweeted_status"]["id"] = Value::Number(serde_json::Number::from(id));
-            post["retweeted_status"]["text_raw"] = post["retweeted_status"]["text"].to_owned();
-        }
-
-        Ok(post)
+        Ok(())
     }
 
     async fn get_pic(&self, url: &str) -> Result<Bytes> {
@@ -251,6 +305,14 @@ impl PostProcessor {
     }
 
     fn extract_pics_from_post(&self, post: &Post) -> Vec<String> {
+        let mut res = self.extract_pics_from_post_non_rec(post);
+        if post["retweeted_status"].is_object() {
+            res.append(&mut self.extract_pics_from_post_non_rec(&post["retweeted_status"]));
+        }
+        res
+    }
+
+    fn extract_pics_from_post_non_rec(&self, post: &Post) -> Vec<String> {
         if let Value::Array(pic_ids) = &post["pic_ids"] {
             if pic_ids.len() > 0 {
                 let pic_infos = &post["pic_infos"];
@@ -294,7 +356,7 @@ impl PostProcessor {
         pic_urls: &mut HashSet<String>,
         resource_dir: &Path,
     ) -> Result<()> {
-        let urls = self.extract_pics_from_post(post);
+        let urls = self.extract_pics_from_post_non_rec(post);
         let pic_locs: Vec<_> = urls
             .iter()
             .map(|url| resource_dir.join(pic_url_to_file(url)))
@@ -445,4 +507,32 @@ impl PostProcessor {
             + url_title
             + "</a>"
     }
+}
+
+fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
+    if let Some(s) = v[property].as_str() {
+        Ok(s)
+    } else {
+        Err(Error::MalFormat(format!(
+            "property {} of {} cannot convert to str",
+            property,
+            v.to_string(),
+        )))
+    }
+}
+
+fn value_as_i64<'a>(v: &'a Value, property: &'a str) -> Result<i64> {
+    if let Some(s) = v[property].as_i64() {
+        Ok(s)
+    } else {
+        Err(Error::MalFormat(format!(
+            "property {} of {} cannot convert to i64",
+            property,
+            v.to_string(),
+        )))
+    }
+}
+
+fn extract_urls(text: &str) -> Vec<&str> {
+    URL_EXPR.find_iter(text).map(|m| m.as_str()).collect()
 }
