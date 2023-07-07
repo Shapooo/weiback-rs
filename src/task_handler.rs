@@ -45,8 +45,10 @@ impl TaskHandler {
             self.processer.get_web_total_num(),
             self.processer.get_db_total_num()
         );
-        *self.task_status.write().unwrap() =
-            TaskStatus::Info(format!("{}  {}", web_total?, db_total?));
+        *self.task_status.write().unwrap() = TaskStatus::Info(format!(
+            "账号共 {} 条收藏\n本地保存有 {} 条收藏",
+            web_total?, db_total?
+        ));
         Ok(())
     }
 
