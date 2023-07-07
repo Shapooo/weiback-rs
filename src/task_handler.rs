@@ -16,6 +16,8 @@ use crate::web_fetcher::WebFetcher;
 
 const SAVING_PERIOD: usize = 200;
 
+static mut POSTS_TOTAL: u64 = 0;
+
 #[derive(Debug)]
 pub struct TaskHandler {
     exporter: Exporter,
@@ -45,9 +47,13 @@ impl TaskHandler {
             self.processer.get_web_total_num(),
             self.processer.get_db_total_num()
         );
+        let web_total = web_total?;
+        unsafe {
+            POSTS_TOTAL = web_total;
+        }
         *self.task_status.write().unwrap() = TaskStatus::Info(format!(
             "账号共 {} 条收藏\n本地保存有 {} 条收藏",
-            web_total?, db_total?
+            web_total, db_total?
         ));
         Ok(())
     }
@@ -95,6 +101,12 @@ impl TaskHandler {
                     .export_page(&subtask_name, html, &target_dir)
                     .await?;
             }
+            let _ = self.task_status.try_write().map(|mut op| {
+                *op = TaskStatus::InProgress(
+                    local_posts.len() as f32 / posts_sum as f32,
+                    "导出中...可能需要下载图片".into(),
+                )
+            });
             index += 1;
         }
         *self.task_status.write().unwrap() = TaskStatus::Finished;
@@ -115,7 +127,12 @@ impl TaskHandler {
         assert!(range.start() != &0);
         info!("pages download range is {range:?}");
         let mut total_posts_sum: usize = 0;
-        let end = *range.end();
+        let end = if *range.end() == u32::MAX {
+            (unsafe { POSTS_TOTAL }) as f32
+        } else {
+            unsafe { POSTS_TOTAL }.min(*range.end() as u64 * 20) as f32
+        };
+
         for (i, page) in range.enumerate() {
             let posts_sum = self
                 .processer
@@ -128,10 +145,10 @@ impl TaskHandler {
                 break;
             }
 
-            let _ = self
-                .task_status
-                .try_write()
-                .map(|mut pro| *pro = TaskStatus::InProgress(i as f32 / end as f32, "".into()));
+            let _ = self.task_status.try_write().map(|mut pro| {
+                *pro =
+                    TaskStatus::InProgress(i as f32 / end, "下载中...耐心等待，先干点别的".into())
+            });
             sleep(Duration::from_secs(5)).await;
         }
         info!("fetched {total_posts_sum} posts in total");

@@ -106,6 +106,7 @@ impl eframe::App for Gui {
                     self.message = msg.to_owned()
                 }
                 TaskStatus::Finished => {
+                    self.ratio = 1.;
                     self.task_ongoing = false;
                 }
                 TaskStatus::Error(msg) => {
