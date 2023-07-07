@@ -60,6 +60,7 @@ struct Gui {
     tab_type: TabType,
     with_pic: bool,
     task_ongoing: bool,
+    reverse: bool,
     period: u32,
     executor: Executor,
     ratio: f32,
@@ -84,6 +85,7 @@ impl Gui {
             tab_type: TabType::DownloadPosts,
             with_pic: true,
             task_ongoing: false,
+            reverse: true,
             period: 50,
             ratio: 0.0,
             executor,
@@ -159,6 +161,8 @@ impl eframe::App for Gui {
                     if self.tab_type == TabType::DownloadPosts {
                         ui.checkbox(&mut self.with_pic, "同时下载图片");
                     } else {
+                        ui.checkbox(&mut self.reverse, "按时间逆序")
+                            .on_hover_text("时间逆序即最上方的微博为最新的微博");
                     }
                     ui.collapsing("高级设置", |ui| {
                         ui.horizontal(|ui| {
@@ -199,7 +203,7 @@ impl eframe::App for Gui {
                             self.executor.download_posts(start..=end, self.with_pic);
                         }
                         TabType::ExportFromLocal => {
-                            self.executor.export_from_local(start..=end, false);
+                            self.executor.export_from_local(start..=end, self.reverse);
                         }
                         _ => {}
                     }
