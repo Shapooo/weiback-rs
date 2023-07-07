@@ -7,7 +7,6 @@ use log::{debug, error, info};
 use tokio::time::sleep;
 
 use crate::config::Config;
-use crate::data::Posts;
 use crate::error::Result;
 use crate::exporter::Exporter;
 use crate::message::TaskStatus;
@@ -51,21 +50,6 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn download_meta_only(&self, range: RangeInclusive<u32>) {
-        info!("downloading posts meta data...");
-        self._download_posts(range, false, false).await;
-    }
-
-    pub async fn download_with_pic(&self, range: RangeInclusive<u32>) {
-        info!("download posts with pics...");
-        self._download_posts(range, true, false).await;
-    }
-
-    pub async fn export_from_net(&self, range: RangeInclusive<u32>) {
-        info!("download posts with pic, and export...");
-        self._download_posts(range, true, true).await;
-    }
-
     pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) {
         info!("fetch posts from local and export");
         match self._export_from_local(range, reverse).await {
@@ -81,31 +65,42 @@ impl TaskHandler {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
-        let mut post_acc = Vec::new();
-        let local_posts = self.processer.get_fav_post_from_db(range, reverse).await?;
+        let mut local_posts = self
+            .processer
+            .load_fav_posts_from_db(range, reverse)
+            .await?;
         let posts_sum = local_posts.len();
         debug!("fetched {} posts from local", posts_sum);
-        for (i, post) in local_posts.into_iter().enumerate() {
-            post_acc.push(post);
-            if i % SAVING_PERIOD == SAVING_PERIOD - 1 || i == posts_sum - 1 {
-                let subtask_name = format!("weiback-{}", (i + SAVING_PERIOD - 1) / SAVING_PERIOD);
+
+        let mut index = 1;
+        loop {
+            let subtask_name = format!("weiback-{index}");
+            if local_posts.len() < SAVING_PERIOD {
                 let html = self
                     .processer
-                    .generate_html(post_acc, &subtask_name)
+                    .generate_html(local_posts, &subtask_name)
                     .await?;
-                post_acc = Vec::new();
-
+                self.exporter
+                    .export_page(&subtask_name, html, &target_dir)
+                    .await?;
+                break;
+            } else {
+                let html = self
+                    .processer
+                    .generate_html(local_posts.split_off(SAVING_PERIOD), &subtask_name)
+                    .await?;
                 self.exporter
                     .export_page(&subtask_name, html, &target_dir)
                     .await?;
             }
+            index += 1;
         }
         *self.task_status.write().unwrap() = TaskStatus::Finished;
         Ok(())
     }
 
-    async fn _download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, export: bool) {
-        match self.__download_posts(range, with_pic, export).await {
+    pub async fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool) {
+        match self._download_posts(range, with_pic).await {
             Err(err) => {
                 error!("{err}");
                 *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
@@ -114,26 +109,16 @@ impl TaskHandler {
         }
     }
 
-    async fn __download_posts(
-        &self,
-        range: RangeInclusive<u32>,
-        with_pic: bool,
-        export: bool,
-    ) -> Result<()> {
-        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
-        let target_dir = std::env::current_dir().unwrap().join(task_name);
-
+    async fn _download_posts(&self, range: RangeInclusive<u32>, with_pic: bool) -> Result<()> {
         assert!(range.start() != &0);
         info!("pages download range is {range:?}");
-        let mut total_posts_sum = 0;
-        let mut posts_acc = Posts::new();
+        let mut total_posts_sum: usize = 0;
         let end = *range.end();
         for (i, page) in range.enumerate() {
-            let mut posts = self
+            let posts_sum = self
                 .processer
-                .get_fav_posts_from_web(self.config.uid.as_str(), page)
+                .download_fav_posts(self.config.uid.as_str(), page, with_pic)
                 .await?;
-            let posts_sum = posts.len();
             total_posts_sum += posts_sum;
             debug!("fetched {} posts in {}th page", posts_sum, page);
             if posts_sum == 0 {
@@ -141,24 +126,6 @@ impl TaskHandler {
                 break;
             }
 
-            if with_pic && !export {
-                self.processer.save_post_pictures(posts).await?
-            } else if export {
-                posts_acc.append(&mut posts);
-                if i % SAVING_PERIOD == SAVING_PERIOD - 1 || posts_sum == 0 {
-                    let subtask_name = format!("weiback-{}", page);
-                    self.exporter
-                        .export_page(
-                            &subtask_name,
-                            self.processer
-                                .generate_html(posts_acc, &subtask_name)
-                                .await?,
-                            &target_dir,
-                        )
-                        .await?;
-                    posts_acc = Posts::new();
-                }
-            }
             let _ = self
                 .task_status
                 .try_write()

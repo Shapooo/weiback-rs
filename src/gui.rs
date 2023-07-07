@@ -69,8 +69,8 @@ struct Gui {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum TaskType {
-    FromWeb,
-    FromLocal,
+    DownloadPosts,
+    ExportFromLocal,
 }
 
 impl Gui {
@@ -81,7 +81,7 @@ impl Gui {
             start_page: Default::default(),
             end_page: Default::default(),
             message: Default::default(),
-            task_type: TaskType::FromWeb,
+            task_type: TaskType::DownloadPosts,
             with_pic: true,
             export: true,
             task_ongoing: false,
@@ -123,10 +123,14 @@ impl eframe::App for Gui {
             ui.group(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.task_type, TaskType::FromWeb, "从网络下载");
-                    ui.selectable_value(&mut self.task_type, TaskType::FromLocal, "从本地导出");
+                    ui.selectable_value(&mut self.task_type, TaskType::DownloadPosts, "从网络下载");
+                    ui.selectable_value(
+                        &mut self.task_type,
+                        TaskType::ExportFromLocal,
+                        "从本地导出",
+                    );
                 });
-                if self.task_type == TaskType::FromWeb {
+                if self.task_type == TaskType::DownloadPosts {
                     let old_with_pic = self.with_pic;
                     ui.checkbox(&mut self.with_pic, "附带图片");
                     ui.checkbox(&mut self.export, "导出");
@@ -156,22 +160,16 @@ impl eframe::App for Gui {
                 });
             });
             let start = self.start_page.parse::<u32>().unwrap_or(1);
-            let end = self.end_page.parse::<u32>().unwrap_or(5);
+            let end = self.end_page.parse::<u32>().unwrap_or(u32::MAX);
             ui.vertical_centered(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 if ui.button("开始").clicked() {
                     self.task_ongoing = true;
                     match self.task_type {
-                        TaskType::FromWeb => {
-                            if self.export {
-                                self.executor.export_from_net(start..=end);
-                            } else if self.with_pic {
-                                self.executor.download_with_pic(start..=end);
-                            } else {
-                                self.executor.download_meta(start..=end);
-                            }
+                        TaskType::DownloadPosts => {
+                            self.executor.download_posts(start..=end, self.with_pic);
                         }
-                        TaskType::FromLocal => {
+                        TaskType::ExportFromLocal => {
                             self.executor.export_from_local(start..=end, false);
                         }
                     }

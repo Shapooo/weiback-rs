@@ -2,9 +2,7 @@ use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone)]
 pub enum Task {
-    DownloadMeta(RangeInclusive<u32>),
-    DownloadWithPic(RangeInclusive<u32>),
-    ExportFromNet(RangeInclusive<u32>),
+    DownloadPosts(RangeInclusive<u32>, bool),
     ExportFromLocal(RangeInclusive<u32>, bool),
 }
 

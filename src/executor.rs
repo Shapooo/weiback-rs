@@ -33,9 +33,9 @@ impl Executor {
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
-                        Task::DownloadMeta(range) => th.download_meta_only(range).await,
-                        Task::DownloadWithPic(range) => th.download_with_pic(range).await,
-                        Task::ExportFromNet(range) => th.export_from_net(range).await,
+                        Task::DownloadPosts(range, with_pic) => {
+                            th.download_posts(range, with_pic).await
+                        }
                         Task::ExportFromLocal(range, rev) => th.export_from_local(range, rev).await,
                     }
                 }
@@ -48,25 +48,13 @@ impl Executor {
         }
     }
 
-    pub fn download_meta(&self, range: RangeInclusive<u32>) {
+    pub fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool) {
         debug!("send task: download meta");
         self.rt
-            .block_on(self.tx.send(Task::DownloadMeta(range)))
+            .block_on(self.tx.send(Task::DownloadPosts(range, with_pic)))
             .unwrap();
     }
 
-    pub fn download_with_pic(&self, range: RangeInclusive<u32>) {
-        debug!("send task: download with pic");
-        self.rt
-            .block_on(self.tx.send(Task::DownloadWithPic(range)))
-            .unwrap();
-    }
-    pub fn export_from_net(&self, range: RangeInclusive<u32>) {
-        debug!("send task: download and export");
-        self.rt
-            .block_on(self.tx.send(Task::ExportFromNet(range)))
-            .unwrap();
-    }
     pub fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) {
         debug!("send task: export from local");
         self.rt

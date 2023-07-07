@@ -54,7 +54,7 @@ impl PostProcessor {
         Ok(())
     }
 
-    pub async fn get_fav_posts_from_web(&self, uid: &str, page: u32) -> Result<Posts> {
+    pub async fn download_fav_posts(&self, uid: &str, page: u32, with_pic: bool) -> Result<usize> {
         let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
         let posts = join_all(posts.into_iter().map(|post| async {
             let post = self.preprocess_post(post).await?;
