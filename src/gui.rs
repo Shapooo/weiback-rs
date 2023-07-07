@@ -57,9 +57,8 @@ struct Gui {
     start_page: String,
     end_page: String,
     message: String,
-    task_type: TaskType,
+    tab_type: TabType,
     with_pic: bool,
-    export: bool,
     task_ongoing: bool,
     period: u32,
     executor: Executor,
@@ -68,9 +67,10 @@ struct Gui {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum TaskType {
+enum TabType {
     DownloadPosts,
     ExportFromLocal,
+    About,
 }
 
 impl Gui {
@@ -81,11 +81,10 @@ impl Gui {
             start_page: Default::default(),
             end_page: Default::default(),
             message: Default::default(),
-            task_type: TaskType::DownloadPosts,
+            tab_type: TabType::DownloadPosts,
             with_pic: true,
-            export: true,
             task_ongoing: false,
-            period: 10,
+            period: 50,
             ratio: 0.0,
             executor,
             task_status,
@@ -123,41 +122,70 @@ impl eframe::App for Gui {
             ui.group(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.task_type, TaskType::DownloadPosts, "从网络下载");
                     ui.selectable_value(
-                        &mut self.task_type,
-                        TaskType::ExportFromLocal,
-                        "从本地导出",
+                        &mut self.tab_type,
+                        TabType::DownloadPosts,
+                        "   从网络下载   ",
                     );
+                    ui.selectable_value(
+                        &mut self.tab_type,
+                        TabType::ExportFromLocal,
+                        "   从本地导出   ",
+                    );
+                    ui.selectable_value(&mut self.tab_type, TabType::About, "        关于        ");
                 });
-                if self.task_type == TaskType::DownloadPosts {
-                    let old_with_pic = self.with_pic;
-                    ui.checkbox(&mut self.with_pic, "附带图片");
-                    ui.checkbox(&mut self.export, "导出");
-                    if !self.with_pic && self.export {
-                        if old_with_pic {
-                            self.export = false;
-                        } else {
-                            self.with_pic = true;
-                        }
-                    }
-                }
 
-                ui.collapsing("高级设置", |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("下载范围：");
-                        // ui.text_edit_singleline(&mut self.start_page);
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.start_page).desired_width(50.0),
-                        )
-                        .on_hover_text("testtest");
-                        ui.label("-");
-                        // ui.text_edit_singleline(&mut self.end_page);
-                        ui.add(egui::TextEdit::singleline(&mut self.end_page).desired_width(50.0))
-                            .on_hover_text("testtest");
+                if self.tab_type == TabType::About {
+                    use egui::special_emojis;
+                    ui.heading("WeiBack-rs");
+                    ui.label("WeiBack-rs 是一个开源微博备份工具。");
+                    ui.label(format!(
+                        "SUPPORTED PLATFORM: {} Linux/{} Windows",
+                        special_emojis::OS_LINUX,
+                        special_emojis::OS_WINDOWS
+                    ));
+                    ui.label(format!(
+                        "You can build by yourself on {} macOS",
+                        special_emojis::OS_APPLE
+                    ));
+                    ui.label("AUTHER: Shapooo");
+                    ui.label("LICENSE: MIT");
+                    ui.hyperlink_to(
+                        format!("{} REPOSITORY LINK", special_emojis::GITHUB),
+                        "https://github.com/shapooo/weiback-rs",
+                    );
+                } else {
+                    if self.tab_type == TabType::DownloadPosts {
+                        ui.checkbox(&mut self.with_pic, "同时下载图片");
+                    } else {
+                    }
+                    ui.collapsing("高级设置", |ui| {
+                        ui.horizontal(|ui| {
+                            let hint = if self.tab_type == TabType::DownloadPosts {
+                                ui.label("下载范围：");
+                                "范围的单位为页，微博以页为单位返回\n每页大概15-20条博文"
+                            } else {
+                                ui.label("导出范围：");
+                                "导出单位为条，按时间顺序排序，可选正序或逆序"
+                            };
+
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.start_page)
+                                    .desired_width(50.0),
+                            )
+                            .on_hover_text(hint);
+                            ui.label("-");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.end_page).desired_width(50.0),
+                            )
+                            .on_hover_text(hint);
+                        });
+                        if self.tab_type == TabType::ExportFromLocal {
+                            ui.add(egui::Slider::new(&mut self.period, 10..=200).text("每页"))
+                                .on_hover_text("导出时默认50条博文分割为一个html文件");
+                        }
                     });
-                    ui.add(egui::Slider::new(&mut self.period, 1..=20).text("每页"));
-                });
+                }
             });
             let start = self.start_page.parse::<u32>().unwrap_or(1);
             let end = self.end_page.parse::<u32>().unwrap_or(u32::MAX);
@@ -165,13 +193,14 @@ impl eframe::App for Gui {
                 ui.set_enabled(!self.task_ongoing);
                 if ui.button("开始").clicked() {
                     self.task_ongoing = true;
-                    match self.task_type {
-                        TaskType::DownloadPosts => {
+                    match self.tab_type {
+                        TabType::DownloadPosts => {
                             self.executor.download_posts(start..=end, self.with_pic);
                         }
-                        TaskType::ExportFromLocal => {
+                        TabType::ExportFromLocal => {
                             self.executor.export_from_local(start..=end, false);
                         }
+                        _ => {}
                     }
                 }
             });
