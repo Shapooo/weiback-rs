@@ -58,9 +58,17 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) {
+    pub async fn export_from_local(
+        &self,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+        image_definition: u8,
+    ) {
         info!("fetch posts from local and export");
-        match self._export_from_local(range, reverse).await {
+        match self
+            ._export_from_local(range, reverse, image_definition)
+            .await
+        {
             Err(err) => {
                 error!("{err}");
                 *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
@@ -69,7 +77,12 @@ impl TaskHandler {
         }
     }
 
-    async fn _export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<()> {
+    async fn _export_from_local(
+        &self,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+        image_definition: u8,
+    ) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
@@ -86,7 +99,7 @@ impl TaskHandler {
             if local_posts.len() < SAVING_PERIOD {
                 let html = self
                     .processer
-                    .generate_html(local_posts, &subtask_name)
+                    .generate_html(local_posts, &subtask_name, image_definition)
                     .await?;
                 self.exporter
                     .export_page(&subtask_name, html, &target_dir)
@@ -95,7 +108,11 @@ impl TaskHandler {
             } else {
                 let html = self
                     .processer
-                    .generate_html(local_posts.split_off(SAVING_PERIOD), &subtask_name)
+                    .generate_html(
+                        local_posts.split_off(SAVING_PERIOD),
+                        &subtask_name,
+                        image_definition,
+                    )
                     .await?;
                 self.exporter
                     .export_page(&subtask_name, html, &target_dir)
@@ -113,8 +130,16 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool) {
-        match self._download_posts(range, with_pic).await {
+    pub async fn download_posts(
+        &self,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) {
+        match self
+            ._download_posts(range, with_pic, image_definition)
+            .await
+        {
             Err(err) => {
                 error!("{err}");
                 *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
@@ -123,7 +148,12 @@ impl TaskHandler {
         }
     }
 
-    async fn _download_posts(&self, range: RangeInclusive<u32>, with_pic: bool) -> Result<()> {
+    async fn _download_posts(
+        &self,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<()> {
         assert!(range.start() != &0);
         info!("pages download range is {range:?}");
         let mut total_posts_sum: usize = 0;
@@ -136,7 +166,7 @@ impl TaskHandler {
         for (i, page) in range.enumerate() {
             let posts_sum = self
                 .processer
-                .download_fav_posts(self.config.uid.as_str(), page, with_pic)
+                .download_fav_posts(self.config.uid.as_str(), page, with_pic, image_definition)
                 .await?;
             total_posts_sum += posts_sum;
             debug!("fetched {} posts in {}th page", posts_sum, page);

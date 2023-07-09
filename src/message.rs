@@ -2,8 +2,8 @@ use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone)]
 pub enum Task {
-    DownloadPosts(RangeInclusive<u32>, bool),
-    ExportFromLocal(RangeInclusive<u32>, bool),
+    DownloadPosts(RangeInclusive<u32>, bool, u8),
+    ExportFromLocal(RangeInclusive<u32>, bool, u8),
 }
 
 #[derive(Debug, Clone)]

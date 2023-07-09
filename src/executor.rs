@@ -33,10 +33,12 @@ impl Executor {
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
-                        Task::DownloadPosts(range, with_pic) => {
-                            th.download_posts(range, with_pic).await
+                        Task::DownloadPosts(range, with_pic, image_definition) => {
+                            th.download_posts(range, with_pic, image_definition).await
                         }
-                        Task::ExportFromLocal(range, rev) => th.export_from_local(range, rev).await,
+                        Task::ExportFromLocal(range, rev, image_definition) => {
+                            th.export_from_local(range, rev, image_definition).await
+                        }
                     }
                 }
                 Ok::<(), anyhow::Error>(())
@@ -48,17 +50,28 @@ impl Executor {
         }
     }
 
-    pub fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool) {
+    pub fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
         debug!("send task: download meta");
         self.rt
-            .block_on(self.tx.send(Task::DownloadPosts(range, with_pic)))
+            .block_on(
+                self.tx
+                    .send(Task::DownloadPosts(range, with_pic, image_definition)),
+            )
             .unwrap();
     }
 
-    pub fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool) {
+    pub fn export_from_local(
+        &self,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+        image_definition: u8,
+    ) {
         debug!("send task: export from local");
         self.rt
-            .block_on(self.tx.send(Task::ExportFromLocal(range, reverse)))
+            .block_on(
+                self.tx
+                    .send(Task::ExportFromLocal(range, reverse, image_definition)),
+            )
             .unwrap();
     }
 }

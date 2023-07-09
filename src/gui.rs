@@ -61,6 +61,7 @@ struct Gui {
     with_pic: bool,
     task_ongoing: bool,
     reverse: bool,
+    image_definition: u8,
     period: u32,
     executor: Executor,
     ratio: f32,
@@ -86,6 +87,7 @@ impl Gui {
             with_pic: true,
             task_ongoing: false,
             reverse: true,
+            image_definition: 2,
             period: 50,
             ratio: 0.0,
             executor,
@@ -158,6 +160,12 @@ impl eframe::App for Gui {
                         "https://github.com/shapooo/weiback-rs",
                     );
                 } else {
+                    ui.horizontal(|ui| {
+                        ui.label("图片清晰度：");
+                        ui.selectable_value(&mut self.image_definition, 0, "最低");
+                        ui.selectable_value(&mut self.image_definition, 1, "中等");
+                        ui.selectable_value(&mut self.image_definition, 2, "最高");
+                    });
                     if self.tab_type == TabType::DownloadPosts {
                         ui.checkbox(&mut self.with_pic, "同时下载图片");
                     } else {
@@ -200,10 +208,18 @@ impl eframe::App for Gui {
                     self.task_ongoing = true;
                     match self.tab_type {
                         TabType::DownloadPosts => {
-                            self.executor.download_posts(start..=end, self.with_pic);
+                            self.executor.download_posts(
+                                start..=end,
+                                self.with_pic,
+                                self.image_definition,
+                            );
                         }
                         TabType::ExportFromLocal => {
-                            self.executor.export_from_local(start..=end, self.reverse);
+                            self.executor.export_from_local(
+                                start..=end,
+                                self.reverse,
+                                self.image_definition,
+                            );
                         }
                         _ => {}
                     }

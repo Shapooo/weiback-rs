@@ -29,6 +29,33 @@ lazy_static! {
     static ref TOPIC_EXPR: Regex = Regex::new(r#"#([^#]+)#"#).unwrap();
 }
 
+const IMG_TYPES: &[&[&'static str; 6]; 3] = &[
+    &[
+        "thunmnail",
+        "bmiddle",
+        "large",
+        "original",
+        "largest",
+        "mw2000",
+    ],
+    &[
+        "large",
+        "original",
+        "bmiddle",
+        "largest",
+        "thumbnail",
+        "mw2000",
+    ],
+    &[
+        "mw2000",
+        "largest",
+        "original",
+        "large",
+        "bmiddle",
+        "thumbnail",
+    ],
+];
+
 #[derive(Debug)]
 pub struct PostProcessor {
     html_generator: HTMLGenerator,
@@ -54,10 +81,17 @@ impl PostProcessor {
         Ok(())
     }
 
-    pub async fn download_fav_posts(&self, uid: &str, page: u32, with_pic: bool) -> Result<usize> {
+    pub async fn download_fav_posts(
+        &self,
+        uid: &str,
+        page: u32,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<usize> {
         let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
         let result = posts.len();
-        self.persist_posts(posts, with_pic).await?;
+        self.persist_posts(posts, with_pic, image_definition)
+            .await?;
         Ok(result)
     }
 
@@ -71,7 +105,12 @@ impl PostProcessor {
         self.persister.query_posts(limit, offset, reverse).await
     }
 
-    pub async fn generate_html(&self, mut posts: Posts, html_name: &str) -> Result<HTMLPage> {
+    pub async fn generate_html(
+        &self,
+        mut posts: Posts,
+        html_name: &str,
+        image_definition: u8,
+    ) -> Result<HTMLPage> {
         debug!("generate html from {} posts", posts.len());
         let mut pic_to_fetch = HashSet::new();
         posts
@@ -81,6 +120,7 @@ impl PostProcessor {
                     &mut post,
                     &mut pic_to_fetch,
                     &Path::new((Borrowed(html_name) + "_files").as_ref()),
+                    image_definition,
                 )
             })
             .collect::<Result<_>>()?;
@@ -110,7 +150,12 @@ impl PostProcessor {
 
 // Private functions
 impl PostProcessor {
-    async fn persist_posts(&self, posts: Posts, with_pic: bool) -> Result<()> {
+    async fn persist_posts(
+        &self,
+        posts: Posts,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<()> {
         let posts = join_all(
             posts
                 .into_iter()
@@ -120,12 +165,12 @@ impl PostProcessor {
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
         if with_pic {
-            self.persist_post_pictures(&posts).await?;
+            self.persist_post_pictures(&posts, image_definition).await?;
         }
         Ok(())
     }
 
-    async fn persist_post_pictures(&self, posts: &Posts) -> Result<()> {
+    async fn persist_post_pictures(&self, posts: &Posts, image_definition: u8) -> Result<()> {
         debug!("save pictures of posts to db...");
         let mut pics = posts
             .iter()
@@ -144,7 +189,7 @@ impl PostProcessor {
             .collect::<HashSet<String>>();
         posts
             .into_iter()
-            .flat_map(|post| self.extract_pics_from_post(&post))
+            .flat_map(|post| self.extract_pics_from_post(&post, image_definition))
             .for_each(|url| {
                 pics.insert(url);
             });
@@ -304,22 +349,25 @@ impl PostProcessor {
         }
     }
 
-    fn extract_pics_from_post(&self, post: &Post) -> Vec<String> {
-        let mut res = self.extract_pics_from_post_non_rec(post);
+    fn extract_pics_from_post(&self, post: &Post, image_definition: u8) -> Vec<String> {
+        let mut res = self.extract_pics_from_post_non_rec(post, image_definition);
         if post["retweeted_status"].is_object() {
-            res.append(&mut self.extract_pics_from_post_non_rec(&post["retweeted_status"]));
+            res.append(
+                &mut self
+                    .extract_pics_from_post_non_rec(&post["retweeted_status"], image_definition),
+            );
         }
         res
     }
 
-    fn extract_pics_from_post_non_rec(&self, post: &Post) -> Vec<String> {
+    fn extract_pics_from_post_non_rec(&self, post: &Post, image_definition: u8) -> Vec<String> {
         if let Value::Array(pic_ids) = &post["pic_ids"] {
             if pic_ids.len() > 0 {
                 let pic_infos = &post["pic_infos"];
                 pic_ids
                     .into_iter()
                     .filter_map(|id| id.as_str())
-                    .filter_map(|id| pic_infos[id]["mw2000"]["url"].as_str())
+                    .filter_map(|id| self.select_pic_url(&pic_infos[id], image_definition))
                     .map(|url| url.to_owned())
                     .collect()
             } else {
@@ -328,6 +376,17 @@ impl PostProcessor {
         } else {
             Default::default()
         }
+    }
+
+    fn select_pic_url<'a>(&self, pic_info: &'a Value, image_definition: u8) -> Option<&'a str> {
+        if pic_info.is_null() {
+            return None;
+        }
+        IMG_TYPES[image_definition as usize]
+            .into_iter()
+            .skip_while(|t| pic_info[t].is_string())
+            .next()
+            .and_then(|t| pic_info[t]["url"].as_str())
     }
 
     fn extract_emoji_from_text(&self, text: &str) -> Vec<String> {
@@ -342,11 +401,17 @@ impl PostProcessor {
         post: &mut Post,
         pics: &mut HashSet<String>,
         resource_dir: &Path,
+        image_definition: u8,
     ) -> Result<()> {
         if post["retweeted_status"].is_object() {
-            self.process_post_non_rec(&mut post["retweeted_status"], pics, resource_dir)?;
+            self.process_post_non_rec(
+                &mut post["retweeted_status"],
+                pics,
+                resource_dir,
+                image_definition,
+            )?;
         }
-        self.process_post_non_rec(post, pics, resource_dir)?;
+        self.process_post_non_rec(post, pics, resource_dir, image_definition)?;
         Ok(())
     }
 
@@ -355,8 +420,9 @@ impl PostProcessor {
         post: &mut Post,
         pic_urls: &mut HashSet<String>,
         resource_dir: &Path,
+        image_definition: u8,
     ) -> Result<()> {
-        let urls = self.extract_pics_from_post_non_rec(post);
+        let urls = self.extract_pics_from_post_non_rec(post, image_definition);
         let pic_locs: Vec<_> = urls
             .iter()
             .map(|url| resource_dir.join(pic_url_to_file(url)))
@@ -374,9 +440,14 @@ impl PostProcessor {
         let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
-        if post["user"]["avatar_hd"].is_string() {
-            // FIXME: avatar_hd may not exists
-            let avatar_url = value_as_str(&post["user"], "avatar_hd")?;
+        let avatar_type = match image_definition {
+            0 => "profile_image_url",
+            1 => "avatar_large",
+            2 => "avatar_hd",
+            _ => unreachable!(),
+        };
+        if post["user"][avatar_type].is_string() {
+            let avatar_url = value_as_str(&post["user"], avatar_type)?;
             pic_urls.insert(avatar_url.into());
             let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
             post["poster_avatar"] = to_value(avatar_loc).unwrap();
