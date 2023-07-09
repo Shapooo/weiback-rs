@@ -364,12 +364,16 @@ impl PostProcessor {
         if let Value::Array(pic_ids) = &post["pic_ids"] {
             if pic_ids.len() > 0 {
                 let pic_infos = &post["pic_infos"];
-                pic_ids
+                let mut pic_urls: Vec<_> = pic_ids
                     .into_iter()
                     .filter_map(|id| id.as_str())
                     .filter_map(|id| self.select_pic_url(&pic_infos[id], image_definition))
                     .map(|url| url.to_owned())
-                    .collect()
+                    .collect();
+                if let Some(avatar_url) = self.get_avatar_url(post, image_definition) {
+                    pic_urls.push(avatar_url.to_owned());
+                }
+                pic_urls
             } else {
                 Default::default()
             }
@@ -415,6 +419,16 @@ impl PostProcessor {
         Ok(())
     }
 
+    fn get_avatar_url<'a>(&self, post: &'a Value, image_definition: u8) -> Option<&'a str> {
+        let avatar_type = match image_definition {
+            0 => "profile_image_url",
+            1 => "avatar_large",
+            2 => "avatar_hd",
+            _ => unreachable!(),
+        };
+        post["user"][avatar_type].as_str()
+    }
+
     fn process_post_non_rec(
         &self,
         post: &mut Post,
@@ -440,14 +454,7 @@ impl PostProcessor {
         let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
         trace!("conv {} to {}", text_raw, &text);
         post["text_raw"] = to_value(text).unwrap();
-        let avatar_type = match image_definition {
-            0 => "profile_image_url",
-            1 => "avatar_large",
-            2 => "avatar_hd",
-            _ => unreachable!(),
-        };
-        if post["user"][avatar_type].is_string() {
-            let avatar_url = value_as_str(&post["user"], avatar_type)?;
+        if let Some(avatar_url) = self.get_avatar_url(post, image_definition) {
             pic_urls.insert(avatar_url.into());
             let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
             post["poster_avatar"] = to_value(avatar_loc).unwrap();
