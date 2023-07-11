@@ -14,6 +14,8 @@ pub enum Error {
     MalFormat(String),
     #[error("resource download failed {0}")]
     ResourceGetFailed(&'static str),
+    #[error("invalid cookie {0}")]
+    InvalidCookie(#[from] reqwest::header::InvalidHeaderValue),
     #[error("unexpected error {0}")]
     UnexpectedError(&'static str),
     #[error("resource not in local")]

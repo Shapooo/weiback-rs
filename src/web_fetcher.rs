@@ -25,16 +25,16 @@ pub struct WebFetcher {
 }
 
 impl WebFetcher {
-    pub fn new(web_cookie: String, mobile_cookie: Option<String>) -> Self {
+    pub fn from_cookies(web_cookie: String, mobile_cookie: Option<String>) -> Result<Self> {
+        let web_cookie = HeaderValue::try_from(web_cookie)?;
+        let mobile_cookie =
+            mobile_cookie.map_or(Ok(None), |cookie| HeaderValue::try_from(cookie).map(Some))?;
         let web_headers = HeaderMap::from_iter(
             [(
                 header::ACCEPT,
                 HeaderValue::from_static("application/json, text/plain, */*")
             ),
-             (
-                 header::COOKIE,
-                 HeaderValue::from_str(web_cookie.as_str()).unwrap(),
-             ),
+             (header::COOKIE, web_cookie),
              (header::REFERER, HeaderValue::from_static("https://weibo.com/")),
              (
                  header::USER_AGENT,
@@ -107,7 +107,7 @@ impl WebFetcher {
 
         let mobile_client = mobile_cookie.map(|cookie| {
             let mobile_headers = HeaderMap::from_iter([
-                (header::COOKIE, HeaderValue::try_from(cookie).unwrap()),
+                (header::COOKIE, cookie),
                 (
                     header::ACCEPT,
                     HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
@@ -153,11 +153,11 @@ impl WebFetcher {
             client
         });
 
-        return WebFetcher {
+        Ok(WebFetcher {
             web_client,
             pic_client,
             mobile_client,
-        };
+        })
     }
 
     async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {

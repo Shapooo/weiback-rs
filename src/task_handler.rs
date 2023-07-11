@@ -28,10 +28,10 @@ pub struct TaskHandler {
 
 impl TaskHandler {
     pub fn new(config: Config, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
-        let fetcher = WebFetcher::new(
+        let fetcher = WebFetcher::from_cookies(
             config.web_cookie.clone(),
             (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
-        );
+        )?;
         let persister = Persister::new(&config.db)?;
         Ok(TaskHandler {
             exporter: Exporter::new(),
