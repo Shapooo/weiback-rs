@@ -588,27 +588,19 @@ impl PostProcessor {
 }
 
 fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
-    if let Some(s) = v[property].as_str() {
-        Ok(s)
-    } else {
-        Err(Error::MalFormat(format!(
-            "property {} of {} cannot convert to str",
-            property,
-            v.to_string(),
-        )))
-    }
+    v[property].as_str().ok_or(Error::MalFormat(format!(
+        "property {} of {} cannot convert to str",
+        property,
+        v.to_string(),
+    )))
 }
 
 fn value_as_i64<'a>(v: &'a Value, property: &'a str) -> Result<i64> {
-    if let Some(s) = v[property].as_i64() {
-        Ok(s)
-    } else {
-        Err(Error::MalFormat(format!(
-            "property {} of {} cannot convert to i64",
-            property,
-            v.to_string(),
-        )))
-    }
+    v[property].as_i64().ok_or(Error::MalFormat(format!(
+        "property {} of {} cannot convert to i64",
+        property,
+        v.to_string(),
+    )))
 }
 
 fn extract_urls(text: &str) -> Vec<&str> {
