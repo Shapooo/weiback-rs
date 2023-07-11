@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use log::{debug, trace};
 use reqwest::{
-    header::{self, HeaderMap, HeaderValue},
+    header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response,
 };
 use serde_json::Value;
@@ -26,116 +26,133 @@ pub struct WebFetcher {
 
 impl WebFetcher {
     pub fn new(web_cookie: String, mobile_cookie: Option<String>) -> Self {
-        let mut web_headers: HeaderMap = HeaderMap::new();
-        web_headers.insert(
-            "Accept",
-            HeaderValue::from_static("application/json, text/plain, */*"),
-        );
-        web_headers.insert(
-            "Cookie",
-            HeaderValue::from_str(web_cookie.as_str()).unwrap(),
-        );
-        web_headers.insert("Host", HeaderValue::from_static("weibo.com"));
-        web_headers.insert("Referer", HeaderValue::from_static("https://weibo.com/"));
-        web_headers.insert(
-            "User-Agent",
-            HeaderValue::from_static(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/113.0",
+        let web_headers = HeaderMap::from_iter(
+            [(
+                header::ACCEPT,
+                HeaderValue::from_static("application/json, text/plain, */*")
             ),
+             (
+                 header::COOKIE,
+                 HeaderValue::from_str(web_cookie.as_str()).unwrap(),
+             ),
+             (header::HOST, HeaderValue::from_static("weibo.com")),
+             (header::REFERER, HeaderValue::from_static("https://weibo.com/")),
+             (
+                 header::USER_AGENT,
+                 HeaderValue::from_static(
+                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/113.0",
+                 ),
+             ),
+             (
+                 header::ACCEPT_LANGUAGE,
+                 HeaderValue::from_static("en-US,en;q=0.5"),
+             ),
+             (
+                 header::ACCEPT_ENCODING,
+                 HeaderValue::from_static("gzip, deflate, br"),
+             ),
+             (
+                 HeaderName::from_static("x-requested-with"),
+                 HeaderValue::from_static("XMLHttpRequest"),
+             ),
+             (HeaderName::from_static("client-version"), HeaderValue::from_static("v2.40.55")),
+             (HeaderName::from_static("server-version"), HeaderValue::from_static("v2023.05.23.3")),
+             (header::DNT, HeaderValue::from_static("1")),
+             (header::CONNECTION, HeaderValue::from_static("keep-alive")),
+             (HeaderName::from_static("sec-fetch-dest"), HeaderValue::from_static("empty")),
+             (HeaderName::from_static("sec-fetch-mode"), HeaderValue::from_static("cors")),
+             (HeaderName::from_static("sec-fetch-site"), HeaderValue::from_static("same-origin")),
+             (header::PRAGMA, HeaderValue::from_static("no-cache")),
+             (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
+             (header::TE, HeaderValue::from_static("trailers"))]
         );
-        web_headers.insert(
-            "Accept-Language",
-            HeaderValue::from_static("en-US,en;q=0.5"),
-        );
-        web_headers.insert(
-            "Accept-Encoding",
-            HeaderValue::from_static("gzip, deflate, br"),
-        );
-        web_headers.insert(
-            "X-Requested-With",
-            HeaderValue::from_static("XMLHttpRequest"),
-        );
-        web_headers.insert("client-version", HeaderValue::from_static("v2.40.55"));
-        web_headers.insert("server-version", HeaderValue::from_static("v2023.05.23.3"));
-        web_headers.insert("DNT", HeaderValue::from_static("1"));
-        web_headers.insert("Connection", HeaderValue::from_static("keep-alive"));
-        web_headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("empty"));
-        web_headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
-        web_headers.insert("Sec-Fetch-Site", HeaderValue::from_static("same-origin"));
-        web_headers.insert("Pragma", HeaderValue::from_static("no-cache"));
-        web_headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
-        web_headers.insert("TE", HeaderValue::from_static("trailers"));
 
         let web_client = reqwest::Client::builder()
             .default_headers(web_headers)
             .build()
             .unwrap();
 
-        let mut pic_headers = HeaderMap::new();
-        pic_headers.insert(
+        let pic_headers = HeaderMap::from_iter([
+        (
             header::USER_AGENT,
             HeaderValue::from_static(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/113.0",
             ),
-        );
-        pic_headers.insert(
+        ),
+        (
             header::ACCEPT,
             HeaderValue::from_static("image/avif,image/webp,*/*"),
-        );
-        pic_headers.insert(
+        ),
+        (
             header::ACCEPT_LANGUAGE,
             HeaderValue::from_static("en-US,en;q=0.5"),
-        );
-        pic_headers.insert(
+        ),
+        (
             header::ACCEPT_ENCODING,
             HeaderValue::from_static("gzip, deflate, br"),
-        );
-        pic_headers.insert(header::DNT, HeaderValue::from_static("1"));
-        pic_headers.insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
-        pic_headers.insert(
+        ),
+        (header::DNT, HeaderValue::from_static("1")),
+        (header::CONNECTION, HeaderValue::from_static("keep-alive")),
+        (
             header::REFERER,
             HeaderValue::from_static("https://weibo.com/"),
-        );
-        pic_headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-        pic_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
-        pic_headers.insert(header::TE, HeaderValue::from_static("trailers"));
-        pic_headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("image"));
-        pic_headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("no-cors"));
-        pic_headers.insert("Sec-Fetch-Site", HeaderValue::from_static("cross-site"));
+        ),
+        (header::PRAGMA, HeaderValue::from_static("no-cache")),
+        (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
+        (header::TE, HeaderValue::from_static("trailers")),
+        (HeaderName::from_static("sec-fetch-dest"), HeaderValue::from_static("image")),
+        (HeaderName::from_static("sec-fetch-mode"), HeaderValue::from_static("no-cors")),
+        (HeaderName::from_static("sec-fetch-site"), HeaderValue::from_static("cross-site"))]);
         let pic_client = reqwest::Client::builder()
             .default_headers(pic_headers)
             .build()
             .unwrap();
 
         let mobile_client = mobile_cookie.map(|cookie| {
-            let mut mobile_headers = HeaderMap::new();
-            mobile_headers.insert("Cookie", HeaderValue::from_str(&cookie).unwrap());
-            mobile_headers.insert(
-                "Accept",
-                HeaderValue::from_static("application/json, text/plain, */*"),
-            );
-            mobile_headers.insert(
-                "Accept-Language",
-                HeaderValue::from_static("en-US,en;q=0.5"),
-            );
-            mobile_headers.insert(
-                "Accept-Encoding",
-                HeaderValue::from_static("gzip, deflate, br"),
-            );
-            mobile_headers.insert(
-                "X-Requested-With",
-                HeaderValue::from_static("XMLHttpRequest"),
-            );
-            mobile_headers.insert("client-version", HeaderValue::from_static("v2.40.57"));
-            mobile_headers.insert("server-version", HeaderValue::from_static("v2023.05.30.1"));
-            mobile_headers.insert("DNT", HeaderValue::from_static("1"));
-            mobile_headers.insert("Connection", HeaderValue::from_static("keep-alive"));
-            mobile_headers.insert("Sec-Fetch-Dest", HeaderValue::from_static("empty"));
-            mobile_headers.insert("Sec-Fetch-Mode", HeaderValue::from_static("cors"));
-            mobile_headers.insert("Sec-Fetch-Site", HeaderValue::from_static("same-origin"));
-            mobile_headers.insert("Pragma", HeaderValue::from_static("no-cache"));
-            mobile_headers.insert("Cache-Control", HeaderValue::from_static("no-cache"));
-            mobile_headers.insert("TE", HeaderValue::from_static("trailers"));
+            let mobile_headers = HeaderMap::from_iter([
+                (header::COOKIE, HeaderValue::from_str(&cookie).unwrap()),
+                (
+                    header::ACCEPT,
+                    HeaderValue::from_static("application/json, text/plain, */*"),
+                ),
+                (
+                    header::ACCEPT_LANGUAGE,
+                    HeaderValue::from_static("en-US,en;q=0.5"),
+                ),
+                (
+                    header::ACCEPT_ENCODING,
+                    HeaderValue::from_static("gzip, deflate, br"),
+                ),
+                (
+                    HeaderName::from_static("x-requested-with"),
+                    HeaderValue::from_static("XMLHttpRequest"),
+                ),
+                (header::DNT, HeaderValue::from_static("1")),
+                (header::CONNECTION, HeaderValue::from_static("keep-alive")),
+                (header::PRAGMA, HeaderValue::from_static("no-cache")),
+                (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
+                (header::TE, HeaderValue::from_static("trailers")),
+                (
+                    HeaderName::from_static("client-version"),
+                    HeaderValue::from_static("v2.40.57"),
+                ),
+                (
+                    HeaderName::from_static("server-version"),
+                    HeaderValue::from_static("v2023.05.30.1"),
+                ),
+                (
+                    HeaderName::from_static("sec-fetch-dest"),
+                    HeaderValue::from_static("empty"),
+                ),
+                (
+                    HeaderName::from_static("sec-fetch-mode"),
+                    HeaderValue::from_static("cors"),
+                ),
+                (
+                    HeaderName::from_static("sec-fetch-site"),
+                    HeaderValue::from_static("same-origin"),
+                ),
+            ]);
 
             let client = reqwest::Client::builder()
                 .default_headers(mobile_headers)
