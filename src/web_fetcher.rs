@@ -35,7 +35,6 @@ impl WebFetcher {
                  header::COOKIE,
                  HeaderValue::from_str(web_cookie.as_str()).unwrap(),
              ),
-             (header::HOST, HeaderValue::from_static("weibo.com")),
              (header::REFERER, HeaderValue::from_static("https://weibo.com/")),
              (
                  header::USER_AGENT,
@@ -97,8 +96,6 @@ impl WebFetcher {
             header::REFERER,
             HeaderValue::from_static("https://weibo.com/"),
         ),
-        (header::PRAGMA, HeaderValue::from_static("no-cache")),
-        (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
         (header::TE, HeaderValue::from_static("trailers")),
         (HeaderName::from_static("sec-fetch-dest"), HeaderValue::from_static("image")),
         (HeaderName::from_static("sec-fetch-mode"), HeaderValue::from_static("no-cors")),
@@ -110,10 +107,10 @@ impl WebFetcher {
 
         let mobile_client = mobile_cookie.map(|cookie| {
             let mobile_headers = HeaderMap::from_iter([
-                (header::COOKIE, HeaderValue::from_str(&cookie).unwrap()),
+                (header::COOKIE, HeaderValue::try_from(cookie).unwrap()),
                 (
                     header::ACCEPT,
-                    HeaderValue::from_static("application/json, text/plain, */*"),
+                    HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
                 ),
                 (
                     header::ACCEPT_LANGUAGE,
@@ -123,34 +120,28 @@ impl WebFetcher {
                     header::ACCEPT_ENCODING,
                     HeaderValue::from_static("gzip, deflate, br"),
                 ),
+                (header::UPGRADE_INSECURE_REQUESTS, HeaderValue::from_static("1")),
                 (
                     HeaderName::from_static("x-requested-with"),
                     HeaderValue::from_static("XMLHttpRequest"),
                 ),
                 (header::DNT, HeaderValue::from_static("1")),
                 (header::CONNECTION, HeaderValue::from_static("keep-alive")),
-                (header::PRAGMA, HeaderValue::from_static("no-cache")),
-                (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
-                (header::TE, HeaderValue::from_static("trailers")),
-                (
-                    HeaderName::from_static("client-version"),
-                    HeaderValue::from_static("v2.40.57"),
-                ),
-                (
-                    HeaderName::from_static("server-version"),
-                    HeaderValue::from_static("v2023.05.30.1"),
-                ),
                 (
                     HeaderName::from_static("sec-fetch-dest"),
-                    HeaderValue::from_static("empty"),
+                    HeaderValue::from_static("document"),
                 ),
                 (
                     HeaderName::from_static("sec-fetch-mode"),
-                    HeaderValue::from_static("cors"),
+                    HeaderValue::from_static("navigate"),
                 ),
                 (
                     HeaderName::from_static("sec-fetch-site"),
-                    HeaderValue::from_static("same-origin"),
+                    HeaderValue::from_static("none"),
+                ),
+                (
+                    HeaderName::from_static("sec-fetch-user"),
+                    HeaderValue::from_static("?1"),
                 ),
             ]);
 
