@@ -3,7 +3,7 @@ use log::{debug, info};
 use simple_logger::SimpleLogger;
 
 use weiback_rs::config::get_config;
-use weiback_rs::gui::WbApp;
+use weiback_rs::core::WbApp;
 
 fn main() -> Result<()> {
     SimpleLogger::new()
