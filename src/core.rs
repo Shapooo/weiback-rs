@@ -1,19 +1,21 @@
 use std::sync::{Arc, RwLock};
 
+use anyhow;
 use eframe::{
     egui::{self, vec2},
     NativeOptions,
 };
 use log::info;
 
-use crate::config::get_config;
+use crate::config::{get_config, Config};
 use crate::executor::Executor;
+use crate::login::{LoginState, Loginator};
 use crate::message::TaskStatus;
 
 pub enum MainState {
     Unlogined,
     Logining,
-    Logined,
+    Logged,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -25,8 +27,8 @@ enum TabType {
 
 pub struct Core {
     state: MainState,
-    task_status: Arc<RwLock<TaskStatus>>,
-    executor: Executor,
+    task_status: Option<Arc<RwLock<TaskStatus>>>,
+    executor: Option<Executor>,
     task_ongoing: bool,
     // variables associated with GUI
     start_page: String,
@@ -38,19 +40,19 @@ pub struct Core {
     image_definition: u8,
     period: u32,
     ratio: f32,
+    // variable associated with logining GUI
+    login_state: Option<Arc<RwLock<LoginState>>>,
+    qrcode_img: Option<egui::TextureHandle>,
 }
 
 impl Core {
     pub fn new() -> Self {
-        let config = get_config().unwrap();
-        let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-        let executor = Executor::new(config, task_status.clone());
         Self {
             state: MainState::Unlogined,
-            task_status,
-            executor,
+            task_status: None,
+            executor: None,
             task_ongoing: false,
-            // variables associated with GUI
+            // variables associated with logged GUI
             start_page: "1".into(),
             end_page: u32::MAX.to_string(),
             message: "Hello!".into(),
@@ -60,10 +62,13 @@ impl Core {
             image_definition: 2,
             period: 50,
             ratio: 0.0,
+            // variable associated with logining GUI
+            login_state: None,
+            qrcode_img: None,
         }
     }
 
-    pub fn run(self) {
+    pub fn run(self) -> anyhow::Result<()> {
         info!("starting gui...");
         eframe::run_native(
             "weiback",
@@ -76,7 +81,8 @@ impl Core {
                 Box::new(self)
             }),
         )
-        .unwrap()
+        .unwrap();
+        Ok(())
     }
 }
 
@@ -99,7 +105,7 @@ impl eframe::App for Core {
         match self.state {
             MainState::Unlogined => self.when_unlogged(ctx, _frame),
             MainState::Logining => self.when_logging(ctx, _frame),
-            MainState::Logined => self.when_logined(ctx, _frame),
+            MainState::Logged => self.when_logined(ctx, _frame),
         }
     }
 }
@@ -108,6 +114,8 @@ impl Core {
     fn when_logined(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let task_status: Option<TaskStatus> = self
             .task_status
+            .as_ref()
+            .unwrap()
             .try_read()
             .ok()
             .map(|task_status| task_status.clone());
@@ -216,14 +224,14 @@ impl Core {
                     self.task_ongoing = true;
                     match self.tab_type {
                         TabType::DownloadPosts => {
-                            self.executor.download_posts(
+                            self.executor.as_ref().unwrap().download_posts(
                                 start..=end,
                                 self.with_pic,
                                 self.image_definition,
                             );
                         }
                         TabType::ExportFromLocal => {
-                            self.executor.export_from_local(
+                            self.executor.as_ref().unwrap().export_from_local(
                                 start..=end,
                                 self.reverse,
                                 self.image_definition,
@@ -240,7 +248,86 @@ impl Core {
         });
     }
 
-    fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {}
+    fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        match get_config().unwrap() {
+            Some(config) => {
+                let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
+                let executor = Executor::new(config, task_status.clone());
+                self.task_status = Some(task_status);
+                self.executor = Some(executor);
+                self.state = MainState::Logged;
+            }
+            None => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.vertical_centered(|ui| ui.heading("WeiBack"));
+                        ui.label("还未登录，请重新登录！\n\n\n\n\n\n");
+                        if ui.button("登录").clicked() {
+                            self.state = MainState::Logining;
+                        }
+                    });
+                });
+            }
+        }
+    }
 
-    fn when_logging(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {}
+    fn when_logging(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let login_state = self
+            .login_state
+            .get_or_insert_with(|| {
+                let login_state: Arc<RwLock<LoginState>> = Default::default();
+                let res = login_state.clone();
+                std::thread::spawn(move || {
+                    // let _login_state = login_state;
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+                    rt.block_on(async {
+                        let loginator = Loginator::new();
+                        let qrcode = loginator.get_login_qrcode().await.unwrap();
+                        *login_state.write().unwrap() = LoginState::QRCodeGotten(qrcode);
+                        while !loginator.check().await.unwrap() {}
+
+                        let mut config = Config::default();
+                        config.web_cookie = loginator.get_cookie().await.unwrap();
+                        config.mobile_cookie = loginator.get_mobile_cookie().await.unwrap();
+                        config.uid = loginator.get_uid().await.unwrap();
+                        *login_state.write().unwrap() = LoginState::Logged(config);
+                    });
+                });
+                res
+            })
+            .try_read()
+            .ok()
+            .map(|a| (&*a).clone());
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if let Some(login_state) = login_state {
+                match login_state {
+                    LoginState::GettingQRCode => {
+                        ui.label("正在获取二维码，稍等...");
+                    }
+                    // FIXME: img update
+                    LoginState::QRCodeGotten(image_data) => {
+                        let qrcode: &_ = self.qrcode_img.get_or_insert_with(|| {
+                            ui.ctx()
+                                .load_texture("login_qrcode", image_data, Default::default())
+                        });
+                        ui.image(qrcode, qrcode.size_vec2());
+                        ui.label("请用手机扫描二维码并确认");
+                    }
+                    LoginState::Logged(config) => {
+                        config.save().unwrap();
+                        let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
+                        let executor = Executor::new(config, task_status.clone());
+                        self.task_status = Some(task_status);
+                        self.executor = Some(executor);
+                        self.state = MainState::Logged;
+                        self.qrcode_img = None;
+                        self.login_state = None;
+                    }
+                }
+            }
+        });
+    }
 }

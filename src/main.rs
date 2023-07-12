@@ -14,7 +14,7 @@ fn main() -> Result<()> {
         .unwrap();
     info!("start running...");
     let core = Core::new();
-    core.run();
+    core.run()?;
 
     info!("done");
     Ok(())

@@ -1,6 +1,21 @@
+#![allow(unused)]
 use bytes::Bytes;
 
+use crate::config::Config;
 use crate::error::Result;
+
+#[derive(Clone)]
+pub enum LoginState {
+    GettingQRCode,
+    QRCodeGotten(egui::ImageData),
+    Logged(Config),
+}
+
+impl Default for LoginState {
+    fn default() -> Self {
+        Self::GettingQRCode
+    }
+}
 
 pub struct Loginator;
 
@@ -9,11 +24,11 @@ impl Loginator {
         Self {}
     }
 
-    pub async fn get_login_qrcode(&self) -> Result<Bytes> {
+    pub async fn get_login_qrcode(&self) -> Result<egui::ImageData> {
         todo!()
     }
 
-    pub async fn check(&self) -> Result<()> {
+    pub async fn check(&self) -> Result<bool> {
         todo!()
     }
 
@@ -21,7 +36,17 @@ impl Loginator {
         todo!()
     }
 
-    pub async fn get_mobile_cookei(&self) -> Result<String> {
+    pub async fn get_uid(&self) -> Result<String> {
         todo!()
+    }
+
+    pub async fn get_mobile_cookie(&self) -> Result<String> {
+        todo!()
+    }
+}
+
+impl Default for Loginator {
+    fn default() -> Self {
+        Self {}
     }
 }
