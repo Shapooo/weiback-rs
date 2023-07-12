@@ -6,33 +6,74 @@ use eframe::{
 };
 use log::info;
 
-use crate::config::Config;
+use crate::config::get_config;
 use crate::executor::Executor;
 use crate::message::TaskStatus;
 
-pub struct WbApp {
-    options: NativeOptions,
-    gui: Gui,
+pub enum MainState {
+    Unlogined,
+    Logining,
+    Logined,
 }
 
-impl WbApp {
-    pub fn new(config: Config) -> Self {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum TabType {
+    DownloadPosts,
+    ExportFromLocal,
+    About,
+}
+
+pub struct Core {
+    state: MainState,
+    task_status: Arc<RwLock<TaskStatus>>,
+    executor: Executor,
+    task_ongoing: bool,
+    // variables associated with GUI
+    start_page: String,
+    end_page: String,
+    message: String,
+    tab_type: TabType,
+    with_pic: bool,
+    reverse: bool,
+    image_definition: u8,
+    period: u32,
+    ratio: f32,
+}
+
+impl Core {
+    pub fn new() -> Self {
+        let config = get_config().unwrap();
+        let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
+        let executor = Executor::new(config, task_status.clone());
         Self {
-            options: NativeOptions {
-                initial_window_size: Some(vec2(300.0, 300.0)),
-                ..Default::default()
-            },
-            gui: Gui::new(config),
+            state: MainState::Unlogined,
+            task_status,
+            executor,
+            task_ongoing: false,
+            // variables associated with GUI
+            start_page: "1".into(),
+            end_page: u32::MAX.to_string(),
+            message: "Hello!".into(),
+            tab_type: TabType::DownloadPosts,
+            with_pic: true,
+            reverse: true,
+            image_definition: 2,
+            period: 50,
+            ratio: 0.0,
         }
     }
+
     pub fn run(self) {
         info!("starting gui...");
         eframe::run_native(
             "weiback",
-            self.options,
+            NativeOptions {
+                initial_window_size: Some(vec2(300.0, 300.0)),
+                ..Default::default()
+            },
             Box::new(|cc| {
                 set_font(cc);
-                Box::new(self.gui)
+                Box::new(self)
             }),
         )
         .unwrap()
@@ -53,51 +94,18 @@ fn set_font(cc: &eframe::CreationContext) {
     cc.egui_ctx.set_fonts(fonts);
 }
 
-struct Gui {
-    start_page: String,
-    end_page: String,
-    message: String,
-    tab_type: TabType,
-    with_pic: bool,
-    task_ongoing: bool,
-    reverse: bool,
-    image_definition: u8,
-    period: u32,
-    executor: Executor,
-    ratio: f32,
-    task_status: Arc<RwLock<TaskStatus>>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum TabType {
-    DownloadPosts,
-    ExportFromLocal,
-    About,
-}
-
-impl Gui {
-    fn new(config: Config) -> Self {
-        let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-        let executor = Executor::new(config, task_status.clone());
-        Self {
-            start_page: Default::default(),
-            end_page: Default::default(),
-            message: Default::default(),
-            tab_type: TabType::DownloadPosts,
-            with_pic: true,
-            task_ongoing: false,
-            reverse: true,
-            image_definition: 2,
-            period: 50,
-            ratio: 0.0,
-            executor,
-            task_status,
+impl eframe::App for Core {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        match self.state {
+            MainState::Unlogined => self.when_unlogged(ctx, _frame),
+            MainState::Logining => self.when_logging(ctx, _frame),
+            MainState::Logined => self.when_logined(ctx, _frame),
         }
     }
 }
 
-impl eframe::App for Gui {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl Core {
+    fn when_logined(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let task_status: Option<TaskStatus> = self
             .task_status
             .try_read()
@@ -231,4 +239,8 @@ impl eframe::App for Gui {
             });
         });
     }
+
+    fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {}
+
+    fn when_logging(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {}
 }

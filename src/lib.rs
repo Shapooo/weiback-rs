@@ -1,6 +1,6 @@
 pub mod config;
-pub mod error;
 pub mod core;
+pub mod error;
 pub mod task_handler;
 
 mod args;

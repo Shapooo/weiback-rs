@@ -1,9 +1,8 @@
 use anyhow::Result;
-use log::{debug, info};
+use log::info;
 use simple_logger::SimpleLogger;
 
-use weiback_rs::config::get_config;
-use weiback_rs::core::WbApp;
+use weiback_rs::core::Core;
 
 fn main() -> Result<()> {
     SimpleLogger::new()
@@ -14,12 +13,8 @@ fn main() -> Result<()> {
         .init()
         .unwrap();
     info!("start running...");
-    // load config
-    let conf = get_config()?;
-    debug!("config is {:?}", conf);
-
-    let gui = WbApp::new(conf);
-    gui.run();
+    let core = Core::new();
+    core.run();
 
     info!("done");
     Ok(())
