@@ -1,7 +1,12 @@
-use std::{env::current_exe, fs, path::PathBuf};
+use std::{
+    env::current_exe,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use lazy_static::lazy_static;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
@@ -20,19 +25,29 @@ pub struct Config {
 }
 
 const DEFAULT_DB_PATH_STR: &str = "res/weiback.db";
+lazy_static! {
+    static ref DEFAULT_CONF_PATH: PathBuf =
+        current_exe().unwrap().join(&Path::new("res/config.yaml"));
+}
 
 impl Config {
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn load(path: &PathBuf) -> Result<Self> {
-        if path.is_file() {
-            let file = fs::read_to_string(path)?;
-            Ok(serde_yaml::from_str::<Config>(&file)?)
-        } else {
+    pub fn load(path: &PathBuf) -> Result<Option<Self>> {
+        if !path.exists() {
+            return Ok(None);
+        } else if !path.is_file() {
             return Err(anyhow!("config file is invalid"));
         }
+        let file = fs::read_to_string(path)?;
+        Ok(Some(serde_yaml::from_str::<Config>(&file)?))
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let config_content = serde_yaml::to_string(self)?;
+        Ok(fs::write(&*DEFAULT_CONF_PATH, config_content)?)
     }
 }
 
@@ -42,12 +57,12 @@ impl Default for Config {
             web_cookie: Default::default(),
             mobile_cookie: Default::default(),
             uid: Default::default(),
-            db: Default::default(),
+            db: DEFAULT_DB_PATH_STR.into(),
         }
     }
 }
 
-pub fn get_config() -> Result<Config> {
+pub fn get_config() -> Result<Option<Config>> {
     let args = Args::parse();
     let config_file: Option<PathBuf> = args.config.or(current_exe().ok().map(|mut path| {
         path.pop();
@@ -55,22 +70,24 @@ pub fn get_config() -> Result<Config> {
         path
     }));
 
-    if config_file.is_none() {
-        panic!("config file must be set!");
-    }
-
-    let config_file = config_file.unwrap();
+    let Some(config_file) = config_file else {
+        return Ok(None);
+    };
     info!("loading config from: {:?}", config_file);
 
-    let mut conf = Config::load(&config_file)?;
+    let Some(conf) = Config::load(&config_file) ? else {
+        return Ok(None);
+    };
 
-    if conf.db.as_os_str() == "" {
-        let mut exe = current_exe().unwrap();
-        exe.pop();
-        exe.push(DEFAULT_DB_PATH_STR);
-        conf.db = exe;
+    if conf.db.as_os_str() == ""
+        || conf.uid == ""
+        || conf.mobile_cookie == ""
+        || conf.web_cookie == ""
+    {
+        info!("some item field are missing in config file");
+        return Ok(None);
     }
 
     debug!("config loaded: {:?}", conf);
-    Ok(conf)
+    Ok(Some(conf))
 }
