@@ -7,9 +7,8 @@ use eframe::{
 };
 use log::info;
 
-use crate::config::{get_config, Config};
 use crate::executor::Executor;
-use crate::login::{LoginState, Loginator};
+use crate::login::{get_login_info, LoginState, Loginator};
 use crate::message::TaskStatus;
 
 pub enum MainState {
@@ -249,10 +248,11 @@ impl Core {
     }
 
     fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        match get_config().unwrap() {
-            Some(config) => {
+        // match get_config().unwrap() {
+        match get_login_info().unwrap() {
+            Some(login_info) => {
                 let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-                let executor = Executor::new(config, task_status.clone());
+                let executor = Executor::new(login_info, task_status.clone());
                 self.task_status = Some(task_status);
                 self.executor = Some(executor);
                 self.state = MainState::Logged;
@@ -278,23 +278,13 @@ impl Core {
                 let login_state: Arc<RwLock<LoginState>> = Default::default();
                 let res = login_state.clone();
                 std::thread::spawn(move || {
-                    // let _login_state = login_state;
-                    let rt = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .unwrap();
-                    rt.block_on(async {
-                        let loginator = Loginator::new();
-                        let qrcode = loginator.get_login_qrcode().await.unwrap();
-                        *login_state.write().unwrap() = LoginState::QRCodeGotten(qrcode);
-                        while !loginator.check().await.unwrap() {}
-
-                        let mut config = Config::default();
-                        config.web_cookie = loginator.get_cookie().await.unwrap();
-                        config.mobile_cookie = loginator.get_mobile_cookie().await.unwrap();
-                        config.uid = loginator.get_uid().await.unwrap();
-                        *login_state.write().unwrap() = LoginState::Logged(config);
-                    });
+                    let loginator = Loginator::new();
+                    let qrcode = loginator.get_login_qrcode().unwrap();
+                    *login_state.write().unwrap() = LoginState::QRCodeGotten(qrcode);
+                    loginator.wait_confirm().unwrap();
+                    *login_state.write().unwrap() = LoginState::Confirmed;
+                    let login_info = loginator.wait_login().unwrap();
+                    *login_state.write().unwrap() = LoginState::Logged(login_info);
                 });
                 res
             })
@@ -316,10 +306,12 @@ impl Core {
                         ui.image(qrcode, qrcode.size_vec2());
                         ui.label("请用手机扫描二维码并确认");
                     }
-                    LoginState::Logged(config) => {
-                        config.save().unwrap();
+                    LoginState::Confirmed => {
+                        ui.label("扫码成功，登录中...");
+                    }
+                    LoginState::Logged(login_info) => {
                         let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-                        let executor = Executor::new(config, task_status.clone());
+                        let executor = Executor::new(login_info, task_status.clone());
                         self.task_status = Some(task_status);
                         self.executor = Some(executor);
                         self.state = MainState::Logged;
