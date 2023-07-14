@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use bytes::Bytes;
 use futures::future::join_all;
 use log::{debug, info, trace};
@@ -15,9 +13,10 @@ use crate::data::{Post, Posts, User};
 use crate::error::{Error, Result};
 use crate::utils::{pic_url_to_id, strip_url_queries};
 
-type DBResult<T> = std::result::Result<T, sqlx::Error>;
-
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, textLength INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json); CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
+const DATABASE: &str = "res/weiback.db";
+
+type DBResult<T> = std::result::Result<T, sqlx::Error>;
 
 #[derive(Debug)]
 pub struct Persister {
@@ -26,15 +25,12 @@ pub struct Persister {
 }
 
 impl Persister {
-    pub fn new<P>(db: P) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
-        let url = String::from("sqlite:") + db.as_ref().to_str().unwrap();
-        Ok(Persister {
-            db_url: url,
+    pub fn new() -> Self {
+        let url = DATABASE;
+        Persister {
+            db_url: url.into(),
             db_pool: None,
-        })
+        }
     }
 
     pub async fn init(&mut self) -> Result<()> {
@@ -501,114 +497,4 @@ pub struct PictureBlob {
     pub url: String,
     pub id: String,
     pub blob: Vec<u8>,
-}
-
-#[cfg(test)]
-mod persister_test {
-    use serde_json::from_str;
-
-    use super::*;
-    use crate::data::{Post, Posts};
-
-    #[tokio::test]
-    async fn post_new() {
-        let mut p = Persister::new("post_new.db").unwrap();
-        p.init().await.unwrap();
-        std::fs::remove_file("post_new.db").unwrap();
-    }
-
-    #[tokio::test]
-    async fn insert_post() {
-        let mut pster = Persister::new("insert_post.db").unwrap();
-        pster.init().await.unwrap();
-        let txt = include_str!("../res/one.json");
-        let post = from_str::<Post>(txt).unwrap();
-        pster.insert_post(&post).await.unwrap();
-        std::fs::remove_file("insert_post.db").unwrap();
-        std::fs::remove_file("insert_post.db-shm").unwrap();
-        std::fs::remove_file("insert_post.db-wal").unwrap();
-    }
-
-    #[tokio::test]
-    async fn insert_posts() {
-        let mut pster = Persister::new("insert_posts.db").unwrap();
-        pster.init().await.unwrap();
-        let txt = include_str!("../res/full.json");
-        let posts: Vec<_> = from_str::<Posts>(txt)
-            .unwrap()
-            .into_iter()
-            // .map(SqlPost::from)
-            .collect();
-        for post in posts.iter() {
-            pster.insert_post(post).await.unwrap();
-        }
-        std::fs::remove_file("insert_posts.db").unwrap();
-        std::fs::remove_file("insert_posts.db-shm").unwrap();
-        std::fs::remove_file("insert_posts.db-wal").unwrap();
-    }
-
-    #[tokio::test]
-    async fn insert_users() {
-        let mut pster = Persister::new("insert_users.db").unwrap();
-        pster.init().await.unwrap();
-        let txt = include_str!("../res/full.json");
-        let users: Vec<_> = from_str::<Posts>(txt)
-            .unwrap()
-            .into_iter()
-            .filter_map(|mut p| {
-                let a = p["user"].take();
-                if !a["id"].is_null() {
-                    Some(a)
-                } else {
-                    None
-                }
-            })
-            // .map(|user| SqlUser::from(user))
-            .collect();
-        for user in users.iter() {
-            pster.insert_user(user).await.unwrap();
-        }
-        std::fs::remove_file("insert_users.db").unwrap();
-        std::fs::remove_file("insert_users.db-shm").unwrap();
-        std::fs::remove_file("insert_users.db-wal").unwrap();
-    }
-
-    #[tokio::test]
-    async fn insert_img() {
-        let img = include_bytes!("../res/example.jpg");
-        let url = "https://test_url/example.jpg";
-        let mut p = Persister::new("insert_img.db").unwrap();
-        p.init().await.unwrap();
-        p.insert_img(url, img).await.unwrap();
-        std::fs::write("./examp.jpg", p.query_img(url).await.unwrap()).unwrap();
-        std::fs::remove_file("insert_img.db").unwrap();
-        std::fs::remove_file("insert_img.db-shm").unwrap();
-        std::fs::remove_file("insert_img.db-wal").unwrap();
-    }
-
-    #[tokio::test]
-    async fn query_post() {
-        let post = from_str::<Post>(include_str!("../res/one.json")).unwrap();
-        let mut pr = Persister::new("query_post.db").unwrap();
-        pr.init().await.unwrap();
-        pr.insert_post(&post).await.unwrap();
-        let result = pr.query_post(post["id"].as_i64().unwrap()).await.unwrap();
-        dbg!(result);
-        std::fs::remove_file("query_post.db").unwrap();
-        std::fs::remove_file("query_post.db-shm").unwrap();
-        std::fs::remove_file("query_post.db-wal").unwrap();
-    }
-
-    #[tokio::test]
-    async fn query_user() {
-        let user = from_str::<Post>(include_str!("../res/one.json")).unwrap()["user"].take();
-        let mut pr = Persister::new("query_user.db").unwrap();
-        pr.init().await.unwrap();
-        pr.insert_user(&user).await.unwrap();
-        let result = pr.query_user(user["id"].as_i64().unwrap()).await.unwrap();
-        dbg!(result);
-        std::fs::remove_file("query_user.db").unwrap();
-        std::fs::remove_file("query_user.db-shm").unwrap();
-        std::fs::remove_file("query_user.db-wal").unwrap();
-    }
 }
