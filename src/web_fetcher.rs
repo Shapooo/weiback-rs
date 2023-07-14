@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use log::{debug, trace};
@@ -6,6 +7,7 @@ use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response,
 };
+use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
 
 use crate::data::{FavTag, LongText, Posts};
@@ -21,20 +23,17 @@ const MOBILE_POST_API: &str = "https://m.weibo.cn/status";
 pub struct WebFetcher {
     web_client: Client,
     pic_client: Client,
-    mobile_client: Option<Client>,
+    mobile_client: Client,
 }
 
 impl WebFetcher {
-    pub fn from_cookies(web_cookie: String, mobile_cookie: Option<String>) -> Result<Self> {
-        let web_cookie = HeaderValue::try_from(web_cookie)?;
-        let mobile_cookie =
-            mobile_cookie.map_or(Ok(None), |cookie| HeaderValue::try_from(cookie).map(Some))?;
+    pub fn from_cookies(cookie_store: CookieStore) -> Result<Self> {
+        let cookie_store = Arc::new(CookieStoreMutex::new(cookie_store));
         let web_headers = HeaderMap::from_iter(
             [(
                 header::ACCEPT,
                 HeaderValue::from_static("application/json, text/plain, */*")
             ),
-             (header::COOKIE, web_cookie),
              (header::REFERER, HeaderValue::from_static("https://weibo.com/")),
              (
                  header::USER_AGENT,
@@ -67,6 +66,8 @@ impl WebFetcher {
         );
 
         let web_client = reqwest::Client::builder()
+            .cookie_store(true)
+            .cookie_provider(cookie_store.clone())
             .default_headers(web_headers)
             .build()
             .unwrap();
@@ -105,9 +106,7 @@ impl WebFetcher {
             .build()
             .unwrap();
 
-        let mobile_client = mobile_cookie.map(|cookie| {
-            let mobile_headers = HeaderMap::from_iter([
-                (header::COOKIE, cookie),
+        let mobile_headers = HeaderMap::from_iter([
                 (
                     header::ACCEPT,
                     HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
@@ -145,13 +144,12 @@ impl WebFetcher {
                 ),
             ]);
 
-            let client = reqwest::Client::builder()
-                .default_headers(mobile_headers)
-                .build()
-                .unwrap();
-
-            client
-        });
+        let mobile_client = reqwest::Client::builder()
+            .cookie_store(true)
+            .cookie_provider(cookie_store)
+            .default_headers(mobile_headers)
+            .build()
+            .unwrap();
 
         Ok(WebFetcher {
             web_client,
@@ -162,10 +160,6 @@ impl WebFetcher {
 
     async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
         Ok(client.get(url).send().await?)
-    }
-
-    pub fn has_mobile_cookie(&self) -> bool {
-        self.mobile_client.is_some()
     }
 
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
@@ -238,15 +232,12 @@ impl WebFetcher {
     }
 
     pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<String> {
-        if let Some(mobile_client) = &self.mobile_client {
-            let url = format!("{}/{}", MOBILE_POST_API, mblogid);
-            debug!("fetch mobile page, url: {}", &url);
-            let res = self._fetch(url, mobile_client).await?;
-            let text = res.text().await?;
-            Ok(text)
-        } else {
-            Err(Error::UnexpectedError("mobile cookie have not set"))
-        }
+        let mobile_client = &self.mobile_client;
+        let url = format!("{}/{}", MOBILE_POST_API, mblogid);
+        debug!("fetch mobile page, url: {}", &url);
+        let res = self._fetch(url, mobile_client).await?;
+        let text = res.text().await?;
+        Ok(text)
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u64> {
