@@ -255,7 +255,6 @@ impl PostProcessor {
         if !post["user"]["id"].is_number() {
             return Ok(
                 if value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
-                    && self.web_fetcher.has_mobile_cookie()
                 {
                     self.handle_mobile_only_post(value_as_str(&post, "mblogid")?)
                         .await?

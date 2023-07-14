@@ -5,7 +5,7 @@ use log::debug;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
-use crate::config::Config;
+use crate::login::LoginInfo;
 use crate::message::Task;
 use crate::message::TaskStatus;
 use crate::task_handler::TaskHandler;
@@ -16,7 +16,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(config: Config, task_status: Arc<RwLock<TaskStatus>>) -> Self {
+    pub fn new(login_info: LoginInfo, task_status: Arc<RwLock<TaskStatus>>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = mpsc::channel(1);
         std::thread::spawn(move || {
@@ -26,7 +26,7 @@ impl Executor {
                 .build()
                 .unwrap();
             debug!("new a async runtime succeed");
-            let mut th = TaskHandler::new(config, task_status).unwrap();
+            let mut th = TaskHandler::new(login_info, task_status).unwrap();
             rt.block_on(async move {
                 th.init().await?;
                 debug!("task handler init succeed");

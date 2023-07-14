@@ -6,9 +6,9 @@ use chrono;
 use log::{debug, error, info};
 use tokio::time::sleep;
 
-use crate::config::Config;
 use crate::error::Result;
 use crate::exporter::Exporter;
+use crate::login::LoginInfo;
 use crate::message::TaskStatus;
 use crate::persister::Persister;
 use crate::post_processor::PostProcessor;
@@ -21,23 +21,22 @@ static mut POSTS_TOTAL: u64 = 0;
 #[derive(Debug)]
 pub struct TaskHandler {
     exporter: Exporter,
-    config: Config,
     processer: PostProcessor,
     task_status: Arc<RwLock<TaskStatus>>,
+    uid: &'static str,
 }
 
 impl TaskHandler {
-    pub fn new(config: Config, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
-        let fetcher = WebFetcher::from_cookies(
-            config.web_cookie.clone(),
-            (!config.mobile_cookie.is_empty()).then_some(config.mobile_cookie.clone()),
-        )?;
-        let persister = Persister::new(&config.db)?;
+    pub fn new(mut login_info: LoginInfo, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
+        let fetcher =
+            WebFetcher::from_cookies(serde_json::from_value(login_info["cookie"].take())?)?;
+        let persister = Persister::new();
+        let uid = login_info["uid"].as_i64().unwrap();
         Ok(TaskHandler {
             exporter: Exporter::new(),
-            config,
             processer: PostProcessor::new(fetcher, persister),
             task_status,
+            uid: Box::leak(Box::new(uid.to_string())),
         })
     }
 
@@ -166,7 +165,7 @@ impl TaskHandler {
         for (i, page) in range.enumerate() {
             let posts_sum = self
                 .processer
-                .download_fav_posts(self.config.uid.as_str(), page, with_pic, image_definition)
+                .download_fav_posts(self.uid, page, with_pic, image_definition)
                 .await?;
             total_posts_sum += posts_sum;
             debug!("fetched {} posts in {}th page", posts_sum, page);

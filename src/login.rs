@@ -3,6 +3,7 @@ use bytes::Bytes;
 
 use crate::config::Config;
 use crate::error::Result;
+pub type LoginInfo = Value;
 
 #[derive(Clone)]
 pub enum LoginState {
