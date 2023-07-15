@@ -89,6 +89,28 @@ impl Loginator {
     }
 
     pub fn get_login_qrcode(&self) -> Result<egui::ImageData> {
+        let time_stamp = chrono::Local::now().timestamp_micros() / 10;
+        let text = self
+            .client
+            .get(format!("{}{}", LOGIN_API, time_stamp))
+            .send()?
+            .text()?;
+        dbg!(&text);
+        let len = text.len();
+        let text = &text[text.find('(').unwrap() + 1..len - 2];
+        let json: Value = from_str(text)?;
+        let img_url = String::from("http:") + json["data"]["image"].as_str().unwrap();
+        dbg!(json);
+        let img = self.client.get(img_url).send()?.bytes()?;
+        let img = Reader::new(Cursor::new(img))
+            .with_guessed_format()?
+            .decode()?
+            .into_rgb8();
+        let img = ColorImage::from_rgb(
+            [img.width() as usize, img.height() as usize],
+            &img.into_vec()[..],
+        );
+        Ok(egui::ImageData::Color(img))
     }
 
     pub fn wait_confirm(&self) -> Result<()> {
