@@ -278,7 +278,7 @@ impl Core {
                 let login_state: Arc<RwLock<LoginState>> = Default::default();
                 let res = login_state.clone();
                 std::thread::spawn(move || {
-                    let loginator = Loginator::new();
+                    let mut loginator = Loginator::new();
                     let qrcode = loginator.get_login_qrcode().unwrap();
                     *login_state.write().unwrap() = LoginState::QRCodeGotten(qrcode);
                     loginator.wait_confirm().unwrap();

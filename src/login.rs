@@ -2,12 +2,14 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 use anyhow::Result;
 use chrono;
 use egui::ColorImage;
-use egui::ImageData;
 use image::io::Reader;
+use log::debug;
 use reqwest::{
     blocking::Client,
     header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -17,7 +19,7 @@ use serde_json::{from_str, to_string, to_value, Value};
 
 const LOGIN_INFO_PATH_STR: &str = "res/login_info.json";
 const LOGIN_API: &str =
-    "https://login.sina.com.cn/sso/qrcode/image?entry=weibo&size=109&callback=STK_";
+    "https://login.sina.com.cn/sso/qrcode/image?entry=weibo&size=180&callback=STK_";
 
 pub type LoginInfo = Value;
 
@@ -38,6 +40,9 @@ impl Default for LoginState {
 pub struct Loginator {
     cookie_store: Arc<CookieStoreMutex>,
     client: Client,
+    time_stamp: i64,
+    qrid: String,
+    alt: String,
 }
 
 impl Loginator {
@@ -85,22 +90,29 @@ impl Loginator {
         Self {
             client,
             cookie_store,
+            time_stamp: 0,
+            qrid: Default::default(),
+            alt: Default::default(),
         }
     }
 
-    pub fn get_login_qrcode(&self) -> Result<egui::ImageData> {
-        let time_stamp = chrono::Local::now().timestamp_micros() / 10;
+    pub fn get_login_qrcode(&mut self) -> Result<egui::ImageData> {
+        self.time_stamp = chrono::Local::now().timestamp_millis();
         let text = self
             .client
-            .get(format!("{}{}", LOGIN_API, time_stamp))
+            .get(format!("{}{}1", LOGIN_API, self.time_stamp))
             .send()?
             .text()?;
         dbg!(&text);
-        let len = text.len();
-        let text = &text[text.find('(').unwrap() + 1..len - 2];
-        let json: Value = from_str(text)?;
+        let text = get_text(&text);
+        let mut json: Value = from_str(text)?;
+        dbg!(&json);
         let img_url = String::from("http:") + json["data"]["image"].as_str().unwrap();
-        dbg!(json);
+        self.qrid = if let Value::String(id) = json["data"]["qrid"].take() {
+            id
+        } else {
+            "".into()
+        };
         let img = self.client.get(img_url).send()?.bytes()?;
         let img = Reader::new(Cursor::new(img))
             .with_guessed_format()?
@@ -113,8 +125,37 @@ impl Loginator {
         Ok(egui::ImageData::Color(img))
     }
 
-    pub fn wait_confirm(&self) -> Result<()> {
-        todo!()
+    pub fn wait_confirm(&mut self) -> Result<()> {
+        let mut index = 3;
+        loop {
+            let url = format!(
+                "https://login.sina.com.cn/sso/qrcode/check?entry=weibo&qrid={}&callback=STK_{}{}",
+                self.qrid, self.time_stamp, index
+            );
+            let text = self.client.get(url).send()?.text()?;
+            let text = get_text(&text);
+            let mut json: Value = from_str(text)?;
+            debug!("login check ret: {:?}", json);
+            let retcode = json["retcode"].as_i64().unwrap();
+            match retcode {
+                20000000 => {
+                    self.alt = if let Value::String(alt) = json["data"]["alt"].take() {
+                        alt
+                    } else {
+                        "".into()
+                    };
+                    return Ok(());
+                }
+                50114001 | 50114002 => {}
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "unexpected retcode, maybe something get wrong"
+                    ))
+                }
+            }
+            index += 2;
+            sleep(Duration::from_secs(2));
+        }
     }
 
     pub fn wait_login(self) -> Result<LoginInfo> {
@@ -128,6 +169,11 @@ impl Loginator {
     fn login_m_weibo_cn(&self) -> Result<()> {
         todo!()
     }
+}
+
+fn get_text(text: &str) -> &str {
+    let len = text.len();
+    &text[text.find('(').unwrap() + 1..len - 2]
 }
 
 impl Default for Loginator {
