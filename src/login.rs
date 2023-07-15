@@ -1,8 +1,11 @@
 #![allow(unused)]
 use bytes::Bytes;
+use std::fs;
+use std::path::Path;
+use anyhow::Result;
+use serde_json::{from_str, to_string, to_value, Value};
 
-use crate::config::Config;
-use crate::error::Result;
+const LOGIN_INFO_PATH_STR: &str = "res/login_info.json";
 pub type LoginInfo = Value;
 
 #[derive(Clone)]
@@ -50,4 +53,15 @@ impl Default for Loginator {
     fn default() -> Self {
         Self {}
     }
+}
+
+pub fn get_login_info() -> Result<Option<LoginInfo>> {
+    let path = Path::new(LOGIN_INFO_PATH_STR);
+    if !path.exists() {
+        return Ok(None);
+    } else if !path.is_file() {
+        return Err(anyhow::anyhow!("login info path have been occupied"));
+    }
+    let content = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&content)?)
 }
