@@ -252,7 +252,12 @@ impl PostProcessor {
     }
 
     async fn preprocess_post_non_rec(&self, mut post: Post) -> Result<Post> {
-        if post["isLongText"] == true {
+        if !post["user"]["id"].is_number() {
+            if value_as_str(&post, "text_raw")?.starts_with("该内容请至手机客户端查看")
+            {
+                post["client_only"] = Value::Bool(true);
+            }
+        } else if post["isLongText"] == true {
             let mblogid = value_as_str(&post, "mblogid")?;
             match self.web_fetcher.fetch_long_text_content(mblogid).await {
                 Ok(long_text) => post["text_raw"] = Value::String(long_text),
