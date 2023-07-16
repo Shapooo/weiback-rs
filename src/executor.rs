@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 
-use log::debug;
+use log::{debug, error, info};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
@@ -43,6 +43,7 @@ impl Executor {
                 }
                 Ok::<(), anyhow::Error>(())
             })
+            .unwrap();
         });
         Self {
             rt: Runtime::new().unwrap(),
@@ -52,12 +53,7 @@ impl Executor {
 
     pub fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
         debug!("send task: download meta");
-        self.rt
-            .block_on(
-                self.tx
-                    .send(Task::DownloadPosts(range, with_pic, image_definition)),
-            )
-            .unwrap();
+        self.send_task(Task::DownloadPosts(range, with_pic, image_definition))
     }
 
     pub fn export_from_local(
@@ -67,11 +63,18 @@ impl Executor {
         image_definition: u8,
     ) {
         debug!("send task: export from local");
-        self.rt
-            .block_on(
-                self.tx
-                    .send(Task::ExportFromLocal(range, reverse, image_definition)),
-            )
-            .unwrap();
+        self.send_task(Task::ExportFromLocal(range, reverse, image_definition))
+    }
+
+    fn send_task(&self, task: Task) {
+        match self.rt.block_on(self.tx.send(task)) {
+            Ok(()) => {
+                info!("task send succ")
+            }
+            Err(e) => {
+                error!("{:?}", e);
+                panic!("{:?}", e)
+            }
+        }
     }
 }
