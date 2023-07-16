@@ -17,13 +17,11 @@ const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
-const MOBILE_POST_API: &str = "https://m.weibo.cn/status";
 
 #[derive(Debug)]
 pub struct WebFetcher {
     web_client: Client,
     pic_client: Client,
-    mobile_client: Client,
 }
 
 impl WebFetcher {
@@ -106,55 +104,9 @@ impl WebFetcher {
             .build()
             .unwrap();
 
-        let mobile_headers = HeaderMap::from_iter([
-                (
-                    header::ACCEPT,
-                    HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
-                ),
-                (
-                    header::ACCEPT_LANGUAGE,
-                    HeaderValue::from_static("en-US,en;q=0.5"),
-                ),
-                (
-                    header::ACCEPT_ENCODING,
-                    HeaderValue::from_static("gzip, deflate, br"),
-                ),
-                (header::UPGRADE_INSECURE_REQUESTS, HeaderValue::from_static("1")),
-                (
-                    HeaderName::from_static("x-requested-with"),
-                    HeaderValue::from_static("XMLHttpRequest"),
-                ),
-                (header::DNT, HeaderValue::from_static("1")),
-                (header::CONNECTION, HeaderValue::from_static("keep-alive")),
-                (
-                    HeaderName::from_static("sec-fetch-dest"),
-                    HeaderValue::from_static("document"),
-                ),
-                (
-                    HeaderName::from_static("sec-fetch-mode"),
-                    HeaderValue::from_static("navigate"),
-                ),
-                (
-                    HeaderName::from_static("sec-fetch-site"),
-                    HeaderValue::from_static("none"),
-                ),
-                (
-                    HeaderName::from_static("sec-fetch-user"),
-                    HeaderValue::from_static("?1"),
-                ),
-            ]);
-
-        let mobile_client = reqwest::Client::builder()
-            .cookie_store(true)
-            .cookie_provider(cookie_store)
-            .default_headers(mobile_headers)
-            .build()
-            .unwrap();
-
         Ok(WebFetcher {
             web_client,
             pic_client,
-            mobile_client,
         })
     }
 
@@ -229,15 +181,6 @@ impl WebFetcher {
             }
         }
         Ok(res)
-    }
-
-    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<String> {
-        let mobile_client = &self.mobile_client;
-        let url = format!("{}/{}", MOBILE_POST_API, mblogid);
-        debug!("fetch mobile page, url: {}", &url);
-        let res = self._fetch(url, mobile_client).await?;
-        let text = res.text().await?;
-        Ok(text)
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u64> {
