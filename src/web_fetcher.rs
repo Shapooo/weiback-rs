@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response,
@@ -118,12 +118,27 @@ impl WebFetcher {
 
     pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
         let id = id.to_string();
-        self.web_client
+        let response = self
+            .web_client
             .post("https://weibo.com/ajax/statuses/destoryFavorites")
             .json(&serde_json::json!({ "id": id }))
             .send()
             .await?;
-        Ok(())
+        let status_code = response.status();
+        if status_code.as_u16() == 200 {
+            Ok(())
+        } else {
+            let res_json = response.json::<Value>().await?;
+            if status_code.as_u16() == 400 && res_json["message"] == "not your collection!" {
+                warn!("post {id} have been unfavorited, there may be bugs in code...");
+                Ok(())
+            } else {
+                Err(Error::Other(format!(
+                    "unfavorite post get 403: {:?}",
+                    res_json["message"],
+                )))
+            }
+        }
     }
 
     async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
