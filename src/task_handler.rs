@@ -61,6 +61,18 @@ impl TaskHandler {
         Ok(())
     }
 
+    pub async fn unfavorite_posts(&self, range: RangeInclusive<u32>) {
+        match self.processer.unfavorite_fav_posts(range).await {
+            Err(e) => {
+                error!("{e}");
+                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{e}"));
+            }
+            Ok(()) => {
+                *self.task_status.write().unwrap() = TaskStatus::Finished;
+            }
+        }
+    }
+
     pub async fn export_from_local(
         &self,
         range: RangeInclusive<u32>,

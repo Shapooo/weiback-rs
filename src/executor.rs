@@ -39,6 +39,7 @@ impl Executor {
                         Task::ExportFromLocal(range, rev, image_definition) => {
                             th.export_from_local(range, rev, image_definition).await
                         }
+                        Task::UnfavoritePosts(range) => th.unfavorite_posts(range).await,
                     }
                 }
                 Ok::<(), anyhow::Error>(())
@@ -49,6 +50,11 @@ impl Executor {
             rt: Runtime::new().unwrap(),
             tx,
         }
+    }
+
+    pub fn unfavorite_posts(&self, range: RangeInclusive<u32>) {
+        debug!("send task: unfavorite posts");
+        self.send_task(Task::UnfavoritePosts(range))
     }
 
     pub fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {

@@ -186,6 +186,10 @@ impl Core {
                     } else {
                         ui.checkbox(&mut self.reverse, "按时间逆序")
                             .on_hover_text("时间逆序即最上方的微博为最新的微博");
+                        if ui.button("对本地微博取消收藏").clicked() {
+                            self.task_ongoing = true;
+                            self.executor.as_ref().unwrap().unfavorite_posts(1..=10);
+                        }
                     }
                     ui.collapsing("高级设置", |ui| {
                         ui.horizontal(|ui| {

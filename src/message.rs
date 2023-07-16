@@ -4,6 +4,7 @@ use std::ops::RangeInclusive;
 pub enum Task {
     DownloadPosts(RangeInclusive<u32>, bool, u8),
     ExportFromLocal(RangeInclusive<u32>, bool, u8),
+    UnfavoritePosts(RangeInclusive<u32>),
 }
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,7 @@ pub enum TaskStatus {
     Info(String),
 }
 
+#[allow(unused)]
 impl TaskStatus {
     pub fn is_inprogress(&self) -> bool {
         if let TaskStatus::InProgress(_, _) = self {

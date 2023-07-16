@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use bytes::Bytes;
 use futures::future::join_all;
 use log::{debug, info, trace};
@@ -13,35 +15,37 @@ use crate::data::{Post, Posts, User};
 use crate::error::{Error, Result};
 use crate::utils::{pic_url_to_id, strip_url_queries};
 
-const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS fav_post(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, textLength INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json, client_only BOOLEAN); CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
+const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY, created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, source VARCHAR, region_name VARCHAR, deleted BOOLEAN, uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, retweeted_status INTEGER, url_struct json, topic_struct json, tag_struct json, number_display_strategy json, mix_media_info json, visible json, text TEXT, attitudes_status INTEGER, showFeedRepost BOOLEAN, showFeedComment BOOLEAN, pictureViewerSign BOOLEAN, showPictureViewer BOOLEAN, favorited BOOLEAN, can_edit BOOLEAN, is_paid BOOLEAN, share_repost_type INTEGER, rid VARCHAR, pic_infos VARCHAR, cardid VARCHAR, pic_bg_new VARCHAR, mark VARCHAR, mblog_vip_type INTEGER, reposts_count INTEGER, comments_count INTEGER, attitudes_count INTEGER, mlevel INTEGER, content_auth INTEGER, is_show_bulletin INTEGER, repost_type INTEGER, edit_count INTEGER, mblogtype INTEGER, textLength INTEGER, isLongText BOOLEAN, annotations json, geo json, pic_focus_point json, page_info json, title json, continue_tag json, comment_manage_info json, client_only BOOLEAN NOT NULL DEFAULT false, unfavorited BOOLEAN NOT NULL DEFAULT false); CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, profile_url VARCHAR, screen_name VARCHAR, profile_image_url VARCHAR, avatar_large VARCHAR, avatar_hd VARCHAR, planet_video BOOLEAN, v_plus INTEGER, pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, mbtype INTEGER, icon_list VARCHAR); CREATE TABLE IF NOT EXISTS picture_blob(url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
 const DATABASE: &str = "res/weiback.db";
 
 type DBResult<T> = std::result::Result<T, sqlx::Error>;
 
 #[derive(Debug)]
 pub struct Persister {
-    db_url: String,
+    db_path: PathBuf,
     db_pool: Option<SqlitePool>,
 }
 
 impl Persister {
     pub fn new() -> Self {
-        let url = DATABASE;
         Persister {
-            db_url: url.into(),
+            db_path: std::env::current_exe()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join(DATABASE),
             db_pool: None,
         }
     }
 
     pub async fn init(&mut self) -> Result<()> {
         debug!("initing...");
-        let path = std::path::Path::new(&self.db_url[7..]);
-        if path.is_file() {
-            info!("db {:?} exists", self.db_url);
+        if self.db_path.is_file() {
+            info!("db {:?} exists", self.db_path);
         } else {
-            info!("db {:?} not exists, create it", self.db_url);
-            Sqlite::create_database(&self.db_url).await?;
-            let mut db = SqliteConnection::connect(&self.db_url).await?;
+            info!("db {:?} not exists, create it", self.db_path);
+            Sqlite::create_database(&self.db_path.to_str().unwrap()).await?;
+            let mut db = SqliteConnection::connect(&self.db_path.to_str().unwrap()).await?;
             use futures::stream::TryStreamExt;
             sqlx::query(DATABASE_CREATE_SQL)
                 .execute_many(&mut db)
@@ -60,7 +64,7 @@ impl Persister {
         self.db_pool = Some(
             SqlitePoolOptions::new()
                 .min_connections(2)
-                .connect_lazy(&self.db_url)?,
+                .connect_lazy(&self.db_path.to_str().unwrap())?,
         );
         Ok(())
     }
@@ -77,6 +81,15 @@ impl Persister {
                 self.insert_user(&post["retweeted_status"]["user"]).await?;
             }
         }
+        Ok(())
+    }
+
+    pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
+        debug!("unfav post {} in db", id);
+        sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
+            .bind(id)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
         Ok(())
     }
 
@@ -97,7 +110,7 @@ impl Persister {
     pub async fn insert_user(&self, user: &User) -> Result<()> {
         trace!("user: {user:?}");
         let result = sqlx::query(
-            r#"INSERT OR IGNORE INTO user VALUES
+            r#"INSERT OR IGNORE INTO users VALUES
  (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(user["id"].as_i64().unwrap())
@@ -180,7 +193,7 @@ impl Persister {
 
     pub async fn query_db_total_num(&self) -> Result<u64> {
         Ok(
-            sqlx::query_as::<Sqlite, (i64,)>("SELECT COUNT(1) FROM fav_post WHERE favorited")
+            sqlx::query_as::<Sqlite, (i64,)>("SELECT COUNT(1) FROM posts WHERE favorited")
                 .fetch_one(self.db_pool.as_ref().unwrap())
                 .await?
                 .0 as u64,
@@ -195,9 +208,9 @@ impl Persister {
     async fn _insert_post(&self, post: &Value) -> DBResult<()> {
         sqlx::query(
             r#"INSERT OR IGNORE INTO
-fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-?, ?, ?, ?, ?, ?, ?, ?)"#,
+?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(post["id"].as_i64().unwrap())
         .bind(post["created_at"].as_str().unwrap())
@@ -257,13 +270,14 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 .then_some(post["comment_manage_info"].to_string()),
         )
         .bind(post["client_only"].as_bool().unwrap_or_default())
+        .bind(post["unfavorited"].as_bool().unwrap_or_default())
         .execute(self.db_pool.as_ref().unwrap())
         .await?;
         Ok(())
     }
 
     async fn _query_user(&self, id: i64) -> DBResult<User> {
-        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM user WHERE id = ?")
+        let sql_user: SqlUser = sqlx::query_as("SELECT id, profile_url, screen_name, profile_image_url, avatar_large, avatar_hd FROM users WHERE id = ?")
             .bind(id)
             .fetch_one(self.db_pool.as_ref().unwrap())
             .await?;
@@ -274,7 +288,7 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
     }
 
     async fn _query_post(&self, id: i64) -> DBResult<SqlPost> {
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText, client_only FROM fav_post WHERE id = ?")
+        sqlx::query_as::<sqlx::Sqlite, SqlPost>("SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText, client_only FROM posts WHERE id = ?")
             .bind(id)
             .fetch_one(self.db_pool.as_ref().unwrap())
             .await
@@ -282,9 +296,9 @@ fav_post VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
 
     async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> DBResult<Vec<SqlPost>> {
         let sql_expr = if reverse {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText, client_only FROM fav_post WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText, client_only, unfavorited FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
         } else {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText, client_only FROM fav_post WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+            "SELECT id, created_at, mblogid, text_raw, source, region_name, deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, topic_struct, tag_struct, number_display_strategy, mix_media_info, isLongText, client_only, unfavorited FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
         };
         sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
             .bind(limit)
@@ -362,6 +376,14 @@ fn sql_post_to_post(sql_post: SqlPost) -> Post {
     map.insert(
         "isLongText".into(),
         to_value(sql_post.is_long_text).unwrap(),
+    );
+    map.insert(
+        "client_only".into(),
+        to_value(sql_post.client_only).unwrap(),
+    );
+    map.insert(
+        "unfavorited".into(),
+        to_value(sql_post.unfavorited).unwrap(),
     );
 
     Value::Object(map)
@@ -457,6 +479,8 @@ pub struct SqlPost {
     pub comment_manage_info: Option<String>,
     #[sqlx(default)]
     pub client_only: bool,
+    #[sqlx(default)]
+    pub unfavorited: bool,
 }
 
 #[derive(Serialize, Debug, Clone, FromRow)]

@@ -81,6 +81,22 @@ impl PostProcessor {
         Ok(())
     }
 
+    pub async fn unfavorite_fav_posts(&self, range: RangeInclusive<u32>) -> Result<()> {
+        let limit = (range.end() - range.start()) + 1;
+        let offset = *range.start() - 1;
+        let posts = self.persister.query_posts(limit, offset, true).await?;
+        dbg!(posts.len());
+        for post in posts {
+            if post["client_only"] == false {
+                let id = post["id"].as_i64().unwrap();
+                dbg!(id);
+                self.web_fetcher.unfavorite_post(id).await?;
+                self.persister.unfavorite_post(id).await?;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn download_fav_posts(
         &self,
         uid: &str,

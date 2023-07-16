@@ -110,6 +110,16 @@ impl WebFetcher {
         })
     }
 
+    pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
+        let id = id.to_string();
+        self.web_client
+            .post("https://weibo.com/ajax/statuses/destoryFavorites")
+            .json(&serde_json::json!({ "id": id }))
+            .send()
+            .await?;
+        Ok(())
+    }
+
     async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
         Ok(client.get(url).send().await?)
     }
