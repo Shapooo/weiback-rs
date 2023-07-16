@@ -84,13 +84,28 @@ impl Persister {
         Ok(())
     }
 
-    pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
+    pub async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
         debug!("unfav post {} in db", id);
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
             .bind(id)
             .execute(self.db_pool.as_ref().unwrap())
             .await?;
         Ok(())
+    }
+
+    pub async fn query_posts_to_unfavorite(&self, limit: u32, offset: u32) -> Result<Vec<i64>> {
+        debug!("query posts to unfavorite, limit {limit} offset {offset}");
+        Ok(sqlx::query_as::<Sqlite, (i64,)>(
+            "SELECT id FROM posts WHERE unfavorited == false and favorited \
+             ORDER BY id DESC LIMIT ? OFFSET ?",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(self.db_pool.as_ref().unwrap())
+        .await?
+        .into_iter()
+        .map(|t| t.0)
+        .collect())
     }
 
     pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<()> {

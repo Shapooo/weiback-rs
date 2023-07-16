@@ -84,15 +84,15 @@ impl PostProcessor {
     pub async fn unfavorite_fav_posts(&self, range: RangeInclusive<u32>) -> Result<()> {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
-        let posts = self.persister.query_posts(limit, offset, true).await?;
-        dbg!(posts.len());
-        for post in posts {
-            if post["client_only"] == false {
-                let id = post["id"].as_i64().unwrap();
-                dbg!(id);
-                self.web_fetcher.unfavorite_post(id).await?;
-                self.persister.unfavorite_post(id).await?;
-            }
+        let ids = self
+            .persister
+            .query_posts_to_unfavorite(limit, offset)
+            .await?;
+        debug!("load {} posts to unfavorite", ids.len());
+        for id in ids {
+            self.web_fetcher.unfavorite_post(id).await?;
+            self.persister.mark_post_unfavorited(id).await?;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         Ok(())
     }
