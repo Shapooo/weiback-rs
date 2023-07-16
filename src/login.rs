@@ -212,7 +212,10 @@ impl Default for Loginator {
 }
 
 pub fn get_login_info() -> Result<Option<LoginInfo>> {
-    let path = Path::new(LOGIN_INFO_PATH_STR);
+    let path = std::env::current_exe()?
+        .parent()
+        .unwrap()
+        .join(LOGIN_INFO_PATH_STR);
     if !path.exists() {
         return Ok(None);
     } else if !path.is_file() {
