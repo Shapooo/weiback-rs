@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
@@ -43,6 +44,8 @@ pub struct Loginator {
     time_stamp: i64,
     qrid: String,
     alt: String,
+    index: i64,
+    uid: String,
 }
 
 impl Loginator {
@@ -93,6 +96,8 @@ impl Loginator {
             time_stamp: 0,
             qrid: Default::default(),
             alt: Default::default(),
+            uid: Default::default(),
+            index: 3,
         }
     }
 
@@ -126,11 +131,10 @@ impl Loginator {
     }
 
     pub fn wait_confirm(&mut self) -> Result<()> {
-        let mut index = 3;
         loop {
             let url = format!(
                 "https://login.sina.com.cn/sso/qrcode/check?entry=weibo&qrid={}&callback=STK_{}{}",
-                self.qrid, self.time_stamp, index
+                self.qrid, self.time_stamp, self.index
             );
             let text = self.client.get(url).send()?.text()?;
             let text = get_text(&text);
@@ -153,21 +157,46 @@ impl Loginator {
                     ))
                 }
             }
-            index += 2;
+            self.index += 2;
             sleep(Duration::from_secs(2));
         }
     }
 
-    pub fn wait_login(self) -> Result<LoginInfo> {
-        todo!()
+    pub fn wait_login(mut self) -> Result<LoginInfo> {
+        self.login_weibo_com()?;
+        drop(self.client);
+        let cookie_store = Arc::try_unwrap(self.cookie_store).unwrap().into_inner()?;
+        let cookie_json = to_value(cookie_store.iter_unexpired().collect::<Vec<_>>())?;
+        let login_info_file = Path::new(LOGIN_INFO_PATH_STR);
+        let mut login_info: HashMap<String, Value> = HashMap::new();
+        login_info.insert("uid".into(), to_value(self.uid)?);
+        login_info.insert("cookies".into(), cookie_json);
+        fs::write(login_info_file, to_string(&login_info)?)?;
+        Ok(to_value(login_info)?)
     }
 
-    fn login_weibo_com(&self) -> Result<()> {
-        todo!()
-    }
-
-    fn login_m_weibo_cn(&self) -> Result<()> {
-        todo!()
+    fn login_weibo_com(&mut self) -> Result<()> {
+        let url = format!("https://login.sina.com.cn/sso/login.php?entry=weibo&returntype=TEXT&crossdomain=1&cdult=3&domain=weibo&alt={}&savestate=30&callback=STK_{}{}", self.alt, self.time_stamp, self.index);
+        self.index += 2;
+        let text = self.client.get(url).send()?.text()?;
+        let text = get_text(&text);
+        let mut json: Value = from_str(text)?;
+        self.uid = if let Value::String(uid) = json["uid"].take() {
+            uid
+        } else {
+            "".into()
+        };
+        if let Value::Array(url_list) = json["crossDomainUrlList"].take() {
+            for url in url_list {
+                self.client.get(url.as_str().unwrap()).send()?;
+            }
+        } else {
+            return Err(anyhow::anyhow!(
+                "crossDomainUrlList should be a list of url"
+            ));
+        }
+        self.client.get("https://weibo.com/login.php").send()?;
+        Ok(())
     }
 }
 
