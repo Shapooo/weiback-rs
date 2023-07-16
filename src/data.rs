@@ -25,9 +25,9 @@ impl LongText {
         if self.ok == 1 && self.http_code == 200 {
             Ok(self.data.long_text_content)
         } else {
-            Err(Error::ResourceGetFailed(
-                "returned long text status is not ok",
-            ))
+            Err(Error::ResourceGetFailed(format!(
+                "returned long text status is not ok: {self:?}"
+            )))
         }
     }
 }

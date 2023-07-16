@@ -1,3 +1,4 @@
+#[allow(unused)]
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("database error {0}")]
@@ -13,7 +14,7 @@ pub enum Error {
     #[error("malformatted data {0}")]
     MalFormat(String),
     #[error("resource download failed {0}")]
-    ResourceGetFailed(&'static str),
+    ResourceGetFailed(String),
     #[error("invalid cookie {0}")]
     InvalidCookie(#[from] reqwest::header::InvalidHeaderValue),
     #[error("unexpected error {0}")]

@@ -121,7 +121,9 @@ impl WebFetcher {
         let mut posts = res.json::<Value>().await?;
         trace!("get json: {posts:?}");
         if posts["ok"] != 1 {
-            Err(Error::ResourceGetFailed("fetched data is not ok"))
+            Err(Error::ResourceGetFailed(format!(
+                "fetched data is not ok: {posts:?}"
+            )))
         } else {
             if let Value::Array(v) = posts["data"].take() {
                 Ok(v)
@@ -147,7 +149,9 @@ impl WebFetcher {
         let res = self._fetch(url, &self.web_client).await?;
         let mut json: Value = res.json().await?;
         if json["ok"] != 1 {
-            return Err(Error::ResourceGetFailed("fetched emoticon is not ok"));
+            return Err(Error::ResourceGetFailed(format!(
+                "fetched emoticon is not ok: {json:?}"
+            )));
         }
 
         let mut res = HashMap::new();
@@ -198,7 +202,9 @@ impl WebFetcher {
         let res = self._fetch(url, &self.web_client).await?;
         let long_text_meta = match res.json::<LongText>().await {
             Ok(res) => res,
-            Err(e) if e.is_decode() => return Err(Error::ResourceGetFailed("bypass weibo's bug")),
+            Err(e) if e.is_decode() => {
+                return Err(Error::ResourceGetFailed("bypass weibo's bug".into()))
+            }
             Err(e) => return Err(e.into()),
         };
         long_text_meta.get_content()
