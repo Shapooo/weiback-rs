@@ -18,7 +18,7 @@ pub enum Error {
     #[error("invalid cookie {0}")]
     InvalidCookie(#[from] reqwest::header::InvalidHeaderValue),
     #[error("unexpected error {0}")]
-    UnexpectedError(&'static str),
+    Other(String),
     #[error("resource not in local")]
     NotInLocal,
 }
