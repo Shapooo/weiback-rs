@@ -26,6 +26,11 @@ pub struct WebFetcher {
 
 impl WebFetcher {
     pub fn from_cookies(cookie_store: CookieStore) -> Result<Self> {
+        let xsrf_token = cookie_store
+            .get("weibo.com", "/", "XSRF-TOKEN")
+            .ok_or(Error::Other("xsrf-token-not-found".into()))?
+            .value()
+            .to_owned();
         let cookie_store = Arc::new(CookieStoreMutex::new(cookie_store));
         let web_headers = HeaderMap::from_iter(
             [(
@@ -58,6 +63,7 @@ impl WebFetcher {
              (HeaderName::from_static("sec-fetch-dest"), HeaderValue::from_static("empty")),
              (HeaderName::from_static("sec-fetch-mode"), HeaderValue::from_static("cors")),
              (HeaderName::from_static("sec-fetch-site"), HeaderValue::from_static("same-origin")),
+             (HeaderName::from_static("x-xsrf-token"), HeaderValue::from_str(xsrf_token.as_str())?),
              (header::PRAGMA, HeaderValue::from_static("no-cache")),
              (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
              (header::TE, HeaderValue::from_static("trailers"))]
