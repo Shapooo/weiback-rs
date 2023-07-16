@@ -176,7 +176,11 @@ impl Loginator {
     }
 
     fn login_weibo_com(&mut self) -> Result<()> {
-        let url = format!("https://login.sina.com.cn/sso/login.php?entry=weibo&returntype=TEXT&crossdomain=1&cdult=3&domain=weibo&alt={}&savestate=30&callback=STK_{}{}", self.alt, self.time_stamp, self.index);
+        let url = format!(
+            "https://login.sina.com.cn/sso/login.php?entry=weibo&returntype=TEXT\
+            &crossdomain=1&cdult=3&domain=weibo&alt={}&savestate=30&callback=STK_{}{}",
+            self.alt, self.time_stamp, self.index
+        );
         self.index += 2;
         let text = self.client.get(url).send()?.text()?;
         let text = get_text(&text);

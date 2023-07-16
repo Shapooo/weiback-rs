@@ -528,7 +528,8 @@ impl PostProcessor {
         }
         Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
             + url
-            + r#""><img class="bk-icon-link" src="https://h5.sinaimg.cn/upload/2015/09/25/3/timeline_card_small_web_default.png"/>"#
+            + "\"><img class=\"bk-icon-link\" src=\"https://h5.sinaimg.cn/upload/2015/09/25/3/\
+               timeline_card_small_web_default.png\"/>"
             + url_title
             + "</a>"
     }

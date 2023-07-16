@@ -32,42 +32,64 @@ impl WebFetcher {
             .value()
             .to_owned();
         let cookie_store = Arc::new(CookieStoreMutex::new(cookie_store));
-        let web_headers = HeaderMap::from_iter(
-            [(
+        let web_headers = HeaderMap::from_iter([
+            (
                 header::ACCEPT,
-                HeaderValue::from_static("application/json, text/plain, */*")
+                HeaderValue::from_static("application/json, text/plain, */*"),
             ),
-             (header::REFERER, HeaderValue::from_static("https://weibo.com/")),
-             (
-                 header::USER_AGENT,
-                 HeaderValue::from_static(
-                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/113.0",
-                 ),
-             ),
-             (
-                 header::ACCEPT_LANGUAGE,
-                 HeaderValue::from_static("en-US,en;q=0.5"),
-             ),
-             (
-                 header::ACCEPT_ENCODING,
-                 HeaderValue::from_static("gzip, deflate, br"),
-             ),
-             (
-                 HeaderName::from_static("x-requested-with"),
-                 HeaderValue::from_static("XMLHttpRequest"),
-             ),
-             (HeaderName::from_static("client-version"), HeaderValue::from_static("v2.40.55")),
-             (HeaderName::from_static("server-version"), HeaderValue::from_static("v2023.05.23.3")),
-             (header::DNT, HeaderValue::from_static("1")),
-             (header::CONNECTION, HeaderValue::from_static("keep-alive")),
-             (HeaderName::from_static("sec-fetch-dest"), HeaderValue::from_static("empty")),
-             (HeaderName::from_static("sec-fetch-mode"), HeaderValue::from_static("cors")),
-             (HeaderName::from_static("sec-fetch-site"), HeaderValue::from_static("same-origin")),
-             (HeaderName::from_static("x-xsrf-token"), HeaderValue::from_str(xsrf_token.as_str())?),
-             (header::PRAGMA, HeaderValue::from_static("no-cache")),
-             (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
-             (header::TE, HeaderValue::from_static("trailers"))]
-        );
+            (
+                header::REFERER,
+                HeaderValue::from_static("https://weibo.com/"),
+            ),
+            (
+                header::USER_AGENT,
+                HeaderValue::from_static(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) \
+                     Gecko/20100101 Firefox/113.0",
+                ),
+            ),
+            (
+                header::ACCEPT_LANGUAGE,
+                HeaderValue::from_static("en-US,en;q=0.5"),
+            ),
+            (
+                header::ACCEPT_ENCODING,
+                HeaderValue::from_static("gzip, deflate, br"),
+            ),
+            (
+                HeaderName::from_static("x-requested-with"),
+                HeaderValue::from_static("XMLHttpRequest"),
+            ),
+            (
+                HeaderName::from_static("client-version"),
+                HeaderValue::from_static("v2.40.55"),
+            ),
+            (
+                HeaderName::from_static("server-version"),
+                HeaderValue::from_static("v2023.05.23.3"),
+            ),
+            (header::DNT, HeaderValue::from_static("1")),
+            (header::CONNECTION, HeaderValue::from_static("keep-alive")),
+            (
+                HeaderName::from_static("sec-fetch-dest"),
+                HeaderValue::from_static("empty"),
+            ),
+            (
+                HeaderName::from_static("sec-fetch-mode"),
+                HeaderValue::from_static("cors"),
+            ),
+            (
+                HeaderName::from_static("sec-fetch-site"),
+                HeaderValue::from_static("same-origin"),
+            ),
+            (
+                HeaderName::from_static("x-xsrf-token"),
+                HeaderValue::from_str(xsrf_token.as_str())?,
+            ),
+            (header::PRAGMA, HeaderValue::from_static("no-cache")),
+            (header::CACHE_CONTROL, HeaderValue::from_static("no-cache")),
+            (header::TE, HeaderValue::from_static("trailers")),
+        ]);
 
         let web_client = reqwest::Client::builder()
             .cookie_store(true)
