@@ -108,16 +108,19 @@ impl Loginator {
             .get(format!("{}{}1", LOGIN_API, self.time_stamp))
             .send()?
             .text()?;
-        dbg!(&text);
-        let text = get_text(&text);
-        let mut json: Value = from_str(text)?;
-        dbg!(&json);
-        let img_url = String::from("http:") + json["data"]["image"].as_str().unwrap();
-        self.qrid = if let Value::String(id) = json["data"]["qrid"].take() {
-            id
-        } else {
-            "".into()
-        };
+        let text = get_text(&text).ok_or(anyhow::anyhow!(
+            "cannot find wanted json in returned text: {}",
+            text
+        ))?;
+        let json: Value = from_str(text)?;
+        let img_url = String::from("http:")
+            + json["data"]["image"]
+                .as_str()
+                .expect("qrcode image url get failed");
+        self.qrid = json["data"]["qrid"]
+            .as_str()
+            .expect("qrcode id get failed")
+            .to_owned();
         let img = self.client.get(img_url).send()?.bytes()?;
         let img = Reader::new(Cursor::new(img))
             .with_guessed_format()?
@@ -137,16 +140,24 @@ impl Loginator {
                 self.qrid, self.time_stamp, self.index
             );
             let text = self.client.get(url).send()?.text()?;
-            let text = get_text(&text);
+            let text = get_text(&text).ok_or(anyhow::anyhow!(
+                "cannot find wanted json in returned text: {}",
+                text
+            ))?;
             let mut json: Value = from_str(text)?;
             debug!("login check ret: {:?}", json);
-            let retcode = json["retcode"].as_i64().unwrap();
+            let retcode = json["retcode"]
+                .as_i64()
+                .ok_or(anyhow::anyhow!("retcode of check api should be a number"))?;
             match retcode {
                 20000000 => {
                     self.alt = if let Value::String(alt) = json["data"]["alt"].take() {
                         alt
                     } else {
-                        "".into()
+                        return Err(anyhow::anyhow!(
+                            "no alt field in login confirm json: {}",
+                            text
+                        ));
                     };
                     return Ok(());
                 }
@@ -165,7 +176,11 @@ impl Loginator {
     pub fn wait_login(mut self) -> Result<LoginInfo> {
         self.login_weibo_com()?;
         drop(self.client);
-        let cookie_store = Arc::try_unwrap(self.cookie_store).unwrap().into_inner()?;
+        let cookie_store = Arc::try_unwrap(self.cookie_store)
+            .or(Err(anyhow::anyhow!(
+                "unwrap Arc<CookieStoreMutext> failed, there are bugs"
+            )))?
+            .into_inner()?;
         let cookie_json = to_value(cookie_store.iter_unexpired().collect::<Vec<_>>())?;
         let login_info_file = Path::new(LOGIN_INFO_PATH_STR);
         let mut login_info: HashMap<String, Value> = HashMap::new();
@@ -183,7 +198,10 @@ impl Loginator {
         );
         self.index += 2;
         let text = self.client.get(url).send()?.text()?;
-        let text = get_text(&text);
+        let text = get_text(&text).ok_or(anyhow::anyhow!(
+            "cannot find wanted json in returned text: {}",
+            text
+        ))?;
         let mut json: Value = from_str(text)?;
         self.uid = if let Value::String(uid) = json["uid"].take() {
             uid
@@ -192,7 +210,11 @@ impl Loginator {
         };
         if let Value::Array(url_list) = json["crossDomainUrlList"].take() {
             for url in url_list {
-                self.client.get(url.as_str().unwrap()).send()?;
+                self.client
+                    .get(url.as_str().ok_or(anyhow::anyhow!(
+                        "crossDomainUrlList must be a vec of string in login weibo.com returned"
+                    ))?)
+                    .send()?;
             }
         } else {
             return Err(anyhow::anyhow!(
@@ -204,9 +226,9 @@ impl Loginator {
     }
 }
 
-fn get_text(text: &str) -> &str {
+fn get_text(text: &str) -> Option<&str> {
     let len = text.len();
-    &text[text.find('(').unwrap() + 1..len - 2]
+    text.find('(').map(|start| &text[start + 1..len - 2])
 }
 
 impl Default for Loginator {
@@ -218,7 +240,10 @@ impl Default for Loginator {
 pub fn get_login_info() -> Result<Option<LoginInfo>> {
     let path = std::env::current_exe()?
         .parent()
-        .unwrap()
+        .ok_or(anyhow::anyhow!(
+            "the executable: {:?} should have parent, maybe bugs in there",
+            std::env::current_exe()
+        ))?
         .join(LOGIN_INFO_PATH_STR);
     if !path.exists() {
         return Ok(None);

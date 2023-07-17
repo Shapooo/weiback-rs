@@ -95,8 +95,7 @@ impl WebFetcher {
             .cookie_store(true)
             .cookie_provider(cookie_store.clone())
             .default_headers(web_headers)
-            .build()
-            .unwrap();
+            .build()?;
 
         let pic_headers = HeaderMap::from_iter([
         (
@@ -129,8 +128,7 @@ impl WebFetcher {
         (HeaderName::from_static("sec-fetch-site"), HeaderValue::from_static("cross-site"))]);
         let pic_client = reqwest::Client::builder()
             .default_headers(pic_headers)
-            .build()
-            .unwrap();
+            .build()?;
 
         Ok(WebFetcher {
             web_client,

@@ -7,9 +7,14 @@ use crate::error::Result;
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
-        let mut path = std::env::current_exe().unwrap();
-        path.pop();
-        let mut path = path.into_os_string().into_string().unwrap();
+        let path = std::env::current_exe().unwrap();
+        let path = path
+            .parent()
+            .expect("the executable should have parent, maybe bugs in there");
+        let mut path = path
+            .to_str()
+            .expect("template path cannot convert to str")
+            .to_owned();
         path.push_str("/res/templates/*.html");
         debug!("init tera from template: {}", path);
         let mut tera = match Tera::new(&path) {

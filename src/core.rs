@@ -114,7 +114,7 @@ impl Core {
         let task_status: Option<TaskStatus> = self
             .task_status
             .as_ref()
-            .unwrap()
+            .expect("core.status must be Some(_), bugs in there")
             .try_read()
             .ok()
             .map(|task_status| task_status.clone());
@@ -188,7 +188,10 @@ impl Core {
                             .on_hover_text("时间逆序即最上方的微博为最新的微博");
                         if ui.button("对本地微博取消收藏").clicked() {
                             self.task_ongoing = true;
-                            self.executor.as_ref().unwrap().unfavorite_posts(1..=10);
+                            self.executor
+                                .as_ref()
+                                .expect("core.executor must be unwrapable, bugs in there")
+                                .unfavorite_posts(1..=u32::MAX);
                         }
                     }
                     ui.collapsing("高级设置", |ui| {
@@ -227,18 +230,20 @@ impl Core {
                     self.task_ongoing = true;
                     match self.tab_type {
                         TabType::DownloadPosts => {
-                            self.executor.as_ref().unwrap().download_posts(
-                                start..=end,
-                                self.with_pic,
-                                self.image_definition,
-                            );
+                            self.executor
+                                .as_ref()
+                                .expect("core.executor must be unwrapable, bugs in there")
+                                .download_posts(start..=end, self.with_pic, self.image_definition);
                         }
                         TabType::ExportFromLocal => {
-                            self.executor.as_ref().unwrap().export_from_local(
-                                start..=end,
-                                self.reverse,
-                                self.image_definition,
-                            );
+                            self.executor
+                                .as_ref()
+                                .expect("core.executor must be unwrapable, bugs in there")
+                                .export_from_local(
+                                    start..=end,
+                                    self.reverse,
+                                    self.image_definition,
+                                );
                         }
                         _ => {}
                     }
@@ -252,7 +257,6 @@ impl Core {
     }
 
     fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // match get_config().unwrap() {
         match get_login_info().unwrap() {
             Some(login_info) => {
                 let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
