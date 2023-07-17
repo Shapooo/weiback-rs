@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response,
@@ -12,6 +12,7 @@ use serde_json::Value;
 
 use crate::data::{FavTag, LongText, Posts};
 use crate::error::{Error, Result};
+use crate::login::{save_login_info, to_login_info};
 
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
@@ -20,12 +21,14 @@ const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&i
 
 #[derive(Debug)]
 pub struct WebFetcher {
+    uid: &'static str,
+    cookie: Arc<CookieStoreMutex>,
     web_client: Client,
     pic_client: Client,
 }
 
 impl WebFetcher {
-    pub fn from_cookies(cookie_store: CookieStore) -> Result<Self> {
+    pub fn from_cookies(uid: &'static str, cookie_store: CookieStore) -> Result<Self> {
         let xsrf_token = cookie_store
             .get("weibo.com", "/", "XSRF-TOKEN")
             .ok_or(Error::Other("xsrf-token-not-found".into()))?
@@ -131,6 +134,8 @@ impl WebFetcher {
             .build()?;
 
         Ok(WebFetcher {
+            uid,
+            cookie: cookie_store.clone(),
             web_client,
             pic_client,
         })
@@ -259,5 +264,23 @@ impl WebFetcher {
             Err(e) => return Err(e.into()),
         };
         long_text_meta.get_content()
+    }
+}
+
+impl Drop for WebFetcher {
+    fn drop(&mut self) {
+        self.cookie
+            .lock()
+            .map_or(
+                Err(anyhow::anyhow!(
+                    "PoisonError: cannot lock Arc<MutexCookieStore>"
+                )),
+                |mutex_cookie_store| to_login_info(&self.uid, &*mutex_cookie_store),
+            )
+            .map(|login_info| save_login_info(&login_info))
+            .map_or_else(
+                |err| warn!("when save cookie, raise {}", err),
+                |_| info!("login_info saved succ"),
+            );
     }
 }

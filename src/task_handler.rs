@@ -28,14 +28,15 @@ pub struct TaskHandler {
 
 impl TaskHandler {
     pub fn new(mut login_info: LoginInfo, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
-        let fetcher =
-            WebFetcher::from_cookies(serde_json::from_value(login_info["cookies"].take())?)?;
-        let persister = Persister::new();
         let uid = if let serde_json::Value::String(uid) = login_info["uid"].take() {
             Box::leak(Box::new(uid))
         } else {
             ""
         };
+        let fetcher =
+            WebFetcher::from_cookies(uid, serde_json::from_value(login_info["cookies"].take())?)?;
+        let persister = Persister::new();
+
         Ok(TaskHandler {
             exporter: Exporter::new(),
             processer: PostProcessor::new(fetcher, persister),
