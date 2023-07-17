@@ -15,7 +15,7 @@ use reqwest::{
     blocking::Client,
     header::{self, HeaderMap, HeaderName, HeaderValue},
 };
-use reqwest_cookie_store::CookieStoreMutex;
+use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::{from_str, to_string, to_value, Value};
 
 const LOGIN_INFO_PATH_STR: &str = "res/login_info.json";
@@ -181,13 +181,9 @@ impl Loginator {
                 "unwrap Arc<CookieStoreMutext> failed, there are bugs"
             )))?
             .into_inner()?;
-        let cookie_json = to_value(cookie_store.iter_unexpired().collect::<Vec<_>>())?;
-        let login_info_file = Path::new(LOGIN_INFO_PATH_STR);
-        let mut login_info: HashMap<String, Value> = HashMap::new();
-        login_info.insert("uid".into(), to_value(self.uid)?);
-        login_info.insert("cookies".into(), cookie_json);
-        fs::write(login_info_file, to_string(&login_info)?)?;
-        Ok(to_value(login_info)?)
+        let login_info = to_login_info(&self.uid, &cookie_store)?;
+        save_login_info(&login_info)?;
+        Ok(login_info)
     }
 
     fn login_weibo_com(&mut self) -> Result<()> {
@@ -252,4 +248,18 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
     }
     let content = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&content)?)
+}
+
+pub fn to_login_info(uid: &str, cookie_store: &CookieStore) -> Result<LoginInfo> {
+    let cookie_json = to_value(cookie_store.iter_unexpired().collect::<Vec<_>>())?;
+    let mut login_info: HashMap<String, Value> = HashMap::new();
+    login_info.insert("uid".into(), to_value(uid)?);
+    login_info.insert("cookies".into(), cookie_json);
+    Ok(to_value(login_info)?)
+}
+
+pub fn save_login_info(login_info: &LoginInfo) -> Result<()> {
+    let login_info_file = Path::new(LOGIN_INFO_PATH_STR);
+    fs::write(login_info_file, to_string(login_info)?)?;
+    Ok(())
 }
