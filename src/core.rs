@@ -147,12 +147,12 @@ impl Core {
                     ui.selectable_value(
                         &mut self.tab_type,
                         TabType::DownloadPosts,
-                        "   从网络下载   ",
+                        "    微博下载    ",
                     );
                     ui.selectable_value(
                         &mut self.tab_type,
                         TabType::ExportFromLocal,
-                        "   从本地导出   ",
+                        "    本地微博    ",
                     );
                     ui.selectable_value(&mut self.tab_type, TabType::About, "        关于        ");
                 });
@@ -306,18 +306,17 @@ impl Core {
             .map(|a| (&*a).clone());
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(login_state) = login_state {
-                match login_state {
+                ui.vertical_centered(|ui| match login_state {
                     LoginState::GettingQRCode => {
                         ui.label("正在获取二维码，稍等...");
                     }
-                    // FIXME: img update
                     LoginState::QRCodeGotten(image_data) => {
                         let qrcode: &_ = self.qrcode_img.get_or_insert_with(|| {
                             ui.ctx()
                                 .load_texture("login_qrcode", image_data, Default::default())
                         });
                         ui.image(qrcode, qrcode.size_vec2());
-                        ui.label("请用手机扫描二维码并确认");
+                        ui.label("请尽快用手机扫描二维码并确认");
                     }
                     LoginState::Confirmed => {
                         ui.label("扫码成功，登录中...");
@@ -331,7 +330,7 @@ impl Core {
                         self.qrcode_img = None;
                         self.login_state = None;
                     }
-                }
+                });
             }
         });
     }
