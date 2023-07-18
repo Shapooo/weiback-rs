@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
-use std::path::Path;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
@@ -259,7 +258,13 @@ pub fn to_login_info(uid: &str, cookie_store: &CookieStore) -> Result<LoginInfo>
 }
 
 pub fn save_login_info(login_info: &LoginInfo) -> Result<()> {
-    let login_info_file = Path::new(LOGIN_INFO_PATH_STR);
+    let login_info_file = std::env::current_exe()?
+        .parent()
+        .ok_or(anyhow::anyhow!(
+            "the executable: {:?} should have parent, maybe bugs in there",
+            std::env::current_exe()
+        ))?
+        .join(LOGIN_INFO_PATH_STR);
     fs::write(login_info_file, to_string(login_info)?)?;
     Ok(())
 }
