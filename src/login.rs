@@ -181,7 +181,6 @@ impl Loginator {
             )))?
             .into_inner()?;
         let login_info = to_login_info(&self.uid, &cookie_store)?;
-        save_login_info(&login_info)?;
         Ok(login_info)
     }
 
