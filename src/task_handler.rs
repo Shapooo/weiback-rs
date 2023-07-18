@@ -6,7 +6,7 @@ use chrono;
 use log::{debug, error, info};
 use tokio::time::sleep;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::exporter::Exporter;
 use crate::login::LoginInfo;
 use crate::message::TaskStatus;
@@ -31,7 +31,10 @@ impl TaskHandler {
         let uid = if let serde_json::Value::String(uid) = login_info["uid"].take() {
             Box::leak(Box::new(uid))
         } else {
-            ""
+            return Err(Error::MalFormat(format!(
+                "no uid field in login_info: {:?}",
+                login_info
+            )));
         };
         let fetcher =
             WebFetcher::from_cookies(uid, serde_json::from_value(login_info["cookies"].take())?)?;
