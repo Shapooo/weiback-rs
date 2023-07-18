@@ -15,7 +15,7 @@ use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
 };
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
-use serde_json::{from_str, to_string, to_value, Value};
+use serde_json::{from_str, from_value, to_string, to_value, Value};
 
 const LOGIN_INFO_PATH_STR: &str = "res/login_info.json";
 const LOGIN_API: &str =
@@ -245,8 +245,87 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
     } else if !path.is_file() {
         return Err(anyhow::anyhow!("login info path have been occupied"));
     }
+    debug!("login_info.json exists, start to validate");
     let content = fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&content)?)
+    let login_info: Value = from_str(&content)?;
+    let cookie_store: CookieStore = from_value(login_info["cookies"].clone())?;
+    let xsrf_token = cookie_store
+        .get("weibo.com", "/", "XSRF-TOKEN")
+        .ok_or(anyhow::anyhow!("xsrf-token-not-found"))?
+        .value()
+        .to_owned();
+    let headers = HeaderMap::from_iter([
+        (
+            header::ACCEPT,
+            HeaderValue::from_static("application/json, text/plain, */*"),
+        ),
+        (
+            header::REFERER,
+            HeaderValue::from_static("https://weibo.com/"),
+        ),
+        (
+            header::USER_AGENT,
+            HeaderValue::from_static(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) \
+                     Gecko/20100101 Firefox/113.0",
+            ),
+        ),
+        (
+            header::ACCEPT_LANGUAGE,
+            HeaderValue::from_static("en-US,en;q=0.5"),
+        ),
+        (
+            header::ACCEPT_ENCODING,
+            HeaderValue::from_static("gzip, deflate, br"),
+        ),
+        (
+            HeaderName::from_static("x-requested-with"),
+            HeaderValue::from_static("XMLHttpRequest"),
+        ),
+        (
+            HeaderName::from_static("client-version"),
+            HeaderValue::from_static("v2.40.55"),
+        ),
+        (
+            HeaderName::from_static("server-version"),
+            HeaderValue::from_static("v2023.05.23.3"),
+        ),
+        (header::DNT, HeaderValue::from_static("1")),
+        (
+            HeaderName::from_static("sec-fetch-dest"),
+            HeaderValue::from_static("empty"),
+        ),
+        (
+            HeaderName::from_static("sec-fetch-mode"),
+            HeaderValue::from_static("cors"),
+        ),
+        (
+            HeaderName::from_static("sec-fetch-site"),
+            HeaderValue::from_static("same-origin"),
+        ),
+        (
+            HeaderName::from_static("x-xsrf-token"),
+            HeaderValue::from_str(xsrf_token.as_str())?,
+        ),
+        (header::TE, HeaderValue::from_static("trailers")),
+    ]);
+    let temporary_client = Client::builder()
+        .default_headers(headers)
+        .cookie_store(true)
+        .cookie_provider(Arc::new(CookieStoreMutex::new(cookie_store)))
+        .build()?;
+    let res: Value = temporary_client
+        .get("https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1")
+        .send()?
+        .json()?;
+    debug!("login check return: {:?}", res);
+    if res["ok"] == 1 {
+        debug!("cookie is valid");
+        Ok(Some(login_info))
+    } else {
+        debug!("cookie is invalid");
+        Ok(None)
+    }
 }
 
 pub fn to_login_info(uid: &str, cookie_store: &CookieStore) -> Result<LoginInfo> {
