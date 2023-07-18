@@ -29,6 +29,7 @@ pub struct Core {
     task_status: Option<Arc<RwLock<TaskStatus>>>,
     executor: Option<Executor>,
     task_ongoing: bool,
+    login_checked: bool,
     // variables associated with GUI
     start_page: String,
     end_page: String,
@@ -51,6 +52,7 @@ impl Core {
             task_status: None,
             executor: None,
             task_ongoing: false,
+            login_checked: false,
             // variables associated with logged GUI
             start_page: "1".into(),
             end_page: u32::MAX.to_string(),
@@ -257,25 +259,28 @@ impl Core {
     }
 
     fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        match get_login_info().unwrap() {
-            Some(login_info) => {
-                let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-                let executor = Executor::new(login_info, task_status.clone());
-                self.task_status = Some(task_status);
-                self.executor = Some(executor);
-                self.state = MainState::Logged;
-            }
-            None => {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.vertical_centered(|ui| ui.heading("WeiBack"));
-                        ui.label("还未登录，请重新登录！\n\n\n\n\n\n");
-                        if ui.button("登录").clicked() {
-                            self.state = MainState::Logining;
-                        }
-                    });
+        let check_res = if !self.login_checked {
+            self.login_checked = true;
+            get_login_info().unwrap()
+        } else {
+            None
+        };
+        if let Some(login_info) = check_res {
+            let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
+            let executor = Executor::new(login_info, task_status.clone());
+            self.task_status = Some(task_status);
+            self.executor = Some(executor);
+            self.state = MainState::Logged;
+        } else {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.vertical_centered(|ui| ui.heading("WeiBack"));
+                    ui.label("还未登录，请重新登录！\n\n\n\n\n\n");
+                    if ui.button("登录").clicked() {
+                        self.state = MainState::Logining;
+                    }
                 });
-            }
+            });
         }
     }
 
