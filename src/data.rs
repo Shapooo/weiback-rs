@@ -32,12 +32,6 @@ impl LongText {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
-pub struct FavTag {
-    pub fav_total_num: u64,
-    pub ok: u8,
-}
-
 #[cfg(test)]
 mod data_test {
     use super::{LongText, Post, Posts};

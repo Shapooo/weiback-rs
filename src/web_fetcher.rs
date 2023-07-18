@@ -10,7 +10,7 @@ use reqwest::{
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
 
-use crate::data::{FavTag, LongText, Posts};
+use crate::data::{LongText, Posts};
 use crate::error::{Error, Result};
 use crate::login::{save_login_info, to_login_info};
 
@@ -245,11 +245,25 @@ impl WebFetcher {
 
     pub async fn fetch_fav_total_num(&self) -> Result<u64> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
-        let res = self._fetch(FAVORITES_TAGS_API, &self.web_client).await?;
-        let fav_tag = res.json::<FavTag>().await?;
-        trace!("get fav tag data: {:?}", fav_tag);
-        assert_eq!(fav_tag.ok, 1);
-        return Ok(fav_tag.fav_total_num);
+        let ret_json: Value = self
+            ._fetch(FAVORITES_TAGS_API, &self.web_client)
+            .await?
+            .json()
+            .await?;
+        trace!("get fav tag data: {:?}", ret_json);
+        if ret_json["ok"] != 1 {
+            return Err(Error::ResourceGetFailed(format!(
+                "fav total num get failed: {:?}",
+                ret_json
+            )));
+        } else {
+            return ret_json["fav_total_num"]
+                .as_u64()
+                .ok_or(Error::MalFormat(format!(
+                    "no fav_total_num field in response: {:?}",
+                    ret_json
+                )));
+        }
     }
 
     pub async fn fetch_long_text_content(&self, mblogid: &str) -> Result<String> {
