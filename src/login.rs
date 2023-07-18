@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -328,10 +327,8 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
 }
 
 pub fn to_login_info(uid: &str, cookie_store: &CookieStore) -> Result<LoginInfo> {
-    let cookie_json = to_value(cookie_store.iter_unexpired().collect::<Vec<_>>())?;
-    let mut login_info: HashMap<String, Value> = HashMap::new();
-    login_info.insert("uid".into(), to_value(uid)?);
-    login_info.insert("cookies".into(), cookie_json);
+    let cookie_json = cookie_store.iter_unexpired().collect::<Vec<_>>();
+    let login_info = serde_json::json!({"uid":uid, "cookies":cookie_json});
     Ok(to_value(login_info)?)
 }
 
