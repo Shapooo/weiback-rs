@@ -1,6 +1,5 @@
 pub mod core;
 
-mod args;
 mod data;
 mod error;
 mod executor;
