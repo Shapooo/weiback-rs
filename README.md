@@ -1,4 +1,4 @@
-# WeiBack-rs 🚀🚀🚀
+# WeiBack-rs 📥
 
 [![license](https://img.shields.io/github/license/Shapooo/weiback-rs)](https://github.com/Shapooo/weiback-rs/blob/master/LICENSE)
 [![Rust](https://img.shields.io/badge/Made%20with-Rust-1f425f.svg)](https://www.rust-lang.org/)
@@ -6,6 +6,7 @@
 
 WeiBack-rs 是一个使用Rust🦀开发的开源软件，它可以帮助你备份自己在微博上的数据。
 
+*注意：本项目仅为技术学习和交流，请在遵守当地相关法律法规的前提下使用本项目*
 ------
 
 ## 特点 💡
@@ -115,12 +116,16 @@ WeiBack 的油猴脚本版本 [WeiBack](https://github.com/Shapooo/WeiBack)，�
 
 ------
 
-## 开源协议和贡献方式 📝
+## 贡献 🤝
 
-本项目使用 [Apache 2.0 License](LICENSE) 开源协议。欢迎其他开发者参与贡献，可以通过以下方式：
+欢迎其他开发者参与贡献，可以通过以下方式：
 
 - 提交 [issue](https://github.com/Shapooo/weiback-rs/issues) 报告问题或建议
 - 提交 [pull request](https://github.com/Shapooo/weiback-rs/pulls) 提交代码或文档
+
+## 开源协议 📝
+
+本项目使用 [Apache 2.0 License](LICENSE) 开源协议。
 
 ## 联系方式 📧
 
