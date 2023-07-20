@@ -66,15 +66,7 @@ impl TaskHandler {
     }
 
     pub async fn unfavorite_posts(&self, range: RangeInclusive<u32>) {
-        match self.processer.unfavorite_fav_posts(range).await {
-            Err(e) => {
-                error!("{e}");
-                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{e}"));
-            }
-            Ok(()) => {
-                *self.task_status.write().unwrap() = TaskStatus::Finished;
-            }
-        }
+        self.handle_task_res(self.processer.unfavorite_fav_posts(range).await)
     }
 
     pub async fn export_from_local(
@@ -84,16 +76,10 @@ impl TaskHandler {
         image_definition: u8,
     ) {
         info!("fetch posts from local and export");
-        match self
-            ._export_from_local(range, reverse, image_definition)
-            .await
-        {
-            Err(err) => {
-                error!("{err}");
-                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
-            }
-            _ => {}
-        }
+        self.handle_task_res(
+            self._export_from_local(range, reverse, image_definition)
+                .await,
+        );
     }
 
     async fn _export_from_local(
@@ -145,7 +131,6 @@ impl TaskHandler {
             });
             index += 1;
         }
-        *self.task_status.write().unwrap() = TaskStatus::Finished;
         Ok(())
     }
 
@@ -155,16 +140,10 @@ impl TaskHandler {
         with_pic: bool,
         image_definition: u8,
     ) {
-        match self
-            ._download_posts(range, with_pic, image_definition)
-            .await
-        {
-            Err(err) => {
-                error!("{err}");
-                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
-            }
-            _ => {}
-        }
+        self.handle_task_res(
+            self._download_posts(range, with_pic, image_definition)
+                .await,
+        );
     }
 
     async fn _download_posts(
@@ -201,7 +180,19 @@ impl TaskHandler {
             sleep(Duration::from_secs(5)).await;
         }
         info!("fetched {total_posts_sum} posts in total");
-        *self.task_status.write().unwrap() = TaskStatus::Finished;
         Ok(())
+    }
+
+    fn handle_task_res(&self, result: Result<()>) {
+        match result {
+            Err(err) => {
+                error!("{err}");
+                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
+            }
+            _ => {
+                info!("task finished");
+                *self.task_status.write().unwrap() = TaskStatus::Finished;
+            }
+        }
     }
 }
