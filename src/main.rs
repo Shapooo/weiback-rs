@@ -17,6 +17,7 @@ fn main() -> Result<()> {
     let log_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(log_path)?;
     Builder::new()
         .filter_level(LevelFilter::Warn)
