@@ -6,7 +6,7 @@ use std::path::Path;
 use bytes::Bytes;
 use futures::future::join_all;
 use lazy_static::lazy_static;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use regex::Regex;
 use serde_json::{to_value, Value};
 
@@ -144,10 +144,11 @@ impl PostProcessor {
         let html = self.html_generator.generate_page(&inner_html)?;
         let mut pics = Vec::new();
         for pic in pic_to_fetch {
-            let blob = self.get_pic(&pic).await?;
-            pics.push(Picture {
-                name: pic_url_to_file(&pic).into(),
-                blob,
+            self.get_pic(&pic).await?.map(|blob| {
+                pics.push(Picture {
+                    name: pic_url_to_file(&pic).into(),
+                    blob,
+                })
             });
         }
         Ok(HTMLPage { html, pics })
@@ -284,15 +285,21 @@ impl PostProcessor {
         Ok(post)
     }
 
-    async fn get_pic(&self, url: &str) -> Result<Bytes> {
+    async fn get_pic(&self, url: &str) -> Result<Option<Bytes>> {
         let url = crate::utils::strip_url_queries(url);
         let res = self.persister.query_img(url).await;
         if let Err(Error::NotInLocal) = res {
-            let pic = self.web_fetcher.fetch_pic(url).await?;
+            let pic = match self.web_fetcher.fetch_pic(url).await {
+                Ok(pic) => pic,
+                Err(err) => {
+                    warn!("pic get failed {}", err);
+                    return Ok(None);
+                }
+            };
             self.persister.insert_img(url, &pic).await?;
-            Ok(pic)
+            Ok(Some(pic))
         } else {
-            Ok(res?)
+            Ok(Some(res?))
         }
     }
 

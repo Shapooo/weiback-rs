@@ -167,14 +167,23 @@ impl WebFetcher {
     }
 
     async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
-        Ok(client.get(url).send().await?)
+        let url_str = url.as_str().to_owned();
+        let res = client.get(url).send().await?;
+        if res.status() != 200 {
+            Err(Error::ResourceGetFailed(format!(
+                "fetch {} failed with status code {}",
+                url_str,
+                res.status()
+            )))
+        } else {
+            Ok(res)
+        }
     }
 
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
-        let res = self._fetch(url, &self.web_client).await?;
-        let mut posts = res.json::<Value>().await?;
+        let mut posts: Value = self._fetch(url, &self.web_client).await?.json().await?;
         trace!("get json: {posts:?}");
         if posts["ok"] != 1 {
             Err(Error::ResourceGetFailed(format!(
