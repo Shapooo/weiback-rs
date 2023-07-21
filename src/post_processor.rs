@@ -131,9 +131,9 @@ impl PostProcessor {
         let mut pic_to_fetch = HashSet::new();
         posts
             .iter_mut()
-            .map(|mut post| {
+            .map(|post| {
                 self.process_post(
-                    &mut post,
+                    post,
                     &mut pic_to_fetch,
                     Path::new((Borrowed(html_name) + "_files").as_ref()),
                     image_definition,
