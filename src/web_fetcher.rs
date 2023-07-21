@@ -189,14 +189,12 @@ impl WebFetcher {
             Err(Error::ResourceGetFailed(format!(
                 "fetched data is not ok: {posts:?}"
             )))
+        } else if let Value::Array(v) = posts["data"].take() {
+            Ok(v)
         } else {
-            if let Value::Array(v) = posts["data"].take() {
-                Ok(v)
-            } else {
-                Err(Error::MalFormat(
-                    "Posts should be a array, maybe api has changed".into(),
-                ))
-            }
+            Err(Error::MalFormat(
+                "Posts should be a array, maybe api has changed".into(),
+            ))
         }
     }
 
