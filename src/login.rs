@@ -5,7 +5,6 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::Result;
-use chrono;
 use egui::ColorImage;
 use image::io::Reader;
 use log::debug;
