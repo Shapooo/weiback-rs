@@ -303,7 +303,7 @@ impl Core {
             })
             .try_read()
             .ok()
-            .map(|a| (&*a).clone());
+            .map(|a| a.clone());
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(login_state) = login_state {
                 ui.vertical_centered(|ui| match login_state {
