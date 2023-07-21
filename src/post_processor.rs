@@ -188,7 +188,7 @@ impl PostProcessor {
         debug!("save pictures of posts to db...");
         let mut pics = posts
             .iter()
-            .map(|ref post| {
+            .map(|post| {
                 Ok(self.extract_emoji_from_text(
                     (Borrowed(value_as_str(post, "text_raw")?)
                         + post["retweeted_status"]["text_raw"]
