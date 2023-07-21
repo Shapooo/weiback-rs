@@ -144,12 +144,12 @@ impl PostProcessor {
         let html = self.html_generator.generate_page(&inner_html)?;
         let mut pics = Vec::new();
         for pic in pic_to_fetch {
-            self.get_pic(&pic).await?.map(|blob| {
+            if let Some(blob) = self.get_pic(&pic).await? {
                 pics.push(Picture {
                     name: pic_url_to_file(&pic).into(),
                     blob,
-                })
-            });
+                });
+            }
         }
         Ok(HTMLPage { html, pics })
     }
