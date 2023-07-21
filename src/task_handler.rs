@@ -65,7 +65,22 @@ impl TaskHandler {
     }
 
     pub async fn unfavorite_posts(&self, range: RangeInclusive<u32>) {
-        self.handle_task_res(self.processer.unfavorite_fav_posts(range).await)
+        self.handle_task_res(self._unfavorite_posts(range).await)
+    }
+
+    async fn _unfavorite_posts(&self, range: RangeInclusive<u32>) -> Result<()> {
+        let ids = self.processer.get_fav_ids_to_unfavorite(range).await?;
+        let len = ids.len();
+        for (i, id) in ids.into_iter().enumerate() {
+            self.processer.unfavorite_post(id).await?;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let _ = self.task_status.try_write().map(|mut op| {
+                let progress = i as f32 / len as f32;
+                *op = TaskStatus::InProgress(progress, format!("已处理{i}条，共{len}条..."))
+            });
+        }
+
+        Ok(())
     }
 
     pub async fn export_from_local(

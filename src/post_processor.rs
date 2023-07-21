@@ -81,7 +81,7 @@ impl PostProcessor {
         Ok(())
     }
 
-    pub async fn unfavorite_fav_posts(&self, range: RangeInclusive<u32>) -> Result<()> {
+    pub async fn get_fav_ids_to_unfavorite(&self, range: RangeInclusive<u32>) -> Result<Vec<i64>> {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
         let ids = self
@@ -89,12 +89,12 @@ impl PostProcessor {
             .query_posts_to_unfavorite(limit, offset)
             .await?;
         debug!("load {} posts to unfavorite", ids.len());
-        for id in ids {
-            self.web_fetcher.unfavorite_post(id).await?;
-            self.persister.mark_post_unfavorited(id).await?;
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
-        Ok(())
+        Ok(ids)
+    }
+
+    pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
+        self.web_fetcher.unfavorite_post(id).await?;
+        self.persister.mark_post_unfavorited(id).await
     }
 
     pub async fn download_fav_posts(
