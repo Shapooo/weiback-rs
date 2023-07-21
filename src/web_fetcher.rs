@@ -261,17 +261,17 @@ impl WebFetcher {
             .await?;
         trace!("get fav tag data: {:?}", ret_json);
         if ret_json["ok"] != 1 {
-            return Err(Error::ResourceGetFailed(format!(
+            Err(Error::ResourceGetFailed(format!(
                 "fav total num get failed: {:?}",
                 ret_json
-            )));
+            )))
         } else {
-            return ret_json["fav_total_num"]
+            ret_json["fav_total_num"]
                 .as_u64()
                 .ok_or(Error::MalFormat(format!(
                     "no fav_total_num field in response: {:?}",
                     ret_json
-                )));
+                )))
         }
     }
 
