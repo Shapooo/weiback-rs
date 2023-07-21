@@ -193,7 +193,7 @@ impl PostProcessor {
             .iter()
             .map(|ref post| {
                 Ok(self.extract_emoji_from_text(
-                    (Borrowed(value_as_str(&post, "text_raw")?)
+                    (Borrowed(value_as_str(post, "text_raw")?)
                         + post["retweeted_status"]["text_raw"]
                             .as_str()
                             .unwrap_or_default())
