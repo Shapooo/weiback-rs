@@ -17,11 +17,23 @@ pub enum MainState {
     Logged,
 }
 
+impl Default for MainState {
+    fn default() -> Self {
+        Self::Unlogined
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum TabType {
     DownloadPosts,
     ExportFromLocal,
     About,
+}
+
+impl Default for TabType {
+    fn default() -> Self {
+        Self::DownloadPosts
+    }
 }
 
 pub struct Core {
@@ -45,28 +57,32 @@ pub struct Core {
     qrcode_img: Option<egui::TextureHandle>,
 }
 
-impl Core {
-    pub fn new() -> Self {
+impl Default for Core {
+    fn default() -> Self {
         Self {
-            state: MainState::Unlogined,
-            task_status: None,
-            executor: None,
-            task_ongoing: false,
-            login_checked: false,
-            // variables associated with logged GUI
-            start_page: "1".into(),
+            state: Default::default(),
+            task_status: Default::default(),
+            executor: Default::default(),
+            task_ongoing: Default::default(),
+            login_checked: Default::default(),
+            start_page: "1".to_string(),
             end_page: u32::MAX.to_string(),
-            message: "Hello!".into(),
-            tab_type: TabType::DownloadPosts,
-            with_pic: true,
-            reverse: true,
+            message: Default::default(),
+            tab_type: Default::default(),
+            with_pic: Default::default(),
+            reverse: Default::default(),
             image_definition: 2,
             period: 50,
-            ratio: 0.0,
-            // variable associated with logining GUI
-            login_state: None,
-            qrcode_img: None,
+            ratio: Default::default(),
+            login_state: Default::default(),
+            qrcode_img: Default::default(),
         }
+    }
+}
+
+impl Core {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn run(self) -> anyhow::Result<()> {
