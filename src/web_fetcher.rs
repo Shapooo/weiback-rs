@@ -159,7 +159,8 @@ impl WebFetcher {
                 Ok(())
             } else {
                 Err(Error::Other(format!(
-                    "unfavorite post get 403: {:?}",
+                    "unfavorite post get {}: {:?}",
+                    status_code.as_u16(),
                     res_json["message"],
                 )))
             }
