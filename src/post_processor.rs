@@ -545,16 +545,14 @@ impl PostProcessor {
 fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
     v[property].as_str().ok_or(Error::MalFormat(format!(
         "property {} of {} cannot convert to str",
-        property,
-        v.to_string(),
+        property, v
     )))
 }
 
 fn value_as_i64<'a>(v: &'a Value, property: &'a str) -> Result<i64> {
     v[property].as_i64().ok_or(Error::MalFormat(format!(
         "property {} of {} cannot convert to i64",
-        property,
-        v.to_string(),
+        property, v
     )))
 }
 
