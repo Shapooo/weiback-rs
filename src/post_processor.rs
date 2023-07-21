@@ -29,7 +29,7 @@ lazy_static! {
     static ref TOPIC_EXPR: Regex = Regex::new(r#"#([^#]+)#"#).unwrap();
 }
 
-const IMG_TYPES: &[&[&'static str; 6]; 3] = &[
+const IMG_TYPES: &[&[&str; 6]; 3] = &[
     &[
         "thunmnail",
         "bmiddle",
