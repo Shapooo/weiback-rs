@@ -267,7 +267,7 @@ impl Core {
                     }
                 }
             });
-            ui.add(egui::ProgressBar::new(self.ratio));
+            ui.add(egui::ProgressBar::new(self.ratio).show_percentage());
             ui.vertical_centered(|ui| {
                 ui.label(&self.message);
             });
