@@ -316,7 +316,7 @@ impl PostProcessor {
 
     fn extract_pics_from_post_non_rec(&self, post: &Post, image_definition: u8) -> Vec<String> {
         if let Value::Array(pic_ids) = &post["pic_ids"] {
-            if pic_ids.len() > 0 {
+            if !pic_ids.is_empty() {
                 let pic_infos = &post["pic_infos"];
                 let mut pic_urls: Vec<_> = pic_ids
                     .iter()
