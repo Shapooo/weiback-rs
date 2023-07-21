@@ -403,10 +403,10 @@ impl PostProcessor {
             pic_urls.insert(url);
         });
 
-        let text_raw = value_as_str(&post, "text_raw")?;
+        let text_raw = value_as_str(post, "text_raw")?;
         let url_struct = &post["url_struct"];
         let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
-        trace!("conv {} to {}", text_raw, &text);
+        trace!("conv {} to {}", text_raw, text);
         post["text_raw"] = to_value(text).unwrap();
         if let Some(avatar_url) = self.get_avatar_url(post, image_definition) {
             pic_urls.insert(avatar_url.into());
