@@ -525,7 +525,7 @@ impl PostProcessor {
         let mut url = Borrowed(s);
         if let Value::Array(url_objs) = url_struct {
             if let Some(obj) = url_objs
-                .into_iter()
+                .iter()
                 .find(|obj| obj["short_url"].is_string() && obj["short_url"].as_str().unwrap() == s)
             {
                 assert!(obj["url_title"].is_string() && obj["long_url"].is_string());
