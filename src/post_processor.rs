@@ -129,17 +129,14 @@ impl PostProcessor {
     ) -> Result<HTMLPage> {
         debug!("generate html from {} posts", posts.len());
         let mut pic_to_fetch = HashSet::new();
-        posts
-            .iter_mut()
-            .map(|post| {
-                self.process_post(
-                    post,
-                    &mut pic_to_fetch,
-                    Path::new((Borrowed(html_name) + "_files").as_ref()),
-                    image_definition,
-                )
-            })
-            .collect::<Result<_>>()?;
+        posts.iter_mut().try_for_each(|post| {
+            self.process_post(
+                post,
+                &mut pic_to_fetch,
+                Path::new((Borrowed(html_name) + "_files").as_ref()),
+                image_definition,
+            )
+        })?;
         let inner_html = self.html_generator.generate_posts(posts)?;
         let html = self.html_generator.generate_page(&inner_html)?;
         let mut pics = Vec::new();
