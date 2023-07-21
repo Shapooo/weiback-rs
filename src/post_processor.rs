@@ -135,7 +135,7 @@ impl PostProcessor {
                 self.process_post(
                     &mut post,
                     &mut pic_to_fetch,
-                    &Path::new((Borrowed(html_name) + "_files").as_ref()),
+                    Path::new((Borrowed(html_name) + "_files").as_ref()),
                     image_definition,
                 )
             })
