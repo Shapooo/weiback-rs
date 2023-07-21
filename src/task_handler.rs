@@ -124,7 +124,7 @@ impl TaskHandler {
             }
             let _ = self.task_status.try_write().map(|mut op| {
                 *op = TaskStatus::InProgress(
-                    local_posts.len() as f32 / posts_sum as f32,
+                    (posts_sum - local_posts.len()) as f32 / posts_sum as f32,
                     "导出中...可能需要下载图片".into(),
                 )
             });
@@ -153,19 +153,17 @@ impl TaskHandler {
     ) -> Result<()> {
         assert!(range.start() != &0);
         info!("pages download range is {range:?}");
-        let mut total_posts_sum: usize = 0;
-        let end = if *range.end() == u32::MAX {
-            (unsafe { POSTS_TOTAL }) as f32
-        } else {
-            unsafe { POSTS_TOTAL }.min(*range.end() as u64 * 20) as f32
-        };
+        let mut total_downloaded: usize = 0;
+        let post_total = unsafe { POSTS_TOTAL };
+        let task_quota = (post_total.min(*range.end() as u64 * 20)
+            - post_total.min(*range.start() as u64 * 20)) as f32;
 
-        for (i, page) in range.enumerate() {
+        for page in range {
             let posts_sum = self
                 .processer
                 .download_fav_posts(self.uid, page, with_pic, image_definition)
                 .await?;
-            total_posts_sum += posts_sum;
+            total_downloaded += posts_sum;
             debug!("fetched {} posts in {}th page", posts_sum, page);
             if posts_sum == 0 {
                 info!("no more posts in {}th page, finish work", page);
@@ -173,12 +171,14 @@ impl TaskHandler {
             }
 
             let _ = self.task_status.try_write().map(|mut pro| {
-                *pro =
-                    TaskStatus::InProgress(i as f32 / end, "下载中...耐心等待，先干点别的".into())
+                *pro = TaskStatus::InProgress(
+                    total_downloaded as f32 / task_quota,
+                    "下载中...耐心等待，先干点别的".into(),
+                )
             });
             sleep(Duration::from_secs(5)).await;
         }
-        info!("fetched {total_posts_sum} posts in total");
+        info!("fetched {total_downloaded} posts in total");
         Ok(())
     }
 
