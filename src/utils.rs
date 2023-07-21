@@ -5,7 +5,6 @@ pub fn pic_url_to_file(url: &str) -> &str {
         .split('?')
         .next()
         .expect("it is not a valid picture url")
-        .into()
 }
 
 pub fn pic_url_to_id(url: &str) -> &str {
