@@ -298,7 +298,7 @@ impl Drop for WebFetcher {
                 Err(anyhow::anyhow!(
                     "PoisonError: cannot lock Arc<MutexCookieStore>"
                 )),
-                |mutex_cookie_store| to_login_info(&self.uid, &*mutex_cookie_store),
+                |mutex_cookie_store| to_login_info(&self.uid, &mutex_cookie_store),
             )
             .map(|login_info| save_login_info(&login_info))
             .map_or_else(
