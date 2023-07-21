@@ -206,7 +206,7 @@ impl PostProcessor {
             .collect::<HashSet<String>>();
         posts
             .into_iter()
-            .flat_map(|post| self.extract_pics_from_post(&post, image_definition))
+            .flat_map(|post| self.extract_pics_from_post(post, image_definition))
             .for_each(|url| {
                 pics.insert(url);
             });
