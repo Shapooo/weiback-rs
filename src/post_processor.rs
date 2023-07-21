@@ -339,8 +339,7 @@ impl PostProcessor {
         }
         IMG_TYPES[image_definition as usize]
             .iter()
-            .skip_while(|t| pic_info[t].is_string())
-            .next()
+            .find(|t| pic_info[t].is_object())
             .and_then(|t| pic_info[t]["url"].as_str())
     }
 
