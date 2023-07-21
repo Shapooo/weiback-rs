@@ -123,9 +123,14 @@ impl TaskHandler {
                     .await?;
             }
             let _ = self.task_status.try_write().map(|mut op| {
+                let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
                 *op = TaskStatus::InProgress(
-                    (posts_sum - local_posts.len()) as f32 / posts_sum as f32,
-                    "导出中...可能需要下载图片".into(),
+                    progress,
+                    format!(
+                        "已处理{}条，共{}条...\n可能需要下载图片",
+                        posts_sum - local_posts.len(),
+                        posts_sum
+                    ),
                 )
             });
             index += 1;
@@ -173,7 +178,7 @@ impl TaskHandler {
             let _ = self.task_status.try_write().map(|mut pro| {
                 *pro = TaskStatus::InProgress(
                     total_downloaded as f32 / task_quota,
-                    "下载中...耐心等待，先干点别的".into(),
+                    format!("已下载第{page}页...耐心等待，先干点别的"),
                 )
             });
             sleep(Duration::from_secs(5)).await;
