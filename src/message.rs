@@ -18,25 +18,15 @@ pub enum TaskStatus {
 #[allow(unused)]
 impl TaskStatus {
     pub fn is_inprogress(&self) -> bool {
-        if let TaskStatus::InProgress(_, _) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::InProgress(_, _))
     }
+
     pub fn is_finished(&self) -> bool {
-        if let TaskStatus::Finished = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::Finished)
     }
+
     pub fn is_error(&self) -> bool {
-        if let TaskStatus::Error(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::Error(_))
     }
 }
 
