@@ -74,8 +74,8 @@ impl Persister {
             info!("db {:?} exists", self.db_path);
         } else {
             info!("db {:?} not exists, create it", self.db_path);
-            Sqlite::create_database(&self.db_path.to_str().unwrap()).await?;
-            let mut db = SqliteConnection::connect(&self.db_path.to_str().unwrap()).await?;
+            Sqlite::create_database(self.db_path.to_str().unwrap()).await?;
+            let mut db = SqliteConnection::connect(self.db_path.to_str().unwrap()).await?;
             use futures::stream::TryStreamExt;
             sqlx::query(DATABASE_CREATE_SQL)
                 .execute_many(&mut db)
@@ -94,7 +94,7 @@ impl Persister {
         self.db_pool = Some(
             SqlitePoolOptions::new()
                 .min_connections(2)
-                .connect_lazy(&self.db_path.to_str().unwrap())?,
+                .connect_lazy(self.db_path.to_str().unwrap())?,
         );
         Ok(())
     }
