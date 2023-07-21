@@ -123,6 +123,15 @@ impl Persister {
         Ok(())
     }
 
+    pub async fn mark_post_favorited(&self, id: i64) -> Result<()> {
+        debug!("mark favorited post {} in db", id);
+        sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
+            .bind(id)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(())
+    }
+
     pub async fn query_posts_to_unfavorite(&self, limit: u32, offset: u32) -> Result<Vec<i64>> {
         debug!("query posts to unfavorite, limit {limit} offset {offset}");
         Ok(sqlx::query_as::<Sqlite, (i64,)>(

@@ -217,7 +217,10 @@ impl PostProcessor {
     async fn preprocess_post(&self, post: Post) -> Result<Post> {
         let id = value_as_i64(&post, "id")?;
         match self.persister.query_post(id).await {
-            Ok(post) => Ok(post),
+            Ok(post) => {
+                self.persister.mark_post_favorited(id).await?;
+                Ok(post)
+            }
             Err(Error::NotInLocal) => {
                 let mut post = self.preprocess_post_non_rec(post).await?;
                 self.persister.insert_post(&post).await?;
