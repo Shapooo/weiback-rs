@@ -2,15 +2,15 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("database error {0}")]
-    DataBaseError(#[from] sqlx::Error),
+    FromDataBase(#[from] sqlx::Error),
     #[error("reqwest error {0}")]
-    ReqwestError(#[from] reqwest::Error),
+    FromReqwest(#[from] reqwest::Error),
     #[error("serde_json parse error {0}")]
-    JsonParseError(#[from] serde_json::Error),
+    JsonParseFailed(#[from] serde_json::Error),
     #[error("tera error {0}")]
-    TeraError(#[from] tera::Error),
+    FromTera(#[from] tera::Error),
     #[error("export error {0}")]
-    ExportError(#[from] std::io::Error),
+    IOFailed(#[from] std::io::Error),
     #[error("malformatted data {0}")]
     MalFormat(String),
     #[error("resource download failed {0}")]
