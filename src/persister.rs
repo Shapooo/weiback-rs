@@ -144,7 +144,7 @@ impl Persister {
         let url = strip_url_queries(url);
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
             .bind(url)
-            .bind(&id)
+            .bind(id)
             .bind(img)
             .execute(self.db_pool.as_ref().unwrap())
             .await?;
