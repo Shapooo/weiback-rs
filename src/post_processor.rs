@@ -319,7 +319,7 @@ impl PostProcessor {
             if pic_ids.len() > 0 {
                 let pic_infos = &post["pic_infos"];
                 let mut pic_urls: Vec<_> = pic_ids
-                    .into_iter()
+                    .iter()
                     .filter_map(|id| id.as_str())
                     .filter_map(|id| self.select_pic_url(&pic_infos[id], image_definition))
                     .map(|url| url.to_owned())
