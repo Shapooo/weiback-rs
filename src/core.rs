@@ -142,6 +142,14 @@ impl Core {
             .map(|task_status| task_status.clone());
         if let Some(task_status) = task_status {
             match &task_status {
+                TaskStatus::Init(web_total, db_total) => {
+                    self.web_total = *web_total;
+                    self.db_total = *db_total;
+                    self.message = format!(
+                        "账号共 {} 条收藏\n本地保存有 {} 条收藏",
+                        self.web_total, self.db_total
+                    );
+                }
                 TaskStatus::InProgress(ratio, msg) => {
                     self.ratio = *ratio;
                     self.message = msg.to_owned()
@@ -154,9 +162,6 @@ impl Core {
                     self.message = "任务完成!".into();
                 }
                 TaskStatus::Error(msg) => {
-                    self.message = msg.to_owned();
-                }
-                TaskStatus::Info(msg) => {
                     self.message = msg.to_owned();
                 }
             }

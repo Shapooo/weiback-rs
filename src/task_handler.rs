@@ -57,10 +57,7 @@ impl TaskHandler {
         unsafe {
             POSTS_TOTAL = web_total;
         }
-        *self.task_status.write().unwrap() = TaskStatus::Info(format!(
-            "账号共 {} 条收藏\n本地保存有 {} 条收藏",
-            web_total, db_total?
-        ));
+        *self.task_status.write().unwrap() = TaskStatus::Init(web_total, db_total?);
         Ok(())
     }
 
