@@ -15,8 +15,6 @@ use crate::web_fetcher::WebFetcher;
 
 const SAVING_PERIOD: usize = 200;
 
-static mut POSTS_TOTAL: u64 = 0;
-
 #[derive(Debug)]
 pub struct TaskHandler {
     exporter: Exporter,
@@ -54,9 +52,6 @@ impl TaskHandler {
             self.processer.get_db_total_num()
         );
         let web_total = web_total?;
-        unsafe {
-            POSTS_TOTAL = web_total;
-        }
         *self.task_status.write().unwrap() = TaskStatus::Init(web_total, db_total?);
         Ok(())
     }
@@ -174,11 +169,10 @@ impl TaskHandler {
         assert!(range.start() != &0);
         info!("pages download range is {range:?}");
         let mut total_downloaded: usize = 0;
-        let post_total = unsafe { POSTS_TOTAL };
-        let task_quota = (post_total.min(*range.end() as u64 * 20)
-            - post_total.min(*range.start() as u64 * 20)) as f32;
+        let range = range.start() / 20 + 1..=range.end() / 20;
+        let total_pages = (range.end() - range.start() + 1) as f32;
 
-        for page in range {
+        for (i, page) in range.into_iter().enumerate() {
             let posts_sum = self
                 .processer
                 .download_fav_posts(self.uid, page, with_pic, image_definition)
@@ -192,7 +186,7 @@ impl TaskHandler {
 
             let _ = self.task_status.try_write().map(|mut pro| {
                 *pro = TaskStatus::InProgress(
-                    total_downloaded as f32 / task_quota,
+                    i as f32 / total_pages,
                     format!("已下载第{page}页...耐心等待，先干点别的"),
                 )
             });
