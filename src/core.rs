@@ -145,6 +145,7 @@ impl Core {
                 TaskStatus::Finished => {
                     self.ratio = 1.;
                     self.task_ongoing = false;
+                    self.message = "任务完成!".into();
                 }
                 TaskStatus::Error(msg) => {
                     self.message = msg.to_owned();
