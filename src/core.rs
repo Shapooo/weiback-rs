@@ -169,7 +169,10 @@ impl Core {
                     self.task_ongoing = false;
                     self.web_total = *web_total;
                     self.db_total = *db_total;
-                    self.message = "任务完成!".into();
+                    self.message = format!(
+                        "任务完成!\n账号剩 {} 条收藏\n本地保存有 {} 条收藏",
+                        self.web_total, self.db_total
+                    );
                 }
                 TaskStatus::Error(msg) => {
                     self.message = msg.to_owned();
