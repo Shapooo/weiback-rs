@@ -42,6 +42,8 @@ pub struct Core {
     executor: Option<Executor>,
     task_ongoing: bool,
     login_checked: bool,
+    web_total: u64,
+    db_total: u64,
     // variables associated with GUI
     start_page: String,
     end_page: String,
@@ -65,6 +67,8 @@ impl Default for Core {
             executor: Default::default(),
             task_ongoing: Default::default(),
             login_checked: Default::default(),
+            web_total: Default::default(),
+            db_total: Default::default(),
             start_page: "1".to_string(),
             end_page: u32::MAX.to_string(),
             message: Default::default(),
@@ -142,9 +146,11 @@ impl Core {
                     self.ratio = *ratio;
                     self.message = msg.to_owned()
                 }
-                TaskStatus::Finished => {
+                TaskStatus::Finished(web_total, db_total) => {
                     self.ratio = 1.;
                     self.task_ongoing = false;
+                    self.web_total = *web_total;
+                    self.db_total = *db_total;
                     self.message = "任务完成!".into();
                 }
                 TaskStatus::Error(msg) => {
