@@ -10,7 +10,7 @@ pub enum Task {
 #[derive(Debug, Clone)]
 pub enum TaskStatus {
     InProgress(f32, String),
-    Finished,
+    Finished(u64, u64),
     Error(String),
     Info(String),
 }
@@ -22,7 +22,7 @@ impl TaskStatus {
     }
 
     pub fn is_finished(&self) -> bool {
-        matches!(self, Self::Finished)
+        matches!(self, Self::Finished(_, _))
     }
 
     pub fn is_error(&self) -> bool {
