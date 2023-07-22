@@ -66,6 +66,7 @@ impl TaskHandler {
 
     pub async fn unfavorite_posts(&self, range: RangeInclusive<u32>) {
         self.handle_task_res(self._unfavorite_posts(range).await)
+            .await
     }
 
     async fn _unfavorite_posts(&self, range: RangeInclusive<u32>) -> Result<()> {
@@ -93,7 +94,8 @@ impl TaskHandler {
         self.handle_task_res(
             self._export_from_local(range, reverse, image_definition)
                 .await,
-        );
+        )
+        .await;
     }
 
     async fn _export_from_local(
@@ -162,7 +164,8 @@ impl TaskHandler {
         self.handle_task_res(
             self._download_posts(range, with_pic, image_definition)
                 .await,
-        );
+        )
+        .await;
     }
 
     async fn _download_posts(
@@ -202,16 +205,37 @@ impl TaskHandler {
         Ok(())
     }
 
-    fn handle_task_res(&self, result: Result<()>) {
+    async fn handle_task_res(&self, result: Result<()>) {
+        let mut db_total = 0;
+        let mut web_total = 0;
+        let result = self
+            ._handle_task_res(result, &mut web_total, &mut db_total)
+            .await;
         match result {
             Err(err) => {
                 error!("{err}");
                 *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
             }
-            _ => {
+            Ok(()) => {
                 info!("task finished");
-                *self.task_status.write().unwrap() = TaskStatus::Finished;
+                *self.task_status.write().unwrap() = TaskStatus::Finished(web_total, db_total);
             }
         }
+    }
+
+    async fn _handle_task_res(
+        &self,
+        result: Result<()>,
+        web_total: &mut u64,
+        db_total: &mut u64,
+    ) -> Result<()> {
+        result?;
+        let (web_total_res, db_total_res) = tokio::join!(
+            self.processer.get_web_total_num(),
+            self.processer.get_db_total_num()
+        );
+        *web_total = web_total_res?;
+        *db_total = db_total_res?;
+        Ok(())
     }
 }
