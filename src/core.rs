@@ -42,11 +42,13 @@ pub struct Core {
     executor: Option<Executor>,
     task_ongoing: bool,
     login_checked: bool,
-    web_total: u64,
-    db_total: u64,
+    web_total: u32,
+    db_total: u32,
     // variables associated with GUI
-    start_page: String,
-    end_page: String,
+    web_start: u32,
+    web_end: u32,
+    db_start: u32,
+    db_end: u32,
     message: String,
     tab_type: TabType,
     with_pic: bool,
@@ -69,8 +71,10 @@ impl Default for Core {
             login_checked: Default::default(),
             web_total: Default::default(),
             db_total: Default::default(),
-            start_page: "1".to_string(),
-            end_page: u32::MAX.to_string(),
+            web_start: 1,
+            web_end: Default::default(),
+            db_start: 1,
+            db_end: Default::default(),
             message: Default::default(),
             tab_type: Default::default(),
             with_pic: true,
@@ -145,6 +149,12 @@ impl Core {
                 TaskStatus::Init(web_total, db_total) => {
                     self.web_total = *web_total;
                     self.db_total = *db_total;
+                    if self.db_end == 0 {
+                        self.db_end = self.db_total;
+                    }
+                    if self.web_end == 0 {
+                        self.web_end = self.web_total;
+                    }
                     self.message = format!(
                         "账号共 {} 条收藏\n本地保存有 {} 条收藏",
                         self.web_total, self.db_total
@@ -226,24 +236,36 @@ impl Core {
                     }
                     ui.collapsing("高级设置", |ui| {
                         ui.horizontal(|ui| {
-                            let hint = if self.tab_type == TabType::DownloadPosts {
+                            if self.tab_type == TabType::DownloadPosts {
                                 ui.label("下载范围：");
-                                "范围的单位为页，微博以页为单位返回\n每页大概15-20条博文"
                             } else {
                                 ui.label("导出范围：");
-                                "导出单位为条，按时间顺序排序，可选正序或逆序"
-                            };
+                            }
 
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.start_page)
-                                    .desired_width(50.0),
-                            )
-                            .on_hover_text(hint);
+                            let (start, end, total, speed) =
+                                if self.tab_type == TabType::DownloadPosts {
+                                    (
+                                        &mut self.web_start,
+                                        &mut self.web_end,
+                                        (self.web_total + 19) / 20 * 20,
+                                        20,
+                                    )
+                                } else {
+                                    (
+                                        &mut self.db_start,
+                                        &mut self.db_end,
+                                        self.db_total,
+                                        self.period,
+                                    )
+                                };
+
+                            ui.add(egui::DragValue::new(start).clamp_range(1..=*end).speed(20));
                             ui.label("-");
                             ui.add(
-                                egui::TextEdit::singleline(&mut self.end_page).desired_width(50.0),
+                                egui::DragValue::new(end)
+                                    .clamp_range(speed..=total)
+                                    .speed(speed),
                             )
-                            .on_hover_text(hint);
                         });
                         if self.tab_type == TabType::ExportFromLocal {
                             ui.add(egui::Slider::new(&mut self.period, 10..=200).text("每页"))
@@ -252,8 +274,6 @@ impl Core {
                     });
                 }
             });
-            let start = self.start_page.parse::<u32>().unwrap_or(1);
-            let end = self.end_page.parse::<u32>().unwrap_or(u32::MAX);
             ui.vertical_centered(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 if ui.button("开始").clicked() {
@@ -263,14 +283,18 @@ impl Core {
                             self.executor
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
-                                .download_posts(start..=end, self.with_pic, self.image_definition);
+                                .download_posts(
+                                    self.web_start..=self.web_end,
+                                    self.with_pic,
+                                    self.image_definition,
+                                );
                         }
                         TabType::ExportFromLocal => {
                             self.executor
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
                                 .export_from_local(
-                                    start..=end,
+                                    self.db_start..=self.db_start,
                                     self.reverse,
                                     self.image_definition,
                                 );
