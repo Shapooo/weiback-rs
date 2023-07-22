@@ -193,7 +193,7 @@ impl Core {
                     ui.selectable_value(
                         &mut self.tab_type,
                         TabType::ExportFromLocal,
-                        "    本地微博    ",
+                        "    本地导出    ",
                     );
                     ui.selectable_value(&mut self.tab_type, TabType::About, "        关于        ");
                 });
