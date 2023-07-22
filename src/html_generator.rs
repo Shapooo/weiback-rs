@@ -15,7 +15,7 @@ lazy_static! {
             .to_str()
             .expect("template path cannot convert to str")
             .to_owned();
-        path.push_str("/res/templates/*.html");
+        path.push_str("/templates/*.html");
         debug!("init tera from template: {}", path);
         let mut tera = match Tera::new(&path) {
             Ok(t) => t,
