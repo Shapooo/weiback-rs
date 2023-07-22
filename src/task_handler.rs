@@ -223,8 +223,8 @@ impl TaskHandler {
     async fn _handle_task_res(
         &self,
         result: Result<()>,
-        web_total: &mut u64,
-        db_total: &mut u64,
+        web_total: &mut u32,
+        db_total: &mut u32,
     ) -> Result<()> {
         result?;
         let (web_total_res, db_total_res) = tokio::join!(

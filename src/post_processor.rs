@@ -151,11 +151,11 @@ impl PostProcessor {
         Ok(HTMLPage { html, pics })
     }
 
-    pub async fn get_web_total_num(&self) -> Result<u64> {
+    pub async fn get_web_total_num(&self) -> Result<u32> {
         self.web_fetcher.fetch_fav_total_num().await
     }
 
-    pub async fn get_db_total_num(&self) -> Result<u64> {
+    pub async fn get_db_total_num(&self) -> Result<u32> {
         self.persister.query_db_total_num().await
     }
 }

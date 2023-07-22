@@ -9,9 +9,9 @@ pub enum Task {
 
 #[derive(Debug, Clone)]
 pub enum TaskStatus {
-    Init(u64, u64),
+    Init(u32, u32),
     InProgress(f32, String),
-    Finished(u64, u64),
+    Finished(u32, u32),
     Error(String),
 }
 
