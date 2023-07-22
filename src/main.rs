@@ -13,7 +13,7 @@ fn main() -> Result<()> {
             "the executable: {:?} should have parent, maybe bugs in there",
             std::env::current_exe()
         ))?
-        .join("res/weiback.log");
+        .join("weiback.log");
     let log_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
