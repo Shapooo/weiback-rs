@@ -74,6 +74,22 @@ impl Persister {
             info!("db {:?} exists", self.db_path);
         } else {
             info!("db {:?} not exists, create it", self.db_path);
+            if !self.db_path.parent().unwrap().exists() {
+                let mut dir_builder = tokio::fs::DirBuilder::new();
+                dir_builder.recursive(true);
+                dir_builder
+                    .create(self.db_path.parent().ok_or(Error::Other(format!(
+                        "{:?} should have parent",
+                        self.db_path
+                    )))?)
+                    .await?;
+            } else if self.db_path.parent().unwrap().is_file() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "export folder is a already exist file",
+                )
+                .into());
+            }
             Sqlite::create_database(self.db_path.to_str().unwrap()).await?;
             let mut db = SqliteConnection::connect(self.db_path.to_str().unwrap()).await?;
             use futures::stream::TryStreamExt;
