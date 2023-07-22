@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.1.1] - 2023-07-22
 
-*Added*
+**Added**
 - github rust-clippy check action
 - more information when error occur
 - support status peek when unfavorite posts
@@ -14,12 +14,12 @@ All notable changes to this project will be documented in this file.
 - support for returning remaining amount of posts after a task
 - github release action
 
-*Changed*
+**Changed**
 - change some detail of UI
 - use DragValue to get range of download and export
 - it won't stop when get zero post from weibo
 
-*Fixed*
+**Fixed**
 - follow rust-clippy, fix coding style problem
 - wrong favorite status in database
 
