@@ -179,10 +179,6 @@ impl TaskHandler {
                 .await?;
             total_downloaded += posts_sum;
             debug!("fetched {} posts in {}th page", posts_sum, page);
-            if posts_sum == 0 {
-                info!("no more posts in {}th page, finish work", page);
-                break;
-            }
 
             let _ = self.task_status.try_write().map(|mut pro| {
                 *pro = TaskStatus::InProgress(
