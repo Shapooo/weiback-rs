@@ -250,7 +250,7 @@ impl Persister {
             sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
                 .fetch_one(self.db_pool.as_ref().unwrap())
                 .await?
-                .0 as u32,
+                .0,
         )
     }
 }
