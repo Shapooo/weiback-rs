@@ -32,7 +32,7 @@ WeiBack-rs 是一个使用Rust🦀开发的开源软件，它可以帮助你备�
 - 克隆或下载本项目到本地
 - 在项目根目录下运行 `cargo build --release` 命令，编译生成可执行文件
 - 在生成的可执行文件同目录下新建 res 文件夹
-- 将源码 `res/templates/` 文件夹复制到新建的 `res` 目录下。即，`weiback-rs` 可执行文件需要访问到同目录下 `res/templates/*.html` 模板文件
+- 将模板 `templates/` 文件夹复制到新建的可执行文件 `weiback-rs` 同目录下。即，`weiback-rs` 可执行文件需要访问到同目录下 `templates/*.html` 模板文件。
 
 ------
 
@@ -111,9 +111,9 @@ WeiBack 的油猴脚本版本 [WeiBack](https://github.com/Shapooo/WeiBack)，�
 
 ## 问题排查 🐞
 
-- 首先确保 `weiback-rs`（Linux平台）或`weiback-rs.exe`（Windows平台）可执行文件同目录下存在 `res` 文件夹。该文件夹内保存有 `templates` 模板文件夹，运行一次后会保存 `login_info.json` cookie 等登录信息、`weiback.db` 数据库文件和`weiback.log` 运行日志。
+- 首先确保 `weiback-rs`（Linux平台）或`weiback-rs.exe`（Windows平台）可执行文件同目录下存在 `templates` 文件夹。该文件夹内保存有 `templates` 模板文件夹。
 - 查看 `weiback.log` 日志文件排查错误。
-- 通过邮箱联系我，或提交 Issue。 
+- 通过邮箱联系我，或提交 Issue。
 
 ------
 
