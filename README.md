@@ -111,8 +111,7 @@ WeiBack 的油猴脚本版本 [WeiBack](https://github.com/Shapooo/WeiBack)，�
 
 ## 问题排查 🐞
 
-- 首先确保 `weiback-rs`（Linux平台）或`weiback-rs.exe`（Windows平台）可执行文件同目录下存在 `res` 文件夹。该文件夹内保存有 `login_info.json` cookie 等登录信息、`weiback.db` 数据库文件、`weiback.log` 运行日志和 `templates` 模板文件夹。
-- 使用命令行设置环境变量 `RUST_LOG` 为 `debug` 并运行 `weiback` 复现错误。
+- 首先确保 `weiback-rs`（Linux平台）或`weiback-rs.exe`（Windows平台）可执行文件同目录下存在 `res` 文件夹。该文件夹内保存有 `templates` 模板文件夹，运行一次后会保存 `login_info.json` cookie 等登录信息、`weiback.db` 数据库文件和`weiback.log` 运行日志。
 - 查看 `weiback.log` 日志文件排查错误。
 - 通过邮箱联系我，或提交 Issue。 
 
