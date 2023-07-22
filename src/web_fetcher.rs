@@ -251,7 +251,7 @@ impl WebFetcher {
         Ok(res)
     }
 
-    pub async fn fetch_fav_total_num(&self) -> Result<u64> {
+    pub async fn fetch_fav_total_num(&self) -> Result<u32> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
         let ret_json: Value = self
             ._fetch(FAVORITES_TAGS_API, &self.web_client)
@@ -271,6 +271,7 @@ impl WebFetcher {
                     "no fav_total_num field in response: {:?}",
                     ret_json
                 )))
+                .map(|v| v as u32)
         }
     }
 
