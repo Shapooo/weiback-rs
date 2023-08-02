@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         .truncate(true)
         .open(log_path)?;
     Builder::new()
-        .filter_level(LevelFilter::Warn)
+        .filter_level(LevelFilter::Info)
         .parse_default_env()
         .filter_module("sqlx", LevelFilter::Error)
         .target(env_logger::Target::Pipe(Box::new(log_file)))

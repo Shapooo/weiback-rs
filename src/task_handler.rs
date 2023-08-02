@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use log::{debug, error, info};
+use log::{error, info};
 use tokio::time::sleep;
 
 use crate::error::{Error, Result};
@@ -66,6 +66,7 @@ impl TaskHandler {
         let len = ids.len();
         for (i, id) in ids.into_iter().enumerate() {
             self.processer.unfavorite_post(id).await?;
+            info!("post {id} unfavorited");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let _ = self.task_status.try_write().map(|mut op| {
                 let progress = i as f32 / len as f32;
@@ -87,7 +88,7 @@ impl TaskHandler {
             self._export_from_local(range, reverse, image_definition)
                 .await,
         )
-        .await;
+            .await;
     }
 
     async fn _export_from_local(
@@ -104,7 +105,7 @@ impl TaskHandler {
             .load_fav_posts_from_db(range, reverse)
             .await?;
         let posts_sum = local_posts.len();
-        debug!("fetched {} posts from local", posts_sum);
+        info!("fetched {} posts from local", posts_sum);
 
         let mut index = 1;
         loop {
@@ -157,7 +158,7 @@ impl TaskHandler {
             self._download_posts(range, with_pic, image_definition)
                 .await,
         )
-        .await;
+            .await;
     }
 
     async fn _download_posts(
@@ -178,7 +179,7 @@ impl TaskHandler {
                 .download_fav_posts(self.uid, page, with_pic, image_definition)
                 .await?;
             total_downloaded += posts_sum;
-            debug!("fetched {} posts in {}th page", posts_sum, page);
+            info!("fetched {} posts in {}th page", posts_sum, page);
 
             let _ = self.task_status.try_write().map(|mut pro| {
                 *pro = TaskStatus::InProgress(
