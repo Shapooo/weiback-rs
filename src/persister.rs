@@ -276,73 +276,84 @@ impl Persister {
 // Private functions
 impl Persister {
     async fn _insert_post(&self, post: &Value) -> DBResult<()> {
-        sqlx::query(
+        let statement = if post["favorited"] == true {
+            "INSERT OR REPLACE INTO posts \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        } else {
             "INSERT OR IGNORE INTO posts \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(post["id"].as_i64().unwrap())
-        .bind(post["created_at"].as_str().unwrap())
-        .bind(post["mblogid"].as_str())
-        .bind(post["text_raw"].as_str().unwrap())
-        .bind(post["source"].as_str().unwrap())
-        .bind(post["region_name"].as_str())
-        .bind(post["deleted"].as_bool().unwrap_or_default())
-        .bind(post["user"]["id"].as_i64())
-        .bind((post["pic_ids"].is_array()).then_some(post["pic_ids"].to_string()))
-        .bind(post["pic_num"].as_i64())
-        .bind(post["retweeted_status"]["id"].as_i64())
-        .bind((post["url_struct"].is_object()).then_some(post["url_struct"].to_string()))
-        .bind((post["topic_struct"].is_object()).then_some(post["topic_struct"].to_string()))
-        .bind((post["tag_struct"].is_object()).then_some(post["tag_struct"].to_string()))
-        .bind(
-            (post["number_display_strategy"].is_object())
-                .then_some(post["number_display_strategy"].to_string()),
-        )
-        .bind((post["mix_media_info"].is_object()).then_some(post["mix_media_info"].to_string()))
-        .bind((post["visible"].is_object()).then_some(post["visible"].to_string()))
-        .bind(post["text"].as_str())
-        .bind(post["attitudes_status"].as_i64())
-        .bind(post["showFeedRepost"].as_bool())
-        .bind(post["showFeedComment"].as_bool())
-        .bind(post["pictureViewerSign"].as_bool())
-        .bind(post["showPictureViewer"].as_bool())
-        .bind(post["favorited"].as_bool().unwrap_or_default())
-        .bind(post["can_edit"].as_bool().unwrap_or_default())
-        .bind(post["is_paid"].as_bool().unwrap_or_default())
-        .bind(post["share_repost_type"].as_i64())
-        .bind(post["rid"].as_str().unwrap_or_default())
-        .bind((post["pic_infos"].is_object()).then_some(post["pic_infos"].to_string()))
-        .bind(post["cardid"].as_str().unwrap_or_default())
-        .bind(post["pic_bg_new"].as_str().unwrap_or_default())
-        .bind(post["mark"].as_str().unwrap_or_default())
-        .bind(post["mblog_vip_type"].as_i64())
-        .bind(post["reposts_count"].as_i64())
-        .bind(post["comments_count"].as_i64())
-        .bind(post["attitudes_count"].as_i64())
-        .bind(post["mlevel"].as_i64())
-        .bind(post["content_auth"].as_i64())
-        .bind(post["is_show_bulletin"].as_i64())
-        .bind(post["repost_type"].as_i64())
-        .bind(post["edit_count"].as_i64())
-        .bind(post["mblogtype"].as_i64())
-        .bind(post["textLength"].as_i64())
-        .bind(post["isLongText"].as_bool().unwrap_or_default())
-        .bind((post["annotations"].is_object()).then_some(post["annotations"].to_string()))
-        .bind((post["geo"].is_object()).then_some(post["geo"].to_string()))
-        .bind((post["pic_focus_point"].is_object()).then_some(post["pic_focus_point"].to_string()))
-        .bind((post["page_info"].is_object()).then_some(post["page_info"].to_string()))
-        .bind(post["title"].as_str())
-        .bind((post["continue_tag"].is_object()).then_some(post["continue_tag"].to_string()))
-        .bind(
-            (post["comment_manage_info"].is_object())
-                .then_some(post["comment_manage_info"].to_string()),
-        )
-        .bind(post["client_only"].as_bool().unwrap_or_default())
-        .bind(post["unfavorited"].as_bool().unwrap_or_default())
-        .execute(self.db_pool.as_ref().unwrap())
-        .await?;
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        };
+        sqlx::query(statement)
+            .bind(post["id"].as_i64().unwrap())
+            .bind(post["created_at"].as_str().unwrap())
+            .bind(post["mblogid"].as_str())
+            .bind(post["text_raw"].as_str().unwrap())
+            .bind(post["source"].as_str().unwrap())
+            .bind(post["region_name"].as_str())
+            .bind(post["deleted"].as_bool().unwrap_or_default())
+            .bind(post["user"]["id"].as_i64())
+            .bind((post["pic_ids"].is_array()).then_some(post["pic_ids"].to_string()))
+            .bind(post["pic_num"].as_i64())
+            .bind(post["retweeted_status"]["id"].as_i64())
+            .bind((post["url_struct"].is_object()).then_some(post["url_struct"].to_string()))
+            .bind((post["topic_struct"].is_object()).then_some(post["topic_struct"].to_string()))
+            .bind((post["tag_struct"].is_object()).then_some(post["tag_struct"].to_string()))
+            .bind(
+                (post["number_display_strategy"].is_object())
+                    .then_some(post["number_display_strategy"].to_string()),
+            )
+            .bind(
+                (post["mix_media_info"].is_object()).then_some(post["mix_media_info"].to_string()),
+            )
+            .bind((post["visible"].is_object()).then_some(post["visible"].to_string()))
+            .bind(post["text"].as_str())
+            .bind(post["attitudes_status"].as_i64())
+            .bind(post["showFeedRepost"].as_bool())
+            .bind(post["showFeedComment"].as_bool())
+            .bind(post["pictureViewerSign"].as_bool())
+            .bind(post["showPictureViewer"].as_bool())
+            .bind(post["favorited"].as_bool().unwrap_or_default())
+            .bind(post["can_edit"].as_bool().unwrap_or_default())
+            .bind(post["is_paid"].as_bool().unwrap_or_default())
+            .bind(post["share_repost_type"].as_i64())
+            .bind(post["rid"].as_str().unwrap_or_default())
+            .bind((post["pic_infos"].is_object()).then_some(post["pic_infos"].to_string()))
+            .bind(post["cardid"].as_str().unwrap_or_default())
+            .bind(post["pic_bg_new"].as_str().unwrap_or_default())
+            .bind(post["mark"].as_str().unwrap_or_default())
+            .bind(post["mblog_vip_type"].as_i64())
+            .bind(post["reposts_count"].as_i64())
+            .bind(post["comments_count"].as_i64())
+            .bind(post["attitudes_count"].as_i64())
+            .bind(post["mlevel"].as_i64())
+            .bind(post["content_auth"].as_i64())
+            .bind(post["is_show_bulletin"].as_i64())
+            .bind(post["repost_type"].as_i64())
+            .bind(post["edit_count"].as_i64())
+            .bind(post["mblogtype"].as_i64())
+            .bind(post["textLength"].as_i64())
+            .bind(post["isLongText"].as_bool().unwrap_or_default())
+            .bind((post["annotations"].is_object()).then_some(post["annotations"].to_string()))
+            .bind((post["geo"].is_object()).then_some(post["geo"].to_string()))
+            .bind(
+                (post["pic_focus_point"].is_object())
+                    .then_some(post["pic_focus_point"].to_string()),
+            )
+            .bind((post["page_info"].is_object()).then_some(post["page_info"].to_string()))
+            .bind(post["title"].as_str())
+            .bind((post["continue_tag"].is_object()).then_some(post["continue_tag"].to_string()))
+            .bind(
+                (post["comment_manage_info"].is_object())
+                    .then_some(post["comment_manage_info"].to_string()),
+            )
+            .bind(post["client_only"].as_bool().unwrap_or_default())
+            .bind(post["unfavorited"].as_bool().unwrap_or_default())
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
         Ok(())
     }
 
@@ -363,9 +374,9 @@ impl Persister {
     async fn _query_post(&self, id: i64) -> DBResult<SqlPost> {
         sqlx::query_as::<sqlx::Sqlite, SqlPost>(
             "SELECT id, created_at, mblogid, text_raw, source, region_name, \
-            deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, \
-            topic_struct, tag_struct, number_display_strategy, mix_media_info, \
-            isLongText, client_only FROM posts WHERE id = ?",
+             deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, \
+             topic_struct, tag_struct, number_display_strategy, mix_media_info, \
+             isLongText, client_only FROM posts WHERE id = ?",
         )
         .bind(id)
         .fetch_one(self.db_pool.as_ref().unwrap())
