@@ -144,28 +144,14 @@ impl WebFetcher {
 
     pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
         let id = id.to_string();
-        let response = self
-            .web_client
-            .post("https://weibo.com/ajax/statuses/destoryFavorites")
-            .json(&serde_json::json!({ "id": id }))
-            .send()
+        let _ = self
+            ._post(
+                "https://weibo.com/ajax/statuses/destoryFavorites",
+                &self.web_client,
+                &serde_json::json!({ "id": id }),
+            )
             .await?;
-        let status_code = response.status();
-        if status_code.as_u16() == 200 {
-            Ok(())
-        } else {
-            let res_json = response.json::<Value>().await?;
-            if status_code.as_u16() == 400 && res_json["message"] == "not your collection!" {
-                warn!("post {id} have been unfavorited, there may be bugs in code...");
-                Ok(())
-            } else {
-                Err(Error::Other(format!(
-                    "unfavorite post get {}: {:?}",
-                    status_code.as_u16(),
-                    res_json["message"],
-                )))
-            }
-        }
+        Ok(())
     }
 
     async fn _post(&self, url: impl IntoUrl, client: &Client, body: &Value) -> Result<Response> {
@@ -181,7 +167,7 @@ impl WebFetcher {
     async fn _http_common(&self, request: reqwest::Request, client: &Client) -> Result<Response> {
         let url_str = request.url().as_str();
         let mut status_code = StatusCode::OK;
-        for _ in 0..3 {
+        for _ in 0..RETRY_COUNT {
             let res = client.execute(request.try_clone().unwrap()).await?;
             if res.status().is_success() {
                 return Ok(res);
