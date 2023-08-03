@@ -5,7 +5,7 @@ use bytes::Bytes;
 use log::{debug, info, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
-    Client, IntoUrl, Response,
+    Client, IntoUrl, Response, StatusCode,
 };
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
@@ -18,6 +18,7 @@ const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
+const RETRY_COUNT: i32 = 3;
 
 #[derive(Debug)]
 pub struct WebFetcher {
@@ -169,16 +170,22 @@ impl WebFetcher {
 
     async fn _get(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
         let url_str = url.as_str().to_owned();
-        let res = client.get(url).send().await?;
-        if res.status() != 200 {
-            Err(Error::ResourceGetFailed(format!(
-                "fetch {} failed with status code {}",
-                url_str,
-                res.status()
-            )))
-        } else {
-            Ok(res)
+        let request = client.get(url);
+        let mut status_code = StatusCode::OK;
+        for _ in 0..3 {
+            let res = request.try_clone().unwrap().send().await?;
+            if res.status().is_success() {
+                return Ok(res);
+            } else if res.status().is_client_error() {
+                status_code = res.status();
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
+        return Err(Error::ResourceGetFailed(format!(
+            "fetch {} failed with status code {}",
+            url_str, status_code
+        )));
     }
 
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
