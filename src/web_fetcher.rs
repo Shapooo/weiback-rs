@@ -167,7 +167,7 @@ impl WebFetcher {
         }
     }
 
-    async fn _fetch(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
+    async fn _get(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
         let url_str = url.as_str().to_owned();
         let res = client.get(url).send().await?;
         if res.status() != 200 {
@@ -184,7 +184,7 @@ impl WebFetcher {
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
-        let mut posts: Value = self._fetch(url, &self.web_client).await?.json().await?;
+        let mut posts: Value = self._get(url, &self.web_client).await?.json().await?;
         trace!("get json: {posts:?}");
         if posts["ok"] != 1 {
             Err(Error::ResourceGetFailed(format!(
@@ -201,7 +201,7 @@ impl WebFetcher {
 
     pub async fn fetch_pic(&self, url: impl IntoUrl) -> Result<Bytes> {
         debug!("fetch pic, url: {}", url.as_str());
-        let res = self._fetch(url, &self.pic_client).await?;
+        let res = self._get(url, &self.pic_client).await?;
         let res_bytes = res.bytes().await?;
         trace!("fetched pic size: {}", res_bytes.len());
         Ok(res_bytes)
@@ -210,7 +210,7 @@ impl WebFetcher {
     pub async fn fetch_emoticon(&self) -> Result<HashMap<String, String>> {
         let url = STATUSES_CONFIG_API;
         debug!("fetch emoticon, url: {url}");
-        let res = self._fetch(url, &self.web_client).await?;
+        let res = self._get(url, &self.web_client).await?;
         let mut json: Value = res.json().await?;
         if json["ok"] != 1 {
             return Err(Error::ResourceGetFailed(format!(
@@ -254,7 +254,7 @@ impl WebFetcher {
     pub async fn fetch_fav_total_num(&self) -> Result<u32> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
         let ret_json: Value = self
-            ._fetch(FAVORITES_TAGS_API, &self.web_client)
+            ._get(FAVORITES_TAGS_API, &self.web_client)
             .await?
             .json()
             .await?;
@@ -278,7 +278,7 @@ impl WebFetcher {
     pub async fn fetch_long_text_content(&self, mblogid: &str) -> Result<String> {
         let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
         debug!("fetch long text, url: {url}");
-        let res = self._fetch(url, &self.web_client).await?;
+        let res = self._get(url, &self.web_client).await?;
         let long_text_meta = match res.json::<LongText>().await {
             Ok(res) => res,
             Err(e) if e.is_decode() => {
