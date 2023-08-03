@@ -168,12 +168,21 @@ impl WebFetcher {
         }
     }
 
+    async fn _post(&self, url: impl IntoUrl, client: &Client, body: &Value) -> Result<Response> {
+        let request = client.post(url).json(body).build()?;
+        self._http_common(request, client).await
+    }
+
     async fn _get(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
-        let url_str = url.as_str().to_owned();
-        let request = client.get(url);
+        let request = client.get(url).build()?;
+        self._http_common(request, client).await
+    }
+
+    async fn _http_common(&self, request: reqwest::Request, client: &Client) -> Result<Response> {
+        let url_str = request.url().as_str();
         let mut status_code = StatusCode::OK;
         for _ in 0..3 {
-            let res = request.try_clone().unwrap().send().await?;
+            let res = client.execute(request.try_clone().unwrap()).await?;
             if res.status().is_success() {
                 return Ok(res);
             } else if res.status().is_client_error() {
@@ -183,7 +192,7 @@ impl WebFetcher {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         return Err(Error::ResourceGetFailed(format!(
-            "fetch {} failed with status code {}",
+            "http request {} failed with status code {}",
             url_str, status_code
         )));
     }
