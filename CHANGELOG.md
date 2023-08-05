@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.2] - 2023-08-05
+
+**Added**
+- Retry when http request return server error
+
+
+**Changed**
+- change default log level to INFO
+
+**Fixed**
+- wrong favorited status in database
+
 ## [v0.1.1] - 2023-07-22
 
 **Added**
