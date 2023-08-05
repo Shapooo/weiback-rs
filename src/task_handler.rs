@@ -73,7 +73,6 @@ impl TaskHandler {
                 *op = TaskStatus::InProgress(progress, format!("已处理{i}条，共{len}条..."))
             });
         }
-
         Ok(())
     }
 
@@ -88,7 +87,7 @@ impl TaskHandler {
             self._export_from_local(range, reverse, image_definition)
                 .await,
         )
-            .await;
+        .await;
     }
 
     async fn _export_from_local(
@@ -158,7 +157,7 @@ impl TaskHandler {
             self._download_posts(range, with_pic, image_definition)
                 .await,
         )
-            .await;
+        .await;
     }
 
     async fn _download_posts(
