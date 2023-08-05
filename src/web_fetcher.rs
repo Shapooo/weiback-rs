@@ -177,10 +177,10 @@ impl WebFetcher {
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-        return Err(Error::ResourceGetFailed(format!(
+        Err(Error::ResourceGetFailed(format!(
             "http request {} failed with status code {}",
             url_str, status_code
-        )));
+        )))
     }
 
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
