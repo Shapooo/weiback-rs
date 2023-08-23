@@ -144,13 +144,28 @@ impl WebFetcher {
 
     pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
         let id = id.to_string();
-        let _ = self
-            ._post(
-                "https://weibo.com/ajax/statuses/destoryFavorites",
-                &self.web_client,
-                &serde_json::json!({ "id": id }),
-            )
+        let res = self
+            .web_client
+            .post("https://weibo.com/ajax/statuses/destoryFavorites")
+            .json(&serde_json::json!({ "id": id }))
+            .send()
             .await?;
+        let status_code = res.status().as_u16();
+
+        if !res.status().is_success() {
+            let res_json = res.json::<Value>().await;
+            if status_code == 400
+                && res_json.is_ok()
+                && res_json.unwrap()["message"] == "not your collection!"
+            {
+                warn!("post {} have been unfavorited", id);
+            } else {
+                warn!(
+                    "cannot unfavorite post {}, with http code {}",
+                    id, status_code
+                );
+            }
+        }
         Ok(())
     }
 
