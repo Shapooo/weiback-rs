@@ -326,7 +326,7 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
 }
 
 pub fn to_login_info(uid: &str, cookie_store: &CookieStore) -> Result<LoginInfo> {
-    let cookie_json = cookie_store.iter_unexpired().collect::<Vec<_>>();
+    let cookie_json = cookie_store.iter_any().collect::<Vec<_>>();
     let login_info = serde_json::json!({"uid":uid, "cookies":cookie_json});
     Ok(to_value(login_info)?)
 }
