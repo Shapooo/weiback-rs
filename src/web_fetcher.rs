@@ -18,6 +18,7 @@ const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
+const MOBILE_POST_API: &str = "https://m.weibo.cn/status";
 const RETRY_COUNT: i32 = 3;
 
 #[derive(Debug)]
@@ -313,6 +314,15 @@ impl WebFetcher {
             }
         }
         Ok(res)
+    }
+
+    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<String> {
+        let mobile_client = &self.mobile_client;
+        let url = format!("{}/{}", MOBILE_POST_API, mblogid);
+        debug!("fetch mobile page, url: {}", &url);
+        let res = self._get(url, mobile_client).await?;
+        let text = res.text().await?;
+        Ok(text)
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u32> {
