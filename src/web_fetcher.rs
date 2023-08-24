@@ -25,6 +25,7 @@ pub struct WebFetcher {
     uid: &'static str,
     cookie: Arc<CookieStoreMutex>,
     web_client: Client,
+    mobile_client: Client,
     pic_client: Client,
 }
 
@@ -101,6 +102,51 @@ impl WebFetcher {
             .default_headers(web_headers)
             .build()?;
 
+        let mobile_headers = HeaderMap::from_iter([
+            (
+                header::ACCEPT,
+                HeaderValue::from_static(
+                    "text/html,application/xhtml+xml,application/xml;\
+                     q=0.9,image/webp,image/apng,*/*;q=0.8,\
+                     application/signed-exchange;v=b3;q=0.7",
+                ),
+            ),
+            (
+                header::USER_AGENT,
+                HeaderValue::from_static(
+                    "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) \
+                     AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 \
+                     Mobile/15E148 Safari/604.1 Edg/116.0.0.0",
+                ),
+            ),
+            (
+                header::ACCEPT_LANGUAGE,
+                HeaderValue::from_static("zh-CN,zh;q=0.9"),
+            ),
+            (
+                header::ACCEPT_ENCODING,
+                HeaderValue::from_static("gzip, deflate, br"),
+            ),
+            (header::DNT, HeaderValue::from_static("1")),
+            (
+                HeaderName::from_static("sec-fetch-dest"),
+                HeaderValue::from_static("document"),
+            ),
+            (
+                HeaderName::from_static("sec-fetch-mode"),
+                HeaderValue::from_static("navigate"),
+            ),
+            (
+                HeaderName::from_static("sec-fetch-site"),
+                HeaderValue::from_static("none"),
+            ),
+        ]);
+        let mobile_client = reqwest::Client::builder()
+            .cookie_store(true)
+            .cookie_provider(cookie_store.clone())
+            .default_headers(mobile_headers)
+            .build()?;
+
         let pic_headers = HeaderMap::from_iter([
         (
             header::USER_AGENT,
@@ -138,6 +184,7 @@ impl WebFetcher {
             uid,
             cookie: cookie_store.clone(),
             web_client,
+            mobile_client,
             pic_client,
         })
     }
