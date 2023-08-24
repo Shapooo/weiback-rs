@@ -172,6 +172,7 @@ impl Loginator {
 
     pub fn wait_login(mut self) -> Result<LoginInfo> {
         self.login_weibo_com()?;
+        self.login_m_weibo_cn()?;
         drop(self.client);
         let cookie_store = Arc::try_unwrap(self.cookie_store)
             .or(Err(anyhow::anyhow!(
@@ -214,6 +215,22 @@ impl Loginator {
             ));
         }
         self.client.get("https://weibo.com/login.php").send()?;
+        Ok(())
+    }
+
+    fn login_m_weibo_cn(&mut self) -> Result<()> {
+        let _ = self
+            .client
+            .get("https://m.weibo.cn")
+            .header(
+                header::USER_AGENT,
+                HeaderValue::from_static(
+                    "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) \
+                     AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 \
+                     Mobile/15E148 Safari/604.1 Edg/116.0.0.0",
+                ),
+            )
+            .send()?;
         Ok(())
     }
 }
