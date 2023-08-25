@@ -22,10 +22,10 @@ lazy_static! {
     static ref NEWLINE_EXPR: Regex = Regex::new("\\n").unwrap();
     static ref URL_EXPR: Regex =
         Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}").unwrap();
-    static ref AT_EXPR: Regex = Regex::new(r#"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+"#).unwrap();
-    static ref EMOJI_EXPR: Regex = Regex::new(r#"(\[.*?\])"#).unwrap();
+    static ref AT_EXPR: Regex = Regex::new(r"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+").unwrap();
+    static ref EMOJI_EXPR: Regex = Regex::new(r"(\[.*?\])").unwrap();
     static ref EMAIL_EXPR: Regex =
-        Regex::new(r#"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}"#).unwrap();
+        Regex::new(r"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}").unwrap();
     static ref TOPIC_EXPR: Regex = Regex::new(r#"#([^#]+)#"#).unwrap();
 }
 
