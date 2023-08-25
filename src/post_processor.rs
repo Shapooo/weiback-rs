@@ -296,7 +296,7 @@ impl PostProcessor {
         let Some(end) = text.find("\"call\"") else {
             return Err(Error::MalFormat(format!("mobile post: {text}")));
         };
-        let Some(end) = text[..end].rfind(",") else {
+        let Some(end) = text[..end].rfind(',') else {
             return Err(Error::MalFormat(format!("mobile post: {text}")));
         };
         let mut post = serde_json::from_str::<Value>(&text[start + 9..end])?;
