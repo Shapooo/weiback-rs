@@ -320,6 +320,7 @@ impl PostProcessor {
         post["id"] = Value::Number(serde_json::Number::from(id));
         post["mblogid"] = post["bid"].take();
         post["text_raw"] = post["text"].to_owned();
+        post["favorited"] = Value::Bool(true);
         if post["pics"].is_array() {
             if let Value::Array(pics) = post["pics"].take() {
                 post["pic_ids"] = serde_json::to_value(
