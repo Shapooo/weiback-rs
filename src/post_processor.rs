@@ -321,6 +321,22 @@ impl PostProcessor {
         post["mblogid"] = post["bid"].take();
         post["text_raw"] = post["text"].to_owned();
         post["favorited"] = Value::Bool(true);
+        if let Value::Array(arr) = post["url_objects"].take() {
+            post["url_struct"] = Value::Array(
+                arr.into_iter()
+                    .map(|mut obj| {
+                        let mut url_struct: HashMap<String, Value> = HashMap::new();
+                        url_struct.insert("url_title".into(), obj["url_ori"].clone());
+                        url_struct.insert("ori_url".into(), obj["url_ori"].take());
+                        url_struct.insert("url_short".into(), obj["info"]["url_short"].take());
+                        url_struct.insert("url_long".into(), obj["info"]["url_long"].take());
+                        url_struct.insert("url_type".into(), obj["info"]["type"].take());
+                        url_struct.insert("result".into(), obj["info"]["result"].take());
+                        Ok(serde_json::to_value(url_struct)?)
+                    })
+                    .collect::<Result<Vec<Value>>>()?,
+            );
+        }
         if post["pics"].is_array() {
             if let Value::Array(pics) = post["pics"].take() {
                 post["pic_ids"] = serde_json::to_value(
