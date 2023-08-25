@@ -319,7 +319,7 @@ impl WebFetcher {
     pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<String> {
         let mobile_client = &self.mobile_client;
         let url = format!("{}/{}", MOBILE_POST_API, mblogid);
-        debug!("fetch mobile page, url: {}", &url);
+        info!("fetch client only post url: {}", &url);
         let res = self._get(url, mobile_client).await?;
         let text = res.text().await?;
         Ok(text)
