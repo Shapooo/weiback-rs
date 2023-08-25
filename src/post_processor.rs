@@ -308,7 +308,7 @@ impl PostProcessor {
     }
 
     fn handle_mobile_only_post_non_rec(&self, post: &mut Value) -> Result<()> {
-        let id = value_as_str(&post, "id")?;
+        let id = value_as_str(post, "id")?;
         let id = match id.parse::<i64>() {
             Ok(id) => id,
             Err(e) => {
@@ -324,7 +324,7 @@ impl PostProcessor {
             if let Value::Array(pics) = post["pics"].take() {
                 post["pic_ids"] = serde_json::to_value(
                     pics.iter()
-                        .map(|pic| value_as_str(&pic, "pid"))
+                        .map(|pic| value_as_str(pic, "pid"))
                         .collect::<Result<Vec<_>>>()?,
                 )
                 .unwrap();
