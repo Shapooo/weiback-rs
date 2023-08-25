@@ -4,11 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.3] - 2023-08-25
+
+**Added**
+- Add mobile web login
+- Support backup client only posts
+
+**Changed**
+- Save all cookies (include expired) to login_info.json
+- Update version of dependencies
+
+**Fixed**
+- Unfavorite unfavorited posts break app down
+
 ## [v0.1.2] - 2023-08-05
 
 **Added**
 - Retry when http request return server error
-
 
 **Changed**
 - change default log level to INFO
