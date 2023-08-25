@@ -232,11 +232,11 @@ impl Loginator {
         let text = res.text()?;
         let url_start = text
             .find("location.replace(")
-            .expect("unexpected html content, maybe api changed");
+            .expect("unexpected html content from mobile login, maybe api changed");
         let text = &text[url_start + 18..];
         let url_end = text
             .find("\")")
-            .expect("unexpected html content, maybe api changed");
+            .expect("unexpected html content from mobile login, maybe api changed");
         let url = &text[..url_end];
         let res = self
             .client
@@ -246,19 +246,19 @@ impl Loginator {
         let text = res.text()?;
         let url1_start = text
             .find("\"arrURL\":[\"")
-            .expect("unexpected html content, maybe api changed");
+            .expect("unexpected html content from mobile login, maybe api changed");
         let text = &text[url1_start + 11..];
         let url1_end = text
             .find("\"]")
-            .expect("unexpected html content, maybe api changed");
+            .expect("unexpected html content from mobile login, maybe api changed");
         let url1 = &text[..url1_end];
         let url2_start = text
             .find("location.replace(")
-            .expect("unexpected html content, maybe api changed");
+            .expect("unexpected html content from mobile login, maybe api changed");
         let text = &text[url2_start + 18..];
         let url2_end = text
             .find(");")
-            .expect("unexpected html content, maybe api changed");
+            .expect("unexpected html content from mobile login, maybe api changed");
         let url2 = &text[..url2_end - 1];
         let _ = self
             .client
