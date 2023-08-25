@@ -219,18 +219,58 @@ impl Loginator {
     }
 
     fn login_m_weibo_cn(&mut self) -> Result<()> {
-        let _ = self
+        let mobile_ua = HeaderValue::from_static(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) \
+             AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 \
+             Mobile/15E148 Safari/604.1 Edg/116.0.0.0",
+        );
+        let res = self
             .client
             .get("https://m.weibo.cn")
-            .header(
-                header::USER_AGENT,
-                HeaderValue::from_static(
-                    "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) \
-                     AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 \
-                     Mobile/15E148 Safari/604.1 Edg/116.0.0.0",
-                ),
-            )
+            .header(header::USER_AGENT, mobile_ua.clone())
             .send()?;
+        let text = res.text()?;
+        let url_start = text
+            .find("location.replace(")
+            .expect("unexpected html content, maybe api changed");
+        let text = &text[url_start + 18..];
+        let url_end = text
+            .find("\")")
+            .expect("unexpected html content, maybe api changed");
+        let url = &text[..url_end];
+        let res = self
+            .client
+            .get(url)
+            .header(header::USER_AGENT, mobile_ua.clone())
+            .send()?;
+        let text = res.text()?;
+        let url1_start = text
+            .find("\"arrURL\":[\"")
+            .expect("unexpected html content, maybe api changed");
+        let text = &text[url1_start + 11..];
+        let url1_end = text
+            .find("\"]")
+            .expect("unexpected html content, maybe api changed");
+        let url1 = &text[..url1_end];
+        let url2_start = text
+            .find("location.replace(")
+            .expect("unexpected html content, maybe api changed");
+        let text = &text[url2_start + 18..];
+        let url2_end = text
+            .find(");")
+            .expect("unexpected html content, maybe api changed");
+        let url2 = &text[..url2_end - 1];
+        let _ = self
+            .client
+            .get(url1)
+            .header(header::USER_AGENT, mobile_ua.clone())
+            .send()?;
+        let _ = self
+            .client
+            .get(url2)
+            .header(header::USER_AGENT, mobile_ua)
+            .send()?;
+
         Ok(())
     }
 }
