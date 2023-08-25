@@ -299,9 +299,9 @@ impl Persister {
             .bind((post["pic_ids"].is_array()).then_some(post["pic_ids"].to_string()))
             .bind(post["pic_num"].as_i64())
             .bind(post["retweeted_status"]["id"].as_i64())
-            .bind((post["url_struct"].is_object()).then_some(post["url_struct"].to_string()))
-            .bind((post["topic_struct"].is_object()).then_some(post["topic_struct"].to_string()))
-            .bind((post["tag_struct"].is_object()).then_some(post["tag_struct"].to_string()))
+            .bind((post["url_struct"].is_array()).then_some(post["url_struct"].to_string()))
+            .bind((post["topic_struct"].is_array()).then_some(post["topic_struct"].to_string()))
+            .bind((post["tag_struct"].is_array()).then_some(post["tag_struct"].to_string()))
             .bind(
                 (post["number_display_strategy"].is_object())
                     .then_some(post["number_display_strategy"].to_string()),
@@ -337,11 +337,10 @@ impl Persister {
             .bind(post["mblogtype"].as_i64())
             .bind(post["textLength"].as_i64())
             .bind(post["isLongText"].as_bool().unwrap_or_default())
-            .bind((post["annotations"].is_object()).then_some(post["annotations"].to_string()))
+            .bind((post["annotations"].is_array()).then_some(post["annotations"].to_string()))
             .bind((post["geo"].is_object()).then_some(post["geo"].to_string()))
             .bind(
-                (post["pic_focus_point"].is_object())
-                    .then_some(post["pic_focus_point"].to_string()),
+                (post["pic_focus_point"].is_array()).then_some(post["pic_focus_point"].to_string()),
             )
             .bind((post["page_info"].is_object()).then_some(post["page_info"].to_string()))
             .bind(post["title"].as_str())
