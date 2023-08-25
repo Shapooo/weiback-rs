@@ -223,7 +223,6 @@ impl PostProcessor {
             }
             Err(Error::NotInLocal) => {
                 let mut post = self.preprocess_post_non_rec(post).await?;
-                self.persister.insert_post(&post).await?;
 
                 if let Some(id) = post["retweeted_status"]["id"].as_i64() {
                     match self.persister.query_post(id).await {
@@ -261,6 +260,7 @@ impl PostProcessor {
                         e => return e,
                     }
                 }
+                self.persister.insert_post(&post).await?;
 
                 Ok(post)
             }
