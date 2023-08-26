@@ -19,8 +19,6 @@ pub enum Error {
     InvalidCookie(#[from] reqwest::header::InvalidHeaderValue),
     #[error("unexpected error {0}")]
     Other(String),
-    #[error("resource not in local")]
-    NotInLocal,
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
