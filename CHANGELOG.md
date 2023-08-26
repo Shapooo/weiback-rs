@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.4] - 2023-08-26
+
+**Added**
+- Support to url_objects of data from mobile web
+
+**Changed**
+- Use another api for client-only posts
+- Change log level of fetching client-only post from debug to info
+
+**Fixed**
+- clippy warnings
+- forget to mark client-only post favorited
+- wrong field type in post json
+- post should be inserted after url_struct procession
+
 ## [v0.1.3] - 2023-08-25
 
 **Added**
