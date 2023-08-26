@@ -289,17 +289,7 @@ impl PostProcessor {
     }
 
     async fn handle_mobile_only_post(&self, mblogid: &str) -> Result<Value> {
-        let text = self.web_fetcher.fetch_mobile_page(mblogid).await?;
-        let Some(start) = text.find("\"status\":") else {
-            return Err(Error::MalFormat(format!("mobile post: {text}")));
-        };
-        let Some(end) = text.find("\"call\"") else {
-            return Err(Error::MalFormat(format!("mobile post: {text}")));
-        };
-        let Some(end) = text[..end].rfind(',') else {
-            return Err(Error::MalFormat(format!("mobile post: {text}")));
-        };
-        let mut post = serde_json::from_str::<Value>(&text[start + 9..end])?;
+        let mut post = self.web_fetcher.fetch_mobile_page(mblogid).await?;
         self.handle_mobile_only_post_non_rec(&mut post)?;
         if post["retweeted_status"].is_object() {
             self.handle_mobile_only_post_non_rec(&mut post["retweeted_status"])?;
