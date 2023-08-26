@@ -116,7 +116,8 @@ impl Persister {
     }
 
     pub async fn insert_post(&self, post: &Post) -> Result<()> {
-        trace!("insert post: {:?}", post);
+        debug!("insert post: {}", post["id"]);
+        trace!("insert post: {}", post);
         self._insert_post(post).await?;
         if post["user"]["id"].is_number() {
             self.insert_user(&post["user"]).await?;
@@ -178,7 +179,8 @@ impl Persister {
     }
 
     pub async fn insert_user(&self, user: &User) -> Result<()> {
-        trace!("user: {user:?}");
+        debug!("insert user: {}", &user["id"]);
+        trace!("insert user: {user}");
         let result = sqlx::query(
             "INSERT OR IGNORE INTO users VALUES \
              (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -276,6 +278,7 @@ impl Persister {
 // Private functions
 impl Persister {
     async fn _insert_post(&self, post: &Value) -> DBResult<()> {
+        debug!("_insert post: {}", post["id"]);
         let statement = if post["favorited"] == true {
             "INSERT OR REPLACE INTO posts \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
