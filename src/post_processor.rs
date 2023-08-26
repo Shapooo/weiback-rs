@@ -228,7 +228,6 @@ impl PostProcessor {
                     match self.persister.query_post(id).await {
                         Ok(retweet) => {
                             post["retweeted_status"] = retweet;
-                            return Ok(post);
                         }
                         Err(Error::NotInLocal) => {
                             let mut retweet = self
