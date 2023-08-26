@@ -217,19 +217,19 @@ impl PostProcessor {
     async fn preprocess_post(&self, post: Post) -> Result<Post> {
         let id = value_as_i64(&post, "id")?;
         match self.persister.query_post(id).await {
-            Ok(post) => {
+            Ok(Some(post)) => {
                 self.persister.mark_post_favorited(id).await?;
                 Ok(post)
             }
-            Err(Error::NotInLocal) => {
+            Ok(None) => {
                 let mut post = self.preprocess_post_non_rec(post).await?;
 
                 if let Some(id) = post["retweeted_status"]["id"].as_i64() {
                     match self.persister.query_post(id).await {
-                        Ok(retweet) => {
+                        Ok(Some(retweet)) => {
                             post["retweeted_status"] = retweet;
                         }
-                        Err(Error::NotInLocal) => {
+                        Ok(None) => {
                             let mut retweet = self
                                 .preprocess_post_non_rec(post["retweeted_status"].take())
                                 .await?;
@@ -256,14 +256,14 @@ impl PostProcessor {
                             }
                             post["retweeted_status"] = retweet;
                         }
-                        e => return e,
+                        Err(e) => return Err(e),
                     }
                 }
                 self.persister.insert_post(&post).await?;
 
                 Ok(post)
             }
-            e => e,
+            Err(e) => Err(e),
         }
     }
 
@@ -358,8 +358,8 @@ impl PostProcessor {
 
     async fn get_pic(&self, url: &str) -> Result<Option<Bytes>> {
         let url = crate::utils::strip_url_queries(url);
-        let res = self.persister.query_img(url).await;
-        if let Err(Error::NotInLocal) = res {
+        let res = self.persister.query_img(url).await?;
+        if res.is_none() {
             let pic = match self.web_fetcher.fetch_pic(url).await {
                 Ok(pic) => pic,
                 Err(err) => {
@@ -370,7 +370,7 @@ impl PostProcessor {
             self.persister.insert_img(url, &pic).await?;
             Ok(Some(pic))
         } else {
-            Ok(Some(res?))
+            Ok(res)
         }
     }
 

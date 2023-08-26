@@ -214,7 +214,7 @@ impl Persister {
         Ok(())
     }
 
-    pub async fn query_img(&self, url: &str) -> Result<Bytes> {
+    pub async fn query_img(&self, url: &str) -> Result<Option<Bytes>> {
         debug!("query img: {url}");
         let result =
             sqlx::query_as::<Sqlite, PictureBlob>("SELECT * FROM picture_blob WHERE url = ?")
@@ -222,18 +222,18 @@ impl Persister {
                 .fetch_one(self.db_pool.as_ref().unwrap())
                 .await;
         match result {
-            Ok(res) => Ok(res.blob.into()),
-            Err(sqlx::Error::RowNotFound) => Err(Error::NotInLocal),
+            Ok(res) => Ok(Some(res.blob.into())),
+            Err(sqlx::Error::RowNotFound) => Ok(None),
             Err(e) => Err(e.into()),
         }
     }
 
-    pub async fn query_post(&self, id: i64) -> Result<Post> {
+    pub async fn query_post(&self, id: i64) -> Result<Option<Post>> {
         debug!("query post, id: {id}");
         let sql_post = self._query_post(id).await;
         match sql_post {
-            Ok(post) => Ok(self._sql_post_to_post(post).await?),
-            Err(sqlx::Error::RowNotFound) => Err(Error::NotInLocal),
+            Ok(post) => Ok(Some(self._sql_post_to_post(post).await?)),
+            Err(sqlx::Error::RowNotFound) => Ok(None),
             Err(e) => Err(e.into()),
         }
     }
@@ -255,10 +255,10 @@ impl Persister {
     }
 
     #[allow(unused)]
-    pub async fn query_user(&self, id: i64) -> Result<User> {
+    pub async fn query_user(&self, id: i64) -> Result<Option<User>> {
         match self._query_user(id).await {
-            Ok(user) => Ok(user),
-            Err(sqlx::Error::RowNotFound) => Err(Error::NotInLocal),
+            Ok(user) => Ok(Some(user)),
+            Err(sqlx::Error::RowNotFound) => Ok(None),
             Err(e) => Err(e.into()),
         }
     }
