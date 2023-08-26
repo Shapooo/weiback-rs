@@ -320,8 +320,15 @@ impl WebFetcher {
         let mobile_client = &self.mobile_client;
         let url = format!("{}{}", MOBILE_POST_API, mblogid);
         info!("fetch client only post url: {}", &url);
-        let res = self._get(url, mobile_client).await?;
-        Ok(res.json().await?)
+        let mut res: Value = self._get(url, mobile_client).await?.json().await?;
+        if res["ok"] == 1 {
+            Ok(res["data"].take())
+        } else {
+            Err(Error::ResourceGetFailed(format!(
+                "fetch mobile post {} failed, with message {}",
+                mblogid, res["message"]
+            )))
+        }
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u32> {
