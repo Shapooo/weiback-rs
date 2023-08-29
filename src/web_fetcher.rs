@@ -19,6 +19,7 @@ const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
+const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
 const RETRY_COUNT: i32 = 3;
 
 #[derive(Debug)]
@@ -247,8 +248,26 @@ impl WebFetcher {
     }
 
     pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
-        let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
+        let url = format!("{STATUSES_MY_MICRO_BLOG_API}?uid={uid}&page={page}");
         debug!("fetch meta page, url: {url}");
+        let mut posts: Value = self._get(url, &self.web_client).await?.json().await?;
+        trace!("get json: {posts:?}");
+        if posts["ok"] != 1 {
+            Err(Error::ResourceGetFailed(format!(
+                "fetched data is not ok: {posts:?}"
+            )))
+        } else if let Value::Array(v) = posts["data"]["list"].take() {
+            Ok(v)
+        } else {
+            Err(Error::MalFormat(
+                "Posts should be a array, maybe api has changed".into(),
+            ))
+        }
+    }
+
+    pub async fn fetch_fav_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
+        let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
+        debug!("fetch fav meta page, url: {url}");
         let mut posts: Value = self._get(url, &self.web_client).await?.json().await?;
         trace!("get json: {posts:?}");
         if posts["ok"] != 1 {
