@@ -104,7 +104,7 @@ impl PostProcessor {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
+        let posts = self.web_fetcher.fetch_fav_posts_meta(uid, page).await?;
         let result = posts.len();
         self.persist_posts(posts, with_pic, image_definition)
             .await?;
@@ -119,6 +119,20 @@ impl PostProcessor {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
         self.persister.query_posts(limit, offset, reverse).await
+    }
+
+    pub async fn download_posts(
+        &self,
+        uid: &str,
+        page: u32,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<usize> {
+        let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
+        let result = posts.len();
+        self.persist_posts(posts, with_pic, image_definition)
+            .await?;
+        Ok(result)
     }
 
     pub async fn generate_html(
