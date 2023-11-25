@@ -514,7 +514,7 @@ impl PostProcessor {
         let text = {
             let res = AT_EXPR
                 .find_iter(&text)
-                .filter_map(|m| (!emails_suffixes.contains(m.as_str())).then_some(m))
+                .filter(|m| !emails_suffixes.contains(m.as_str()))
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
                         acc + Borrowed(&text[i..m.start()])
