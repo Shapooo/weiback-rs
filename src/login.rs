@@ -127,7 +127,7 @@ impl Loginator {
             [img.width() as usize, img.height() as usize],
             &img.into_vec()[..],
         );
-        Ok(egui::ImageData::Color(img))
+        Ok(egui::ImageData::Color(img.into()))
     }
 
     pub fn wait_confirm(&mut self) -> Result<()> {

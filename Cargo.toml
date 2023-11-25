@@ -7,22 +7,22 @@ edition = "2021"
 
 
 [dependencies]
-anyhow = "1.0.72"
-bytes = "1.4.0"
-chrono = { version = "0.4.26", default-features = false }
-eframe = "0.22.0"
-egui = "0.22.0"
-env_logger = "0.10.0"
-futures = "0.3.28"
-image = "0.24.6"
+anyhow = "1.0.75"
+bytes = "1.5.0"
+chrono = { version = "0.4.31", default-features = false }
+eframe = "0.24.1"
+egui = "0.24.1"
+env_logger = "0.10.1"
+futures = "0.3.29"
+image = "0.24.7"
 lazy_static = "1.4.0"
-log = "0.4.19"
-regex = "1.9.1"
-reqwest = { version = "0.11.18", features = ["json", "gzip", "rustls", "blocking", "cookies"] }
+log = "0.4.20"
+regex = "1.10.2"
+reqwest = { version = "0.11.22", features = ["json", "gzip", "rustls", "blocking", "cookies"] }
 reqwest_cookie_store = "0.6.0"
-serde = { version = "1.0.173", features = ["serde_derive"] }
-serde_json = "1.0.103"
-sqlx = { version = "0.7.1", features = ["sqlite", "runtime-tokio-rustls"] }
-tera = "1.19.0"
-thiserror = "1.0.43"
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "time", "fs"] }
+serde = { version = "1.0.193", features = ["serde_derive"] }
+serde_json = "1.0.108"
+sqlx = { version = "0.7.3", features = ["sqlite", "runtime-tokio-rustls"] }
+tera = "1.19.1"
+thiserror = "1.0.50"
+tokio = { version = "1.35.0", features = ["macros", "rt-multi-thread", "time", "fs"] }

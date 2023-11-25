@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use anyhow;
 use eframe::{
-    egui::{self, vec2},
+    egui::{self, vec2, viewport::ViewportBuilder},
     NativeOptions,
 };
 use log::info;
@@ -98,7 +98,7 @@ impl Core {
         eframe::run_native(
             "weiback",
             NativeOptions {
-                initial_window_size: Some(vec2(300.0, 300.0)),
+                viewport: ViewportBuilder::default().with_inner_size(vec2(300., 300.)),
                 ..Default::default()
             },
             Box::new(|cc| {
@@ -370,7 +370,7 @@ impl Core {
                             ui.ctx()
                                 .load_texture("login_qrcode", image_data, Default::default())
                         });
-                        ui.image(qrcode, qrcode.size_vec2());
+                        ui.image(qrcode);
                         ui.label("请尽快用手机扫描二维码并确认");
                     }
                     LoginState::Confirmed => {
