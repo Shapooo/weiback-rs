@@ -6,6 +6,16 @@ use log::{info, LevelFilter};
 use weiback_rs::core::Core;
 
 fn main() -> Result<()> {
+    init_logger()?;
+    info!("start running...");
+    let core = Core::new();
+    core.run()?;
+
+    info!("done");
+    Ok(())
+}
+
+fn init_logger() -> Result<()> {
     let log_path = std::env::current_exe()?;
     let log_path = log_path
         .parent()
@@ -23,12 +33,10 @@ fn main() -> Result<()> {
         .filter_level(LevelFilter::Info)
         .parse_default_env()
         .filter_module("sqlx", LevelFilter::Error)
+        .filter_module("zbus", LevelFilter::Warn)
+        .filter_module("tracing", LevelFilter::Warn)
+        .filter_module("winit", LevelFilter::Warn)
         .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
-    info!("start running...");
-    let core = Core::new();
-    core.run()?;
-
-    info!("done");
     Ok(())
 }
