@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.5] - 2023-12-10
+
+**Changed**
+- filter unecessary module logs
+- update version of dependencies
+
+**Fixed**
+- export range wrong
+
 ## [v0.1.4] - 2023-08-26
 
 **Added**
