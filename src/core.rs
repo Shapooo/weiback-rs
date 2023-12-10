@@ -297,7 +297,7 @@ impl Core {
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
                                 .export_from_local(
-                                    self.db_start..=self.db_start,
+                                    self.db_start..=self.db_end,
                                     self.reverse,
                                     self.image_definition,
                                 );
