@@ -43,9 +43,10 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER P
                                    pc_new INTEGER, verified BOOLEAN, verified_type INTEGER, \
                                    domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, \
                                    follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, \
-                                   mbtype INTEGER, icon_list VARCHAR); \
-                                   CREATE TABLE IF NOT EXISTS picture_blob(\
-                                   url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB);";
+                                   mbtype INTEGER, icon_list VARCHAR, backedup BOOLEAN DEFAULT false); \
+                                   CREATE TABLE IF NOT EXISTS picture_blob( \
+                                   url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB); \
+                                   PRAGMA user_version = 1;";
 const DATABASE: &str = "res/weiback.db";
 
 type DBResult<T> = std::result::Result<T, sqlx::Error>;
@@ -149,6 +150,15 @@ impl Persister {
         Ok(())
     }
 
+    pub async fn mark_user_backedup(&self, id: i64) -> Result<()> {
+        debug!("mark user {} backedup", id);
+        sqlx::query("UPDATE users SET backedup = true WHERE id = ?")
+            .bind(id)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(())
+    }
+
     pub async fn query_posts_to_unfavorite(&self, limit: u32, offset: u32) -> Result<Vec<i64>> {
         debug!("query posts to unfavorite, limit {limit} offset {offset}");
         Ok(sqlx::query_as::<Sqlite, (i64,)>(
@@ -183,7 +193,7 @@ impl Persister {
         trace!("insert user: {user}");
         let result = sqlx::query(
             "INSERT OR IGNORE INTO users VALUES \
-             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(user["id"].as_i64().unwrap())
         .bind(user["profile_url"].as_str().unwrap())
@@ -208,6 +218,7 @@ impl Persister {
                 .is_object()
                 .then_some(user["icon_list"].to_string()),
         )
+        .bind(false)
         .execute(self.db_pool.as_ref().unwrap())
         .await?;
         trace!("insert user {user:?}, result {result:?}");
@@ -362,7 +373,7 @@ impl Persister {
     async fn _query_user(&self, id: i64) -> DBResult<User> {
         let sql_user: SqlUser = sqlx::query_as(
             "SELECT id, profile_url, screen_name, profile_image_url, \
-             avatar_large, avatar_hd FROM users WHERE id = ?",
+             avatar_large, avatar_hd, backedup FROM users WHERE id = ?",
         )
         .bind(id)
         .fetch_one(self.db_pool.as_ref().unwrap())
@@ -616,6 +627,8 @@ pub struct SqlUser {
     pub mbtype: i64,
     #[sqlx(default)]
     pub icon_list: String,
+    #[sqlx(default)]
+    pub backedup: bool,
 }
 
 #[derive(Debug, Clone, FromRow)]
