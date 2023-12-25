@@ -121,17 +121,21 @@ impl PostProcessor {
         self.persister.query_posts(limit, offset, reverse).await
     }
 
-    pub async fn download_posts(
+    pub async fn backup_ones_posts(
         &self,
-        uid: &str,
+        uid: i64,
         page: u32,
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = self.web_fetcher.fetch_posts_meta(uid, page).await?;
+        let posts = self
+            .web_fetcher
+            .fetch_posts_meta(uid.to_string().as_str(), page)
+            .await?;
         let result = posts.len();
         self.persist_posts(posts, with_pic, image_definition)
             .await?;
+        self.persister.mark_user_backedup(uid).await?;
         Ok(result)
     }
 
