@@ -135,7 +135,7 @@ impl PostProcessor {
         let result = posts.len();
         self.persist_posts(posts, with_pic, image_definition)
             .await?;
-        self.persister.mark_user_backedup(uid).await?;
+        self.persister.mark_user_backed_up(uid).await?;
         Ok(result)
     }
 

@@ -25,14 +25,15 @@ impl Default for MainState {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum TabType {
-    DownloadPosts,
+    BackUpFav,
+    BackUpUser,
     ExportFromLocal,
     About,
 }
 
 impl Default for TabType {
     fn default() -> Self {
-        Self::DownloadPosts
+        Self::BackUpFav
     }
 }
 
@@ -59,6 +60,7 @@ pub struct Core {
     // variable associated with logining GUI
     login_state: Option<Arc<RwLock<LoginState>>>,
     qrcode_img: Option<egui::TextureHandle>,
+    uid_str: String,
 }
 
 impl Default for Core {
@@ -84,6 +86,7 @@ impl Default for Core {
             ratio: Default::default(),
             login_state: Default::default(),
             qrcode_img: Default::default(),
+            uid_str: Default::default(),
         }
     }
 }
@@ -98,7 +101,7 @@ impl Core {
         eframe::run_native(
             "weiback",
             NativeOptions {
-                viewport: ViewportBuilder::default().with_inner_size(vec2(300., 300.)),
+                viewport: ViewportBuilder::default().with_inner_size(vec2(320., 300.)),
                 ..Default::default()
             },
             Box::new(|cc| {
@@ -185,17 +188,14 @@ impl Core {
             ui.group(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 ui.horizontal(|ui| {
-                    ui.selectable_value(
-                        &mut self.tab_type,
-                        TabType::DownloadPosts,
-                        "    微博下载    ",
-                    );
+                    ui.selectable_value(&mut self.tab_type, TabType::BackUpFav, "  收藏备份  ");
+                    ui.selectable_value(&mut self.tab_type, TabType::BackUpUser, "  备份用户  ");
                     ui.selectable_value(
                         &mut self.tab_type,
                         TabType::ExportFromLocal,
-                        "    本地导出    ",
+                        "  本地导出  ",
                     );
-                    ui.selectable_value(&mut self.tab_type, TabType::About, "        关于        ");
+                    ui.selectable_value(&mut self.tab_type, TabType::About, "      关于      ");
                 });
 
                 if self.tab_type == TabType::About {
@@ -224,9 +224,7 @@ impl Core {
                         ui.selectable_value(&mut self.image_definition, 1, "中等");
                         ui.selectable_value(&mut self.image_definition, 2, "最高");
                     });
-                    if self.tab_type == TabType::DownloadPosts {
-                        ui.checkbox(&mut self.with_pic, "同时下载图片");
-                    } else {
+                    if self.tab_type == TabType::ExportFromLocal {
                         ui.checkbox(&mut self.reverse, "按时间逆序")
                             .on_hover_text("时间逆序即最上方的微博为最新的微博");
                         if ui.button("对本地微博取消收藏").clicked() {
@@ -236,45 +234,55 @@ impl Core {
                                 .expect("core.executor must be unwrapable, bugs in there")
                                 .unfavorite_posts(1..=u32::MAX);
                         }
+                    } else {
+                        ui.checkbox(&mut self.with_pic, "同时下载图片");
                     }
-                    ui.collapsing("高级设置", |ui| {
+
+                    if self.tab_type == TabType::BackUpUser {
                         ui.horizontal(|ui| {
-                            if self.tab_type == TabType::DownloadPosts {
-                                ui.label("下载范围：");
-                            } else {
-                                ui.label("导出范围：");
-                            }
-
-                            let (start, end, total, speed) =
-                                if self.tab_type == TabType::DownloadPosts {
-                                    (
-                                        &mut self.web_start,
-                                        &mut self.web_end,
-                                        (self.web_total + 19) / 20 * 20,
-                                        20,
-                                    )
-                                } else {
-                                    (
-                                        &mut self.db_start,
-                                        &mut self.db_end,
-                                        self.db_total,
-                                        self.period,
-                                    )
-                                };
-
-                            ui.add(egui::DragValue::new(start).clamp_range(1..=*end).speed(20));
-                            ui.label("-");
-                            ui.add(
-                                egui::DragValue::new(end)
-                                    .clamp_range(speed..=total)
-                                    .speed(speed),
-                            )
+                            ui.label("下载用户ID，默认自己：");
+                            ui.text_edit_singleline(&mut self.uid_str);
                         });
-                        if self.tab_type == TabType::ExportFromLocal {
-                            ui.add(egui::Slider::new(&mut self.period, 10..=200).text("每页"))
-                                .on_hover_text("导出时默认50条博文分割为一个html文件");
-                        }
-                    });
+                    } else {
+                        ui.collapsing("高级设置", |ui| {
+                            ui.horizontal(|ui| {
+                                if self.tab_type == TabType::ExportFromLocal {
+                                    ui.label("导出范围：");
+                                } else {
+                                    ui.label("下载范围：");
+                                }
+
+                                let (start, end, total, speed) =
+                                    if self.tab_type == TabType::BackUpFav {
+                                        (
+                                            &mut self.web_start,
+                                            &mut self.web_end,
+                                            (self.web_total + 19) / 20 * 20,
+                                            20,
+                                        )
+                                    } else {
+                                        (
+                                            &mut self.db_start,
+                                            &mut self.db_end,
+                                            self.db_total,
+                                            self.period,
+                                        )
+                                    };
+
+                                ui.add(egui::DragValue::new(start).clamp_range(1..=*end).speed(20));
+                                ui.label("-");
+                                ui.add(
+                                    egui::DragValue::new(end)
+                                        .clamp_range(speed..=total)
+                                        .speed(speed),
+                                )
+                            });
+                            if self.tab_type == TabType::ExportFromLocal {
+                                ui.add(egui::Slider::new(&mut self.period, 10..=200).text("每页"))
+                                    .on_hover_text("导出时默认50条博文分割为一个html文件");
+                            }
+                        });
+                    }
                 }
             });
             ui.vertical_centered(|ui| {
@@ -282,15 +290,31 @@ impl Core {
                 if ui.button("开始").clicked() {
                     self.task_ongoing = true;
                     match self.tab_type {
-                        TabType::DownloadPosts => {
+                        TabType::BackUpFav => {
                             self.executor
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
-                                .download_posts(
+                                .download_fav(
                                     self.web_start..=self.web_end,
                                     self.with_pic,
                                     self.image_definition,
                                 );
+                        }
+                        TabType::BackUpUser => {
+                            let uid = if self.uid_str.is_empty() {
+                                0
+                            } else {
+                                self.uid_str.parse().unwrap()
+                            };
+                            self.executor
+                                .as_ref()
+                                .expect("core.executor must be unwrapable, bugs in there")
+                                .backup_user(
+                                    uid,
+                                    self.web_start..=self.web_end,
+                                    self.with_pic,
+                                    self.image_definition,
+                                )
                         }
                         TabType::ExportFromLocal => {
                             self.executor

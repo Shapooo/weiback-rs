@@ -175,7 +175,7 @@ impl Persister {
         Ok(())
     }
 
-    pub async fn mark_user_backedup(&self, id: i64) -> Result<()> {
+    pub async fn mark_user_backed_up(&self, id: i64) -> Result<()> {
         debug!("mark user {} backedup", id);
         sqlx::query("UPDATE users SET backedup = true WHERE id = ?")
             .bind(id)

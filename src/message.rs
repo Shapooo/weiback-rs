@@ -2,9 +2,10 @@ use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone)]
 pub enum Task {
-    DownloadPosts(RangeInclusive<u32>, bool, u8),
+    DownloadFav(RangeInclusive<u32>, bool, u8),
     ExportFromLocal(RangeInclusive<u32>, bool, u8),
     UnfavoritePosts(RangeInclusive<u32>),
+    DownloadPosts(i64, RangeInclusive<u32>, bool, u8),
 }
 
 #[derive(Debug, Clone)]

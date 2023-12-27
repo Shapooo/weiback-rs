@@ -33,11 +33,19 @@ impl Executor {
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
-                        Task::DownloadPosts(range, with_pic, image_definition) => {
-                            th.download_posts(range, with_pic, image_definition).await
+                        Task::DownloadFav(range, with_pic, image_definition) => {
+                            th.download_favorites(range, with_pic, image_definition)
+                                .await
                         }
                         Task::ExportFromLocal(range, rev, image_definition) => {
                             th.export_from_local(range, rev, image_definition).await
+                        }
+                        Task::DownloadPosts(uid, range, with_pic, image_definition) => {
+                            if uid == 0 {
+                                th.backup_self(range, with_pic, image_definition).await
+                            } else {
+                                th.backup_user(uid, range, with_pic, image_definition).await
+                            }
                         }
                         Task::UnfavoritePosts(range) => th.unfavorite_posts(range).await,
                     }
@@ -57,9 +65,20 @@ impl Executor {
         self.send_task(Task::UnfavoritePosts(range))
     }
 
-    pub fn download_posts(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
+    pub fn download_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
         debug!("send task: download meta");
-        self.send_task(Task::DownloadPosts(range, with_pic, image_definition))
+        self.send_task(Task::DownloadFav(range, with_pic, image_definition))
+    }
+
+    pub fn backup_user(
+        &self,
+        uid: i64,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) {
+        debug!("send task: backup user");
+        self.send_task(Task::DownloadPosts(uid, range, with_pic, image_definition))
     }
 
     pub fn export_from_local(
