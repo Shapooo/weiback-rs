@@ -109,8 +109,19 @@ impl PostProcessor {
             .fetch_fav_posts_meta(uid.to_string().as_str(), page)
             .await?;
         let result = posts.len();
+        let ids = posts
+            .iter()
+            .map(|post| post["id"].as_i64().unwrap())
+            .collect::<Vec<_>>();
         self.persist_posts(posts, with_pic, image_definition)
             .await?;
+        join_all(
+            ids.into_iter()
+                .map(|id| self.persister.mark_post_favorited(id)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<_>>()?;
         Ok(result)
     }
 
@@ -233,20 +244,20 @@ impl PostProcessor {
 
     async fn preprocess_post(&self, post: Post) -> Result<Post> {
         let id = value_as_i64(&post, "id")?;
-        match self.persister.query_post(id).await {
-            Ok(Some(post)) => {
-                self.persister.mark_post_favorited(id).await?;
+        match self.persister.query_post(id).await? {
+            Some(_post) => {
+                // TODO: update post according to the setting
                 Ok(post)
             }
-            Ok(None) => {
+            None => {
                 let mut post = self.preprocess_post_non_rec(post).await?;
 
                 if let Some(id) = post["retweeted_status"]["id"].as_i64() {
-                    match self.persister.query_post(id).await {
-                        Ok(Some(retweet)) => {
+                    match self.persister.query_post(id).await? {
+                        Some(retweet) => {
                             post["retweeted_status"] = retweet;
                         }
-                        Ok(None) => {
+                        None => {
                             let mut retweet = self
                                 .preprocess_post_non_rec(post["retweeted_status"].take())
                                 .await?;
@@ -273,14 +284,12 @@ impl PostProcessor {
                             }
                             post["retweeted_status"] = retweet;
                         }
-                        Err(e) => return Err(e),
                     }
                 }
                 self.persister.insert_post(&post).await?;
 
                 Ok(post)
             }
-            Err(e) => Err(e),
         }
     }
 
