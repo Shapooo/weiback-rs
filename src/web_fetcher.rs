@@ -24,7 +24,7 @@ const RETRY_COUNT: i32 = 3;
 
 #[derive(Debug)]
 pub struct WebFetcher {
-    uid: &'static str,
+    uid: i64,
     cookie: Arc<CookieStoreMutex>,
     web_client: Client,
     mobile_client: Client,
@@ -32,7 +32,7 @@ pub struct WebFetcher {
 }
 
 impl WebFetcher {
-    pub fn from_cookies(uid: &'static str, cookie_store: CookieStore) -> Result<Self> {
+    pub fn from_cookies(uid: i64, cookie_store: CookieStore) -> Result<Self> {
         let xsrf_token = cookie_store
             .get("weibo.com", "/", "XSRF-TOKEN")
             .ok_or(Error::Other("xsrf-token-not-found".into()))?

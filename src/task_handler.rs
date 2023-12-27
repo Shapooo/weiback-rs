@@ -20,13 +20,13 @@ pub struct TaskHandler {
     exporter: Exporter,
     processer: PostProcessor,
     task_status: Arc<RwLock<TaskStatus>>,
-    uid: &'static str,
+    uid: i64,
 }
 
 impl TaskHandler {
     pub fn new(mut login_info: LoginInfo, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
-        let uid = if let serde_json::Value::String(uid) = login_info["uid"].take() {
-            Box::leak(Box::new(uid))
+        let uid = if let serde_json::Value::Number(uid) = &login_info["uid"] {
+            uid.as_i64().unwrap()
         } else {
             return Err(Error::MalFormat(format!(
                 "no uid field in login_info: {:?}",
@@ -41,7 +41,7 @@ impl TaskHandler {
             exporter: Exporter::new(),
             processer: PostProcessor::new(fetcher, persister),
             task_status,
-            uid: Box::leak(Box::new(uid.to_string())),
+            uid,
         })
     }
 
@@ -92,7 +92,7 @@ impl TaskHandler {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<()> {
-        let uid = self.uid.parse().unwrap();
+        let uid = self.uid;
         self._backup_user(uid, range, with_pic, image_definition)
             .await
     }
