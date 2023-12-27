@@ -47,6 +47,8 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER P
                                    CREATE TABLE IF NOT EXISTS picture_blob( \
                                    url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB); \
                                    PRAGMA user_version = 1;";
+const UPGRADE_DB_SQL: &str =
+    "ALTER TABLE users ADD COLUMN backedup BOOLEAN DEFAULT false; PRAGMA user_version = 1;";
 const DATABASE: &str = "res/weiback.db";
 
 type DBResult<T> = std::result::Result<T, sqlx::Error>;
@@ -73,6 +75,7 @@ impl Persister {
         debug!("initing...");
         if self.db_path.is_file() {
             info!("db {:?} exists", self.db_path);
+            self.upgrade_db().await?;
         } else {
             info!("db {:?} not exists, create it", self.db_path);
             if !self.db_path.parent().unwrap().exists() {
@@ -91,28 +94,50 @@ impl Persister {
                 )
                 .into());
             }
-            Sqlite::create_database(self.db_path.to_str().unwrap()).await?;
-            let mut db = SqliteConnection::connect(self.db_path.to_str().unwrap()).await?;
-            use futures::stream::TryStreamExt;
-            sqlx::query(DATABASE_CREATE_SQL)
-                .execute_many(&mut db)
-                .await
-                .try_for_each_concurrent(None, |res| async move {
-                    let query_result = res;
-                    trace!(
-                        "rows_affected {}, last_insert_rowid {}",
-                        query_result.rows_affected(),
-                        query_result.last_insert_rowid()
-                    );
-                    Ok(())
-                })
-                .await?;
+            self.create_db().await?;
         }
         self.db_pool = Some(
             SqlitePoolOptions::new()
                 .min_connections(2)
                 .connect_lazy(self.db_path.to_str().unwrap())?,
         );
+        Ok(())
+    }
+
+    async fn upgrade_db(&mut self) -> Result<()> {
+        let mut db = SqliteConnection::connect(self.db_path.to_str().unwrap()).await?;
+        let mut version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
+            .fetch_one(&mut db)
+            .await?;
+        debug!("db version: {}", version.0);
+        if version.0 == 0 {
+            info!("upgrade db from version 0 to 1");
+            sqlx::query(UPGRADE_DB_SQL).execute(&mut db).await?;
+            version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
+                .fetch_one(&mut db)
+                .await?;
+            debug!("db version: {}", version.0);
+        }
+        Ok(())
+    }
+
+    async fn create_db(&mut self) -> Result<()> {
+        Sqlite::create_database(self.db_path.to_str().unwrap()).await?;
+        let mut db = SqliteConnection::connect(self.db_path.to_str().unwrap()).await?;
+        use futures::stream::TryStreamExt;
+        sqlx::query(DATABASE_CREATE_SQL)
+            .execute_many(&mut db)
+            .await
+            .try_for_each_concurrent(None, |res| async move {
+                let query_result = res;
+                trace!(
+                    "rows_affected {}, last_insert_rowid {}",
+                    query_result.rows_affected(),
+                    query_result.last_insert_rowid()
+                );
+                Ok(())
+            })
+            .await?;
         Ok(())
     }
 
