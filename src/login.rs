@@ -42,7 +42,7 @@ pub struct Loginator {
     qrid: String,
     alt: String,
     index: i64,
-    uid: String,
+    uid: i64,
 }
 
 impl Loginator {
@@ -179,7 +179,7 @@ impl Loginator {
                 "unwrap Arc<CookieStoreMutext> failed, there are bugs"
             )))?
             .into_inner()?;
-        let login_info = to_login_info(&self.uid, &cookie_store)?;
+        let login_info = to_login_info(self.uid, &cookie_store)?;
         Ok(login_info)
     }
 
@@ -197,9 +197,9 @@ impl Loginator {
         ))?;
         let mut json: Value = from_str(text)?;
         self.uid = if let Value::String(uid) = json["uid"].take() {
-            uid
+            uid.parse()?
         } else {
-            "".into()
+            return Err(anyhow::anyhow!("no uid field in returned json"));
         };
         if let Value::Array(url_list) = json["crossDomainUrlList"].take() {
             for url in url_list {
@@ -382,7 +382,7 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
     }
 }
 
-pub fn to_login_info(uid: &str, cookie_store: &CookieStore) -> Result<LoginInfo> {
+pub fn to_login_info(uid: i64, cookie_store: &CookieStore) -> Result<LoginInfo> {
     let cookie_json = cookie_store.iter_any().collect::<Vec<_>>();
     let login_info = serde_json::json!({"uid":uid, "cookies":cookie_json});
     Ok(to_value(login_info)?)
