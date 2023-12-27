@@ -273,14 +273,10 @@ impl Persister {
         debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
         let sql_posts = self._query_posts(limit, offset, reverse).await?;
         debug!("geted {} post from local", sql_posts.len());
-        let data: Vec<_> = join_all(
-            sql_posts
-                .into_iter()
-                .map(|p| async { self._sql_post_to_post(p).await }),
-        )
-        .await
-        .into_iter()
-        .collect::<std::result::Result<_, _>>()?;
+        let data: Vec<_> = join_all(sql_posts.into_iter().map(|p| self._sql_post_to_post(p)))
+            .await
+            .into_iter()
+            .collect::<std::result::Result<_, _>>()?;
         debug!("fetched {} posts", data.len());
         Ok(data)
     }

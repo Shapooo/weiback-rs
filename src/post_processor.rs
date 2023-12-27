@@ -188,14 +188,10 @@ impl PostProcessor {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<()> {
-        let posts = join_all(
-            posts
-                .into_iter()
-                .map(|post| async { self.preprocess_post(post).await }),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
+        let posts = join_all(posts.into_iter().map(|post| self.preprocess_post(post)))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
         if with_pic {
             self.persist_post_pictures(&posts, image_definition).await?;
         }
