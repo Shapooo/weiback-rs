@@ -51,8 +51,6 @@ const UPGRADE_DB_SQL: &str =
     "ALTER TABLE users ADD COLUMN backedup BOOLEAN DEFAULT false; PRAGMA user_version = 1;";
 const DATABASE: &str = "res/weiback.db";
 
-type DBResult<T> = std::result::Result<T, sqlx::Error>;
-
 #[derive(Debug)]
 pub struct Persister {
     db_path: PathBuf,
@@ -252,25 +250,22 @@ impl Persister {
 
     pub async fn query_img(&self, url: &str) -> Result<Option<Bytes>> {
         debug!("query img: {url}");
-        let result =
+        Ok(
             sqlx::query_as::<Sqlite, PictureBlob>("SELECT * FROM picture_blob WHERE url = ?")
                 .bind(url)
-                .fetch_one(self.db_pool.as_ref().unwrap())
-                .await;
-        match result {
-            Ok(res) => Ok(Some(res.blob.into())),
-            Err(sqlx::Error::RowNotFound) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+                .fetch_optional(self.db_pool.as_ref().unwrap())
+                .await?
+                .map(|img| img.blob.into()),
+        )
     }
 
     pub async fn query_post(&self, id: i64) -> Result<Option<Post>> {
         debug!("query post, id: {id}");
-        let sql_post = self._query_post(id).await;
-        match sql_post {
-            Ok(post) => Ok(Some(self._sql_post_to_post(post).await?)),
-            Err(sqlx::Error::RowNotFound) => Ok(None),
-            Err(e) => Err(e.into()),
+        let sql_post = self._query_post(id).await?;
+        if let Some(post) = sql_post {
+            Ok(Some(self._sql_post_to_post(post).await?))
+        } else {
+            Ok(None)
         }
     }
 
@@ -291,12 +286,8 @@ impl Persister {
     }
 
     #[allow(unused)]
-    pub async fn query_user(&self, id: i64) -> Result<Option<User>> {
-        match self._query_user(id).await {
-            Ok(user) => Ok(Some(user)),
-            Err(sqlx::Error::RowNotFound) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+    pub async fn query_user(&self, id: i64) -> Result<User> {
+        self._query_user(id).await
     }
 
     pub async fn query_db_total_num(&self) -> Result<u32> {
@@ -313,7 +304,7 @@ impl Persister {
 
 // Private functions
 impl Persister {
-    async fn _insert_post(&self, post: &Value) -> DBResult<()> {
+    async fn _insert_post(&self, post: &Value) -> Result<()> {
         debug!("_insert post: {}", post["id"]);
         let statement = if post["favorited"] == true {
             "INSERT OR REPLACE INTO posts \
@@ -395,33 +386,34 @@ impl Persister {
         Ok(())
     }
 
-    async fn _query_user(&self, id: i64) -> DBResult<User> {
-        let sql_user: SqlUser = sqlx::query_as(
+    async fn _query_user(&self, id: i64) -> Result<User> {
+        let sql_user: Option<SqlUser> = sqlx::query_as(
             "SELECT id, profile_url, screen_name, profile_image_url, \
              avatar_large, avatar_hd, backedup FROM users WHERE id = ?",
         )
         .bind(id)
-        .fetch_one(self.db_pool.as_ref().unwrap())
+        .fetch_optional(self.db_pool.as_ref().unwrap())
         .await?;
+        // TODO: deal with None condition
 
         let result = serde_json::to_value(sql_user).unwrap();
         // TODO: conv icon_list to Value
         Ok(result)
     }
 
-    async fn _query_post(&self, id: i64) -> DBResult<SqlPost> {
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>(
+    async fn _query_post(&self, id: i64) -> Result<Option<SqlPost>> {
+        Ok(sqlx::query_as::<sqlx::Sqlite, SqlPost>(
             "SELECT id, created_at, mblogid, text_raw, source, region_name, \
              deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, \
              topic_struct, tag_struct, number_display_strategy, mix_media_info, \
              isLongText, client_only FROM posts WHERE id = ?",
         )
         .bind(id)
-        .fetch_one(self.db_pool.as_ref().unwrap())
-        .await
+        .fetch_optional(self.db_pool.as_ref().unwrap())
+        .await?)
     }
 
-    async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> DBResult<Vec<SqlPost>> {
+    async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<SqlPost>> {
         let sql_expr = if reverse {
             "SELECT id, created_at, mblogid, text_raw, source, region_name, \
              deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, \
@@ -435,21 +427,21 @@ impl Persister {
              mix_media_info, isLongText, client_only, unfavorited FROM posts \
              WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
         };
-        sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
+        Ok(sqlx::query_as::<sqlx::Sqlite, SqlPost>(sql_expr)
             .bind(limit)
             .bind(offset)
             .fetch_all(self.db_pool.as_ref().unwrap())
-            .await
+            .await?)
     }
 
-    async fn _sql_post_to_post(&self, sql_post: SqlPost) -> DBResult<Post> {
+    async fn _sql_post_to_post(&self, sql_post: SqlPost) -> Result<Post> {
         let user = if let Some(uid) = sql_post.uid {
             self._query_user(uid).await?
         } else {
             Value::Null
         };
         let retweet = if let Some(ret_id) = sql_post.retweeted_status {
-            let sql_retweet = self._query_post(ret_id).await?;
+            let sql_retweet = self._query_post(ret_id).await?.unwrap(); // retweeted post must be stored
             let user = if let Some(uid) = sql_retweet.uid {
                 self._query_user(uid).await?
             } else {
