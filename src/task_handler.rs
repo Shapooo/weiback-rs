@@ -76,6 +76,58 @@ impl TaskHandler {
         Ok(())
     }
 
+    pub async fn backup_self(
+        &self,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) {
+        self.handle_task_res(self._backup_self(range, with_pic, image_definition).await)
+            .await
+    }
+
+    async fn _backup_self(
+        &self,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<()> {
+        let uid = self.uid.parse().unwrap();
+        self._backup_user(uid, range, with_pic, image_definition)
+            .await
+    }
+
+    pub async fn backup_user(
+        &self,
+        uid: i64,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) {
+        self.handle_task_res(
+            self._backup_user(uid, range, with_pic, image_definition)
+                .await,
+        )
+        .await
+    }
+
+    async fn _backup_user(
+        &self,
+        uid: i64,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<()> {
+        assert!(range.start() != &0);
+        info!("download user {uid} posts, range is {range:?}");
+        for page in range {
+            self.processer
+                .backup_ones_posts(uid, page, with_pic, image_definition)
+                .await?;
+        }
+        Ok(())
+    }
+
     pub async fn export_from_local(
         &self,
         range: RangeInclusive<u32>,
@@ -147,27 +199,27 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn download_posts(
+    pub async fn download_favorites(
         &self,
         range: RangeInclusive<u32>,
         with_pic: bool,
         image_definition: u8,
     ) {
         self.handle_task_res(
-            self._download_posts(range, with_pic, image_definition)
+            self._download_favorites(range, with_pic, image_definition)
                 .await,
         )
         .await;
     }
 
-    async fn _download_posts(
+    async fn _download_favorites(
         &self,
         range: RangeInclusive<u32>,
         with_pic: bool,
         image_definition: u8,
     ) -> Result<()> {
         assert!(range.start() != &0);
-        info!("pages download range is {range:?}");
+        info!("favorites download range is {range:?}");
         let mut total_downloaded: usize = 0;
         let range = range.start() / 20 + 1..=range.end() / 20;
         let total_pages = (range.end() - range.start() + 1) as f32;
