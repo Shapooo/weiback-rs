@@ -45,7 +45,8 @@ mod data_test {
     #[test]
     fn parse_posts() {
         let txt = include_str!("../res/full.json");
-        serde_json::from_str::<Posts>(txt).unwrap();
+        let mut json = serde_json::from_str::<serde_json::Value>(txt).unwrap();
+        serde_json::from_value::<Posts>(json["data"].take()).unwrap();
     }
 
     #[test]
