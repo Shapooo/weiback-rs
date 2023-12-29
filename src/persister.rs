@@ -16,6 +16,7 @@ use crate::data::{Post, Posts, User};
 use crate::error::{Error, Result};
 use crate::utils::{pic_url_to_id, strip_url_queries};
 
+const VALIDE_DB_VERSION: i64 = 1;
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY, \
                                    mblogid VARCHAR, text_raw TEXT, \
                                    source VARCHAR, region_name VARCHAR, deleted BOOLEAN, \
@@ -49,8 +50,6 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER P
                                    CREATE TABLE IF NOT EXISTS picture_blob( \
                                    url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB); \
                                    PRAGMA user_version = 1;";
-const UPGRADE_DB_SQL: &str =
-    "ALTER TABLE users ADD COLUMN backedup BOOLEAN DEFAULT false; PRAGMA user_version = 1;";
 const DATABASE: &str = "res/weiback.db";
 
 #[derive(Debug)]
@@ -75,7 +74,7 @@ impl Persister {
         debug!("initing...");
         if self.db_path.is_file() {
             info!("db {:?} exists", self.db_path);
-            self.upgrade_db().await?;
+            self.check_db_version().await?;
         } else {
             info!("db {:?} not exists, create it", self.db_path);
             if !self.db_path.parent().unwrap().exists() {
@@ -104,21 +103,19 @@ impl Persister {
         Ok(())
     }
 
-    async fn upgrade_db(&mut self) -> Result<()> {
+    async fn check_db_version(&mut self) -> Result<()> {
         let mut db = SqliteConnection::connect(self.db_path.to_str().unwrap()).await?;
-        let mut version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
+        let version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
             .fetch_one(&mut db)
             .await?;
         debug!("db version: {}", version.0);
-        if version.0 == 0 {
-            info!("upgrade db from version 0 to 1");
-            sqlx::query(UPGRADE_DB_SQL).execute(&mut db).await?;
-            version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
-                .fetch_one(&mut db)
-                .await?;
-            debug!("db version: {}", version.0);
+        if version.0 == VALIDE_DB_VERSION {
+            Ok(())
+        } else {
+            Err(Error::Other(
+                "Invalid database version, please upgrade db file".into(),
+            ))
         }
-        Ok(())
     }
 
     async fn create_db(&mut self) -> Result<()> {
