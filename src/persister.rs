@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bytes::Bytes;
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use futures::future::join_all;
 use log::{debug, info, trace};
 use serde::Serialize;
@@ -16,7 +17,7 @@ use crate::error::{Error, Result};
 use crate::utils::{pic_url_to_id, strip_url_queries};
 
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY, \
-                                   created_at VARCHAR, mblogid VARCHAR, text_raw TEXT, \
+                                   mblogid VARCHAR, text_raw TEXT, \
                                    source VARCHAR, region_name VARCHAR, deleted BOOLEAN, \
                                    uid INTEGER, pic_ids VARCHAR, pic_num INTEGER, \
                                    retweeted_status INTEGER, url_struct json,topic_struct json, \
@@ -35,7 +36,8 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER P
                                    geo json, pic_focus_point json, page_info json, title json, \
                                    continue_tag json, comment_manage_info json, \
                                    client_only BOOLEAN NOT NULL DEFAULT false, \
-                                   unfavorited BOOLEAN NOT NULL DEFAULT false); \
+                                   unfavorited BOOLEAN NOT NULL DEFAULT false, \
+                                   created_at INTEGER, created_at_tz VARCHAR);\
                                    CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, \
                                    profile_url VARCHAR, screen_name VARCHAR, \
                                    profile_image_url VARCHAR, avatar_large VARCHAR, \
@@ -306,16 +308,16 @@ impl Persister {
             "INSERT OR REPLACE INTO posts \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
         } else {
             "INSERT OR IGNORE INTO posts \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
         };
+        let created_at = parse_created_at(post["created_at"].as_str().unwrap())?;
         sqlx::query(statement)
             .bind(post["id"].as_i64().unwrap())
-            .bind(post["created_at"].as_str().unwrap())
             .bind(post["mblogid"].as_str())
             .bind(post["text_raw"].as_str().unwrap())
             .bind(post["source"].as_str().unwrap())
@@ -377,6 +379,8 @@ impl Persister {
             )
             .bind(post["client_only"].as_bool().unwrap_or_default())
             .bind(post["unfavorited"].as_bool().unwrap_or_default())
+            .bind(created_at.timestamp())
+            .bind(created_at.timezone().to_string())
             .execute(self.db_pool.as_ref().unwrap())
             .await?;
         Ok(())
@@ -399,7 +403,7 @@ impl Persister {
 
     async fn _query_post(&self, id: i64) -> Result<Option<SqlPost>> {
         Ok(sqlx::query_as::<sqlx::Sqlite, SqlPost>(
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, \
+            "SELECT id, created_at, created_at_tz, mblogid, text_raw, source, region_name, \
              deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, url_struct, \
              topic_struct, tag_struct, number_display_strategy, mix_media_info, \
              isLongText, client_only FROM posts WHERE id = ?",
@@ -411,13 +415,13 @@ impl Persister {
 
     async fn _query_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<SqlPost>> {
         let sql_expr = if reverse {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, \
+            "SELECT id, created_at, created_at_tz, mblogid, text_raw, source, region_name, \
              deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, \
              url_struct, topic_struct, tag_struct, number_display_strategy, \
              mix_media_info, isLongText, client_only, unfavorited FROM posts \
              WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
         } else {
-            "SELECT id, created_at, mblogid, text_raw, source, region_name, \
+            "SELECT id, created_at, created_at_tz, mblogid, text_raw, source, region_name, \
              deleted, uid, pic_ids, pic_num, pic_infos, retweeted_status, \
              url_struct, topic_struct, tag_struct, number_display_strategy, \
              mix_media_info, isLongText, client_only, unfavorited FROM posts \
@@ -464,7 +468,17 @@ fn sql_post_to_post(sql_post: SqlPost) -> Post {
     trace!("convert SqlPost to Post: {:?}", sql_post);
     let mut map = serde_json::Map::new();
     map.insert("id".into(), serde_json::to_value(sql_post.id).unwrap());
-    map.insert("created_at".into(), to_value(sql_post.created_at).unwrap());
+    map.insert(
+        "created_at".into(),
+        to_value(
+            DateTime::<FixedOffset>::from_naive_utc_and_offset(
+                NaiveDateTime::from_timestamp_opt(sql_post.created_at, 0).unwrap(),
+                sql_post.created_at_tz.parse().unwrap(),
+            )
+            .to_string(),
+        )
+        .unwrap(),
+    );
     map.insert("mblogid".into(), to_value(sql_post.mblogid).unwrap());
     map.insert("text_raw".into(), to_value(sql_post.text_raw).unwrap());
     map.insert("source".into(), to_value(sql_post.source).unwrap());
@@ -515,7 +529,6 @@ fn sql_post_to_post(sql_post: SqlPost) -> Post {
 #[derive(Serialize, Debug, Clone, FromRow)]
 pub struct SqlPost {
     pub id: i64,
-    pub created_at: String,
     pub mblogid: String,
     pub text_raw: String,
     pub source: String,
@@ -604,6 +617,8 @@ pub struct SqlPost {
     pub client_only: bool,
     #[sqlx(default)]
     pub unfavorited: bool,
+    pub created_at: i64,
+    pub created_at_tz: String,
 }
 
 #[derive(Serialize, Debug, Clone, FromRow)]
@@ -649,4 +664,23 @@ pub struct PictureBlob {
     pub url: String,
     pub id: String,
     pub blob: Vec<u8>,
+}
+
+pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
+    match DateTime::parse_from_str(created_at, "%a %b %d %T %z %Y") {
+        Ok(dt) => Ok(dt),
+        Err(e) => Err(Error::MalFormat(format!("{e}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_datetime() {
+        parse_created_at("Mon May 29 19:29:32 +0800 2023").unwrap();
+        parse_created_at("Mon May 29 19:45:00 +0800 2023").unwrap();
+        parse_created_at("Tue May 30 04:07:49 +0800 2023").unwrap();
+    }
 }
