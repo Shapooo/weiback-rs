@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.1.6] - 2023-12-30
+
+**Added**
+- 新增了备份自己和指定用户微博的功能
+- 新增了数据库升级工具
+
+**Changed**
+- 数据库变动：created_at 字段变为使用时间戳
+- 数据库变动：用户增加 backedup 字段
+- 数据库变动：增加 Picture 表
+
+**Fixed**
+- 修复了因移动端微博API变动导致的无法登录的问题
+
+**NOTICE**
+- 老用户需要升级数据库，详见 README
+
 ## [v0.1.5] - 2023-12-10
 
 **Changed**
