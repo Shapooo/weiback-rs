@@ -1,4 +1,5 @@
 pub mod core;
+pub mod utils;
 
 mod data;
 mod error;
@@ -11,5 +12,4 @@ mod persister;
 mod picture;
 mod post_processor;
 mod task_handler;
-mod utils;
 mod web_fetcher;
