@@ -12,7 +12,7 @@ use serde_json::{to_value, Value};
 
 use crate::data::{Post, Posts};
 use crate::error::{Error, Result};
-use crate::exporter::{HTMLPage, Picture};
+use crate::exporter::{HTMLPage, HTMLPicture};
 use crate::html_generator::HTMLGenerator;
 use crate::persister::Persister;
 use crate::utils::pic_url_to_file;
@@ -174,7 +174,7 @@ impl PostProcessor {
         let mut pics = Vec::new();
         for pic in pic_to_fetch {
             if let Some(blob) = self.get_pic(&pic).await? {
-                pics.push(Picture {
+                pics.push(HTMLPicture {
                     name: pic_url_to_file(&pic).into(),
                     blob,
                 });

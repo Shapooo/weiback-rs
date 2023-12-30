@@ -62,25 +62,25 @@ impl Exporter {
 #[derive(Debug, Clone)]
 pub struct HTMLPage {
     pub html: String,
-    pub pics: Vec<Picture>,
+    pub pics: Vec<HTMLPicture>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Picture {
+pub struct HTMLPicture {
     pub name: String,
     pub blob: Bytes,
 }
 
 #[cfg(test)]
 mod exporter_test {
-    use super::{Exporter, HTMLPage, Picture};
+    use super::{Exporter, HTMLPage, HTMLPicture};
     #[tokio::test]
     async fn export_page() {
         let e = Exporter::new();
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
         let page = HTMLPage {
             html: "testtesttest".into(),
-            pics: vec![Picture {
+            pics: vec![HTMLPicture {
                 name: "example.jpg".into(),
                 blob: pic_blob.into(),
             }]
