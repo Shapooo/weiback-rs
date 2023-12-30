@@ -8,22 +8,22 @@ default-run = "weiback-rs"
 
 
 [dependencies]
-anyhow = "1.0.75"
+anyhow = { version = "1.0.77", features = ["backtrace"] }
 bytes = "1.5.0"
 chrono = { version = "0.4.31", default-features = false }
 eframe = "0.24.1"
 egui = "0.24.1"
 env_logger = "0.10.1"
-futures = "0.3.29"
+futures = "0.3.30"
 image = "0.24.7"
 lazy_static = "1.4.0"
 log = "0.4.20"
 regex = "1.10.2"
-reqwest = { version = "0.11.22", features = ["json", "gzip", "rustls", "blocking", "cookies"] }
+reqwest = { version = "0.11.23", features = ["json", "gzip", "rustls", "blocking", "cookies"] }
 reqwest_cookie_store = "0.6.0"
 serde = { version = "1.0.193", features = ["serde_derive"] }
 serde_json = "1.0.108"
 sqlx = { version = "0.7.3", features = ["sqlite", "runtime-tokio-rustls"] }
 tera = "1.19.1"
-thiserror = "1.0.50"
-tokio = { version = "1.35.0", features = ["macros", "rt-multi-thread", "time", "fs"] }
+thiserror = "1.0.52"
+tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "time", "fs"] }
