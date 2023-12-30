@@ -1,3 +1,5 @@
+use crate::picture::{Picture, PictureMeta};
+
 use std::path::PathBuf;
 
 use bytes::Bytes;
@@ -14,7 +16,7 @@ use sqlx::{
 
 use crate::data::{Post, Posts, User};
 use crate::error::{Error, Result};
-use crate::utils::{pic_url_to_id, strip_url_queries};
+use crate::utils::pic_url_to_id;
 
 const VALIDE_DB_VERSION: i64 = 1;
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY, \
@@ -250,7 +252,7 @@ impl Persister {
     pub async fn query_img(&self, url: &str) -> Result<Option<Bytes>> {
         debug!("query img: {url}");
         Ok(
-            sqlx::query_as::<Sqlite, PictureBlob>("SELECT * FROM picture_blob WHERE url = ?")
+            sqlx::query_as::<Sqlite, SqlPictureBlob>("SELECT * FROM picture_blob WHERE url = ?")
                 .bind(url)
                 .fetch_optional(self.db_pool.as_ref().unwrap())
                 .await?
@@ -657,10 +659,60 @@ pub struct SqlUser {
 }
 
 #[derive(Debug, Clone, FromRow)]
-pub struct PictureBlob {
+struct SqlPicture {
+    pub id: String,
+    pub uid: Option<i64>,
+    pub post_id: Option<i64>,
+    #[sqlx(rename = "type")]
+    pub type_: u8,
+}
+
+impl From<&PictureMeta> for SqlPicture {
+    fn from(value: &PictureMeta) -> Self {
+        match value {
+            PictureMeta::InPost(url, id) => Self {
+                id: pic_url_to_id(url).into(),
+                post_id: Some(*id),
+                uid: None,
+                type_: PIC_TYPE_INPOST,
+            },
+            PictureMeta::Avatar(url, id) => Self {
+                id: pic_url_to_id(url).into(),
+                post_id: None,
+                uid: Some(*id),
+                type_: PIC_TYPE_AVATAR,
+            },
+            PictureMeta::Emoji(url) => Self {
+                id: pic_url_to_id(url).into(),
+                post_id: None,
+                uid: None,
+                type_: PIC_TYPE_EMOJI,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct SqlPictureBlob {
     pub url: String,
     pub id: String,
     pub blob: Vec<u8>,
+}
+
+const PIC_TYPE_AVATAR: u8 = 0;
+const PIC_TYPE_INPOST: u8 = 1;
+const PIC_TYPE_EMOJI: u8 = 2;
+
+impl From<Picture> for SqlPictureBlob {
+    fn from(value: Picture) -> Self {
+        let url = value.meta.url();
+        let id = pic_url_to_id(url).into();
+        Self {
+            url: url.into(),
+            id,
+            blob: value.blob.to_vec(),
+        }
+    }
 }
 
 pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
