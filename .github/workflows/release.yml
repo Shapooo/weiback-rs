@@ -36,7 +36,7 @@ jobs:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
           # Note that glob pattern is not supported yet.
           bin: weiback-rs,db-upgrade-tool
-          archive: $bin-$tag-$target
+          archive: weiback-rs-$tag-$target
           # (optional) On which platform to distribute the `.tar.gz` file.
           # [default value: unix]
           # [possible values: all, unix, windows, none]
