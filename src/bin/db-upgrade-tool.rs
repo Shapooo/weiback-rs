@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use chrono::{DateTime, FixedOffset};
+use env_logger::Builder;
+use log::{error, info, warn};
 use sqlx::{Sqlite, SqlitePool};
 use tokio::{
     fs::{remove_file, File, OpenOptions},
@@ -13,25 +15,53 @@ use tokio::{
 };
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
+    let res = start().await;
+    if let Err(e) = res {
+        error!("{}\n{}", e, e.backtrace());
+    }
+}
+
+async fn start() -> Result<()> {
+    init_logger()?;
     let db = init_db().await?;
     let user_version = check_user_version(&db).await?;
     if user_version == 1 {
-        println!("Info: version fulfilled, exit.");
+        info!("Info: version fulfilled, exit.");
         return Ok(());
     } else if user_version > 1 {
-        eprintln!("Warn: the DB file has higher version, please download newest weiback-rs!");
+        warn!("Warn: the DB file has higher version, please download newest weiback-rs!");
         return Ok(());
     } else if user_version < 0 {
-        eprintln!("Error: are you kidding? Invalid DB version");
+        error!("Error: are you kidding? Invalid DB version");
         return Err(anyhow::anyhow!("Invalid DB version"));
     }
 
     let mut upgrader = Upgrader::new(db).await?;
     upgrader.upgrade_0_1().await?;
 
-    println!("Upgrade succeed!");
+    info!("Upgrade succeed!");
     upgrader.close().await?;
+    Ok(())
+}
+
+fn init_logger() -> Result<()> {
+    let log_path = std::env::current_exe()?;
+    let log_path = log_path
+        .parent()
+        .ok_or(anyhow::anyhow!(
+            "the executable: {:?} should have parent, maybe bugs in there",
+            std::env::current_exe()
+        ))?
+        .join("upgrade-db-tool.log");
+    let log_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(log_path)?;
+    Builder::new()
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
+        .init();
     Ok(())
 }
 
@@ -71,7 +101,7 @@ impl Upgrader {
             self.status_file
                 .write_all(format!("{}: {}\n", self.flag, message).as_bytes())
                 .await?;
-            println!("{}...", message);
+            info!("{}...", message);
             self.flag += 1;
             self.check_point += 1;
             Ok(true)
@@ -93,7 +123,7 @@ impl Upgrader {
             })
             .max()
             .unwrap_or(0);
-        println!("flag {}", flag);
+        info!("flag {}", flag);
         Ok(Self {
             flag,
             check_point: 0,
@@ -131,7 +161,7 @@ impl Upgrader {
         // 3.新增了 picture 表。
         // 原本的 picture_blob 表无法体现图片与 posts/users 的关系，只有存储图片的基本功能。
         // 新增关系之后，方便后续删除冗余图片等功能的实现。
-        println!("Upgrading db from version 0 to 1, this may take a while...");
+        info!("Upgrading db from version 0 to 1, this may take a while...");
         self.created_at_str_to_timestamp().await?;
         self.add_backedup_column().await?;
         self.create_picture_table().await?;
@@ -289,7 +319,7 @@ impl Upgrader {
                         .execute(&self.db)
                         .await?;
                 } else {
-                    eprintln!(
+                    warn!(
                         "Warn: the post/user/emoji not found, which associated to picture {}: {}",
                         pic_id, url
                     );
