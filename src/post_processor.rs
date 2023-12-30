@@ -15,7 +15,8 @@ use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, HTMLPicture};
 use crate::html_generator::HTMLGenerator;
 use crate::persister::Persister;
-use crate::utils::pic_url_to_file;
+use crate::picture::{Picture, PictureMeta};
+use crate::utils::{pic_url_to_file, strip_url_queries};
 use crate::web_fetcher::WebFetcher;
 
 lazy_static! {
@@ -160,7 +161,7 @@ impl PostProcessor {
         image_definition: u8,
     ) -> Result<HTMLPage> {
         debug!("generate html from {} posts", posts.len());
-        let mut pic_to_fetch = HashSet::new();
+        let mut pic_to_fetch = HashMap::new();
         posts.iter_mut().try_for_each(|post| {
             self.process_post(
                 post,
@@ -172,8 +173,8 @@ impl PostProcessor {
         let inner_html = self.html_generator.generate_posts(posts)?;
         let html = self.html_generator.generate_page(&inner_html)?;
         let mut pics = Vec::new();
-        for pic in pic_to_fetch {
-            if let Some(blob) = self.get_pic(&pic).await? {
+        for (pic, meta) in pic_to_fetch {
+            if let Some(blob) = self.get_pic(meta).await? {
                 pics.push(HTMLPicture {
                     name: pic_url_to_file(&pic).into(),
                     blob,
@@ -227,17 +228,28 @@ impl PostProcessor {
             })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
-            .flatten()
-            .collect::<HashSet<String>>();
+            .flat_map(|urls| {
+                urls.into_iter().map(|url| {
+                    let url = strip_url_queries(&url);
+                    (url.into(), PictureMeta::Emoji(url.into()))
+                })
+            })
+            .collect::<HashMap<String, PictureMeta>>();
         posts
             .iter()
-            .flat_map(|post| self.extract_pics_from_post(post, image_definition))
-            .for_each(|url| {
-                pics.insert(url);
+            .flat_map(|post| {
+                let id = post["id"].as_i64().unwrap();
+                self.extract_pics_from_post(post, image_definition)
+                    .into_iter()
+                    .map(move |url| (id, url))
+            })
+            .for_each(|(id, url)| {
+                let url = strip_url_queries(&url);
+                pics.insert(url.into(), PictureMeta::InPost(url.into(), id));
             });
         debug!("extracted {} pics from posts", pics.len());
-        for pic in pics {
-            self.get_pic(&pic).await?;
+        for (_, pic) in pics {
+            self.get_pic(pic).await?;
         }
         Ok(())
     }
@@ -382,8 +394,8 @@ impl PostProcessor {
         Ok(())
     }
 
-    async fn get_pic(&self, url: &str) -> Result<Option<Bytes>> {
-        let url = crate::utils::strip_url_queries(url);
+    async fn get_pic(&self, picture: PictureMeta) -> Result<Option<Bytes>> {
+        let url = picture.url();
         let res = self.persister.query_img(url).await?;
         if res.is_none() {
             let pic = match self.web_fetcher.fetch_pic(url).await {
@@ -393,7 +405,12 @@ impl PostProcessor {
                     return Ok(None);
                 }
             };
-            self.persister.insert_img(url, &pic).await?;
+            self.persister
+                .insert_img(Picture {
+                    meta: picture,
+                    blob: pic.clone(),
+                })
+                .await?;
             Ok(Some(pic))
         } else {
             Ok(res)
@@ -453,19 +470,19 @@ impl PostProcessor {
     fn process_post(
         &self,
         post: &mut Post,
-        pics: &mut HashSet<String>,
+        pictures: &mut HashMap<String, PictureMeta>,
         resource_dir: &Path,
         image_definition: u8,
     ) -> Result<()> {
         if post["retweeted_status"].is_object() {
             self.process_post_non_rec(
                 &mut post["retweeted_status"],
-                pics,
+                pictures,
                 resource_dir,
                 image_definition,
             )?;
         }
-        self.process_post_non_rec(post, pics, resource_dir, image_definition)?;
+        self.process_post_non_rec(post, pictures, resource_dir, image_definition)?;
         Ok(())
     }
 
@@ -482,7 +499,7 @@ impl PostProcessor {
     fn process_post_non_rec(
         &self,
         post: &mut Post,
-        pic_urls: &mut HashSet<String>,
+        pictures: &mut HashMap<String, PictureMeta>,
         resource_dir: &Path,
         image_definition: u8,
     ) -> Result<()> {
@@ -496,16 +513,24 @@ impl PostProcessor {
         }
 
         urls.into_iter().for_each(|url| {
-            pic_urls.insert(url);
+            let url = strip_url_queries(&url);
+            pictures.insert(
+                url.into(),
+                PictureMeta::InPost(url.into(), post["id"].as_i64().unwrap()),
+            );
         });
 
         let text_raw = value_as_str(post, "text_raw")?;
         let url_struct = &post["url_struct"];
-        let text = self.trans_text(text_raw, url_struct, pic_urls, resource_dir)?;
+        let text = self.trans_text(text_raw, url_struct, pictures, resource_dir)?;
         trace!("conv {} to {}", text_raw, text);
         post["text_raw"] = to_value(text).unwrap();
         if let Some(avatar_url) = self.get_avatar_url(post, image_definition) {
-            pic_urls.insert(avatar_url.into());
+            let avatar_url = strip_url_queries(avatar_url);
+            pictures.insert(
+                avatar_url.into(),
+                PictureMeta::Avatar(avatar_url.into(), post["user"]["id"].as_i64().unwrap()),
+            );
             let avatar_loc = resource_dir.join(pic_url_to_file(avatar_url));
             post["poster_avatar"] = to_value(avatar_loc).unwrap();
         }
@@ -517,7 +542,7 @@ impl PostProcessor {
         &self,
         text: &str,
         url_struct: &Value,
-        pic_urls: &mut HashSet<String>,
+        pictures: &mut HashMap<String, PictureMeta>,
         pic_folder: &Path,
     ) -> Result<String> {
         let emails_suffixes = EMAIL_EXPR
@@ -567,7 +592,7 @@ impl PostProcessor {
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
                         acc + &text[i..m.start()]
-                            + self.trans_emoji(&text[m.start()..m.end()], pic_urls, pic_folder),
+                            + self.trans_emoji(&text[m.start()..m.end()], pictures, pic_folder),
                         m.end(),
                     )
                 });
@@ -580,11 +605,12 @@ impl PostProcessor {
     fn trans_emoji<'a>(
         &self,
         s: &'a str,
-        pic_urls: &mut HashSet<String>,
+        pic_urls: &mut HashMap<String, PictureMeta>,
         pic_folder: &'a Path,
     ) -> Cow<'a, str> {
         if let Some(url) = self.emoticon.get(s) {
-            pic_urls.insert(url.into());
+            let url = strip_url_queries(url);
+            pic_urls.insert(url.into(), PictureMeta::Emoji(url.into()));
             let pic_name = pic_url_to_file(url).to_owned();
             Borrowed(r#"<img class="bk-emoji" alt=""#)
                 + s

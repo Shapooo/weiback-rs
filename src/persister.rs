@@ -49,6 +49,8 @@ const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER P
                                    domain VARCHAR, weihao VARCHAR, verified_type_ext INTEGER, \
                                    follow_me BOOLEAN, following BOOLEAN, mbrank INTEGER, \
                                    mbtype INTEGER, icon_list VARCHAR, backedup BOOLEAN DEFAULT false); \
+                                   CREATE TABLE IF NOT EXISTS picture(\
+                                   id VARCHAR PRIMARY KEY, uid INTEGER, post_id INTEGER, type INTEGER);\
                                    CREATE TABLE IF NOT EXISTS picture_blob( \
                                    url VARCHAR PRIMARY KEY, id VARCHAR, blob BLOB); \
                                    PRAGMA user_version = 1;";
@@ -198,17 +200,30 @@ impl Persister {
         .collect())
     }
 
-    pub async fn insert_img(&self, url: &str, img: &[u8]) -> Result<()> {
-        debug!("insert img: {url}");
-        let id = pic_url_to_id(url);
-        let url = strip_url_queries(url);
+    pub async fn insert_img(&self, pic: Picture) -> Result<()> {
+        let pic_meta: SqlPicture = (&pic.meta).into();
+        let pic_blob: SqlPictureBlob = pic.into();
+        debug!("insert img: {}", pic_meta.id);
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
-            .bind(url)
-            .bind(id)
-            .bind(img)
+            .bind(pic_blob.url.as_str())
+            .bind(pic_blob.id.as_str())
+            .bind(pic_blob.blob)
             .execute(self.db_pool.as_ref().unwrap())
             .await?;
-        trace!("insert img {id}-{url}, result: {result:?}");
+        trace!(
+            "insert img blob {}-{}, result: {:?}",
+            pic_blob.id,
+            pic_blob.url,
+            result
+        );
+        let result = sqlx::query("INSERT OR IGNORE INTO picture VALUES (?, ?, ?, ?)")
+            .bind(pic_meta.id)
+            .bind(pic_meta.uid)
+            .bind(pic_meta.post_id)
+            .bind(pic_meta.type_)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
+        trace!("insert picture result: {result:?}");
         Ok(())
     }
 
