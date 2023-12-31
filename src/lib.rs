@@ -10,6 +10,8 @@ mod login;
 mod message;
 mod persister;
 mod picture;
+mod post;
 mod post_processor;
 mod task_handler;
+mod user;
 mod web_fetcher;

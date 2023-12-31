@@ -1,14 +1,15 @@
-use crate::picture::{Picture, PictureMeta};
+use crate::{
+    picture::{Picture, SqlPicture, SqlPictureBlob},
+    post::{sql_post_to_post, SqlPost},
+    user::SqlUser,
+};
 
 use std::path::PathBuf;
 
 use bytes::Bytes;
-use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use futures::future::join_all;
 use log::{debug, info, trace};
-use serde::Serialize;
-use serde_json::{from_str, to_value, Value};
-use sqlx::FromRow;
+use serde_json::Value;
 use sqlx::{
     migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Connection, Sqlite, SqliteConnection,
     SqlitePool,
@@ -16,7 +17,6 @@ use sqlx::{
 
 use crate::data::{Post, Posts, User};
 use crate::error::{Error, Result};
-use crate::utils::pic_url_to_id;
 
 const VALIDE_DB_VERSION: i64 = 1;
 const DATABASE_CREATE_SQL: &str = "CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY, \
@@ -329,7 +329,7 @@ impl Persister {
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
         };
-        let created_at = parse_created_at(post["created_at"].as_str().unwrap())?;
+        let created_at = crate::post::parse_created_at(post["created_at"].as_str().unwrap())?;
         sqlx::query(statement)
             .bind(post["id"].as_i64().unwrap())
             .bind(post["mblogid"].as_str())
@@ -475,276 +475,5 @@ impl Persister {
         }
 
         Ok(post)
-    }
-}
-
-fn sql_post_to_post(sql_post: SqlPost) -> Post {
-    trace!("convert SqlPost to Post: {:?}", sql_post);
-    let mut map = serde_json::Map::new();
-    map.insert("id".into(), serde_json::to_value(sql_post.id).unwrap());
-    map.insert(
-        "created_at".into(),
-        to_value(
-            DateTime::<FixedOffset>::from_naive_utc_and_offset(
-                NaiveDateTime::from_timestamp_opt(sql_post.created_at, 0).unwrap(),
-                sql_post.created_at_tz.parse().unwrap(),
-            )
-            .to_string(),
-        )
-        .unwrap(),
-    );
-    map.insert("mblogid".into(), to_value(sql_post.mblogid).unwrap());
-    map.insert("text_raw".into(), to_value(sql_post.text_raw).unwrap());
-    map.insert("source".into(), to_value(sql_post.source).unwrap());
-    if let Some(v) = sql_post.region_name {
-        map.insert("region_name".into(), to_value(v).unwrap());
-    }
-    map.insert("deleted".into(), to_value(sql_post.deleted).unwrap());
-    if let Some(v) = sql_post.pic_ids {
-        map.insert("pic_ids".into(), from_str(&v).unwrap());
-    }
-    if let Some(v) = sql_post.pic_num {
-        map.insert("pic_num".into(), to_value(v).unwrap());
-    }
-    if let Some(v) = sql_post.pic_infos {
-        map.insert("pic_infos".into(), from_str(&v).unwrap());
-    }
-    if let Some(v) = sql_post.url_struct {
-        map.insert("url_struct".into(), from_str(&v).unwrap());
-    }
-    if let Some(v) = sql_post.topic_struct {
-        map.insert("topic_struct".into(), from_str(&v).unwrap());
-    }
-    if let Some(v) = sql_post.tag_struct {
-        map.insert("tag_struct".into(), from_str(&v).unwrap());
-    }
-    if let Some(v) = sql_post.number_display_strategy {
-        map.insert("number_display_strategy".into(), from_str(&v).unwrap());
-    }
-    if let Some(v) = sql_post.mix_media_info {
-        map.insert("mix_media_info".into(), from_str(&v).unwrap());
-    }
-    map.insert(
-        "isLongText".into(),
-        to_value(sql_post.is_long_text).unwrap(),
-    );
-    map.insert(
-        "client_only".into(),
-        to_value(sql_post.client_only).unwrap(),
-    );
-    map.insert(
-        "unfavorited".into(),
-        to_value(sql_post.unfavorited).unwrap(),
-    );
-
-    Value::Object(map)
-}
-
-#[derive(Serialize, Debug, Clone, FromRow)]
-pub struct SqlPost {
-    pub id: i64,
-    pub mblogid: String,
-    pub text_raw: String,
-    pub source: String,
-    pub region_name: Option<String>,
-    pub deleted: bool,
-    pub uid: Option<i64>,
-    pub pic_ids: Option<String>,
-    pub pic_num: Option<i64>,
-    pub retweeted_status: Option<i64>,
-    pub url_struct: Option<String>,
-    pub topic_struct: Option<String>,
-    pub tag_struct: Option<String>,
-    pub number_display_strategy: Option<String>,
-    pub mix_media_info: Option<String>,
-    #[sqlx(default)]
-    pub visible: String,
-    #[sqlx(default)]
-    pub text: String,
-    #[sqlx(default)]
-    pub attitudes_status: i64,
-    #[sqlx(default, rename = "showFeedRepost")]
-    pub show_feed_repost: bool,
-    #[sqlx(default, rename = "showFeedComment")]
-    pub show_feed_comment: bool,
-    #[sqlx(default, rename = "pictureViewerSign")]
-    pub picture_viewer_sign: bool,
-    #[sqlx(default, rename = "showPictureViewer")]
-    pub show_picture_viewer: bool,
-    #[sqlx(default)]
-    pub favorited: bool,
-    #[sqlx(default)]
-    pub can_edit: bool,
-    #[sqlx(default)]
-    pub is_paid: bool,
-    #[sqlx(default)]
-    pub share_repost_type: Option<i64>,
-    #[sqlx(default)]
-    pub rid: Option<String>,
-    #[sqlx(default)]
-    pub pic_infos: Option<String>,
-    #[sqlx(default)]
-    pub cardid: Option<String>,
-    #[sqlx(default)]
-    pub pic_bg_new: Option<String>,
-    #[sqlx(default)]
-    pub mark: Option<String>,
-    #[sqlx(default)]
-    pub mblog_vip_type: Option<i64>,
-    #[sqlx(default)]
-    pub reposts_count: Option<i64>,
-    #[sqlx(default)]
-    pub comments_count: Option<i64>,
-    #[sqlx(default)]
-    pub attitudes_count: Option<i64>,
-    #[sqlx(default)]
-    pub mlevel: Option<i64>,
-    #[sqlx(default)]
-    pub content_auth: Option<i64>,
-    #[sqlx(default)]
-    pub is_show_bulletin: Option<i64>,
-    #[sqlx(default)]
-    pub repost_type: Option<i64>,
-    #[sqlx(default)]
-    pub edit_count: Option<i64>,
-    #[sqlx(default)]
-    pub mblogtype: Option<i64>,
-    #[sqlx(default, rename = "textLength")]
-    pub text_length: Option<i64>,
-    #[sqlx(default, rename = "isLongText")]
-    pub is_long_text: bool,
-    #[sqlx(default)]
-    pub annotations: Option<String>,
-    #[sqlx(default)]
-    pub geo: Option<String>,
-    #[sqlx(default)]
-    pub pic_focus_point: Option<String>,
-    #[sqlx(default)]
-    pub page_info: Option<String>,
-    #[sqlx(default)]
-    pub title: Option<String>,
-    #[sqlx(default)]
-    pub continue_tag: Option<String>,
-    #[sqlx(default)]
-    pub comment_manage_info: Option<String>,
-    #[sqlx(default)]
-    pub client_only: bool,
-    #[sqlx(default)]
-    pub unfavorited: bool,
-    pub created_at: i64,
-    pub created_at_tz: String,
-}
-
-#[derive(Serialize, Debug, Clone, FromRow)]
-pub struct SqlUser {
-    pub id: i64,
-    pub profile_url: String,
-    pub screen_name: String,
-    pub profile_image_url: String,
-    pub avatar_large: String,
-    pub avatar_hd: String,
-    #[sqlx(default)]
-    pub planet_video: bool,
-    #[sqlx(default)]
-    pub v_plus: i64,
-    #[sqlx(default)]
-    pub pc_new: i64,
-    #[sqlx(default)]
-    pub verified: bool,
-    #[sqlx(default)]
-    pub verified_type: i64,
-    #[sqlx(default)]
-    pub domain: String,
-    #[sqlx(default)]
-    pub weihao: String,
-    #[sqlx(default)]
-    pub verified_type_ext: Option<i64>,
-    #[sqlx(default)]
-    pub follow_me: bool,
-    #[sqlx(default)]
-    pub following: bool,
-    #[sqlx(default)]
-    pub mbrank: i64,
-    #[sqlx(default)]
-    pub mbtype: i64,
-    #[sqlx(default)]
-    pub icon_list: String,
-    #[sqlx(default)]
-    pub backedup: bool,
-}
-
-#[derive(Debug, Clone, FromRow)]
-struct SqlPicture {
-    pub id: String,
-    pub uid: Option<i64>,
-    pub post_id: Option<i64>,
-    #[sqlx(rename = "type")]
-    pub type_: u8,
-}
-
-impl From<&PictureMeta> for SqlPicture {
-    fn from(value: &PictureMeta) -> Self {
-        match value {
-            PictureMeta::InPost(url, id) => Self {
-                id: pic_url_to_id(url).into(),
-                post_id: Some(*id),
-                uid: None,
-                type_: PIC_TYPE_INPOST,
-            },
-            PictureMeta::Avatar(url, id) => Self {
-                id: pic_url_to_id(url).into(),
-                post_id: None,
-                uid: Some(*id),
-                type_: PIC_TYPE_AVATAR,
-            },
-            PictureMeta::Emoji(url) => Self {
-                id: pic_url_to_id(url).into(),
-                post_id: None,
-                uid: None,
-                type_: PIC_TYPE_EMOJI,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct SqlPictureBlob {
-    pub url: String,
-    pub id: String,
-    pub blob: Vec<u8>,
-}
-
-const PIC_TYPE_AVATAR: u8 = 0;
-const PIC_TYPE_INPOST: u8 = 1;
-const PIC_TYPE_EMOJI: u8 = 2;
-
-impl From<Picture> for SqlPictureBlob {
-    fn from(value: Picture) -> Self {
-        let url = value.meta.url();
-        let id = pic_url_to_id(url).into();
-        Self {
-            url: url.into(),
-            id,
-            blob: value.blob.to_vec(),
-        }
-    }
-}
-
-pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
-    match DateTime::parse_from_str(created_at, "%a %b %d %T %z %Y") {
-        Ok(dt) => Ok(dt),
-        Err(e) => Err(Error::MalFormat(format!("{e}"))),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_datetime() {
-        parse_created_at("Mon May 29 19:29:32 +0800 2023").unwrap();
-        parse_created_at("Mon May 29 19:45:00 +0800 2023").unwrap();
-        parse_created_at("Tue May 30 04:07:49 +0800 2023").unwrap();
     }
 }
