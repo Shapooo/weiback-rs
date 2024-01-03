@@ -1,33 +1,100 @@
-use crate::utils::pic_url_to_id;
+use crate::{error::Result, web_fetcher::WebFetcher};
 
-use bytes::Bytes;
-use sqlx::FromRow;
+use log::{debug, trace};
+use sqlx::{FromRow, Sqlite, SqlitePool};
 
-#[derive(Debug, Clone)]
-pub struct Picture {
-    pub meta: PictureMeta,
-    pub blob: Bytes,
-}
+const PIC_TYPE_AVATAR: u8 = 0;
+const PIC_TYPE_INPOST: u8 = 1;
+const PIC_TYPE_EMOJI: u8 = 2;
 
-impl PictureMeta {
-    pub fn url(&self) -> &str {
-        match self {
-            PictureMeta::InPost(url, _) => url,
-            PictureMeta::Avatar(url, _) => url,
-            PictureMeta::Emoji(url) => url,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum PictureMeta {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Picture {
     InPost(String, i64),
     Avatar(String, i64),
     Emoji(String),
 }
 
+impl Picture {
+    pub fn in_post(url: &str, post_id: i64) -> Self {
+        let url = strip_url_queries(url).into();
+        Self::InPost(url, post_id)
+    }
+
+    pub fn avatar(url: &str, uid: i64) -> Self {
+        let url = strip_url_queries(url).into();
+        Self::Avatar(url, uid)
+    }
+
+    pub fn emoji(url: &str) -> Self {
+        let url = strip_url_queries(url).into();
+        Self::Emoji(url)
+    }
+
+    pub fn get_url(&self) -> &str {
+        match self {
+            Picture::InPost(url, _) => url,
+            Picture::Avatar(url, _) => url,
+            Picture::Emoji(url) => url,
+        }
+    }
+
+    pub fn get_id(&self) -> &str {
+        pic_url_to_id(self.get_url())
+    }
+
+    pub fn get_file_name(&self) -> &str {
+        pic_url_to_file(self.get_url())
+    }
+
+    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+        PictureInner::create_table(db).await?;
+        PictureBlob::create_table(db).await?;
+        Ok(())
+    }
+
+    pub async fn persist(&self, db: &SqlitePool, fetcher: &WebFetcher) -> Result<()> {
+        self.get_blob(db, fetcher).await?;
+        Ok(())
+    }
+
+    pub async fn get_blob(&self, db: &SqlitePool, fetcher: &WebFetcher) -> Result<Option<Vec<u8>>> {
+        match self.query_blob(db).await? {
+            Some(blob) => Ok(Some(blob)),
+            None => {
+                let blob = self.fetch_blob(fetcher).await?;
+                let blob = PictureBlob::new(self.get_url(), blob);
+                let inner = PictureInner::from(self);
+                blob.insert(db).await?;
+                inner.insert(db).await?;
+                Ok(Some(blob.blob))
+            }
+        }
+    }
+
+    async fn fetch_blob(&self, fetcher: &WebFetcher) -> Result<Vec<u8>> {
+        let url = self.get_url();
+        debug!("fetch pic, url: {}", url);
+        let res = fetcher.get(url, fetcher.pic_client()).await?;
+        let res_bytes = res.bytes().await?;
+        trace!("fetched pic size: {}", res_bytes.len());
+        Ok(res_bytes.into())
+    }
+
+    async fn query_blob(&self, db: &SqlitePool) -> Result<Option<Vec<u8>>> {
+        let url = self.get_url();
+        debug!("query img: {url}");
+        Ok(
+            sqlx::query_as::<Sqlite, (Vec<u8>,)>("SELECT blob FROM picture_blob WHERE url = ?")
+                .bind(url)
+                .fetch_optional(db)
+                .await?
+                .map(|(blob,)| blob),
+        )
+    }
+}
+
 #[derive(Debug, Clone, FromRow)]
-pub struct SqlPicture {
+struct PictureInner {
     pub id: String,
     pub uid: Option<i64>,
     pub post_id: Option<i64>,
@@ -35,22 +102,22 @@ pub struct SqlPicture {
     pub type_: u8,
 }
 
-impl From<&PictureMeta> for SqlPicture {
-    fn from(value: &PictureMeta) -> Self {
+impl From<&Picture> for PictureInner {
+    fn from(value: &Picture) -> Self {
         match value {
-            PictureMeta::InPost(url, id) => Self {
+            Picture::InPost(url, id) => Self {
                 id: pic_url_to_id(url).into(),
                 post_id: Some(*id),
                 uid: None,
                 type_: PIC_TYPE_INPOST,
             },
-            PictureMeta::Avatar(url, id) => Self {
+            Picture::Avatar(url, id) => Self {
                 id: pic_url_to_id(url).into(),
                 post_id: None,
                 uid: Some(*id),
                 type_: PIC_TYPE_AVATAR,
             },
-            PictureMeta::Emoji(url) => Self {
+            Picture::Emoji(url) => Self {
                 id: pic_url_to_id(url).into(),
                 post_id: None,
                 uid: None,
@@ -60,25 +127,112 @@ impl From<&PictureMeta> for SqlPicture {
     }
 }
 
+impl PictureInner {
+    pub async fn insert(&self, db: &SqlitePool) -> Result<()> {
+        let result = sqlx::query("INSERT OR IGNORE INTO picture VALUES (?, ?, ?, ?)")
+            .bind(&self.id)
+            .bind(self.uid)
+            .bind(self.post_id)
+            .bind(self.type_)
+            .execute(db)
+            .await?;
+        trace!("insert picture result: {result:?}");
+        Ok(())
+    }
+
+    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS picture (\
+            id TEXT PRIMARY KEY, \
+            uid INTEGER, \
+            post_id INTEGER, \
+            type INTEGER);",
+        )
+        .execute(db)
+        .await?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, FromRow)]
-pub struct SqlPictureBlob {
+struct PictureBlob {
     pub url: String,
     pub id: String,
     pub blob: Vec<u8>,
 }
 
-const PIC_TYPE_AVATAR: u8 = 0;
-const PIC_TYPE_INPOST: u8 = 1;
-const PIC_TYPE_EMOJI: u8 = 2;
-
-impl From<Picture> for SqlPictureBlob {
-    fn from(value: Picture) -> Self {
-        let url = value.meta.url();
-        let id = pic_url_to_id(url).into();
+impl PictureBlob {
+    pub fn new(url: &str, blob: Vec<u8>) -> Self {
         Self {
             url: url.into(),
-            id,
-            blob: value.blob.to_vec(),
+            id: pic_url_to_id(url).into(),
+            blob,
         }
+    }
+
+    pub async fn insert(&self, db: &SqlitePool) -> Result<()> {
+        let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
+            .bind(&self.url)
+            .bind(&self.id)
+            .bind(&self.blob)
+            .execute(db)
+            .await?;
+        trace!(
+            "insert img blob {}-{}, result: {:?}",
+            self.id,
+            self.url,
+            result
+        );
+        Ok(())
+    }
+
+    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS picture_blob (\
+            url TEXT PRIMARY KEY, \
+            id TEXT, \
+            blob BLOB);",
+        )
+        .execute(db)
+        .await?;
+        Ok(())
+    }
+}
+
+// TODO: handle exception
+fn pic_url_to_file(url: &str) -> &str {
+    url.rsplit('/')
+        .next()
+        .expect("it is not a valid picture url")
+        .split('?')
+        .next()
+        .expect("it is not a valid picture url")
+}
+
+fn pic_url_to_id(url: &str) -> &str {
+    let file = pic_url_to_file(url);
+    let i = file.rfind('.').expect("it is not a valid picture url");
+    &file[..i]
+}
+
+fn strip_url_queries(url: &str) -> &str {
+    url.split('?').next().unwrap()
+}
+
+#[cfg(test)]
+mod picture_tests {
+    use super::*;
+    #[test]
+    fn pic_url_to_file_test() {
+        let a = "https://baidu.com/hhhh.jpg?a=1&b=2";
+        let res = pic_url_to_file(a);
+        dbg!(res);
+    }
+
+    #[test]
+    fn pic_url_to_id_test() {
+        let a = "https://baidu.com/hhhh.jpg?a=1&b=2";
+        let res = pic_url_to_id(a);
+        dbg!(res);
     }
 }
