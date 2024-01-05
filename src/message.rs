@@ -4,7 +4,7 @@ use std::ops::RangeInclusive;
 pub enum Task {
     DownloadFav(RangeInclusive<u32>, bool, u8),
     ExportFromLocal(RangeInclusive<u32>, bool, u8),
-    UnfavoritePosts(RangeInclusive<u32>),
+    UnfavoritePosts,
     DownloadPosts(i64, RangeInclusive<u32>, bool, u8),
 }
 
