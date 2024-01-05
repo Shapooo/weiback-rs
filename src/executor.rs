@@ -47,7 +47,7 @@ impl Executor {
                                 th.backup_user(uid, range, with_pic, image_definition).await
                             }
                         }
-                        Task::UnfavoritePosts(range) => th.unfavorite_posts(range).await,
+                        Task::UnfavoritePosts => th.unfavorite_posts().await,
                     }
                 }
                 Ok::<(), anyhow::Error>(())
@@ -60,9 +60,9 @@ impl Executor {
         }
     }
 
-    pub fn unfavorite_posts(&self, range: RangeInclusive<u32>) {
+    pub fn unfavorite_posts(&self) {
         debug!("send task: unfavorite posts");
-        self.send_task(Task::UnfavoritePosts(range))
+        self.send_task(Task::UnfavoritePosts)
     }
 
     pub fn download_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {

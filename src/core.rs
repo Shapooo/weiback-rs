@@ -232,7 +232,7 @@ impl Core {
                             self.executor
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
-                                .unfavorite_posts(1..=u32::MAX);
+                                .unfavorite_posts();
                         }
                     } else {
                         ui.checkbox(&mut self.with_pic, "同时下载图片");
