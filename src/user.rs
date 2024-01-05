@@ -1,4 +1,7 @@
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    picture::Picture,
+};
 
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
@@ -162,6 +165,15 @@ impl User {
             .fetch_optional(db)
             .await?;
         Ok(user)
+    }
+
+    pub fn get_avatar_pic(&self, image_definition: u8) -> Picture {
+        match image_definition {
+            0 => Picture::avatar(self.profile_image_url.as_str(), self.id),
+            1 => Picture::avatar(self.avatar_large.as_str(), self.id),
+            2 => Picture::avatar(self.avatar_hd.as_str(), self.id),
+            _ => unreachable!(),
+        }
     }
 }
 
