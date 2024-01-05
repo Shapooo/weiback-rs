@@ -1,5 +1,6 @@
-use crate::{error::Result, web_fetcher::WebFetcher};
+use crate::web_fetcher::WebFetcher;
 
+use anyhow::Result;
 use log::{debug, trace};
 use sqlx::{FromRow, Sqlite, SqlitePool};
 

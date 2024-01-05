@@ -1,10 +1,8 @@
-use crate::{
-    error::{Error, Result},
-    web_fetcher::WebFetcher,
-};
+use crate::web_fetcher::WebFetcher;
 
 use std::collections::HashMap;
 
+use anyhow::{anyhow, Result};
 use log::debug;
 use serde_json::Value;
 
@@ -17,36 +15,26 @@ pub async fn init_emoticon(fetcher: &WebFetcher) -> Result<()> {
     let res = fetcher.get(url, fetcher.web_client()).await?;
     let mut json: Value = res.json().await?;
     if json["ok"] != 1 {
-        return Err(Error::ResourceGetFailed(format!(
-            "fetched emoticon is not ok: {json:?}"
-        )));
+        return Err(anyhow!("fetched emoticon is not ok: {json:?}"));
     }
 
     let mut res = HashMap::new();
     let Value::Object(emoticon) = json["data"]["emoticon"].take() else {
-        return Err(Error::MalFormat(
-            "the format of emoticon is unexpected".into(),
-        ));
+        return Err(anyhow!("the format of emoticon is unexpected"));
     };
     for (_, groups) in emoticon {
         let Value::Object(group) = groups else {
-            return Err(Error::MalFormat(
-                "the format of emoticon is unexpected".into(),
-            ));
+            return Err(anyhow!("the format of emoticon is unexpected"));
         };
         for (_, emojis) in group {
             let Value::Array(emojis) = emojis else {
-                return Err(Error::MalFormat(
-                    "the format of emoticon is unexpected".into(),
-                ));
+                return Err(anyhow!("the format of emoticon is unexpected"));
             };
             for mut emoji in emojis {
                 let (Value::String(phrase), Value::String(url)) =
                     (emoji["phrase"].take(), emoji["url"].take())
                 else {
-                    return Err(Error::MalFormat(
-                        "the format of emoticon is unexpected".into(),
-                    ));
+                    return Err(anyhow!("the format of emoticon is unexpected"));
                 };
                 res.insert(phrase, url);
             }

@@ -1,5 +1,6 @@
-use crate::{error::Result, post::Post};
+use crate::post::Post;
 
+use anyhow::Result;
 use lazy_static::lazy_static;
 use log::{debug, error};
 use serde_json::Value;

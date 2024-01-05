@@ -1,6 +1,5 @@
 use crate::{
     emoticon::emoticon_get,
-    error::{Error, Result},
     exporter::{HTMLPage, HTMLPicture},
     html_generator::HTMLGenerator,
     long_text::LongText,
@@ -15,6 +14,7 @@ use std::{
     path::Path,
 };
 
+use anyhow::{anyhow, Error, Result};
 use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use futures::future::join_all;
 use lazy_static::lazy_static;
@@ -192,7 +192,7 @@ impl TryFrom<Value> for Post {
         let created_at = if let Value::String(created_at) = &json["created_at"] {
             parse_created_at(created_at)?
         } else {
-            return Err(Error::MalFormat("invalid created_at field".into()));
+            return Err(anyhow!("invalid created_at field"));
         };
         let mut post: Post = from_value(json)?;
         post.uid = post.user.as_ref().map(|user| user.id);
@@ -579,9 +579,7 @@ impl Post {
         let mut json: Value = fetcher.get(url, fetcher.web_client()).await?.json().await?;
         trace!("get json: {json:?}");
         if json["ok"] != 1 {
-            Err(Error::ResourceGetFailed(format!(
-                "fetched data is not ok: {json:?}"
-            )))
+            Err(anyhow!("fetched data is not ok: {json:?}"))
         } else if let Value::Array(posts) = json["data"]["list"].take() {
             let posts = posts
                 .into_iter()
@@ -599,9 +597,7 @@ impl Post {
             .collect::<Result<Vec<_>>>()?;
             Ok(posts)
         } else {
-            Err(Error::MalFormat(
-                "Posts should be a array, maybe api has changed".into(),
-            ))
+            Err(anyhow!("Posts should be a array, maybe api has changed"))
         }
     }
 
@@ -611,9 +607,7 @@ impl Post {
         let mut posts: Value = fetcher.get(url, fetcher.web_client()).await?.json().await?;
         trace!("get json: {posts:?}");
         if posts["ok"] != 1 {
-            Err(Error::ResourceGetFailed(format!(
-                "fetched data is not ok: {posts:?}"
-            )))
+            Err(anyhow!("fetched data is not ok: {posts:?}"))
         } else if let Value::Array(posts) = posts["data"].take() {
             let posts = posts
                 .into_iter()
@@ -631,9 +625,7 @@ impl Post {
             .collect::<Result<Vec<_>>>()?;
             Ok(posts)
         } else {
-            Err(Error::MalFormat(
-                "Posts should be a array, maybe api has changed".into(),
-            ))
+            Err(anyhow!("Posts should be a array, maybe api has changed"))
         }
     }
 
@@ -666,10 +658,11 @@ impl Post {
             let post = res["data"].take().try_into()?;
             Ok(post)
         } else {
-            Err(Error::ResourceGetFailed(format!(
+            Err(anyhow!(
                 "fetch mobile post {} failed, with message {}",
-                mblogid, res["message"]
-            )))
+                mblogid,
+                res["message"]
+            ))
         }
     }
 
@@ -734,11 +727,7 @@ impl Post {
         let id = value_as_str(post, "id")?;
         let id = match id.parse::<i64>() {
             Ok(id) => id,
-            Err(e) => {
-                return Err(Error::MalFormat(format!(
-                    "failed to parse mobile post id {id}: {e}"
-                )))
-            }
+            Err(e) => return Err(anyhow!("failed to parse mobile post id {id}: {e}")),
         };
         post["id"] = Value::Number(serde_json::Number::from(id));
         post["mblogid"] = post["bid"].take();
@@ -997,7 +986,7 @@ impl Post {
 pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
     match DateTime::parse_from_str(created_at, "%a %b %d %T %z %Y") {
         Ok(dt) => Ok(dt),
-        Err(e) => Err(Error::MalFormat(format!("{e}"))),
+        Err(e) => Err(anyhow!("{e}")),
     }
 }
 
@@ -1007,10 +996,11 @@ fn extract_urls(text: &str) -> Vec<&str> {
 
 // to be removed
 fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
-    v[property].as_str().ok_or(Error::MalFormat(format!(
+    v[property].as_str().ok_or(anyhow!(
         "property {} of {} cannot convert to str",
-        property, v
-    )))
+        property,
+        v
+    ))
 }
 
 #[cfg(test)]
