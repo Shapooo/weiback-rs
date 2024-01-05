@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use bytes::Bytes;
 use log::{debug, info, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -10,16 +8,10 @@ use reqwest::{
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
 
-use crate::data::{LongText, Posts};
 use crate::error::{Error, Result};
 use crate::login::{save_login_info, to_login_info};
 
-const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
-const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
-const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
-const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
-const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
 const RETRY_COUNT: i32 = 3;
 
 #[derive(Debug)]
@@ -191,39 +183,12 @@ impl WebFetcher {
         })
     }
 
-    pub async fn unfavorite_post(&self, id: i64) -> Result<()> {
-        let id = id.to_string();
-        let res = self
-            .web_client
-            .post("https://weibo.com/ajax/statuses/destoryFavorites")
-            .json(&serde_json::json!({ "id": id }))
-            .send()
-            .await?;
-        let status_code = res.status().as_u16();
-
-        if !res.status().is_success() {
-            let res_json = res.json::<Value>().await;
-            if status_code == 400
-                && res_json.is_ok()
-                && res_json.unwrap()["message"] == "not your collection!"
-            {
-                warn!("post {} have been unfavorited", id);
-            } else {
-                warn!(
-                    "cannot unfavorite post {}, with http code {}",
-                    id, status_code
-                );
-            }
-        }
-        Ok(())
-    }
-
-    async fn _post(&self, url: impl IntoUrl, client: &Client, body: &Value) -> Result<Response> {
+    pub async fn post(&self, url: impl IntoUrl, client: &Client, body: &Value) -> Result<Response> {
         let request = client.post(url).json(body).build()?;
         self._http_common(request, client).await
     }
 
-    async fn _get(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
+    pub async fn get(&self, url: impl IntoUrl, client: &Client) -> Result<Response> {
         let request = client.get(url).build()?;
         self._http_common(request, client).await
     }
@@ -247,113 +212,22 @@ impl WebFetcher {
         )))
     }
 
-    pub async fn fetch_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
-        let url = format!("{STATUSES_MY_MICRO_BLOG_API}?uid={uid}&page={page}");
-        debug!("fetch meta page, url: {url}");
-        let mut posts: Value = self._get(url, &self.web_client).await?.json().await?;
-        trace!("get json: {posts:?}");
-        if posts["ok"] != 1 {
-            Err(Error::ResourceGetFailed(format!(
-                "fetched data is not ok: {posts:?}"
-            )))
-        } else if let Value::Array(v) = posts["data"]["list"].take() {
-            Ok(v)
-        } else {
-            Err(Error::MalFormat(
-                "Posts should be a array, maybe api has changed".into(),
-            ))
-        }
+    pub fn mobile_client(&self) -> &Client {
+        &self.mobile_client
     }
 
-    pub async fn fetch_fav_posts_meta(&self, uid: &str, page: u32) -> Result<Posts> {
-        let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
-        debug!("fetch fav meta page, url: {url}");
-        let mut posts: Value = self._get(url, &self.web_client).await?.json().await?;
-        trace!("get json: {posts:?}");
-        if posts["ok"] != 1 {
-            Err(Error::ResourceGetFailed(format!(
-                "fetched data is not ok: {posts:?}"
-            )))
-        } else if let Value::Array(v) = posts["data"].take() {
-            Ok(v)
-        } else {
-            Err(Error::MalFormat(
-                "Posts should be a array, maybe api has changed".into(),
-            ))
-        }
+    pub fn web_client(&self) -> &Client {
+        &self.web_client
     }
 
-    pub async fn fetch_pic(&self, url: impl IntoUrl) -> Result<Bytes> {
-        debug!("fetch pic, url: {}", url.as_str());
-        let res = self._get(url, &self.pic_client).await?;
-        let res_bytes = res.bytes().await?;
-        trace!("fetched pic size: {}", res_bytes.len());
-        Ok(res_bytes)
-    }
-
-    pub async fn fetch_emoticon(&self) -> Result<HashMap<String, String>> {
-        let url = STATUSES_CONFIG_API;
-        debug!("fetch emoticon, url: {url}");
-        let res = self._get(url, &self.web_client).await?;
-        let mut json: Value = res.json().await?;
-        if json["ok"] != 1 {
-            return Err(Error::ResourceGetFailed(format!(
-                "fetched emoticon is not ok: {json:?}"
-            )));
-        }
-
-        let mut res = HashMap::new();
-        let Value::Object(emoticon) = json["data"]["emoticon"].take() else {
-            return Err(Error::MalFormat(
-                "the format of emoticon is unexpected".into(),
-            ));
-        };
-        for (_, groups) in emoticon {
-            let Value::Object(group) = groups else {
-                return Err(Error::MalFormat(
-                    "the format of emoticon is unexpected".into(),
-                ));
-            };
-            for (_, emojis) in group {
-                let Value::Array(emojis) = emojis else {
-                    return Err(Error::MalFormat(
-                        "the format of emoticon is unexpected".into(),
-                    ));
-                };
-                for mut emoji in emojis {
-                    let (Value::String(phrase), Value::String(url)) =
-                        (emoji["phrase"].take(), emoji["url"].take())
-                    else {
-                        return Err(Error::MalFormat(
-                            "the format of emoticon is unexpected".into(),
-                        ));
-                    };
-                    res.insert(phrase, url);
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    pub async fn fetch_mobile_page(&self, mblogid: &str) -> Result<Value> {
-        let mobile_client = &self.mobile_client;
-        let url = format!("{}{}", MOBILE_POST_API, mblogid);
-        info!("fetch client only post url: {}", &url);
-        let mut res: Value = self._get(url, mobile_client).await?.json().await?;
-        if res["ok"] == 1 {
-            Ok(res["data"].take())
-        } else {
-            Err(Error::ResourceGetFailed(format!(
-                "fetch mobile post {} failed, with message {}",
-                mblogid, res["message"]
-            )))
-        }
+    pub fn pic_client(&self) -> &Client {
+        &self.pic_client
     }
 
     pub async fn fetch_fav_total_num(&self) -> Result<u32> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
         let ret_json: Value = self
-            ._get(FAVORITES_TAGS_API, &self.web_client)
+            .get(FAVORITES_TAGS_API, &self.web_client)
             .await?
             .json()
             .await?;
@@ -372,20 +246,6 @@ impl WebFetcher {
                 )))
                 .map(|v| v as u32)
         }
-    }
-
-    pub async fn fetch_long_text_content(&self, mblogid: &str) -> Result<String> {
-        let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
-        debug!("fetch long text, url: {url}");
-        let res = self._get(url, &self.web_client).await?;
-        let long_text_meta = match res.json::<LongText>().await {
-            Ok(res) => res,
-            Err(e) if e.is_decode() => {
-                return Err(Error::ResourceGetFailed("bypass weibo's bug".into()))
-            }
-            Err(e) => return Err(e.into()),
-        };
-        long_text_meta.get_content()
     }
 }
 
