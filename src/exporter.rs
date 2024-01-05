@@ -1,12 +1,11 @@
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
+use anyhow::Result;
 use futures::future::join_all;
 use log::info;
 use tokio::fs::{DirBuilder, File};
 use tokio::io::AsyncWriteExt;
-
-use crate::error::Result;
 
 #[derive(Debug, Clone)]
 pub struct Exporter();

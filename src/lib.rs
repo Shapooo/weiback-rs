@@ -1,7 +1,6 @@
 pub mod core;
 
 mod emoticon;
-mod error;
 mod executor;
 mod exporter;
 mod html_generator;

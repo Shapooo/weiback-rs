@@ -1,9 +1,7 @@
 #![allow(unused)]
-use crate::{
-    error::{Error, Result},
-    web_fetcher::WebFetcher,
-};
+use crate::web_fetcher::WebFetcher;
 
+use anyhow::{anyhow, Result};
 use log::debug;
 use serde::Deserialize;
 
@@ -27,9 +25,7 @@ impl LongText {
         if self.ok == 1 && self.http_code == 200 {
             Ok(self.data.long_text_content)
         } else {
-            Err(Error::ResourceGetFailed(format!(
-                "returned long text status is not ok: {self:?}"
-            )))
+            Err(anyhow!("returned long text status is not ok: {self:?}"))
         }
     }
 
@@ -39,9 +35,7 @@ impl LongText {
         let res = fetcher.get(url, fetcher.web_client()).await?;
         let long_text_meta = match res.json::<LongText>().await {
             Ok(res) => res,
-            Err(e) if e.is_decode() => {
-                return Err(Error::ResourceGetFailed("bypass weibo's bug".into()))
-            }
+            Err(e) if e.is_decode() => return Err(anyhow!("bypass weibo's bug")),
             Err(e) => return Err(e.into()),
         };
         long_text_meta.get_content()

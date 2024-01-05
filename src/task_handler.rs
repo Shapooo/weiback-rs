@@ -1,19 +1,13 @@
 use crate::{
-    emoticon::init_emoticon,
-    error::{Error, Result},
-    exporter::Exporter,
-    login::LoginInfo,
-    message::TaskStatus,
-    persister::Persister,
-    post::Post,
-    user::User,
-    web_fetcher::WebFetcher,
+    emoticon::init_emoticon, exporter::Exporter, login::LoginInfo, message::TaskStatus,
+    persister::Persister, post::Post, user::User, web_fetcher::WebFetcher,
 };
 
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use anyhow::{anyhow, Result};
 use futures::future::join_all;
 use log::{debug, error, info};
 use tokio::time::sleep;
@@ -33,10 +27,7 @@ impl TaskHandler {
         let uid = if let serde_json::Value::Number(uid) = &login_info["uid"] {
             uid.as_i64().unwrap()
         } else {
-            return Err(Error::MalFormat(format!(
-                "no uid field in login_info: {:?}",
-                login_info
-            )));
+            return Err(anyhow!("no uid field in login_info: {:?}", login_info));
         };
         let web_fetcher =
             WebFetcher::from_cookies(uid, serde_json::from_value(login_info["cookies"].take())?)?;

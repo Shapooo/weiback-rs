@@ -1,12 +1,8 @@
-use crate::{
-    error::{Error, Result},
-    picture::Picture,
-    post::Post,
-    user::User,
-};
+use crate::{picture::Picture, post::Post, user::User};
 
 use std::path::PathBuf;
 
+use anyhow::{anyhow, Result};
 use log::{debug, info};
 use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
 
@@ -43,10 +39,11 @@ impl Persister {
                 let mut dir_builder = tokio::fs::DirBuilder::new();
                 dir_builder.recursive(true);
                 dir_builder
-                    .create(self.db_path.parent().ok_or(Error::Other(format!(
-                        "{:?} should have parent",
+                    .create(
                         self.db_path
-                    )))?)
+                            .parent()
+                            .ok_or(anyhow!("{:?} should have parent", self.db_path))?,
+                    )
                     .await?;
             } else if self.db_path.parent().unwrap().is_file() {
                 return Err(std::io::Error::new(
@@ -70,9 +67,7 @@ impl Persister {
         if version.0 == VALIDE_DB_VERSION {
             Ok(())
         } else {
-            Err(Error::Other(
-                "Invalid database version, please upgrade db file".into(),
-            ))
+            Err(anyhow!("Invalid database version, please upgrade db file"))
         }
     }
 

@@ -1,5 +1,8 @@
+use crate::login::{save_login_info, to_login_info};
+
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use log::{debug, info, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -7,9 +10,6 @@ use reqwest::{
 };
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
-
-use crate::error::{Error, Result};
-use crate::login::{save_login_info, to_login_info};
 
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const RETRY_COUNT: i32 = 3;
@@ -27,7 +27,7 @@ impl WebFetcher {
     pub fn from_cookies(uid: i64, cookie_store: CookieStore) -> Result<Self> {
         let xsrf_token = cookie_store
             .get("weibo.com", "/", "XSRF-TOKEN")
-            .ok_or(Error::Other("xsrf-token-not-found".into()))?
+            .ok_or(anyhow!("xsrf-token-not-found"))?
             .value()
             .to_owned();
         let cookie_store = Arc::new(CookieStoreMutex::new(cookie_store));
@@ -206,10 +206,11 @@ impl WebFetcher {
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-        Err(Error::ResourceGetFailed(format!(
+        Err(anyhow!(
             "http request {} failed with status code {}",
-            url_str, status_code
-        )))
+            url_str,
+            status_code
+        ))
     }
 
     pub fn mobile_client(&self) -> &Client {
@@ -233,17 +234,14 @@ impl WebFetcher {
             .await?;
         trace!("get fav tag data: {:?}", ret_json);
         if ret_json["ok"] != 1 {
-            Err(Error::ResourceGetFailed(format!(
-                "fav total num get failed: {:?}",
-                ret_json
-            )))
+            Err(anyhow!("fav total num get failed: {:?}", ret_json))
         } else {
             ret_json["fav_total_num"]
                 .as_u64()
-                .ok_or(Error::MalFormat(format!(
+                .ok_or(anyhow!(
                     "no fav_total_num field in response: {:?}",
                     ret_json
-                )))
+                ))
                 .map(|v| v as u32)
         }
     }

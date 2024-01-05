@@ -1,8 +1,6 @@
-use crate::{
-    error::{Error, Result},
-    picture::Picture,
-};
+use crate::picture::Picture;
 
+use anyhow::{Error, Result};
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
 use serde_json::{to_string, Value};
@@ -72,7 +70,7 @@ impl TryFrom<Value> for User {
     type Error = Error;
 
     fn try_from(value: Value) -> std::result::Result<Self, Self::Error> {
-        serde_json::from_value(value).map_err(|e| Error::Other(e.to_string()))
+        Ok(serde_json::from_value(value)?)
     }
 }
 
@@ -180,14 +178,14 @@ impl User {
 #[cfg(test)]
 mod user_test {
     use super::User;
-    use crate::error::Result;
+    use anyhow::Result;
     use flate2::read::GzDecoder;
     use futures::future::join_all;
     use serde_json::{from_str, Value};
     use std::collections::HashMap;
     use std::io::Read;
 
-    async fn create_db() -> anyhow::Result<sqlx::SqlitePool> {
+    async fn create_db() -> Result<sqlx::SqlitePool> {
         Ok(sqlx::sqlite::SqlitePoolOptions::new()
             .connect("sqlite::memory:")
             .await?)
