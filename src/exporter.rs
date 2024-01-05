@@ -1,7 +1,6 @@
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
-use bytes::Bytes;
 use futures::future::join_all;
 use log::info;
 use tokio::fs::{DirBuilder, File};
@@ -13,11 +12,7 @@ use crate::error::Result;
 pub struct Exporter();
 
 impl Exporter {
-    pub fn new() -> Self {
-        Exporter()
-    }
-
-    pub async fn export_page<N, P>(&self, html_name: N, page: HTMLPage, path: P) -> Result<()>
+    pub async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
     where
         N: AsRef<str>,
         P: AsRef<Path>,
@@ -68,7 +63,7 @@ pub struct HTMLPage {
 #[derive(Debug, Clone)]
 pub struct HTMLPicture {
     pub name: String,
-    pub blob: Bytes,
+    pub blob: Vec<u8>,
 }
 
 #[cfg(test)]
@@ -76,7 +71,6 @@ mod exporter_test {
     use super::{Exporter, HTMLPage, HTMLPicture};
     #[tokio::test]
     async fn export_page() {
-        let e = Exporter::new();
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
         let page = HTMLPage {
             html: "testtesttest".into(),
@@ -87,7 +81,7 @@ mod exporter_test {
             .into_iter()
             .collect(),
         };
-        e.export_page("test_task", page, "./export_page")
+        Exporter::export_page("test_task", page, "./export_page")
             .await
             .unwrap();
         std::fs::remove_dir_all("export_page").unwrap();
