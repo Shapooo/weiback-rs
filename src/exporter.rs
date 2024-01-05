@@ -42,8 +42,8 @@ impl Exporter {
         operating_path.pop();
         operating_path.push(resources_dir_name);
         dir_builder.create(operating_path.as_path()).await?;
-        join_all(page.pics.into_iter().map(|pic| async {
-            let pic = pic;
+        let operating_path = operating_path.as_path();
+        join_all(page.pics.into_iter().map(|pic| async move {
             let mut pic_file = File::create(operating_path.join(pic.name)).await?;
             pic_file.write_all(&pic.blob).await
         }))

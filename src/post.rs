@@ -267,7 +267,7 @@ impl TryInto<Value> for Post {
 }
 
 impl Post {
-    fn to_tera_context_val(
+    fn into_tera_context_val(
         mut self,
         pictures: &mut HashSet<Picture>,
         resource_dir: &Path,
@@ -586,11 +586,10 @@ impl Post {
                 .map(|post| post.try_into())
                 .collect::<Result<Vec<Post>>>()?;
             let posts = join_all(posts.into_iter().map(|post| async {
-                Ok(post
-                    .with_process_client_only(fetcher)
+                post.with_process_client_only(fetcher)
                     .await?
                     .with_process_long_text(fetcher)
-                    .await?)
+                    .await
             }))
             .await
             .into_iter()
@@ -614,11 +613,10 @@ impl Post {
                 .map(|post| post.try_into())
                 .collect::<Result<Vec<Post>>>()?;
             let posts = join_all(posts.into_iter().map(|post| async {
-                Ok(post
-                    .with_process_client_only(fetcher)
+                post.with_process_client_only(fetcher)
                     .await?
                     .with_process_long_text(fetcher)
-                    .await?)
+                    .await
             }))
             .await
             .into_iter()
@@ -970,7 +968,7 @@ impl Post {
         let posts = posts
             .into_iter()
             .map(|post| {
-                post.to_tera_context_val(
+                post.into_tera_context_val(
                     &mut pic_to_fetch,
                     Path::new((Borrowed(html_name) + "_files").as_ref()),
                     image_definition,
