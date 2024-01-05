@@ -146,3 +146,113 @@ impl User {
         Ok(user)
     }
 }
+
+#[cfg(test)]
+mod user_test {
+    use super::User;
+    use crate::error::Result;
+    use flate2::read::GzDecoder;
+    use futures::future::join_all;
+    use serde_json::{from_str, Value};
+    use std::collections::HashMap;
+    use std::io::Read;
+
+    async fn create_db() -> anyhow::Result<sqlx::SqlitePool> {
+        Ok(sqlx::sqlite::SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await?)
+    }
+
+    async fn load_test_case() -> Result<Vec<Value>> {
+        let gz = include_bytes!("../res/full.json.gz");
+        let mut de = GzDecoder::new(gz.as_ref());
+        let mut text = String::new();
+        de.read_to_string(&mut text)?;
+
+        let test_case_post: Vec<Value> = from_str(&text)?;
+        let test_case = test_case_post
+            .into_iter()
+            .filter_map(|mut v| v["user"].is_object().then_some(v["user"].take()))
+            .collect();
+        Ok(test_case)
+    }
+
+    #[tokio::test]
+    async fn create_table() {
+        let db = create_db().await.unwrap();
+        User::create_table(&db).await.unwrap();
+    }
+
+    async fn parse_users(test_case: Vec<Value>) -> Result<Vec<User>> {
+        test_case
+            .into_iter()
+            .map(|user| {
+                let user: User = user.try_into()?;
+                Ok(user)
+            })
+            .collect::<Result<Vec<_>>>()
+    }
+
+    #[tokio::test]
+    async fn parse_from_json() {
+        let test_case = load_test_case().await.unwrap();
+        parse_users(test_case).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn insert() {
+        let ref db = create_db().await.unwrap();
+        User::create_table(&db).await.unwrap();
+        let test_case = load_test_case().await.unwrap();
+        let test_case = parse_users(test_case).await.unwrap();
+        let test_case = test_case
+            .into_iter()
+            .filter(|user| user.id != i64::default())
+            .collect::<Vec<_>>();
+        join_all(
+            test_case
+                .into_iter()
+                .map(|user| async move { user.insert(db).await }),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn query() {
+        let ref db = create_db().await.unwrap();
+        User::create_table(db).await.unwrap();
+        let test_case = load_test_case().await.unwrap();
+        let test_case = parse_users(test_case).await.unwrap();
+        let test_case = test_case
+            .into_iter()
+            .filter_map(|user| (user.id != i64::default()).then_some((user.id, user)))
+            .collect::<HashMap<_, _>>();
+        join_all(
+            test_case
+                .iter()
+                .map(|(_, user)| async move { user.insert(db).await }),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+        let queried_user = join_all(
+            test_case
+                .iter()
+                .map(|t| async move { User::query(*t.0, db).await }),
+        )
+        .await
+        .into_iter()
+        .filter_map(|user| user.transpose())
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+        assert_eq!(queried_user.len(), test_case.len());
+        queried_user.into_iter().for_each(|user| {
+            let origin = test_case.get(&user.id).unwrap();
+            assert_eq!(origin, &user);
+        });
+    }
+}

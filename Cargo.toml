@@ -27,3 +27,6 @@ sqlx = { version = "0.7.3", features = ["sqlite", "runtime-tokio-rustls"] }
 tera = "1.19.1"
 thiserror = "1.0.52"
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "time", "fs"] }
+
+[dev-dependencies]
+flate2 = "1.0.28"
