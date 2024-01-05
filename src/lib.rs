@@ -1,5 +1,6 @@
 pub mod core;
 
+mod emoticon;
 mod error;
 mod executor;
 mod exporter;
