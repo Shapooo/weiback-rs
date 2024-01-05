@@ -724,7 +724,9 @@ impl Post {
     }
 
     fn convert_mobile2pc_post_non_rec(post: &mut Value) -> Result<()> {
-        let id = value_as_str(post, "id")?;
+        let id = post["id"]
+            .as_str()
+            .ok_or(anyhow!("mobile post id should be str: {}", post))?;
         let id = match id.parse::<i64>() {
             Ok(id) => id,
             Err(e) => return Err(anyhow!("failed to parse mobile post id {id}: {e}")),
@@ -752,14 +754,21 @@ impl Post {
         if let Value::Array(pics) = post["pics"].take() {
             post["pic_ids"] = serde_json::to_value(
                 pics.iter()
-                    .map(|pic| value_as_str(pic, "pid"))
+                    .map(|pic| {
+                        pic["pid"]
+                            .as_str()
+                            .ok_or(anyhow!("pid of mobile post pic should be a str: {}", pic))
+                    })
                     .collect::<Result<Vec<_>>>()?,
             )
             .unwrap();
             post["pic_infos"] = serde_json::to_value(
                 pics.into_iter()
                     .map(|mut pic| {
-                        let id = value_as_str(&pic, "pid")?.to_owned();
+                        let id = pic["pid"]
+                            .as_str()
+                            .ok_or(anyhow!("pid of mobile post pic should be a str: {}", pic))?
+                            .to_owned();
                         let mut v: HashMap<String, Value> = HashMap::new();
                         v.insert("pic_id".into(), pic["pid"].take());
                         v.insert("type".into(), "pic".into());
@@ -992,15 +1001,6 @@ pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
 
 fn extract_urls(text: &str) -> Vec<&str> {
     URL_EXPR.find_iter(text).map(|m| m.as_str()).collect()
-}
-
-// to be removed
-fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
-    v[property].as_str().ok_or(anyhow!(
-        "property {} of {} cannot convert to str",
-        property,
-        v
-    ))
 }
 
 #[cfg(test)]
