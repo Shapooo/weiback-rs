@@ -7,11 +7,16 @@ use sqlx::{FromRow, Sqlite, SqlitePool};
 
 #[derive(Deserialize, Serialize, Debug, Clone, FromRow, PartialEq)]
 pub struct User {
+    #[serde(default)]
     pub id: i64,
     pub profile_url: String,
+    #[serde(default)]
     pub screen_name: String,
+    #[serde(default)]
     pub profile_image_url: String,
+    #[serde(default)]
     pub avatar_large: String,
+    #[serde(default)]
     pub avatar_hd: String,
     #[sqlx(default)]
     pub planet_video: bool,
@@ -19,26 +24,34 @@ pub struct User {
     #[serde(deserialize_with = "parse_v_plus")]
     pub v_plus: i64,
     #[sqlx(default)]
+    #[serde(default)]
     pub pc_new: i64,
     #[sqlx(default)]
+    #[serde(default)]
     pub verified: bool,
     #[sqlx(default)]
+    #[serde(default)]
     pub verified_type: i64,
     #[sqlx(default)]
+    #[serde(default)]
     pub domain: String,
     #[sqlx(default)]
+    #[serde(default)]
     pub weihao: String,
     #[sqlx(default)]
     pub verified_type_ext: Option<i64>,
     #[sqlx(default)]
+    #[serde(default)]
     pub follow_me: bool,
     #[sqlx(default)]
+    #[serde(default)]
     pub following: bool,
     #[sqlx(default)]
+    #[serde(default)]
     pub mbrank: i64,
     #[sqlx(default)]
+    #[serde(default)]
     pub mbtype: i64,
-    #[sqlx(json)]
     pub icon_list: Option<Value>,
     #[sqlx(default)]
     #[serde(default)]
