@@ -154,16 +154,11 @@ impl User {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub async fn query_user(id: i64, db: &SqlitePool) -> Result<Self> {
-        let user = sqlx::query_as::<Sqlite, User>(
-            "SELECT id, profile_url, screen_name, profile_image_url, \
-             avatar_large, avatar_hd, backedup FROM users WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(db)
-        .await?;
-        let user = user.ok_or(Error::Other(format!("user {} not found", id)))?;
+    pub async fn query(id: i64, db: &SqlitePool) -> Result<Option<Self>> {
+        let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(db)
+            .await?;
         Ok(user)
     }
 }
