@@ -1,9 +1,9 @@
+use crate::{error::Result, post::Post};
+
 use lazy_static::lazy_static;
 use log::{debug, error};
+use serde_json::Value;
 use tera::{Context, Tera};
-
-use crate::data::{Post, Posts};
-use crate::error::Result;
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
@@ -33,12 +33,8 @@ lazy_static! {
 pub struct HTMLGenerator();
 
 impl HTMLGenerator {
-    pub fn new() -> Self {
-        Self()
-    }
-
     #[allow(unused)]
-    pub fn generate_post(&self, mut post: Post) -> Result<String> {
+    pub fn generate_post(mut post: Post) -> Result<String> {
         let mut context = Context::new();
         context.insert("post", &post);
         let html = TEMPLATES.render("post.html", &context)?;
@@ -46,14 +42,14 @@ impl HTMLGenerator {
         Ok(html)
     }
 
-    pub fn generate_posts(&self, posts: Posts) -> Result<String> {
+    pub fn generate_posts(posts: Vec<Value>) -> Result<String> {
         let mut context = Context::new();
         context.insert("posts", &posts);
         let html = TEMPLATES.render("posts.html", &context)?;
         Ok(html)
     }
 
-    pub fn generate_page(&self, posts: &str) -> Result<String> {
+    pub fn generate_page(posts: &str) -> Result<String> {
         let mut context = Context::new();
         context.insert("html", &posts);
         let html = TEMPLATES.render("page.html", &context)?;
