@@ -1014,8 +1014,106 @@ fn value_as_str<'a>(v: &'a Value, property: &'a str) -> Result<&'a str> {
 }
 
 #[cfg(test)]
-mod tests {
+mod post_test {
     use super::*;
+    use flate2::read::GzDecoder;
+    use std::io::prelude::*;
+
+    async fn create_db() -> anyhow::Result<sqlx::SqlitePool> {
+        Ok(sqlx::sqlite::SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await?)
+    }
+
+    fn load_test_case() -> anyhow::Result<String> {
+        let gz = include_bytes!("../res/full.json.gz");
+        let mut de = GzDecoder::new(gz.as_ref());
+        let mut txt = String::new();
+        de.read_to_string(&mut txt).unwrap();
+        Ok(txt)
+    }
+
+    #[tokio::test]
+    async fn create_table() {
+        let db = create_db().await.unwrap();
+        Post::create_table(&db).await.unwrap();
+    }
+
+    #[test]
+    fn deserialize_posts() {
+        let test_case = load_test_case().unwrap();
+        let test_case_val = serde_json::from_str::<Value>(&test_case).unwrap();
+        let test_case_val_vec = serde_json::from_str::<Vec<Value>>(&test_case).unwrap();
+
+        let _: Vec<Post> = serde_json::from_str(&test_case).unwrap();
+        let _: Vec<Post> = serde_json::from_value(test_case_val).unwrap();
+        let _: Vec<Post> = test_case_val_vec
+            .into_iter()
+            .map(|v| serde_json::from_value(v).unwrap())
+            .collect();
+    }
+
+    #[test]
+    fn posts_try_from_value() {
+        let test_case = load_test_case().unwrap();
+        let posts: Vec<Value> = serde_json::from_str(&test_case).unwrap();
+        for post in posts {
+            let postb = post.clone();
+            let _: Post = post
+                .try_into()
+                .map_err(|e| {
+                    format!(
+                        "failed to convert post {post:?} to Post: {e}",
+                        post = postb,
+                        e = e
+                    )
+                })
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn insert() {
+        let ref db = create_db().await.unwrap();
+        Post::create_table(db).await.unwrap();
+        User::create_table(db).await.unwrap();
+
+        let test_case = serde_json::from_str::<Vec<Value>>(&load_test_case().unwrap())
+            .unwrap()
+            .into_iter()
+            .map(|v| v.try_into().unwrap())
+            .collect::<Vec<Post>>();
+        join_all(test_case.iter().map(|p| p.insert(db)))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn query() {
+        // let ref db = create_db().await.unwrap();
+        let ref db = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        Post::create_table(db).await.unwrap();
+        User::create_table(db).await.unwrap();
+
+        let test_case = serde_json::from_str::<Vec<Value>>(&load_test_case().unwrap())
+            .unwrap()
+            .into_iter()
+            .map(|v| v.try_into().unwrap())
+            .collect::<Vec<Post>>();
+        join_all(test_case.iter().map(|p| p.insert(db)))
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        let _posts = join_all(test_case.iter().map(|p| Post::query(p.id, db)))
+            .await
+            .into_iter()
+            .collect::<Result<Option<Vec<_>>>>()
+            .unwrap()
+            .unwrap();
+    }
 
     #[test]
     fn parse_datetime() {
