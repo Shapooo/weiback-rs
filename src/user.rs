@@ -16,6 +16,7 @@ pub struct User {
     #[sqlx(default)]
     pub planet_video: bool,
     #[sqlx(default)]
+    #[serde(deserialize_with = "parse_v_plus")]
     pub v_plus: i64,
     #[sqlx(default)]
     pub pc_new: i64,
@@ -42,6 +43,13 @@ pub struct User {
     #[sqlx(default)]
     #[serde(default)]
     pub backedup: bool,
+}
+
+fn parse_v_plus<'de, D>(deserializer: D) -> std::result::Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<i64>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 impl TryFrom<Value> for User {
