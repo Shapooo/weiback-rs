@@ -145,10 +145,12 @@ impl User {
         Ok(())
     }
 
-    pub async fn mark_user_backed_up(&self, db: &SqlitePool) -> Result<()> {
-        debug!("mark user {} backedup", self.id);
+    // mark_user_backed_up must be called after all posts inserted,
+    // to ensure the user info is persisted
+    pub async fn mark_user_backed_up(uid: i64, db: &SqlitePool) -> Result<()> {
+        debug!("mark user {} backedup", uid);
         sqlx::query("UPDATE users SET backedup = true WHERE id = ?")
-            .bind(self.id)
+            .bind(uid)
             .execute(db)
             .await?;
         Ok(())
