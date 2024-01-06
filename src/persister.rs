@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use log::{debug, info};
 use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
 
-const VALIDE_DB_VERSION: i64 = 1;
+const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
 
 #[derive(Debug)]
@@ -75,6 +75,10 @@ impl Persister {
         Post::create_table(self.db().unwrap()).await?;
         User::create_table(self.db().unwrap()).await?;
         Picture::create_table(self.db().unwrap()).await?;
+        sqlx::query("PRAGMA user_version = ?")
+            .bind(VALIDE_DB_VERSION)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
         Ok(())
     }
 
