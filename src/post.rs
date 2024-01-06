@@ -80,7 +80,7 @@ pub struct Post {
     pub pic_ids: Option<Value>,
     pub pic_num: Option<i64>,
     #[serde(skip)]
-    pub retweeted_status: Option<i64>,
+    pub retweeted_id: Option<i64>,
     pub url_struct: Option<Value>,
     pub topic_struct: Option<Value>,
     pub tag_struct: Option<Value>,
@@ -150,8 +150,7 @@ pub struct Post {
     #[serde(skip)]
     pub created_at_tz: String,
     #[sqlx(skip)]
-    #[serde(rename = "retweeted_status")]
-    pub retweeted_post: Option<Box<Post>>,
+    pub retweeted_status: Option<Box<Post>>,
     #[sqlx(skip)]
     #[serde(deserialize_with = "deserialize_user")]
     pub user: Option<User>,
@@ -199,10 +198,10 @@ impl TryFrom<Value> for Post {
         post.created_at_timestamp = created_at.timestamp();
         post.created_at_tz = created_at.timezone().to_string();
         post.created_at = created_at.to_string();
-        post.retweeted_status = post.retweeted_post.as_ref().map(|post| post.id);
+        post.retweeted_id = post.retweeted_status.as_ref().map(|post| post.id);
         post.client_only = post.is_client_only();
 
-        if let Some(mut retweet) = post.retweeted_post.take() {
+        if let Some(mut retweet) = post.retweeted_status.take() {
             retweet.page_info = post.page_info.take();
             if let Some(Value::Array(url_struct)) = post.url_struct.take() {
                 let url_struct = url_struct
@@ -238,7 +237,7 @@ impl TryFrom<Value> for Post {
                 }
             }
             // TODO: handle tag_struct
-            post.retweeted_post = Some(retweet);
+            post.retweeted_status = Some(retweet);
         }
         Ok(post)
     }
@@ -326,7 +325,7 @@ impl Post {
              uid INTEGER, \
              pic_ids TEXT, \
              pic_num INTEGER, \
-             retweeted_status INTEGER, \
+             retweeted_id INTEGER, \
              url_struct TEXT, \
              topic_struct TEXT, \
              tag_struct TEXT, \
@@ -382,7 +381,7 @@ impl Post {
         debug!("insert post: {}", self.id);
         trace!("insert post: {:?}", self);
         self._insert(db).await?;
-        if let Some(retweeted_post) = &self.retweeted_post {
+        if let Some(retweeted_post) = &self.retweeted_status {
             retweeted_post._insert(db).await?;
         }
         Ok(())
@@ -407,7 +406,7 @@ impl Post {
         .bind(self.uid)
         .bind(&self.pic_ids)
         .bind(self.pic_num)
-        .bind(self.retweeted_status)
+        .bind(self.retweeted_id)
         .bind(&self.url_struct)
         .bind(&self.topic_struct)
         .bind(&self.tag_struct)
@@ -461,8 +460,8 @@ impl Post {
     pub async fn query(id: i64, db: &SqlitePool) -> Result<Option<Post>> {
         debug!("query post, id: {id}");
         if let Some(mut post) = Post::_query(id, db).await? {
-            if let Some(retweeted_id) = post.retweeted_status {
-                post.retweeted_post = Post::_query(retweeted_id, db).await?.map(Box::new);
+            if let Some(retweeted_id) = post.retweeted_id {
+                post.retweeted_status = Post::_query(retweeted_id, db).await?.map(Box::new);
             }
             Ok(Some(post))
         } else {
@@ -806,7 +805,7 @@ impl Post {
         } else {
             Default::default()
         };
-        if let Some(retweeted_post) = &self.retweeted_post {
+        if let Some(retweeted_post) = &self.retweeted_status {
             let mut retweeted_pic_vec = retweeted_post.extract_pic_urls(image_definition);
             pic_vec.append(retweeted_pic_vec.as_mut());
         }
