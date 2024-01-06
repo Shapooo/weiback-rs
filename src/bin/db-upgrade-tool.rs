@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use chrono::{DateTime, FixedOffset};
 use env_logger::Builder;
-use log::{error, info, warn};
+use log::{error, info, warn, LevelFilter};
 use sqlx::{Sqlite, SqlitePool};
 use tokio::{
     fs::{remove_file, File, OpenOptions},
@@ -59,6 +59,7 @@ fn init_logger() -> Result<()> {
         .truncate(true)
         .open(log_path)?;
     Builder::new()
+        .filter_level(LevelFilter::Info)
         .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
     Ok(())
