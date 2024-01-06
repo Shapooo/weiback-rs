@@ -1,6 +1,6 @@
 use weiback_rs::utils::strip_url_queries;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::env::current_exe;
 use std::path::PathBuf;
 
@@ -254,7 +254,6 @@ impl Upgrader {
         if self.is_unfinished("- creating picture table.").await? {
             sqlx::query(CREATE_PICTURE).execute(&self.db).await?;
         }
-        let emoticon = get_emoticon().await?;
         let mut user_avatars = HashMap::new();
         let res = sqlx::query_as::<Sqlite, (i64, String, String, String)>(
             "SELECT id, profile_image_url, avatar_large, avatar_hd FROM users;",
@@ -312,7 +311,7 @@ impl Upgrader {
                         .bind(PIC_TYPE_AVATAR)
                         .execute(&self.db)
                         .await?;
-                } else if emoticon.get(&url).is_some() {
+                } else if is_emoji(url.as_str()) {
                     sqlx::query("INSERT OR IGNORE INTO picture (id, type) VALUES (?, ?);")
                         .bind(pic_id)
                         .bind(PIC_TYPE_EMOJI)
@@ -341,39 +340,11 @@ pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
     Ok(DateTime::parse_from_str(created_at, "%a %b %d %T %z %Y")?)
 }
 
-use serde_json::{from_str, Value};
-async fn get_emoticon() -> Result<HashSet<String>> {
-    // TODO: Fetch emoticon from web, rather static resource.
-    let json = from_str::<Value>(include_str!("emoticon.json"))?;
-    let mut res = HashSet::new();
-    let Value::Object(emoticon) = json else {
-        return Err(anyhow::anyhow!("Cannot recognize the emoticon json"));
-    };
-    for (_, groups) in emoticon {
-        let Value::Object(group) = groups else {
-            return Err(anyhow::anyhow!("Cannot recognize the emoticon json"));
-        };
-        for (_, emojis) in group {
-            let Value::Array(emojis) = emojis else {
-                return Err(anyhow::anyhow!("Cannot recognize the emoticon json"));
-            };
-            for mut emoji in emojis {
-                let Value::String(url) = emoji["url"].take() else {
-                    return Err(anyhow::anyhow!("Cannot recognize the emoticon json"));
-                };
-                res.insert(url);
-            }
-        }
-    }
-    Ok(res)
+use regex::Regex;
+lazy_static::lazy_static! {
+    static ref EMOJI_URL_RE:Regex = Regex::new(r"^https://face.t.sinajs.cn.*").unwrap();
 }
 
-#[cfg(test)]
-mod tool_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn emoticon() {
-        get_emoticon().await.unwrap();
-    }
+fn is_emoji(url: &str) -> bool {
+    EMOJI_URL_RE.is_match(url)
 }
