@@ -1,5 +1,4 @@
-
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::env::current_exe;
 use std::path::PathBuf;
 
@@ -7,6 +6,7 @@ use anyhow::Result;
 use chrono::{DateTime, FixedOffset};
 use env_logger::Builder;
 use log::{error, info, warn, LevelFilter};
+use serde_json::{from_str, Value};
 use sqlx::{Sqlite, SqlitePool};
 use tokio::{
     fs::{remove_file, File, OpenOptions},
@@ -157,29 +157,6 @@ impl Upgrader {
                 .await?,
             path,
         ))
-    }
-
-    async fn upgrade_0_1(&mut self) -> Result<()> {
-        // DB 文件0到1版本升级内容：
-        // 1.将字符串类型的 created_at 变更为 INTEGER 类型，用 Unix 时间戳记录；
-        // 同时增加一个 created_at_tz 字符串类型，表示时区。
-        // 因为原非标准的时间字符串格式无法使用 sqlite 进行计算，后续的按时间筛选、排序功能不方便做。
-        // 2.为 users 表增加 backedup 字段。
-        // 因为新增了用户备份功能，需要一个字段记录被备份的用户，方便后续导出功能。
-        // 3.新增了 picture 表。
-        // 原本的 picture_blob 表无法体现图片与 posts/users 的关系，只有存储图片的基本功能。
-        // 新增关系之后，方便后续删除冗余图片等功能的实现。
-        info!("Upgrading db from version 0 to 1, this may take a while...");
-        self.created_at_str_to_timestamp().await?;
-        self.add_backedup_column().await?;
-        self.create_picture_table().await?;
-        if self.is_unfinished("setting user_version...").await? {
-            sqlx::query("PRAGMA user_version = 1")
-                .execute(&self.db)
-                .await?;
-        }
-        self.is_unfinished("all task finished.").await?;
-        Ok(())
     }
 
     async fn upgrade_1_2(&mut self) -> Result<()> {
