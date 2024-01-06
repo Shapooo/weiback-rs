@@ -25,10 +25,10 @@ async fn start() -> Result<()> {
     init_logger()?;
     let db = init_db().await?;
     let user_version = check_user_version(&db).await?;
-    if user_version == 1 {
+    if user_version == 2 {
         info!("Info: version fulfilled, exit.");
         return Ok(());
-    } else if user_version > 1 {
+    } else if user_version > 2 {
         warn!("Warn: the DB file has higher version, please download newest weiback-rs!");
         return Ok(());
     } else if user_version < 0 {
@@ -37,7 +37,15 @@ async fn start() -> Result<()> {
     }
 
     let mut upgrader = Upgrader::new(db).await?;
-    upgrader.upgrade_0_1().await?;
+    match user_version {
+        1 => {
+            upgrader.upgrade_1_2().await?;
+        }
+        0 => {
+            upgrader.upgrade_0_2().await?;
+        }
+        _ => unreachable!(),
+    }
 
     info!("Upgrade succeed!");
     upgrader.close().await?;
@@ -171,6 +179,32 @@ impl Upgrader {
                 .await?;
         }
         self.is_unfinished("all task finished.").await?;
+        Ok(())
+    }
+
+    async fn upgrade_1_2(&mut self) -> Result<()> {
+        // DB 文件1到2版本升级内容：
+        // 1.将用于 Unix 时间戳记录的 INTEGER 类型 created_at 名称改为 created_at_timestamp；
+        // 仍然保留 created_at 列，用于保存字符串格式的时间。
+        // 2.将 retweeted_status 列更名为 retweeted_id。原因：更合理直观该列为转发的数字id，
+        // 且代码里，需要用到 retweeted_status 保存整个转发。
+        info!("Upgrading db from version 1 to 2, this may take a while...");
+        Ok(())
+    }
+
+    async fn upgrade_0_2(&mut self) -> Result<()> {
+        // DB 文件0到2版本升级内容：
+        // 1.新增 created_at_timestamp 字段，INTEGER 类型，用于记录 Unix 时间戳；
+        // 同时增加一个 created_at_tz 字符串类型，表示时区。
+        // 因为原非标准的时间字符串格式无法使用 sqlite 进行计算，后续的按时间筛选、排序功能不方便做。
+        // 2.为 users 表增加 backedup 字段。
+        // 因为新增了用户备份功能，需要一个字段记录被备份的用户，方便后续导出功能。
+        // 3.新增了 picture 表。
+        // 原本的 picture_blob 表无法体现图片与 posts/users 的关系，只有存储图片的基本功能。
+        // 新增关系之后，方便后续删除冗余图片等功能的实现。
+        // 4.将 retweeted_status 列更名为 retweeted_id。原因：更合理直观该列为转发的数字id，
+        // 且代码里，需要用到 retweeted_status 保存整个转发。
+        info!("Upgrading db from version 0 to 2, this may take a while...");
         Ok(())
     }
 
