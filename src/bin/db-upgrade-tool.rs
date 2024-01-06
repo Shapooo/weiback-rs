@@ -189,6 +189,14 @@ impl Upgrader {
         // 2.将 retweeted_status 列更名为 retweeted_id。原因：更合理直观该列为转发的数字id，
         // 且代码里，需要用到 retweeted_status 保存整个转发。
         info!("Upgrading db from version 1 to 2, this may take a while...");
+        self.add_created_at_str().await?;
+        self.rename_retweeted_status_to_id().await?;
+        if self.is_unfinished("setting user_version...").await? {
+            sqlx::query("PRAGMA user_version = 2")
+                .execute(&self.db)
+                .await?;
+        }
+        self.is_unfinished("all task finished.").await?;
         Ok(())
     }
 
@@ -205,6 +213,16 @@ impl Upgrader {
         // 4.将 retweeted_status 列更名为 retweeted_id。原因：更合理直观该列为转发的数字id，
         // 且代码里，需要用到 retweeted_status 保存整个转发。
         info!("Upgrading db from version 0 to 2, this may take a while...");
+        self.add_created_at_timestamp().await?;
+        self.rename_retweeted_status_to_id().await?;
+        self.add_backedup_column().await?;
+        self.create_picture_table().await?;
+        if self.is_unfinished("setting user_version...").await? {
+            sqlx::query("PRAGMA user_version = 2")
+                .execute(&self.db)
+                .await?;
+        }
+        self.is_unfinished("all task finished.").await?;
         Ok(())
     }
 
