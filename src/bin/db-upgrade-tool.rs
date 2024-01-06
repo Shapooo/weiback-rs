@@ -217,9 +217,8 @@ impl Upgrader {
         Ok(())
     }
 
-    async fn created_at_str_to_timestamp(&mut self) -> Result<()> {
-        self.is_unfinished("task: convert created_at to timestamp.")
-            .await?;
+    async fn add_created_at_timestamp(&mut self) -> Result<()> {
+        self.is_unfinished("task: add created_at column.").await?;
 
         let post_data =
             sqlx::query_as::<Sqlite, (i64, String)>("SELECT id, created_at FROM posts;")
@@ -231,7 +230,7 @@ impl Upgrader {
         {
             sqlx::query(
                 "ALTER TABLE posts ADD COLUMN created_at_timestamp INGETER;\
-         ALTER TABLE posts ADD COLUMN created_at_tz VARCHAR;",
+                 ALTER TABLE posts ADD COLUMN created_at_tz TEXT;",
             )
             .execute(&self.db)
             .await?;
@@ -260,18 +259,6 @@ impl Upgrader {
                 fut.await?;
             }
         }
-        if self
-            .is_unfinished("- droping created_at and renaming created_at_timestamp to created_at.")
-            .await?
-        {
-            sqlx::query(
-                "ALTER TABLE posts DROP COLUMN created_at;\
-         ALTER TABLE posts RENAME COLUMN created_at_timestamp TO created_at;",
-            )
-            .execute(&self.db)
-            .await?;
-        }
-
         Ok(())
     }
 
