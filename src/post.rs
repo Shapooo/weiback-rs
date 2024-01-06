@@ -15,7 +15,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Error, Result};
-use chrono::{DateTime, FixedOffset, NaiveDateTime};
+use chrono::{DateTime, FixedOffset};
 use futures::future::join_all;
 use lazy_static::lazy_static;
 use log::{debug, info, trace, warn};
@@ -243,22 +243,7 @@ impl TryFrom<Value> for Post {
 impl TryInto<Value> for Post {
     type Error = Error;
     fn try_into(self) -> Result<Value> {
-        let mut post = serde_json::to_value(self)?;
-        let timestamp = post["created_at_timestamp"].take();
-        let tz = post["created_at_tz"].take();
-        // Convert created_at field to datetime string
-        if let (Some(timestamp), Some(tz)) = (timestamp.as_i64(), tz.as_str()) {
-            post["created_at"] = to_value(
-                DateTime::<FixedOffset>::from_naive_utc_and_offset(
-                    // TODO: remove unwrap, return error
-                    NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(),
-                    tz.parse().unwrap(),
-                )
-                .to_string(),
-            )
-            .unwrap();
-        }
-        Ok(post)
+        Ok(to_value(self)?)
     }
 }
 
