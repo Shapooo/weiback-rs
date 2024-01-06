@@ -208,6 +208,46 @@ impl Upgrader {
         Ok(())
     }
 
+    async fn add_created_at_str(&mut self) -> Result<()> {
+        self.is_unfinished("task: add created_at str column.")
+            .await?;
+        if self
+            .is_unfinished("- rename created_at to created_at_timestamp.")
+            .await?
+        {
+            sqlx::query("ALTER TABLE posts RENAME COLUMN created_at TO created_at_timestamp;")
+                .execute(&self.db)
+                .await?;
+        }
+        if self.is_unfinished("- adding created_at column.").await? {
+            sqlx::query("ALTER TABLE posts ADD COLUMN created_at TEXT;")
+                .execute(&self.db)
+                .await?;
+        }
+        if self
+            .is_unfinished("- convert created_at_timestamp to created_at.")
+            .await?
+        {
+            let query_res = sqlx::query_as::<Sqlite, (i64, i64, String)>(
+                "SELECT id, created_at_timestamp, created_at_tz FROM posts;",
+            )
+            .fetch_all(&self.db)
+            .await?;
+            for (id, timestamp, tz) in query_res {
+                let dt = DateTime::<FixedOffset>::from_naive_utc_and_offset(
+                    chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(),
+                    tz.parse().unwrap(),
+                );
+                sqlx::query("UPDATE posts SET created_at = ? WHERE id = ?;")
+                    .bind(dt.to_string())
+                    .bind(id)
+                    .execute(&self.db)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
     async fn rename_retweeted_status_to_id(&mut self) -> Result<()> {
         self.is_unfinished("task: rename retweeted_status to retweeted_id.")
             .await?;
