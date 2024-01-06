@@ -1,4 +1,3 @@
-use weiback_rs::utils::strip_url_queries;
 
 use std::collections::{HashMap};
 use std::env::current_exe;
@@ -334,6 +333,10 @@ impl Upgrader {
         remove_file(self.status_file_path).await?;
         Ok(())
     }
+}
+
+pub fn strip_url_queries(url: &str) -> &str {
+    url.split('?').next().unwrap()
 }
 
 pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
