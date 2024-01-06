@@ -117,7 +117,28 @@ impl User {
         debug!("insert user: {}", self.id);
         trace!("insert user: {:?}", self);
         let result = sqlx::query(
-            "INSERT OR IGNORE INTO users VALUES \
+            "INSERT OR IGNORE INTO users (\
+             id,\
+             profile_url,\
+             screen_name,\
+             profile_image_url,\
+             avatar_large,\
+             avatar_hd,\
+             planet_video,\
+             v_plus,\
+             pc_new,\
+             verified,\
+             verified_type,\
+             domain,\
+             weihao,\
+             verified_type_ext,\
+             follow_me,\
+             following,\
+             mbrank,\
+             mbtype,\
+             icon_list,\
+             backedup)\
+             VALUES \
              (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(self.id)
