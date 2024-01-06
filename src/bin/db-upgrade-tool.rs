@@ -208,6 +208,15 @@ impl Upgrader {
         Ok(())
     }
 
+    async fn rename_retweeted_status_to_id(&mut self) -> Result<()> {
+        self.is_unfinished("task: rename retweeted_status to retweeted_id.")
+            .await?;
+        sqlx::query("ALTER TABLE posts RENAME COLUMN retweeted_status TO retweeted_id;")
+            .execute(&self.db)
+            .await?;
+        Ok(())
+    }
+
     async fn created_at_str_to_timestamp(&mut self) -> Result<()> {
         self.is_unfinished("task: convert created_at to timestamp.")
             .await?;
