@@ -101,10 +101,10 @@ struct Upgrader {
 }
 
 impl Upgrader {
-    async fn is_unfinished(&mut self, message: &str) -> Result<bool> {
+    async fn is_finished(&mut self, message: &str) -> Result<bool> {
         if self.flag > self.check_point {
             self.check_point += 1;
-            Ok(false)
+            Ok(true)
         } else {
             self.status_file
                 .write_all(format!("{}: {}\n", self.flag, message).as_bytes())
@@ -112,7 +112,7 @@ impl Upgrader {
             info!("{}...", message);
             self.flag += 1;
             self.check_point += 1;
-            Ok(true)
+            Ok(false)
         }
     }
 
@@ -168,12 +168,12 @@ impl Upgrader {
         info!("Upgrading db from version 1 to 2, this may take a while...");
         self.add_created_at_str().await?;
         self.rename_retweeted_status_to_id().await?;
-        if self.is_unfinished("setting user_version...").await? {
+        if !self.is_finished("setting user_version...").await? {
             sqlx::query("PRAGMA user_version = 2")
                 .execute(&self.db)
                 .await?;
         }
-        self.is_unfinished("all task finished.").await?;
+        info!("all task finished.");
         Ok(())
     }
 
@@ -194,58 +194,53 @@ impl Upgrader {
         self.rename_retweeted_status_to_id().await?;
         self.add_backedup_column().await?;
         self.create_picture_table().await?;
-        if self.is_unfinished("setting user_version...").await? {
+        if !self.is_finished("setting user_version...").await? {
             sqlx::query("PRAGMA user_version = 2")
                 .execute(&self.db)
                 .await?;
         }
-        self.is_unfinished("all task finished.").await?;
+        info!("all task finished.");
         Ok(())
     }
 
     async fn add_created_at_str(&mut self) -> Result<()> {
-        self.is_unfinished("task: add created_at str column.")
+        if self.is_finished("task: add created_at str column.").await? {
+            return Ok(());
+        }
+        let mut trans = self.db.begin().await?;
+        sqlx::query("ALTER TABLE posts RENAME COLUMN created_at TO created_at_timestamp;")
+            .execute(trans.as_mut())
             .await?;
-        if self
-            .is_unfinished("- rename created_at to created_at_timestamp.")
-            .await?
-        {
-            sqlx::query("ALTER TABLE posts RENAME COLUMN created_at TO created_at_timestamp;")
-                .execute(&self.db)
+        sqlx::query("ALTER TABLE posts ADD COLUMN created_at TEXT;")
+            .execute(trans.as_mut())
+            .await?;
+        let query_res = sqlx::query_as::<Sqlite, (i64, i64, String)>(
+            "SELECT id, created_at_timestamp, created_at_tz FROM posts;",
+        )
+        .fetch_all(trans.as_mut())
+        .await?;
+        for (id, timestamp, tz) in query_res {
+            let dt = DateTime::<FixedOffset>::from_naive_utc_and_offset(
+                chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(),
+                tz.parse().unwrap(),
+            );
+            sqlx::query("UPDATE posts SET created_at = ? WHERE id = ?;")
+                .bind(dt.to_string())
+                .bind(id)
+                .execute(trans.as_mut())
                 .await?;
         }
-        if self.is_unfinished("- adding created_at column.").await? {
-            sqlx::query("ALTER TABLE posts ADD COLUMN created_at TEXT;")
-                .execute(&self.db)
-                .await?;
-        }
-        if self
-            .is_unfinished("- convert created_at_timestamp to created_at.")
-            .await?
-        {
-            let query_res = sqlx::query_as::<Sqlite, (i64, i64, String)>(
-                "SELECT id, created_at_timestamp, created_at_tz FROM posts;",
-            )
-            .fetch_all(&self.db)
-            .await?;
-            for (id, timestamp, tz) in query_res {
-                let dt = DateTime::<FixedOffset>::from_naive_utc_and_offset(
-                    chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(),
-                    tz.parse().unwrap(),
-                );
-                sqlx::query("UPDATE posts SET created_at = ? WHERE id = ?;")
-                    .bind(dt.to_string())
-                    .bind(id)
-                    .execute(&self.db)
-                    .await?;
-            }
-        }
+        trans.commit().await?;
         Ok(())
     }
 
     async fn rename_retweeted_status_to_id(&mut self) -> Result<()> {
-        self.is_unfinished("task: rename retweeted_status to retweeted_id.")
-            .await?;
+        if self
+            .is_finished("task: rename retweeted_status to retweeted_id.")
+            .await?
+        {
+            return Ok(());
+        }
         sqlx::query("ALTER TABLE posts RENAME COLUMN retweeted_status TO retweeted_id;")
             .execute(&self.db)
             .await?;
@@ -253,58 +248,47 @@ impl Upgrader {
     }
 
     async fn add_created_at_timestamp(&mut self) -> Result<()> {
-        self.is_unfinished("task: add created_at column.").await?;
+        if self.is_finished("task: add created_at column.").await? {
+            return Ok(());
+        }
 
+        let mut trans = self.db.begin().await?;
         let post_data =
             sqlx::query_as::<Sqlite, (i64, String)>("SELECT id, created_at FROM posts;")
-                .fetch_all(&self.db)
+                .fetch_all(trans.as_mut())
                 .await?;
-        if self
-            .is_unfinished("- adding column created_at_timestamp and created_at_tz.")
-            .await?
+        sqlx::query(
+            "ALTER TABLE posts ADD COLUMN created_at_timestamp INGETER;\
+                 ALTER TABLE posts ADD COLUMN created_at_tz TEXT;",
+        )
+        .execute(trans.as_mut())
+        .await?;
+        for (id, datetime) in post_data
+            .into_iter()
+            .map(|(id, created_at)| parse_created_at(created_at.as_str()).map(|dt| (id, dt)))
+            .collect::<Result<Vec<_>>>()?
         {
             sqlx::query(
-                "ALTER TABLE posts ADD COLUMN created_at_timestamp INGETER;\
-                 ALTER TABLE posts ADD COLUMN created_at_tz TEXT;",
+                "UPDATE posts SET created_at = ?, created_at_timestamp = ?, created_at_tz = ? WHERE id = ?;",
             )
-            .execute(&self.db)
+            .bind(datetime.to_string())
+            .bind(datetime.timestamp())
+            .bind(datetime.timezone().to_string())
+            .bind(id)
+            .execute(trans.as_mut())
             .await?;
         }
-        if self
-            .is_unfinished("- updating created_at_timestamp and created_at_tz.")
-            .await?
-        {
-            for fut in post_data
-                .into_iter()
-                .map(|(id, created_at)| parse_created_at(created_at.as_str()).map(|dt| (id, dt)))
-                .collect::<Result<Vec<_>>>()?
-                .into_iter()
-                .map(|(id, created_at)| {
-                    let tz = created_at.timezone().to_string();
-                    let created_at = created_at.timestamp();
-                    sqlx::query(
-                    "UPDATE posts SET created_at_timestamp = ?, created_at_tz = ? WHERE id = ?;",
-                )
-                .bind(created_at)
-                .bind(tz)
-                .bind(id)
-                .execute(&self.db)
-                })
-            {
-                fut.await?;
-            }
-        }
+        trans.commit().await?;
         Ok(())
     }
 
     async fn add_backedup_column(&mut self) -> Result<()> {
-        self.is_unfinished("task: add backedup column.").await?;
-        if self.is_unfinished("- adding backedup column.").await? {
-            const ADD_BACKEDUP_COLUMN: &str =
-                "ALTER TABLE users ADD COLUMN backedup BOOLEAN DEFAULT false;";
-            sqlx::query(ADD_BACKEDUP_COLUMN).execute(&self.db).await?;
+        if self.is_finished("task: add backedup column.").await? {
+            return Ok(());
         }
-
+        const ADD_BACKEDUP_COLUMN: &str =
+            "ALTER TABLE users ADD COLUMN backedup BOOLEAN DEFAULT false;";
+        sqlx::query(ADD_BACKEDUP_COLUMN).execute(&self.db).await?;
         Ok(())
     }
 
@@ -315,15 +299,17 @@ impl Upgrader {
         const CREATE_PICTURE: &str = "CREATE TABLE IF NOT EXISTS picture(\
                                   id VARCHAR PRIMARY KEY, uid INTEGER, post_id INTEGER, type INTEGER);";
 
-        self.is_unfinished("task: create picture table.").await?;
-        if self.is_unfinished("- creating picture table.").await? {
-            sqlx::query(CREATE_PICTURE).execute(&self.db).await?;
+        if self.is_finished("task: create picture table.").await? {
+            return Ok(());
         }
+
+        let mut trans = self.db.begin().await?;
+        sqlx::query(CREATE_PICTURE).execute(trans.as_mut()).await?;
         let mut user_avatars = HashMap::new();
         let res = sqlx::query_as::<Sqlite, (i64, String, String, String)>(
             "SELECT id, profile_image_url, avatar_large, avatar_hd FROM users;",
         )
-        .fetch_all(&self.db)
+        .fetch_all(trans.as_mut())
         .await?;
         res.into_iter().for_each(|(id, url1, url2, url3)| {
             user_avatars.insert(strip_url_queries(&url1).to_string(), id);
@@ -332,7 +318,7 @@ impl Upgrader {
         });
         let mut post_pic = HashMap::new();
         let res = sqlx::query_as::<Sqlite, (i64, String)>("SELECT id, pic_ids FROM posts;")
-            .fetch_all(&self.db)
+            .fetch_all(trans.as_mut())
             .await?;
         res.into_iter().for_each(|(id, ids)| {
             if ids.is_empty() {
@@ -354,7 +340,7 @@ impl Upgrader {
             );
             idx += 1;
             let pics = sqlx::query_as::<Sqlite, (String, String)>(&sql)
-                .fetch_all(&self.db)
+                .fetch_all(trans.as_mut())
                 .await?;
             if pics.is_empty() {
                 break;
@@ -367,20 +353,20 @@ impl Upgrader {
                     .bind(pic_id)
                     .bind(id)
                     .bind(PIC_TYPE_INPOST)
-                    .execute(&self.db)
+                    .execute(trans.as_mut())
                     .await?;
                 } else if let Some(id) = user_avatars.get(&url) {
                     sqlx::query("INSERT OR IGNORE INTO picture (id, uid, type) VALUES (?, ?, ?);")
                         .bind(pic_id)
                         .bind(id)
                         .bind(PIC_TYPE_AVATAR)
-                        .execute(&self.db)
+                        .execute(trans.as_mut())
                         .await?;
                 } else if is_emoji(url.as_str()) {
                     sqlx::query("INSERT OR IGNORE INTO picture (id, type) VALUES (?, ?);")
                         .bind(pic_id)
                         .bind(PIC_TYPE_EMOJI)
-                        .execute(&self.db)
+                        .execute(trans.as_mut())
                         .await?;
                 } else {
                     warn!(
@@ -390,6 +376,7 @@ impl Upgrader {
                 }
             }
         }
+        trans.commit().await?;
         Ok(())
     }
 
