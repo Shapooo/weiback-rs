@@ -142,9 +142,7 @@ pub struct Post {
     #[sqlx(default)]
     #[serde(skip)]
     pub unfavorited: bool,
-    #[sqlx(skip)]
     pub created_at: String,
-    #[sqlx(rename = "created_at")]
     #[serde(skip)]
     pub created_at_timestamp: i64,
     #[serde(skip)]
@@ -188,11 +186,10 @@ impl TryFrom<Value> for Post {
         if json["id"].is_string() {
             Self::convert_mobile2pc_post(&mut json)?;
         }
-        let created_at = if let Value::String(created_at) = &json["created_at"] {
-            parse_created_at(created_at)?
-        } else {
-            return Err(anyhow!("invalid created_at field"));
-        };
+        let created_at = json["created_at"]
+            .as_str()
+            .map(|s| parse_created_at(s))
+            .ok_or(anyhow!("invalid created_at field"))??;
         let mut post: Post = from_value(json)?;
         post.uid = post.user.as_ref().map(|user| user.id);
         post.created_at_timestamp = created_at.timestamp();
@@ -246,12 +243,12 @@ impl TryFrom<Value> for Post {
 impl TryInto<Value> for Post {
     type Error = Error;
     fn try_into(self) -> Result<Value> {
-        let mut value = serde_json::to_value(self)?;
-        let timestamp = value["created_at_timestamp"].take();
-        let tz = value["created_at_tz"].take();
+        let mut post = serde_json::to_value(self)?;
+        let timestamp = post["created_at_timestamp"].take();
+        let tz = post["created_at_tz"].take();
         // Convert created_at field to datetime string
         if let (Some(timestamp), Some(tz)) = (timestamp.as_i64(), tz.as_str()) {
-            value["created_at"] = to_value(
+            post["created_at"] = to_value(
                 DateTime::<FixedOffset>::from_naive_utc_and_offset(
                     // TODO: remove unwrap, return error
                     NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(),
@@ -261,7 +258,7 @@ impl TryInto<Value> for Post {
             )
             .unwrap();
         }
-        Ok(value)
+        Ok(post)
     }
 }
 
@@ -368,7 +365,8 @@ impl Post {
              comment_manage_info TEXT, \
              client_only INTEGER, \
              unfavorited INTEGER, \
-             created_at INTEGER, \
+             created_at TEXT, \
+             created_at_timestamp INTEGER, \
              created_at_tz TEXT \
              )",
         )
@@ -392,10 +390,65 @@ impl Post {
             user.insert(db).await?;
         }
         sqlx::query(
-            "INSERT OR IGNORE INTO posts \
+            "INSERT OR IGNORE INTO posts (\
+             id,\
+             mblogid,\
+             text_raw,\
+             source,\
+             region_name,\
+             deleted,\
+             uid,\
+             pic_ids,\
+             pic_num,\
+             retweeted_id,\
+             url_struct,\
+             topic_struct,\
+             tag_struct,\
+             number_display_strategy,\
+             mix_media_info,\
+             visible,\
+             text,\
+             attitudes_status,\
+             showFeedRepost,\
+             showFeedComment,\
+             pictureViewerSign,\
+             showPictureViewer,\
+             favorited,\
+             can_edit,\
+             is_paid,\
+             share_repost_type,\
+             rid,\
+             pic_infos,\
+             cardid,\
+             pic_bg_new,\
+             mark,\
+             mblog_vip_type,\
+             reposts_count,\
+             comments_count,\
+             attitudes_count,\
+             mlevel,\
+             content_auth,\
+             is_show_bulletin,\
+             repost_type,\
+             edit_count,\
+             mblogtype,\
+             textLength,\
+             isLongText,\
+             annotations,\
+             geo,\
+             pic_focus_point,\
+             page_info,\
+             title,\
+             continue_tag,\
+             comment_manage_info,\
+             client_only,\
+             unfavorited,\
+             created_at,\
+             created_at_timestamp,\
+             created_at_tz)\
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(self.id)
         .bind(&self.mblogid)
@@ -449,6 +502,7 @@ impl Post {
         .bind(&self.comment_manage_info)
         .bind(self.client_only)
         .bind(self.unfavorited)
+        .bind(&self.created_at)
         .bind(self.created_at_timestamp)
         .bind(&self.created_at_tz)
         .execute(db)
