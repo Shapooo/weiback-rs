@@ -1,9 +1,8 @@
 use std::ops::RangeInclusive;
-use std::sync::{Arc, RwLock};
 
 use log::{debug, error, info};
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{channel, Sender};
 
 use crate::login::LoginInfo;
 use crate::message::Task;
@@ -12,13 +11,13 @@ use crate::task_handler::TaskHandler;
 
 pub struct Executor {
     rt: Runtime,
-    tx: mpsc::Sender<Task>,
+    tx: Sender<Task>,
 }
 
 impl Executor {
-    pub fn new(login_info: LoginInfo, task_status: Arc<RwLock<TaskStatus>>) -> Self {
+    pub fn new(login_info: LoginInfo, task_status_sender: Sender<TaskStatus>) -> Self {
         debug!("new a executor");
-        let (tx, mut rx) = mpsc::channel(1);
+        let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
             debug!("entered a new worker thread");
             let rt = tokio::runtime::Builder::new_multi_thread()
@@ -26,7 +25,7 @@ impl Executor {
                 .build()
                 .unwrap();
             debug!("new a async runtime succeed");
-            let mut th = TaskHandler::new(login_info, task_status).unwrap();
+            let mut th = TaskHandler::new(login_info, task_status_sender).unwrap();
             rt.block_on(async move {
                 th.init().await?;
                 debug!("task handler init succeed");
