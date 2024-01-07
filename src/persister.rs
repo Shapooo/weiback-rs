@@ -72,9 +72,10 @@ impl Persister {
     }
 
     async fn create_db(&mut self) -> Result<()> {
-        Post::create_table(self.db().unwrap()).await?;
-        User::create_table(self.db().unwrap()).await?;
-        Picture::create_table(self.db().unwrap()).await?;
+        let mut conn = self.db_pool.as_ref().unwrap().acquire().await?;
+        Post::create_table(conn.as_mut()).await?;
+        User::create_table(conn.as_mut()).await?;
+        Picture::create_table(conn).await?;
         sqlx::query("PRAGMA user_version = ?")
             .bind(VALIDE_DB_VERSION)
             .execute(self.db_pool.as_ref().unwrap())
