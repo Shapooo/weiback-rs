@@ -232,41 +232,6 @@ impl TryFrom<Value> for Post {
 
         if let Some(mut retweet) = post.retweeted_status.take() {
             retweet.page_info = post.page_info.take();
-            if let Some(Value::Array(url_struct)) = post.url_struct.take() {
-                let url_struct = url_struct
-                    .into_iter()
-                    .filter_map(|st| {
-                        let short_url = st["short_url"].as_str().map(|s| s.to_owned());
-                        short_url.map(|url| (url, st))
-                    })
-                    .collect::<HashMap<String, Value>>();
-                let ret_url_struct = extract_urls(&retweet.text_raw)
-                    .into_iter()
-                    .filter_map(|url| url_struct.get(url))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let ret_len = ret_url_struct.len();
-                if !ret_url_struct.is_empty() {
-                    retweet.url_struct = Some(Value::Array(ret_url_struct));
-                }
-                let post_url_struct = extract_urls(&post.text_raw)
-                    .into_iter()
-                    .filter_map(|url| url_struct.get(url))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let post_len = post_url_struct.len();
-                if !post_url_struct.is_empty() {
-                    post.url_struct = Some(Value::Array(post_url_struct));
-                }
-                if post_len + ret_len < url_struct.len() {
-                    warn!(
-                        "{} url_struct is not used, in post id {}",
-                        url_struct.len() - post_len - ret_len,
-                        post.mblogid
-                    );
-                }
-            }
-            // TODO: handle tag_struct
             post.retweeted_status = Some(retweet);
         }
         Ok(post)
@@ -1130,10 +1095,6 @@ pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
         Ok(dt) => Ok(dt),
         Err(e) => Err(anyhow!("{e}")),
     }
-}
-
-fn extract_urls(text: &str) -> Vec<&str> {
-    URL_EXPR.find_iter(text).map(|m| m.as_str()).collect()
 }
 
 #[cfg(test)]
