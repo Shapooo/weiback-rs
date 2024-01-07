@@ -302,7 +302,7 @@ impl TaskHandler {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = Post::fetch_posts(uid, page, &self.web_fetcher).await?;
+        let posts = Post::fetch_posts(uid, page, true, &self.web_fetcher).await?;
         let result = posts.len();
         Post::persist_posts(
             posts,
