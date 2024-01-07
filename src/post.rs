@@ -513,13 +513,13 @@ impl Post {
     }
 
     async fn _query(id: i64, db: &SqlitePool) -> Result<Option<Post>> {
-        if let Some(post) = sqlx::query_as::<sqlx::Sqlite, Post>("SELECT * FROM posts WHERE id = ?")
+        if let Some(mut post) = sqlx::query_as::<Sqlite, Post>("SELECT * FROM posts WHERE id = ?")
             .bind(id)
             .fetch_optional(db)
             .await?
         {
             if let Some(uid) = post.uid {
-                User::query(uid, db).await?;
+                post.user = User::query(uid, db).await?;
             }
             return Ok(Some(post));
         }
