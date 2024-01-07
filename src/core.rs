@@ -102,7 +102,7 @@ impl Core {
         eframe::run_native(
             "weiback",
             NativeOptions {
-                viewport: ViewportBuilder::default().with_inner_size(vec2(320., 300.)),
+                viewport: ViewportBuilder::default().with_inner_size(vec2(330., 300.)),
                 ..Default::default()
             },
             Box::new(|cc| {
