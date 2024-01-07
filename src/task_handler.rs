@@ -8,7 +8,6 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use futures::future::join_all;
 use log::{debug, error, info};
 use tokio::time::sleep;
 
@@ -56,10 +55,11 @@ impl TaskHandler {
     }
 
     async fn _unfavorite_posts(&self) -> Result<()> {
-        let ids = Post::query_posts_to_unfavorite(self.persister.db().unwrap()).await?;
+        let mut trans = self.persister.db().unwrap().acquire().await?;
+        let ids = Post::query_posts_to_unfavorite(trans.as_mut()).await?;
         let len = ids.len();
         for (i, id) in ids.into_iter().enumerate() {
-            Post::unfavorite_post(id, self.persister.db().unwrap(), &self.web_fetcher).await?;
+            Post::unfavorite_post(id, trans.as_mut(), &self.web_fetcher).await?;
             info!("post {id} unfavorited");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let _ = self.task_status.try_write().map(|mut op| {
@@ -137,6 +137,7 @@ impl TaskHandler {
         let posts_sum = local_posts.len();
         info!("fetched {} posts from local", posts_sum);
 
+        let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
         let mut index = 1;
         loop {
             let subtask_name = format!("weiback-{index}");
@@ -145,7 +146,7 @@ impl TaskHandler {
                     local_posts,
                     &subtask_name,
                     image_definition,
-                    self.persister.db().unwrap(),
+                    conn.as_mut(),
                     &self.web_fetcher,
                 )
                 .await?;
@@ -156,7 +157,7 @@ impl TaskHandler {
                     local_posts.split_off(SAVING_PERIOD),
                     &subtask_name,
                     image_definition,
-                    self.persister.db().unwrap(),
+                    conn.as_mut(),
                     &self.web_fetcher,
                 )
                 .await?;
@@ -268,19 +269,17 @@ impl TaskHandler {
             posts,
             with_pic,
             image_definition,
-            self.persister.db().unwrap(),
+            self.persister.db().as_ref().unwrap(),
             &self.web_fetcher,
         )
         .await?;
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
-        join_all(
-            ids.into_iter()
-                .map(|id| Post::mark_post_favorited(id, self.persister.db().unwrap())),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<_>>()?;
+        let mut trans = self.persister.db().as_ref().unwrap().begin().await?;
+        for id in ids {
+            Post::mark_post_favorited(id, trans.as_mut()).await?;
+        }
+        trans.commit().await?;
 
         Ok(result)
     }
@@ -292,7 +291,8 @@ impl TaskHandler {
     ) -> Result<Vec<Post>> {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
-        Post::query_posts(limit, offset, reverse, self.persister.db().unwrap()).await
+        let conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        Post::query_posts(limit, offset, reverse, conn).await
     }
 
     pub async fn backup_ones_posts(
@@ -308,13 +308,15 @@ impl TaskHandler {
             posts,
             with_pic,
             image_definition,
-            self.persister.db().unwrap(),
+            self.persister.db().as_ref().unwrap(),
             &self.web_fetcher,
         )
         .await?;
         // mark_user_backed_up should be called after all posts inserted,
         // to ensure the user info is persisted
-        User::mark_user_backed_up(uid, self.persister.db().unwrap()).await?;
+        let mut trans = self.persister.db().as_ref().unwrap().begin().await?;
+        User::mark_user_backed_up(uid, trans.as_mut()).await?;
+        trans.commit().await?;
 
         Ok(result)
     }
@@ -324,6 +326,7 @@ impl TaskHandler {
     }
 
     async fn get_db_total_num(&self) -> Result<u32> {
-        Post::query_favorited_sum(self.persister.db().unwrap()).await
+        let conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        Post::query_favorited_sum(conn).await
     }
 }

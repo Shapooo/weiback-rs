@@ -23,7 +23,7 @@ use log::{debug, info, trace, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, to_value, Value};
-use sqlx::{Executor, FromRow, Sqlite};
+use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
 
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
@@ -759,17 +759,14 @@ impl Post {
         }
     }
 
-    pub async fn persist_posts<E>(
+    pub async fn persist_posts(
         posts: Vec<Post>,
         with_pic: bool,
         image_definition: u8,
-        mut executor: E,
+        db: &SqlitePool,
         fetcher: &WebFetcher,
-    ) -> Result<()>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
+    ) -> Result<()> {
+        let mut trans = db.begin().await?;
         if with_pic {
             let emojis = posts
                 .iter()
@@ -790,13 +787,14 @@ impl Post {
                 .chain(emojis)
                 .chain(avatar)
             {
-                pic.persist(&mut *executor, fetcher).await?;
+                pic.persist(trans.as_mut(), fetcher).await?;
             }
         }
 
         for post in posts {
-            post.insert(&mut *executor).await?;
+            post.insert(trans.as_mut()).await?;
         }
+        trans.commit().await?;
 
         Ok(())
     }
