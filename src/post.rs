@@ -233,8 +233,9 @@ impl TryFrom<Value> for Post {
                 }
                 if post_len + ret_len < url_struct.len() {
                     warn!(
-                        "{} url_struct is not used",
-                        url_struct.len() - post_len - ret_len
+                        "{} url_struct is not used, in post id {}",
+                        url_struct.len() - post_len - ret_len,
+                        post.mblogid
                     );
                 }
             }
