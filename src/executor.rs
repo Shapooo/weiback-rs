@@ -33,8 +33,7 @@ impl Executor {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
                         Task::DownloadFav(range, with_pic, image_definition) => {
-                            th.download_favorites(range, with_pic, image_definition)
-                                .await
+                            th.backup_favorites(range, with_pic, image_definition).await
                         }
                         Task::ExportFromLocal(range, rev, image_definition) => {
                             th.export_from_local(range, rev, image_definition).await

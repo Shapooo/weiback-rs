@@ -183,20 +183,20 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn download_favorites(
+    pub async fn backup_favorites(
         &self,
         range: RangeInclusive<u32>,
         with_pic: bool,
         image_definition: u8,
     ) {
         self.handle_task_res(
-            self._download_favorites(range, with_pic, image_definition)
+            self._backup_favorites(range, with_pic, image_definition)
                 .await,
         )
         .await;
     }
 
-    async fn _download_favorites(
+    async fn _backup_favorites(
         &self,
         range: RangeInclusive<u32>,
         with_pic: bool,
@@ -210,7 +210,7 @@ impl TaskHandler {
 
         for (i, page) in range.into_iter().enumerate() {
             let posts_sum = self
-                .backup_fav_post(self.uid, page, with_pic, image_definition)
+                .backup_one_fav_page(self.uid, page, with_pic, image_definition)
                 .await?;
             total_downloaded += posts_sum;
             info!("fetched {} posts in {}th page", posts_sum, page);
@@ -266,7 +266,7 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn backup_fav_post(
+    pub async fn backup_one_fav_page(
         &self,
         uid: i64,
         page: u32,
