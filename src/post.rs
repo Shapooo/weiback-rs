@@ -85,6 +85,15 @@ pub struct Post {
     pub url_struct: Option<Value>,
     pub topic_struct: Option<Value>,
     pub tag_struct: Option<Value>,
+    #[serde(default, deserialize_with = "deserialize_vec_value")]
+    pub tags: Option<Value>,
+    #[sqlx(rename = "customIcons")]
+    #[serde(
+        default,
+        rename = "customIcons",
+        deserialize_with = "deserialize_vec_value"
+    )]
+    pub custom_icons: Option<Value>,
     pub number_display_strategy: Option<Value>,
     pub mix_media_info: Option<Value>,
     pub visible: Value,
@@ -119,6 +128,7 @@ pub struct Post {
     pub comments_count: Option<i64>,
     pub attitudes_count: Option<i64>,
     pub mlevel: Option<i64>,
+    pub complaint: Option<Value>,
     pub content_auth: Option<i64>,
     pub is_show_bulletin: Option<i64>,
     pub repost_type: Option<i64>,
@@ -127,9 +137,12 @@ pub struct Post {
     #[sqlx(rename = "textLength")]
     #[serde(rename = "textLength")]
     pub text_length: Option<i64>,
-    #[serde(default, rename = "isLongText")]
     #[sqlx(default, rename = "isLongText")]
+    #[serde(default, rename = "isLongText")]
     pub is_long_text: bool,
+    #[sqlx(rename = "rcList")]
+    #[serde(default, rename = "rcList", deserialize_with = "deserialize_vec_value")]
+    pub rc_list: Option<Value>,
     pub annotations: Option<Value>,
     pub geo: Option<Value>,
     pub pic_focus_point: Option<Value>,
@@ -153,6 +166,20 @@ pub struct Post {
     #[sqlx(skip)]
     #[serde(deserialize_with = "deserialize_user")]
     pub user: Option<User>,
+}
+
+fn deserialize_vec_value<'de, D>(deserializer: D) -> std::result::Result<Option<Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+
+    if let Some(Value::Array(arr)) = &value {
+        if arr.is_empty() {
+            return Ok(None);
+        }
+    }
+    Ok(value)
 }
 
 fn deserialize_user<'de, D>(deserializer: D) -> std::result::Result<Option<User>, D::Error>
@@ -321,6 +348,8 @@ impl Post {
              url_struct TEXT, \
              topic_struct TEXT, \
              tag_struct TEXT, \
+             tags TEXT, \
+             customIcons TEXT, \
              number_display_strategy TEXT, \
              mix_media_info TEXT, \
              visible TEXT, \
@@ -344,6 +373,7 @@ impl Post {
              comments_count INTEGER, \
              attitudes_count INTEGER, \
              mlevel INTEGER, \
+             complaint TEXT, \
              content_auth INTEGER, \
              is_show_bulletin INTEGER, \
              repost_type INTEGER, \
@@ -351,6 +381,7 @@ impl Post {
              mblogtype INTEGER, \
              textLength INTEGER, \
              isLongText INTEGER, \
+             rcList TEXT, \
              annotations TEXT, \
              geo TEXT, \
              pic_focus_point TEXT, \
@@ -407,6 +438,8 @@ impl Post {
              url_struct,\
              topic_struct,\
              tag_struct,\
+             tags,\
+             customIcons,\
              number_display_strategy,\
              mix_media_info,\
              visible,\
@@ -430,6 +463,7 @@ impl Post {
              comments_count,\
              attitudes_count,\
              mlevel,\
+             complaint,\
              content_auth,\
              is_show_bulletin,\
              repost_type,\
@@ -437,6 +471,7 @@ impl Post {
              mblogtype,\
              textLength,\
              isLongText,\
+             rcList,\
              annotations,\
              geo,\
              pic_focus_point,\
@@ -451,7 +486,7 @@ impl Post {
              created_at_tz)\
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(self.id)
         .bind(&self.mblogid)
@@ -466,6 +501,8 @@ impl Post {
         .bind(&self.url_struct)
         .bind(&self.topic_struct)
         .bind(&self.tag_struct)
+        .bind(&self.tags)
+        .bind(&self.custom_icons)
         .bind(&self.number_display_strategy)
         .bind(&self.mix_media_info)
         .bind(&self.visible)
@@ -489,6 +526,7 @@ impl Post {
         .bind(self.comments_count)
         .bind(self.attitudes_count)
         .bind(self.mlevel)
+        .bind(&self.complaint)
         .bind(self.content_auth)
         .bind(self.is_show_bulletin)
         .bind(self.repost_type)
@@ -496,6 +534,7 @@ impl Post {
         .bind(self.mblogtype)
         .bind(self.text_length)
         .bind(self.is_long_text)
+        .bind(&self.rc_list)
         .bind(&self.annotations)
         .bind(&self.geo)
         .bind(&self.pic_focus_point)
