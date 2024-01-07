@@ -165,9 +165,12 @@ impl Upgrader {
         // 仍然保留 created_at 列，用于保存字符串格式的时间。
         // 2.将 retweeted_status 列更名为 retweeted_id。原因：更合理直观该列为转发的数字id，
         // 且代码里，需要用到 retweeted_status 保存整个转发。
+        // 3.新增四个用户字段：rcList, customIcons, tags, complaint。
+        // 这四个字段原本在 post 里。
         info!("Upgrading db from version 1 to 2, this may take a while...");
         self.add_created_at_str().await?;
         self.rename_retweeted_status_to_id().await?;
+        self.add_4_columns().await?;
         if !self.is_finished("setting user_version...").await? {
             sqlx::query("PRAGMA user_version = 2")
                 .execute(&self.db)
@@ -189,17 +192,38 @@ impl Upgrader {
         // 新增关系之后，方便后续删除冗余图片等功能的实现。
         // 4.将 retweeted_status 列更名为 retweeted_id。原因：更合理直观该列为转发的数字id，
         // 且代码里，需要用到 retweeted_status 保存整个转发。
+        // 5.新增四个用户字段：rcList, customIcons, tags, complaint。
+        // 这四个字段原本在 post 里。
         info!("Upgrading db from version 0 to 2, this may take a while...");
         self.add_created_at_timestamp().await?;
         self.rename_retweeted_status_to_id().await?;
         self.add_backedup_column().await?;
         self.create_picture_table().await?;
+        self.add_4_columns().await?;
         if !self.is_finished("setting user_version...").await? {
             sqlx::query("PRAGMA user_version = 2")
                 .execute(&self.db)
                 .await?;
         }
         info!("all task finished.");
+        Ok(())
+    }
+
+    async fn add_4_columns(&mut self) -> Result<()> {
+        if self
+            .is_finished("task: add 4 columns: rcList, customIcons, tags, complaint.")
+            .await?
+        {
+            return Ok(());
+        }
+        sqlx::query(
+            "ALTER TABLE posts ADD COLUMN rcList TEXT;\
+             ALTER TABLE posts ADD COLUMN customIcons TEXT;\
+             ALTER TABLE posts ADD COLUMN tags TEXT;\
+             ALTER TABLE posts ADD COLUMN complaint TEXT;",
+        )
+        .execute(&self.db)
+        .await?;
         Ok(())
     }
 
