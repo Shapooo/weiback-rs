@@ -1118,27 +1118,40 @@ mod post_test {
 
     #[tokio::test]
     async fn query() {
-        // let ref db = create_db().await.unwrap();
-        let ref db = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let ref db = create_db().await.unwrap();
         Post::create_table(db).await.unwrap();
         User::create_table(db).await.unwrap();
 
-        let test_case = serde_json::from_str::<Vec<Value>>(&load_test_case().unwrap())
-            .unwrap()
-            .into_iter()
-            .map(|v| v.try_into().unwrap())
-            .collect::<Vec<Post>>();
-        join_all(test_case.iter().map(|p| p.insert(db)))
+        let test_case = serde_json::from_str::<Vec<Value>>(&load_test_case().unwrap()).unwrap();
+        let mut posts: HashMap<i64, Post> = HashMap::new();
+        test_case.into_iter().for_each(|v| {
+            let post: Post = v.try_into().unwrap();
+            if posts.contains_key(&post.id) {
+                return;
+            }
+            if let Some(retweeted) = &post.retweeted_status {
+                if posts.contains_key(&retweeted.id) {
+                    return;
+                }
+                posts.insert(retweeted.id, retweeted.as_ref().clone());
+            }
+            posts.insert(post.id, post);
+        });
+        join_all(posts.values().map(|p| p.insert(db)))
             .await
             .into_iter()
             .collect::<Result<Vec<_>>>()
             .unwrap();
-        let _posts = join_all(test_case.iter().map(|p| Post::query(p.id, db)))
-            .await
-            .into_iter()
-            .collect::<Result<Option<Vec<_>>>>()
-            .unwrap()
-            .unwrap();
+
+        for &id in posts.keys() {
+            let mut origin_post = posts.get(&id).unwrap().clone();
+            let mut post = Post::query(id, db).await.unwrap().unwrap();
+            origin_post.user = None;
+            origin_post.retweeted_status.as_mut().map(|p| p.user = None);
+            post.user = None;
+            post.retweeted_status.as_mut().map(|p| p.user = None);
+            assert_eq!(origin_post, post);
+        }
     }
 
     #[test]
