@@ -311,7 +311,7 @@ impl Core {
                                 .expect("core.executor must be unwrapable, bugs in there")
                                 .backup_user(
                                     uid,
-                                    self.web_start..=self.web_end,
+                                    1..=u32::MAX,
                                     self.with_pic,
                                     self.image_definition,
                                 )
