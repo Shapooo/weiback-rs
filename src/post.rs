@@ -27,7 +27,7 @@ use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
 
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
-const STATUSES_MY_MICRO_BLOG_API: &str = "https://weibo.com/ajax/statuses/mymblog";
+const POST_SEARCH_API: &str = "https://weibo.com/ajax/statuses/searchProfile";
 const DESTROY_FAVORITES: &str = "https://weibo.com/ajax/statuses/destoryFavorites";
 
 lazy_static! {
@@ -678,8 +678,18 @@ impl Post {
         Ok(())
     }
 
-    pub async fn fetch_posts(uid: i64, page: u32, fetcher: &WebFetcher) -> Result<Vec<Post>> {
-        let url = format!("{STATUSES_MY_MICRO_BLOG_API}?uid={uid}&page={page}");
+    pub async fn fetch_posts(
+        uid: i64,
+        page: u32,
+        hasret: bool,
+        fetcher: &WebFetcher,
+    ) -> Result<Vec<Post>> {
+        let url = format!(
+            "{POST_SEARCH_API}?uid={}&page={}hasori=1&hasret={}",
+            uid,
+            page,
+            if hasret { 1 } else { 0 }
+        );
         debug!("fetch meta page, url: {url}");
         let mut json: Value = fetcher.get(url, fetcher.web_client()).await?.json().await?;
         trace!("get json: {json:?}");
