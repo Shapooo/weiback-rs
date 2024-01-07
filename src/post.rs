@@ -195,8 +195,12 @@ impl TryFrom<Value> for Post {
         post.created_at_timestamp = created_at.timestamp();
         post.created_at_tz = created_at.timezone().to_string();
         post.created_at = created_at.to_string();
-        post.retweeted_id = post.retweeted_status.as_ref().map(|post| post.id);
         post.client_only = post.is_client_only();
+        if let Some(mut retweeted_status) = post.retweeted_status.take() {
+            post.retweeted_id = Some(retweeted_status.id);
+            retweeted_status.uid = retweeted_status.user.as_ref().map(|user| user.id);
+            post.retweeted_status = Some(retweeted_status);
+        }
 
         if let Some(mut retweet) = post.retweeted_status.take() {
             retweet.page_info = post.page_info.take();
