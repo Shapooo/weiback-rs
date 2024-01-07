@@ -1,3 +1,7 @@
+use crate::executor::Executor;
+use crate::login::{get_login_info, LoginState, Loginator};
+use crate::message::TaskStatus;
+
 use std::sync::{Arc, RwLock};
 
 use anyhow;
@@ -6,10 +10,7 @@ use eframe::{
     NativeOptions,
 };
 use log::info;
-
-use crate::executor::Executor;
-use crate::login::{get_login_info, LoginState, Loginator};
-use crate::message::TaskStatus;
+use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver};
 
 pub enum MainState {
     Unlogined,
@@ -39,7 +40,7 @@ impl Default for TabType {
 
 pub struct Core {
     state: MainState,
-    task_status: Option<Arc<RwLock<TaskStatus>>>,
+    task_status_receiver: Option<Receiver<TaskStatus>>,
     executor: Option<Executor>,
     task_ongoing: bool,
     login_checked: bool,
@@ -67,7 +68,7 @@ impl Default for Core {
     fn default() -> Self {
         Self {
             state: Default::default(),
-            task_status: Default::default(),
+            task_status_receiver: Default::default(),
             executor: Default::default(),
             task_ongoing: Default::default(),
             login_checked: Default::default(),
@@ -140,13 +141,16 @@ impl eframe::App for Core {
 
 impl Core {
     fn when_logined(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let task_status: Option<TaskStatus> = self
-            .task_status
-            .as_ref()
+        let task_status: Option<TaskStatus> = match self
+            .task_status_receiver
+            .as_mut()
             .expect("core.status must be Some(_), bugs in there")
-            .try_read()
-            .ok()
-            .map(|task_status| task_status.clone());
+            .try_recv()
+        {
+            Ok(status) => Some(status),
+            Err(TryRecvError::Empty) => None,
+            Err(e) => panic!("{}", e),
+        };
         if let Some(task_status) = task_status {
             match &task_status {
                 TaskStatus::Init(web_total, db_total) => {
@@ -345,9 +349,9 @@ impl Core {
             None
         };
         if let Some(login_info) = check_res {
-            let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-            let executor = Executor::new(login_info, task_status.clone());
-            self.task_status = Some(task_status);
+            let (task_status_sender, task_status_receiver) = channel(100);
+            let executor = Executor::new(login_info, task_status_sender);
+            self.task_status_receiver = Some(task_status_receiver);
             self.executor = Some(executor);
             self.state = MainState::Logged;
         } else {
@@ -401,9 +405,9 @@ impl Core {
                         ui.label("扫码成功，登录中...");
                     }
                     LoginState::Logged(login_info) => {
-                        let task_status: Arc<RwLock<TaskStatus>> = Arc::default();
-                        let executor = Executor::new(login_info, task_status.clone());
-                        self.task_status = Some(task_status);
+                        let (task_status_sender, task_status_receiver) = channel(100);
+                        let executor = Executor::new(login_info, task_status_sender);
+                        self.task_status_receiver = Some(task_status_receiver);
                         self.executor = Some(executor);
                         self.state = MainState::Logged;
                         self.qrcode_img = None;

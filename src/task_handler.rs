@@ -4,12 +4,11 @@ use crate::{
 };
 
 use std::ops::RangeInclusive;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use log::{debug, error, info};
-use tokio::time::sleep;
+use tokio::{sync::mpsc::Sender, time::sleep};
 
 const SAVING_PERIOD: usize = 200;
 
@@ -17,12 +16,12 @@ const SAVING_PERIOD: usize = 200;
 pub struct TaskHandler {
     web_fetcher: WebFetcher,
     persister: Persister,
-    task_status: Arc<RwLock<TaskStatus>>,
+    task_status_sender: Sender<TaskStatus>,
     uid: i64,
 }
 
 impl TaskHandler {
-    pub fn new(mut login_info: LoginInfo, task_status: Arc<RwLock<TaskStatus>>) -> Result<Self> {
+    pub fn new(mut login_info: LoginInfo, task_status_sender: Sender<TaskStatus>) -> Result<Self> {
         let uid = if let serde_json::Value::Number(uid) = &login_info["uid"] {
             uid.as_i64().unwrap()
         } else {
@@ -35,7 +34,7 @@ impl TaskHandler {
         Ok(TaskHandler {
             web_fetcher,
             persister,
-            task_status,
+            task_status_sender,
             uid,
         })
     }
@@ -46,7 +45,9 @@ impl TaskHandler {
         let (web_total, db_total) = tokio::join!(self.get_web_total_num(), self.get_db_total_num());
         let web_total = web_total?;
         debug!("initing...");
-        *self.task_status.write().unwrap() = TaskStatus::Init(web_total, db_total?);
+        self.task_status_sender
+            .send(TaskStatus::Init(web_total, db_total?))
+            .await?;
         Ok(())
     }
 
@@ -62,10 +63,13 @@ impl TaskHandler {
             Post::unfavorite_post(id, trans.as_mut(), &self.web_fetcher).await?;
             info!("post {id} unfavorited");
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            let _ = self.task_status.try_write().map(|mut op| {
-                let progress = i as f32 / len as f32;
-                *op = TaskStatus::InProgress(progress, format!("已处理{i}条，共{len}条..."))
-            });
+            let progress = i as f32 / len as f32;
+            self.task_status_sender
+                .send(TaskStatus::InProgress(
+                    progress,
+                    format!("已处理{i}条，共{len}条..."),
+                ))
+                .await?;
         }
         Ok(())
     }
@@ -163,17 +167,17 @@ impl TaskHandler {
                 .await?;
                 Exporter::export_page(&subtask_name, html, &target_dir).await?;
             }
-            let _ = self.task_status.try_write().map(|mut op| {
-                let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
-                *op = TaskStatus::InProgress(
+            let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
+            self.task_status_sender
+                .send(TaskStatus::InProgress(
                     progress,
                     format!(
                         "已处理{}条，共{}条...\n可能需要下载图片",
                         posts_sum - local_posts.len(),
                         posts_sum
                     ),
-                )
-            });
+                ))
+                .await?;
             index += 1;
         }
         Ok(())
@@ -211,12 +215,13 @@ impl TaskHandler {
             total_downloaded += posts_sum;
             info!("fetched {} posts in {}th page", posts_sum, page);
 
-            let _ = self.task_status.try_write().map(|mut pro| {
-                *pro = TaskStatus::InProgress(
+            let _ = self
+                .task_status_sender
+                .send(TaskStatus::InProgress(
                     i as f32 / total_pages,
                     format!("已下载第{page}页...耐心等待，先干点别的"),
-                )
-            });
+                ))
+                .await?;
             sleep(Duration::from_secs(5)).await;
         }
         info!("fetched {total_downloaded} posts in total");
@@ -232,11 +237,17 @@ impl TaskHandler {
         match result {
             Err(err) => {
                 error!("{err}");
-                *self.task_status.write().unwrap() = TaskStatus::Error(format!("错误：{err}"));
+                self.task_status_sender
+                    .send(TaskStatus::Error(format!("错误：{err}")))
+                    .await
+                    .unwrap();
             }
             Ok(()) => {
                 info!("task finished");
-                *self.task_status.write().unwrap() = TaskStatus::Finished(web_total, db_total);
+                self.task_status_sender
+                    .send(TaskStatus::Finished(web_total, db_total))
+                    .await
+                    .unwrap();
             }
         }
     }
