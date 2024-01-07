@@ -182,7 +182,7 @@ impl Core {
                     );
                 }
                 TaskStatus::Error(msg) => {
-                    self.message = msg.to_owned();
+                    self.message = msg.to_string();
                 }
             }
         }

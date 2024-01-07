@@ -1,5 +1,7 @@
 use std::ops::RangeInclusive;
 
+use anyhow::Error;
+
 #[derive(Debug, Clone)]
 pub enum Task {
     DownloadFav(RangeInclusive<u32>, bool, u8),
@@ -8,12 +10,12 @@ pub enum Task {
     DownloadPosts(i64, RangeInclusive<u32>, bool, u8),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TaskStatus {
     Init(u32, u32),
     InProgress(f32, String),
     Finished(u32, u32),
-    Error(String),
+    Error(Error),
 }
 
 #[allow(unused)]

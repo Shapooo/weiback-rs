@@ -238,7 +238,7 @@ impl TaskHandler {
             Err(err) => {
                 error!("{err}");
                 self.task_status_sender
-                    .send(TaskStatus::Error(format!("错误：{err}")))
+                    .send(TaskStatus::Error(err))
                     .await
                     .unwrap();
             }
