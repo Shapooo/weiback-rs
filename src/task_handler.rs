@@ -236,7 +236,7 @@ impl TaskHandler {
             .await;
         match result {
             Err(err) => {
-                error!("{err}");
+                error!("{err:?}");
                 self.task_status_sender
                     .send(TaskStatus::Error(err))
                     .await
