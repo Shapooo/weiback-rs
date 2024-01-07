@@ -2,7 +2,7 @@
 use crate::web_fetcher::WebFetcher;
 
 use anyhow::{anyhow, Result};
-use log::debug;
+use log::{debug, warn};
 use serde::Deserialize;
 
 const STATUSES_LONGTEXT_API: &str = "https://weibo.com/ajax/statuses/longtext";
@@ -29,16 +29,19 @@ impl LongText {
         }
     }
 
-    pub async fn fetch_long_text(mblogid: &str, fetcher: &WebFetcher) -> Result<String> {
+    pub async fn fetch_long_text(mblogid: &str, fetcher: &WebFetcher) -> Result<Option<String>> {
         let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
         debug!("fetch long text, url: {url}");
         let res = fetcher.get(url, fetcher.web_client()).await?;
         let long_text_meta = match res.json::<LongText>().await {
             Ok(res) => res,
-            Err(e) if e.is_decode() => return Err(anyhow!("bypass weibo's bug")),
+            Err(e) if e.is_decode() => {
+                warn!("bypass weibo's bug: {e}, mblogid: {mblogid}");
+                return Ok(None);
+            }
             Err(e) => return Err(e.into()),
         };
-        long_text_meta.get_content()
+        long_text_meta.get_content().map(Some)
     }
 }
 

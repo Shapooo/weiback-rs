@@ -724,8 +724,9 @@ impl Post {
 
     pub async fn with_process_long_text(mut self, fetcher: &WebFetcher) -> Result<Post> {
         if self.is_long_text {
-            let content = LongText::fetch_long_text(&self.mblogid, fetcher).await?;
-            self.text_raw = content;
+            LongText::fetch_long_text(&self.mblogid, fetcher)
+                .await?
+                .map(|content| self.text_raw = content);
         }
         Ok(self)
     }
