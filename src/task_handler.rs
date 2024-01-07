@@ -104,7 +104,7 @@ impl TaskHandler {
         assert!(range.start() != &0);
         info!("download user {uid} posts, range is {range:?}");
         for page in range {
-            self.backup_ones_posts(uid, page, with_pic, image_definition)
+            self.backup_one_page(uid, page, with_pic, image_definition)
                 .await?;
         }
         Ok(())
@@ -295,7 +295,7 @@ impl TaskHandler {
         Post::query_posts(limit, offset, reverse, conn).await
     }
 
-    pub async fn backup_ones_posts(
+    pub async fn backup_one_page(
         &self,
         uid: i64,
         page: u32,
