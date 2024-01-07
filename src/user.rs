@@ -1,10 +1,12 @@
 use crate::picture::Picture;
 
+use std::ops::DerefMut;
+
 use anyhow::{Error, Result};
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
 use serde_json::{to_string, Value};
-use sqlx::{FromRow, Sqlite, SqlitePool};
+use sqlx::{Executor, FromRow, Sqlite};
 
 #[derive(Deserialize, Serialize, Debug, Clone, FromRow, PartialEq)]
 pub struct User {
@@ -83,7 +85,11 @@ impl TryInto<Value> for User {
 }
 
 impl User {
-    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+    pub async fn create_table<E>(mut db: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS users ( \
              id INTEGER PRIMARY KEY, \
@@ -108,12 +114,16 @@ impl User {
              backedup INTEGER \
              )",
         )
-        .execute(db)
+        .execute(&mut *db)
         .await?;
         Ok(())
     }
 
-    pub async fn insert(&self, db: &SqlitePool) -> Result<()> {
+    pub async fn insert<E>(&self, mut db: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("insert user: {}", self.id);
         trace!("insert user: {:?}", self);
         let result = sqlx::query(
@@ -161,7 +171,7 @@ impl User {
         .bind(self.mbtype)
         .bind(self.icon_list.as_ref().and_then(|v| to_string(&v).ok()))
         .bind(false)
-        .execute(db)
+        .execute(&mut *db)
         .await?;
         trace!("insert user {self:?}, result {result:?}");
         Ok(())
@@ -169,19 +179,27 @@ impl User {
 
     // mark_user_backed_up must be called after all posts inserted,
     // to ensure the user info is persisted
-    pub async fn mark_user_backed_up(uid: i64, db: &SqlitePool) -> Result<()> {
+    pub async fn mark_user_backed_up<E>(uid: i64, mut db: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("mark user {} backedup", uid);
         sqlx::query("UPDATE users SET backedup = true WHERE id = ?")
             .bind(uid)
-            .execute(db)
+            .execute(&mut *db)
             .await?;
         Ok(())
     }
 
-    pub async fn query(id: i64, db: &SqlitePool) -> Result<Option<Self>> {
+    pub async fn query<E>(id: i64, mut executor: E) -> Result<Option<Self>>
+    where
+        E: DerefMut,
+        for<'b> &'b mut E::Target: Executor<'b, Database = Sqlite>,
+    {
         let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
             .bind(id)
-            .fetch_optional(db)
+            .fetch_optional(&mut *executor)
             .await?;
         Ok(user)
     }
@@ -201,7 +219,6 @@ mod user_test {
     use super::User;
     use anyhow::Result;
     use flate2::read::GzDecoder;
-    use futures::future::join_all;
     use serde_json::{from_str, Value};
     use std::collections::HashMap;
     use std::io::Read;
@@ -229,7 +246,8 @@ mod user_test {
     #[tokio::test]
     async fn create_table() {
         let db = create_db().await.unwrap();
-        User::create_table(&db).await.unwrap();
+        let conn = db.acquire().await.unwrap();
+        User::create_table(conn).await.unwrap();
     }
 
     async fn parse_users(test_case: Vec<Value>) -> Result<Vec<User>> {
@@ -250,54 +268,43 @@ mod user_test {
 
     #[tokio::test]
     async fn insert() {
-        let ref db = create_db().await.unwrap();
-        User::create_table(&db).await.unwrap();
+        let db = create_db().await.unwrap();
+        let mut trans = db.begin().await.unwrap();
+        User::create_table(trans.as_mut()).await.unwrap();
         let test_case = load_test_case().await.unwrap();
         let test_case = parse_users(test_case).await.unwrap();
         let test_case = test_case
             .into_iter()
             .filter(|user| user.id != i64::default())
             .collect::<Vec<_>>();
-        join_all(
-            test_case
-                .into_iter()
-                .map(|user| async move { user.insert(db).await }),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>>>()
-        .unwrap();
+        for user in test_case {
+            user.insert(trans.as_mut()).await.unwrap();
+        }
+        trans.commit().await.unwrap();
     }
 
     #[tokio::test]
     async fn query() {
         let ref db = create_db().await.unwrap();
-        User::create_table(db).await.unwrap();
+        let mut trans = db.begin().await.unwrap();
+        User::create_table(trans.as_mut()).await.unwrap();
         let test_case = load_test_case().await.unwrap();
         let test_case = parse_users(test_case).await.unwrap();
         let test_case = test_case
             .into_iter()
             .filter_map(|user| (user.id != i64::default()).then_some((user.id, user)))
             .collect::<HashMap<_, _>>();
-        join_all(
-            test_case
-                .iter()
-                .map(|(_, user)| async move { user.insert(db).await }),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>>>()
-        .unwrap();
-        let queried_user = join_all(
-            test_case
-                .iter()
-                .map(|t| async move { User::query(*t.0, db).await }),
-        )
-        .await
-        .into_iter()
-        .filter_map(|user| user.transpose())
-        .collect::<Result<Vec<_>>>()
-        .unwrap();
+        for user in test_case.values() {
+            user.insert(trans.as_mut()).await.unwrap();
+        }
+        let mut queried_user = Vec::new();
+        for &id in test_case.keys() {
+            queried_user.push(User::query(id, trans.as_mut()).await.unwrap());
+        }
+        let queried_user = queried_user
+            .into_iter()
+            .filter_map(|user| user)
+            .collect::<Vec<_>>();
         assert_eq!(queried_user.len(), test_case.len());
         queried_user.into_iter().for_each(|user| {
             let origin = test_case.get(&user.id).unwrap();
