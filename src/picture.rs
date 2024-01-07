@@ -1,8 +1,10 @@
 use crate::web_fetcher::WebFetcher;
 
+use std::ops::DerefMut;
+
 use anyhow::Result;
 use log::{debug, trace};
-use sqlx::{FromRow, Sqlite, SqlitePool};
+use sqlx::{Executor, FromRow, Sqlite};
 
 const PIC_TYPE_AVATAR: u8 = 0;
 const PIC_TYPE_INPOST: u8 = 1;
@@ -39,6 +41,7 @@ impl Picture {
         }
     }
 
+    #[allow(unused)]
     pub fn get_id(&self) -> &str {
         pic_url_to_id(self.get_url())
     }
@@ -47,26 +50,42 @@ impl Picture {
         pic_url_to_file(self.get_url())
     }
 
-    pub async fn create_table(db: &SqlitePool) -> Result<()> {
-        PictureInner::create_table(db).await?;
-        PictureBlob::create_table(db).await?;
+    pub async fn create_table<E>(mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
+        PictureInner::create_table(&mut *executor).await?;
+        PictureBlob::create_table(&mut *executor).await?;
         Ok(())
     }
 
-    pub async fn persist(&self, db: &SqlitePool, fetcher: &WebFetcher) -> Result<()> {
-        self.get_blob(db, fetcher).await?;
+    pub async fn persist<E>(&self, executor: E, fetcher: &WebFetcher) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
+        self.get_blob(executor, fetcher).await?;
         Ok(())
     }
 
-    pub async fn get_blob(&self, db: &SqlitePool, fetcher: &WebFetcher) -> Result<Option<Vec<u8>>> {
-        match self.query_blob(db).await? {
+    pub async fn get_blob<E>(
+        &self,
+        mut executor: E,
+        fetcher: &WebFetcher,
+    ) -> Result<Option<Vec<u8>>>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
+        match self.query_blob(&mut *executor).await? {
             Some(blob) => Ok(Some(blob)),
             None => {
                 let blob = self.fetch_blob(fetcher).await?;
                 let blob = PictureBlob::new(self.get_url(), blob);
                 let inner = PictureInner::from(self);
-                blob.insert(db).await?;
-                inner.insert(db).await?;
+                blob.insert(&mut *executor).await?;
+                inner.insert(&mut *executor).await?;
                 Ok(Some(blob.blob))
             }
         }
@@ -81,13 +100,17 @@ impl Picture {
         Ok(res_bytes.into())
     }
 
-    async fn query_blob(&self, db: &SqlitePool) -> Result<Option<Vec<u8>>> {
+    async fn query_blob<E>(&self, mut executor: E) -> Result<Option<Vec<u8>>>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         let url = self.get_url();
         debug!("query img: {url}");
         Ok(
             sqlx::query_as::<Sqlite, (Vec<u8>,)>("SELECT blob FROM picture_blob WHERE url = ?")
                 .bind(url)
-                .fetch_optional(db)
+                .fetch_optional(&mut *executor)
                 .await?
                 .map(|(blob,)| blob),
         )
@@ -129,19 +152,27 @@ impl From<&Picture> for PictureInner {
 }
 
 impl PictureInner {
-    pub async fn insert(&self, db: &SqlitePool) -> Result<()> {
+    pub async fn insert<E>(&self, mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         let result = sqlx::query("INSERT OR IGNORE INTO picture VALUES (?, ?, ?, ?)")
             .bind(&self.id)
             .bind(self.uid)
             .bind(self.post_id)
             .bind(self.type_)
-            .execute(db)
+            .execute(&mut *executor)
             .await?;
         trace!("insert picture result: {result:?}");
         Ok(())
     }
 
-    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+    pub async fn create_table<E>(mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS picture (\
             id TEXT PRIMARY KEY, \
@@ -149,7 +180,7 @@ impl PictureInner {
             post_id INTEGER, \
             type INTEGER);",
         )
-        .execute(db)
+        .execute(&mut *executor)
         .await?;
         Ok(())
     }
@@ -171,12 +202,16 @@ impl PictureBlob {
         }
     }
 
-    pub async fn insert(&self, db: &SqlitePool) -> Result<()> {
+    pub async fn insert<E>(&self, mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
             .bind(&self.url)
             .bind(&self.id)
             .bind(&self.blob)
-            .execute(db)
+            .execute(&mut *executor)
             .await?;
         trace!(
             "insert img blob {}-{}, result: {:?}",
@@ -187,14 +222,18 @@ impl PictureBlob {
         Ok(())
     }
 
-    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+    pub async fn create_table<E>(mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS picture_blob (\
             url TEXT PRIMARY KEY, \
             id TEXT, \
             blob BLOB);",
         )
-        .execute(db)
+        .execute(&mut *executor)
         .await?;
         Ok(())
     }
