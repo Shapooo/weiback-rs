@@ -36,7 +36,7 @@ impl LongText {
         let long_text_meta = match res.json::<LongText>().await {
             Ok(res) => res,
             Err(e) if e.is_decode() => {
-                warn!("bypass weibo's bug: {e}, mblogid: {mblogid}");
+                // bypass post pictures folding
                 return Ok(None);
             }
             Err(e) => return Err(e.into()),
