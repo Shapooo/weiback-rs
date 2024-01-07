@@ -366,6 +366,7 @@ impl Post {
         Ok(())
     }
 
+    // TODO: more setting for insert replace or ignore policy
     pub async fn insert<E>(&self, mut executor: E) -> Result<()>
     where
         E: DerefMut,
@@ -373,14 +374,14 @@ impl Post {
     {
         debug!("insert post: {}", self.id);
         trace!("insert post: {:?}", self);
-        self._insert(&mut *executor).await?;
+        self._insert(&mut *executor, true).await?;
         if let Some(retweeted_post) = &self.retweeted_status {
-            retweeted_post._insert(executor).await?;
+            retweeted_post._insert(executor, false).await?;
         }
         Ok(())
     }
 
-    async fn _insert<E>(&self, mut executor: E) -> Result<()>
+    async fn _insert<E>(&self, mut executor: E, overwrite: bool) -> Result<()>
     where
         E: DerefMut,
         for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
@@ -389,7 +390,8 @@ impl Post {
             user.insert(&mut *executor).await?;
         }
         sqlx::query(
-            "INSERT OR IGNORE INTO posts (\
+            format!(
+                "INSERT OR {} INTO posts (\
              id,\
              mblogid,\
              text_raw,\
@@ -452,6 +454,9 @@ impl Post {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                if overwrite { "REPLACE" } else { "IGNORE" }
+            )
+            .as_str(),
         )
         .bind(self.id)
         .bind(&self.mblogid)
