@@ -8,9 +8,10 @@ use crate::{
     web_fetcher::WebFetcher,
 };
 
-use std::collections::{HashMap, HashSet};
 use std::{
     borrow::Cow::{self, Borrowed, Owned},
+    collections::{HashMap, HashSet},
+    ops::DerefMut,
     path::Path,
 };
 
@@ -22,7 +23,7 @@ use log::{debug, info, trace, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, to_value, Value};
-use sqlx::{FromRow, Sqlite, SqlitePool};
+use sqlx::{Executor, FromRow, Sqlite};
 
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
@@ -299,7 +300,11 @@ impl Post {
 }
 
 impl Post {
-    pub async fn create_table(db: &SqlitePool) -> Result<()> {
+    pub async fn create_table<E>(mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS posts ( \
              id INTEGER PRIMARY KEY, \
@@ -359,24 +364,32 @@ impl Post {
              created_at_tz TEXT \
              )",
         )
-        .execute(db)
+        .execute(&mut *executor)
         .await?;
         Ok(())
     }
 
-    pub async fn insert(&self, db: &SqlitePool) -> Result<()> {
+    pub async fn insert<E>(&self, mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("insert post: {}", self.id);
         trace!("insert post: {:?}", self);
-        self._insert(db).await?;
+        self._insert(&mut *executor).await?;
         if let Some(retweeted_post) = &self.retweeted_status {
-            retweeted_post._insert(db).await?;
+            retweeted_post._insert(executor).await?;
         }
         Ok(())
     }
 
-    async fn _insert(&self, db: &SqlitePool) -> Result<()> {
+    async fn _insert<E>(&self, mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         if let Some(user) = &self.user {
-            user.insert(db).await?;
+            user.insert(&mut *executor).await?;
         }
         sqlx::query(
             "INSERT OR IGNORE INTO posts (\
@@ -494,17 +507,29 @@ impl Post {
         .bind(&self.created_at)
         .bind(self.created_at_timestamp)
         .bind(&self.created_at_tz)
-        .execute(db)
+        .execute(&mut *executor)
         .await?;
         Ok(())
     }
 
     #[allow(unused)]
-    pub async fn query(id: i64, db: &SqlitePool) -> Result<Option<Post>> {
+    pub async fn query<E>(id: i64, mut executor: E) -> Result<Option<Post>>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("query post, id: {id}");
-        if let Some(mut post) = Post::_query(id, db).await? {
+        if let Some(mut post) = Post::_query(id, &mut *executor).await? {
             if let Some(retweeted_id) = post.retweeted_id {
-                post.retweeted_status = Post::_query(retweeted_id, db).await?.map(Box::new);
+                post.retweeted_status = Some(Box::new(
+                    Post::_query(retweeted_id, &mut *executor)
+                        .await?
+                        .ok_or(anyhow!(
+                            "cannot find retweeted post {} of post {}",
+                            retweeted_id,
+                            id
+                        ))?,
+                ));
             }
             Ok(Some(post))
         } else {
@@ -512,26 +537,34 @@ impl Post {
         }
     }
 
-    async fn _query(id: i64, db: &SqlitePool) -> Result<Option<Post>> {
+    async fn _query<E>(id: i64, mut executor: E) -> Result<Option<Post>>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         if let Some(mut post) = sqlx::query_as::<Sqlite, Post>("SELECT * FROM posts WHERE id = ?")
             .bind(id)
-            .fetch_optional(db)
+            .fetch_optional(&mut *executor)
             .await?
         {
             if let Some(uid) = post.uid {
-                post.user = User::query(uid, db).await?;
+                post.user = User::query(uid, executor).await?;
             }
             return Ok(Some(post));
         }
         Ok(None)
     }
 
-    pub async fn query_posts(
+    pub async fn query_posts<E>(
         limit: u32,
         offset: u32,
         reverse: bool,
-        db: &SqlitePool,
-    ) -> Result<Vec<Post>> {
+        mut executor: E,
+    ) -> Result<Vec<Post>>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
         let sql_expr = if reverse {
             "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
@@ -541,52 +574,72 @@ impl Post {
         let posts = sqlx::query_as::<sqlx::Sqlite, Post>(sql_expr)
             .bind(limit)
             .bind(offset)
-            .fetch_all(db)
+            .fetch_all(&mut *executor)
             .await?;
         debug!("geted {} post from local", posts.len());
         Ok(posts)
     }
 
-    async fn mark_post_unfavorited(id: i64, db: &SqlitePool) -> Result<()> {
+    async fn mark_post_unfavorited<E>(id: i64, mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("unfav post {} in db", id);
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
             .bind(id)
-            .execute(db)
+            .execute(&mut *executor)
             .await?;
         Ok(())
     }
 
-    pub async fn mark_post_favorited(id: i64, db: &SqlitePool) -> Result<()> {
+    pub async fn mark_post_favorited<E>(id: i64, mut executor: E) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("mark favorited post {} in db", id);
         sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
             .bind(id)
-            .execute(db)
+            .execute(&mut *executor)
             .await?;
         Ok(())
     }
 
-    pub async fn query_posts_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
+    pub async fn query_posts_to_unfavorite<E>(mut executor: E) -> Result<Vec<i64>>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("query all posts to unfavorite");
         Ok(sqlx::query_as::<Sqlite, (i64,)>(
             "SELECT id FROM posts WHERE unfavorited == false and favorited;",
         )
-        .fetch_all(db)
+        .fetch_all(&mut *executor)
         .await?
         .into_iter()
         .map(|t| t.0)
         .collect())
     }
 
-    pub async fn query_favorited_sum(db: &SqlitePool) -> Result<u32> {
+    pub async fn query_favorited_sum<E>(mut executor: E) -> Result<u32>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         Ok(
             sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
-                .fetch_one(db)
+                .fetch_one(&mut *executor)
                 .await?
                 .0,
         )
     }
 
-    pub async fn unfavorite_post(id: i64, db: &SqlitePool, fetcher: &WebFetcher) -> Result<()> {
+    pub async fn unfavorite_post<E>(id: i64, executor: E, fetcher: &WebFetcher) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         let idstr = id.to_string();
         let res = fetcher
             .post(
@@ -611,7 +664,7 @@ impl Post {
                 );
             }
         }
-        Self::mark_post_unfavorited(id, db).await?;
+        Self::mark_post_unfavorited(id, executor).await?;
         Ok(())
     }
 
@@ -706,13 +759,17 @@ impl Post {
         }
     }
 
-    pub async fn persist_posts(
+    pub async fn persist_posts<E>(
         posts: Vec<Post>,
         with_pic: bool,
         image_definition: u8,
-        db: &SqlitePool,
+        mut executor: E,
         fetcher: &WebFetcher,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         if with_pic {
             let emojis = posts
                 .iter()
@@ -723,31 +780,24 @@ impl Post {
                     .as_ref()
                     .map(|user| user.get_avatar_pic(image_definition))
             });
-            join_all(
-                posts
-                    .iter()
-                    .flat_map(|post| {
-                        post.extract_pic_urls(image_definition)
-                            .into_iter()
-                            .map(|url| Picture::in_post(url, post.id))
-                    })
-                    .chain(emojis)
-                    .chain(avatar)
-                    .map(|pic| async move { pic.persist(db, fetcher).await }),
-            )
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
+            for pic in posts
+                .iter()
+                .flat_map(|post| {
+                    post.extract_pic_urls(image_definition)
+                        .into_iter()
+                        .map(|url| Picture::in_post(url, post.id))
+                })
+                .chain(emojis)
+                .chain(avatar)
+            {
+                pic.persist(&mut *executor, fetcher).await?;
+            }
         }
 
-        join_all(
-            posts
-                .into_iter()
-                .map(|post| async move { post.insert(db).await }),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
+        for post in posts {
+            post.insert(&mut *executor).await?;
+        }
+
         Ok(())
     }
 
@@ -998,13 +1048,17 @@ impl Post {
             + "</a>"
     }
 
-    pub async fn generate_html(
+    pub async fn generate_html<E>(
         posts: Vec<Post>,
         html_name: &str,
         image_definition: u8,
-        db: &SqlitePool,
+        mut executor: E,
         fetcher: &WebFetcher,
-    ) -> Result<HTMLPage> {
+    ) -> Result<HTMLPage>
+    where
+        E: DerefMut,
+        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+    {
         debug!("generate html from {} posts", posts.len());
         let mut pic_to_fetch = HashSet::new();
         let posts = posts
@@ -1021,7 +1075,7 @@ impl Post {
         let html = HTMLGenerator::generate_page(&inner_html)?;
         let mut pics = Vec::new();
         for pic in pic_to_fetch {
-            if let Some(blob) = pic.get_blob(db, fetcher).await? {
+            if let Some(blob) = pic.get_blob(&mut *executor, fetcher).await? {
                 pics.push(HTMLPicture {
                     name: pic.get_file_name().into(),
                     blob,
@@ -1066,7 +1120,8 @@ mod post_test {
     #[tokio::test]
     async fn create_table() {
         let db = create_db().await.unwrap();
-        Post::create_table(&db).await.unwrap();
+        let mut conn = db.acquire().await.unwrap();
+        Post::create_table(conn.as_mut()).await.unwrap();
     }
 
     #[test]
@@ -1105,26 +1160,27 @@ mod post_test {
     #[tokio::test]
     async fn insert() {
         let ref db = create_db().await.unwrap();
-        Post::create_table(db).await.unwrap();
-        User::create_table(db).await.unwrap();
+        let mut trans = db.begin().await.unwrap();
+        Post::create_table(trans.as_mut()).await.unwrap();
+        User::create_table(trans.as_mut()).await.unwrap();
 
         let test_case = serde_json::from_str::<Vec<Value>>(&load_test_case().unwrap())
             .unwrap()
             .into_iter()
             .map(|v| v.try_into().unwrap())
             .collect::<Vec<Post>>();
-        join_all(test_case.iter().map(|p| p.insert(db)))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        for post in test_case {
+            post.insert(trans.as_mut()).await.unwrap();
+        }
+        trans.commit().await.unwrap();
     }
 
     #[tokio::test]
     async fn query() {
         let ref db = create_db().await.unwrap();
-        Post::create_table(db).await.unwrap();
-        User::create_table(db).await.unwrap();
+        let mut trans = db.begin().await.unwrap();
+        Post::create_table(trans.as_mut()).await.unwrap();
+        User::create_table(trans.as_mut()).await.unwrap();
 
         let test_case = serde_json::from_str::<Vec<Value>>(&load_test_case().unwrap()).unwrap();
         let mut posts: HashMap<i64, Post> = HashMap::new();
@@ -1141,15 +1197,13 @@ mod post_test {
             }
             posts.insert(post.id, post);
         });
-        join_all(posts.values().map(|p| p.insert(db)))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
+        for post in posts.values() {
+            post.insert(trans.as_mut()).await.unwrap();
+        }
 
         for &id in posts.keys() {
             let mut origin_post = posts.get(&id).unwrap().clone();
-            let mut post = Post::query(id, db).await.unwrap().unwrap();
+            let mut post = Post::query(id, trans.as_mut()).await.unwrap().unwrap();
             origin_post.user = None;
             origin_post.retweeted_status.as_mut().map(|p| p.user = None);
             post.user = None;
