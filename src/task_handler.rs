@@ -41,11 +41,11 @@ impl TaskHandler {
     }
 
     pub async fn init(&mut self) -> Result<()> {
+        init_emoticon(&self.web_fetcher).await?;
+        self.persister.init().await?;
         let (web_total, db_total) = tokio::join!(self.get_web_total_num(), self.get_db_total_num());
         let web_total = web_total?;
         debug!("initing...");
-        init_emoticon(&self.web_fetcher).await?;
-        self.persister.init().await?;
         *self.task_status.write().unwrap() = TaskStatus::Init(web_total, db_total?);
         Ok(())
     }
