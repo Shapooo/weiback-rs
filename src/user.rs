@@ -1,12 +1,14 @@
-use crate::picture::Picture;
+use crate::{picture::Picture, web_fetcher::WebFetcher};
 
 use std::ops::DerefMut;
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
-use serde_json::{to_string, Value};
+use serde_json::{from_value, to_string, Value};
 use sqlx::{Executor, FromRow, Sqlite};
+
+const USER_INFO_API: &str = "https://weibo.com/ajax/profile/info";
 
 #[derive(Deserialize, Serialize, Debug, Clone, FromRow, PartialEq)]
 pub struct User {
@@ -210,6 +212,20 @@ impl User {
             1 => Picture::avatar(self.avatar_large.as_str(), self.id),
             2 => Picture::avatar(self.avatar_hd.as_str(), self.id),
             _ => unreachable!(),
+        }
+    }
+
+    pub async fn fetch(id: i64, fetcher: &WebFetcher) -> Result<Self> {
+        let url = format!("{}?uid={}", USER_INFO_API, id);
+        let mut json = fetcher
+            .get(url, fetcher.web_client())
+            .await?
+            .json::<Value>()
+            .await?;
+        if json["ok"] != 1 {
+            Err(anyhow!("fetch user info failed: {:?}", json))
+        } else {
+            Ok(from_value(json["data"]["user"].take())?)
         }
     }
 }
