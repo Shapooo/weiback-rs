@@ -215,8 +215,7 @@ impl TaskHandler {
             total_downloaded += posts_sum;
             info!("fetched {} posts in {}th page", posts_sum, page);
 
-            let _ = self
-                .task_status_sender
+            self.task_status_sender
                 .send(TaskStatus::InProgress(
                     i as f32 / total_pages,
                     format!("已下载第{page}页...耐心等待，先干点别的"),
