@@ -301,7 +301,7 @@ impl Core {
                             self.executor
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
-                                .download_fav(
+                                .backup_fav(
                                     self.web_start..=self.web_end,
                                     self.with_pic,
                                     self.image_definition,
