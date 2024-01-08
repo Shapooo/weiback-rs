@@ -74,6 +74,11 @@ impl Executor {
         self.send_task(Task::BackupUser(uid, with_pic, image_definition))
     }
 
+    pub fn get_user_meta(&self, id: i64) {
+        debug!("send task: get user meta");
+        self.send_task(Task::FetchUserMeta(id))
+    }
+
     pub fn export_from_local(
         &self,
         range: RangeInclusive<u32>,
