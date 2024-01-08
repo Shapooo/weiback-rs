@@ -2,20 +2,19 @@ use std::ops::RangeInclusive;
 
 use anyhow::Error;
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub enum Task {
+    // to fetch user meta data, include screen name and avatar
+    FetchUserMeta(i64),
+    // to download favorites (range, with pic, image definition level)
     DownloadFav(RangeInclusive<u32>, bool, u8),
+    // to export favorites from local db (range, with pic, image definition level)
     ExportFromLocal(RangeInclusive<u32>, bool, u8),
+    // to unfavorite favorite post
     UnfavoritePosts,
-    DownloadPosts(i64, RangeInclusive<u32>, bool, u8),
-}
-
-#[derive(Debug)]
-pub enum TaskStatus {
-    Init(u32, u32),
-    InProgress(f32, String),
-    Finished(u32, u32),
-    Error(Error),
+    // to backup user (id, with pic, image definition level)
+    BackupUser(i64, bool, u8),
 }
 
 #[allow(unused)]
