@@ -78,27 +78,15 @@ impl TaskHandler {
         Ok(())
     }
 
-    pub async fn backup_self(
-        &self,
-        range: RangeInclusive<u32>,
-        with_pic: bool,
-        image_definition: u8,
-    ) {
-        self.backup_user(self.uid, range, with_pic, image_definition)
+    pub async fn backup_self(&self, with_pic: bool, image_definition: u8) {
+        self.backup_user(self.uid, with_pic, image_definition).await
+    }
+
+    pub async fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
+        self.handle_long_task_res(self._backup_user(uid, with_pic, image_definition).await)
             .await
     }
 
-    pub async fn backup_user(
-        &self,
-        uid: i64,
-        range: RangeInclusive<u32>,
-        with_pic: bool,
-        image_definition: u8,
-    ) {
-        self.handle_task_res(
-            self._backup_user(uid, range, with_pic, image_definition)
-                .await,
-        )
         .await
     }
 
@@ -125,7 +113,7 @@ impl TaskHandler {
         image_definition: u8,
     ) {
         info!("fetch posts from local and export");
-        self.handle_task_res(
+        self.handle_long_task_res(
             self._export_from_local(range, reverse, image_definition)
                 .await,
         )
@@ -193,7 +181,7 @@ impl TaskHandler {
         with_pic: bool,
         image_definition: u8,
     ) {
-        self.handle_task_res(
+        self.handle_long_task_res(
             self._backup_favorites(range, with_pic, image_definition)
                 .await,
         )
@@ -231,7 +219,7 @@ impl TaskHandler {
         Ok(())
     }
 
-    async fn handle_task_res(&self, result: Result<()>) {
+    async fn handle_long_task_res(&self, result: Result<()>) {
         let mut db_total = 0;
         let mut web_total = 0;
         let result = self
