@@ -259,6 +259,17 @@ impl TaskHandler {
             .await
     }
 
+    async fn _get_user_meta(&self, uid: i64) -> Result<TaskResponse> {
+        let user = User::fetch(uid, &self.web_fetcher).await?;
+        let avatar = Picture::tmp(&user.profile_image_url);
+        let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        let pic_blob = avatar
+            .get_blob(conn.as_mut(), &self.web_fetcher)
+            .await?
+            .unwrap_or_default();
+        Ok(TaskResponse::UserMeta(user.screen_name, pic_blob))
+    }
+
     async fn handle_short_task_res(&self, result: Result<TaskResponse>) {
         match result {
             Ok(res) => {

@@ -46,6 +46,7 @@ impl Executor {
                             }
                         }
                         Task::UnfavoritePosts => th.unfavorite_posts().await,
+                        Task::FetchUserMeta(id) => th.get_user_meta(id).await,
                     }
                 }
                 Ok::<(), anyhow::Error>(())
