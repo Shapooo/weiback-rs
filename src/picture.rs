@@ -9,12 +9,14 @@ use sqlx::{Executor, FromRow, Sqlite};
 const PIC_TYPE_AVATAR: u8 = 0;
 const PIC_TYPE_INPOST: u8 = 1;
 const PIC_TYPE_EMOJI: u8 = 2;
+const PIC_TYPE_TMP: u8 = u8::MAX;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Picture {
     InPost(String, i64),
     Avatar(String, i64),
     Emoji(String),
+    Tmp(String),
 }
 
 impl Picture {
@@ -33,11 +35,21 @@ impl Picture {
         Self::Emoji(url)
     }
 
+    pub fn tmp(url: &str) -> Self {
+        let url = strip_url_queries(url).into();
+        Self::Tmp(url)
+    }
+
+    pub fn is_tmp(&self) -> bool {
+        matches!(self, Picture::Tmp(_))
+    }
+
     pub fn get_url(&self) -> &str {
         match self {
             Picture::InPost(url, _) => url,
             Picture::Avatar(url, _) => url,
             Picture::Emoji(url) => url,
+            Picture::Tmp(url) => url,
         }
     }
 
@@ -84,8 +96,10 @@ impl Picture {
                 let blob = self.fetch_blob(fetcher).await?;
                 let blob = PictureBlob::new(self.get_url(), blob);
                 let inner = PictureInner::from(self);
-                blob.insert(&mut *executor).await?;
-                inner.insert(&mut *executor).await?;
+                if !self.is_tmp() {
+                    blob.insert(&mut *executor).await?;
+                    inner.insert(&mut *executor).await?;
+                }
                 Ok(Some(blob.blob))
             }
         }
@@ -146,6 +160,12 @@ impl From<&Picture> for PictureInner {
                 post_id: None,
                 uid: None,
                 type_: PIC_TYPE_EMOJI,
+            },
+            Picture::Tmp(url) => Self {
+                id: pic_url_to_id(url).into(),
+                post_id: None,
+                uid: None,
+                type_: PIC_TYPE_TMP,
             },
         }
     }
