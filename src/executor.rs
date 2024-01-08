@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{channel, Sender};
 
 use crate::login::LoginInfo;
 use crate::message::Task;
-use crate::message::TaskStatus;
+use crate::message::TaskResponse;
 use crate::task_handler::TaskHandler;
 
 pub struct Executor {
@@ -15,7 +15,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(login_info: LoginInfo, task_status_sender: Sender<TaskStatus>) -> Self {
+    pub fn new(login_info: LoginInfo, task_status_sender: Sender<TaskResponse>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
