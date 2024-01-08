@@ -10,6 +10,7 @@ mod message;
 mod persister;
 mod picture;
 mod post;
+mod search_args;
 mod task_handler;
 mod user;
 mod web_fetcher;
