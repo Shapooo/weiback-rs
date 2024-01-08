@@ -2,6 +2,7 @@ use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use bytes::Bytes;
 use futures::future::join_all;
 use log::info;
 use tokio::fs::{DirBuilder, File};
@@ -62,7 +63,7 @@ pub struct HTMLPage {
 #[derive(Debug, Clone)]
 pub struct HTMLPicture {
     pub name: String,
-    pub blob: Vec<u8>,
+    pub blob: Bytes,
 }
 
 #[cfg(test)]

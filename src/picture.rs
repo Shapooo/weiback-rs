@@ -3,6 +3,7 @@ use crate::web_fetcher::WebFetcher;
 use std::ops::DerefMut;
 
 use anyhow::Result;
+use bytes::Bytes;
 use log::{debug, trace};
 use sqlx::{Executor, FromRow, Sqlite};
 
@@ -81,11 +82,7 @@ impl Picture {
         Ok(())
     }
 
-    pub async fn get_blob<E>(
-        &self,
-        mut executor: E,
-        fetcher: &WebFetcher,
-    ) -> Result<Option<Vec<u8>>>
+    pub async fn get_blob<E>(&self, mut executor: E, fetcher: &WebFetcher) -> Result<Option<Bytes>>
     where
         E: DerefMut,
         for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
@@ -105,16 +102,16 @@ impl Picture {
         }
     }
 
-    async fn fetch_blob(&self, fetcher: &WebFetcher) -> Result<Vec<u8>> {
+    async fn fetch_blob(&self, fetcher: &WebFetcher) -> Result<Bytes> {
         let url = self.get_url();
         debug!("fetch pic, url: {}", url);
         let res = fetcher.get(url, fetcher.pic_client()).await?;
         let res_bytes = res.bytes().await?;
         trace!("fetched pic size: {}", res_bytes.len());
-        Ok(res_bytes.into())
+        Ok(res_bytes)
     }
 
-    async fn query_blob<E>(&self, mut executor: E) -> Result<Option<Vec<u8>>>
+    async fn query_blob<E>(&self, mut executor: E) -> Result<Option<Bytes>>
     where
         E: DerefMut,
         for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
@@ -126,7 +123,7 @@ impl Picture {
                 .bind(url)
                 .fetch_optional(&mut *executor)
                 .await?
-                .map(|(blob,)| blob),
+                .map(|blob| Bytes::from(blob.0)),
         )
     }
 }
@@ -210,11 +207,11 @@ impl PictureInner {
 struct PictureBlob {
     pub url: String,
     pub id: String,
-    pub blob: Vec<u8>,
+    pub blob: Bytes,
 }
 
 impl PictureBlob {
-    pub fn new(url: &str, blob: Vec<u8>) -> Self {
+    pub fn new(url: &str, blob: Bytes) -> Self {
         Self {
             url: url.into(),
             id: pic_url_to_id(url).into(),
@@ -230,7 +227,7 @@ impl PictureBlob {
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
             .bind(&self.url)
             .bind(&self.id)
-            .bind(&self.blob)
+            .bind(&self.blob.as_ref())
             .execute(&mut *executor)
             .await?;
         trace!(
