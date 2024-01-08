@@ -18,22 +18,11 @@ pub enum Task {
 }
 
 #[allow(unused)]
-impl TaskStatus {
-    pub fn is_inprogress(&self) -> bool {
-        matches!(self, Self::InProgress(_, _))
-    }
-
-    pub fn is_finished(&self) -> bool {
-        matches!(self, Self::Finished(_, _))
-    }
-
-    pub fn is_error(&self) -> bool {
-        matches!(self, Self::Error(_))
-    }
-}
-
-impl Default for TaskStatus {
-    fn default() -> Self {
-        Self::InProgress(0.0, "".into())
-    }
+#[derive(Debug)]
+pub enum TaskResponse {
+    SumOfFavDB(u32, u32),      // remain sum of favorite in weibo and local db
+    UserMeta(String, Vec<u8>), // screen name and avatar picture
+    InProgress(f32, String),   // long time task is in progress
+    Finished(u32, u32),        // long time task is finished
+    Error(Error),              // error occurs
 }

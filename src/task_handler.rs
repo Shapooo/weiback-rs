@@ -16,12 +16,15 @@ const SAVING_PERIOD: usize = 200;
 pub struct TaskHandler {
     web_fetcher: WebFetcher,
     persister: Persister,
-    task_status_sender: Sender<TaskStatus>,
+    task_status_sender: Sender<TaskResponse>,
     uid: i64,
 }
 
 impl TaskHandler {
-    pub fn new(mut login_info: LoginInfo, task_status_sender: Sender<TaskStatus>) -> Result<Self> {
+    pub fn new(
+        mut login_info: LoginInfo,
+        task_status_sender: Sender<TaskResponse>,
+    ) -> Result<Self> {
         let uid = if let serde_json::Value::Number(uid) = &login_info["uid"] {
             uid.as_i64().unwrap()
         } else {
@@ -46,13 +49,14 @@ impl TaskHandler {
         let web_total = web_total?;
         debug!("initing...");
         self.task_status_sender
-            .send(TaskStatus::Init(web_total, db_total?))
+            .send(TaskResponse::SumOfFavDB(web_total, db_total?))
             .await?;
         Ok(())
     }
 
     pub async fn unfavorite_posts(&self) {
-        self.handle_task_res(self._unfavorite_posts().await).await
+        self.handle_long_task_res(self._unfavorite_posts().await)
+            .await
     }
 
     async fn _unfavorite_posts(&self) -> Result<()> {
@@ -65,7 +69,7 @@ impl TaskHandler {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let progress = i as f32 / len as f32;
             self.task_status_sender
-                .send(TaskStatus::InProgress(
+                .send(TaskResponse::InProgress(
                     progress,
                     format!("已处理{i}条，共{len}条..."),
                 ))
@@ -169,7 +173,7 @@ impl TaskHandler {
             }
             let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
             self.task_status_sender
-                .send(TaskStatus::InProgress(
+                .send(TaskResponse::InProgress(
                     progress,
                     format!(
                         "已处理{}条，共{}条...\n可能需要下载图片",
@@ -216,7 +220,7 @@ impl TaskHandler {
             info!("fetched {} posts in {}th page", posts_sum, page);
 
             self.task_status_sender
-                .send(TaskStatus::InProgress(
+                .send(TaskResponse::InProgress(
                     i as f32 / total_pages,
                     format!("已下载第{page}页...耐心等待，先干点别的"),
                 ))
@@ -237,14 +241,14 @@ impl TaskHandler {
             Err(err) => {
                 error!("{err:?}");
                 self.task_status_sender
-                    .send(TaskStatus::Error(err))
+                    .send(TaskResponse::Error(err))
                     .await
                     .unwrap();
             }
             Ok(()) => {
                 info!("task finished");
                 self.task_status_sender
-                    .send(TaskStatus::Finished(web_total, db_total))
+                    .send(TaskResponse::Finished(web_total, db_total))
                     .await
                     .unwrap();
             }

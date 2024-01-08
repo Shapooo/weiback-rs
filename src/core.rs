@@ -1,6 +1,6 @@
 use crate::executor::Executor;
 use crate::login::{get_login_info, LoginState, Loginator};
-use crate::message::TaskStatus;
+use crate::message::TaskResponse;
 
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -41,7 +41,7 @@ impl Default for TabType {
 
 pub struct Core {
     state: MainState,
-    task_status_receiver: Option<Receiver<TaskStatus>>,
+    task_status_receiver: Option<Receiver<TaskResponse>>,
     executor: Option<Executor>,
     task_ongoing: bool,
     login_checked: bool,
@@ -143,7 +143,7 @@ impl eframe::App for Core {
 
 impl Core {
     fn when_logined(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let task_status: Option<TaskStatus> = match self
+        let task_status: Option<TaskResponse> = match self
             .task_status_receiver
             .as_mut()
             .expect("core.status must be Some(_), bugs in there")
@@ -155,7 +155,7 @@ impl Core {
         };
         if let Some(task_status) = task_status {
             match &task_status {
-                TaskStatus::Init(web_total, db_total) => {
+                TaskResponse::SumOfFavDB(web_total, db_total) => {
                     self.web_total = *web_total;
                     self.db_total = *db_total;
                     if self.db_end == 0 {
@@ -169,11 +169,11 @@ impl Core {
                         self.web_total, self.db_total
                     );
                 }
-                TaskStatus::InProgress(ratio, msg) => {
+                TaskResponse::InProgress(ratio, msg) => {
                     self.ratio = *ratio;
                     self.message = msg.to_owned()
                 }
-                TaskStatus::Finished(web_total, db_total) => {
+                TaskResponse::Finished(web_total, db_total) => {
                     self.ratio = 1.;
                     self.task_ongoing = false;
                     self.web_total = *web_total;
@@ -183,9 +183,10 @@ impl Core {
                         self.web_total, self.db_total
                     );
                 }
-                TaskStatus::Error(msg) => {
+                TaskResponse::Error(msg) => {
                     self.message = msg.to_string();
                 }
+                TaskResponse::UserMeta(_, _) => todo!(),
             }
         }
 
