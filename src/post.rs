@@ -216,7 +216,7 @@ impl TryFrom<Value> for Post {
         }
         let created_at = json["created_at"]
             .as_str()
-            .map(|s| parse_created_at(s))
+            .map(parse_created_at)
             .ok_or(anyhow!("invalid created_at field"))??;
         let mut post: Post = from_value(json)?;
         post.uid = post.user.as_ref().map(|user| user.id);
@@ -744,9 +744,9 @@ impl Post {
 
     pub async fn with_process_long_text(mut self, fetcher: &WebFetcher) -> Result<Post> {
         if self.is_long_text {
-            LongText::fetch_long_text(&self.mblogid, fetcher)
-                .await?
-                .map(|content| self.text_raw = content);
+            if let Some(content) = LongText::fetch_long_text(&self.mblogid, fetcher).await? {
+                self.text_raw = content;
+            }
         }
         Ok(self)
     }
