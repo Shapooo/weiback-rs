@@ -1,6 +1,7 @@
 use crate::{
-    emoticon::init_emoticon, exporter::Exporter, login::LoginInfo, message::TaskStatus,
-    persister::Persister, post::Post, user::User, web_fetcher::WebFetcher,
+    emoticon::init_emoticon, exporter::Exporter, login::LoginInfo, message::TaskResponse,
+    persister::Persister, picture::Picture, post::Post, search_args::SearchArgs, user::User,
+    web_fetcher::WebFetcher,
 };
 
 use std::ops::RangeInclusive;
@@ -87,23 +88,57 @@ impl TaskHandler {
             .await
     }
 
-        .await
-    }
-
-    async fn _backup_user(
-        &self,
-        uid: i64,
-        range: RangeInclusive<u32>,
-        with_pic: bool,
-        image_definition: u8,
-    ) -> Result<()> {
-        assert!(range.start() != &0);
-        info!("download user {uid} posts, range is {range:?}");
-        for page in range {
-            self.backup_one_page(uid, page, with_pic, image_definition)
-                .await?;
+    async fn _backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) -> Result<()> {
+        info!("download user {uid} posts");
+        let mut page = 1;
+        let search_args_vec = vec![
+            SearchArgs::new().with_ori().with_text(),
+            SearchArgs::new().with_ori().with_pic(),
+            SearchArgs::new().with_ori().with_video(),
+            SearchArgs::new().with_ori().with_music(),
+            SearchArgs::new().with_ret().with_pic(),
+            SearchArgs::new().with_ret().with_video(),
+            SearchArgs::new().with_ret().with_music(),
+        ];
+        for search_args in search_args_vec {
+            loop {
+                let len = self
+                    .backup_one_page(uid, page, &search_args, with_pic, image_definition)
+                    .await?;
+                if len == 0 {
+                    break;
+                }
+                page += 1;
+            }
         }
         Ok(())
+    }
+
+    pub async fn backup_one_page(
+        &self,
+        uid: i64,
+        page: u32,
+        search_args: &SearchArgs,
+        with_pic: bool,
+        image_definition: u8,
+    ) -> Result<usize> {
+        let posts = Post::fetch_posts(uid, page, search_args, &self.web_fetcher).await?;
+        let result = posts.len();
+        Post::persist_posts(
+            posts,
+            with_pic,
+            image_definition,
+            self.persister.db().as_ref().unwrap(),
+            &self.web_fetcher,
+        )
+        .await?;
+        // mark_user_backed_up should be called after all posts inserted,
+        // to ensure the user info is persisted
+        let mut trans = self.persister.db().as_ref().unwrap().begin().await?;
+        User::mark_user_backed_up(uid, trans.as_mut()).await?;
+        trans.commit().await?;
+
+        Ok(result)
     }
 
     pub async fn export_from_local(
@@ -219,6 +254,11 @@ impl TaskHandler {
         Ok(())
     }
 
+    pub async fn get_user_meta(&self, uid: i64) {
+        self.handle_short_task_res(self._get_user_meta(uid).await)
+            .await
+    }
+
     async fn handle_long_task_res(&self, result: Result<()>) {
         let mut db_total = 0;
         let mut web_total = 0;
@@ -295,32 +335,6 @@ impl TaskHandler {
         let offset = *range.start() - 1;
         let conn = self.persister.db().as_ref().unwrap().acquire().await?;
         Post::query_posts(limit, offset, reverse, conn).await
-    }
-
-    pub async fn backup_one_page(
-        &self,
-        uid: i64,
-        page: u32,
-        with_pic: bool,
-        image_definition: u8,
-    ) -> Result<usize> {
-        let posts = Post::fetch_posts(uid, page, true, &self.web_fetcher).await?;
-        let result = posts.len();
-        Post::persist_posts(
-            posts,
-            with_pic,
-            image_definition,
-            self.persister.db().as_ref().unwrap(),
-            &self.web_fetcher,
-        )
-        .await?;
-        // mark_user_backed_up should be called after all posts inserted,
-        // to ensure the user info is persisted
-        let mut trans = self.persister.db().as_ref().unwrap().begin().await?;
-        User::mark_user_backed_up(uid, trans.as_mut()).await?;
-        trans.commit().await?;
-
-        Ok(result)
     }
 
     async fn get_web_total_num(&self) -> Result<u32> {
