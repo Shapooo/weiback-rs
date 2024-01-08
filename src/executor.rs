@@ -64,7 +64,7 @@ impl Executor {
         self.send_task(Task::UnfavoritePosts)
     }
 
-    pub fn download_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
+    pub fn backup_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
         debug!("send task: download meta");
         self.send_task(Task::DownloadFav(range, with_pic, image_definition))
     }
