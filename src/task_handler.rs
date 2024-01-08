@@ -4,10 +4,11 @@ use crate::{
     web_fetcher::WebFetcher,
 };
 
-use std::ops::RangeInclusive;
-use std::time::Duration;
+use std::{io::Cursor, ops::RangeInclusive, time::Duration};
 
 use anyhow::{anyhow, Result};
+use egui::{ColorImage, ImageData};
+use image::io::Reader;
 use log::{debug, error, info};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
@@ -43,6 +44,7 @@ impl TaskHandler {
         })
     }
 
+    // initialize database、get emoticon data
     pub async fn init(&mut self) -> Result<()> {
         init_emoticon(&self.web_fetcher).await?;
         self.persister.init().await?;
@@ -263,11 +265,23 @@ impl TaskHandler {
         let user = User::fetch(uid, &self.web_fetcher).await?;
         let avatar = Picture::tmp(&user.profile_image_url);
         let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
-        let pic_blob = avatar
+        let avatar_blob = avatar
             .get_blob(conn.as_mut(), &self.web_fetcher)
             .await?
             .unwrap_or_default();
-        Ok(TaskResponse::UserMeta(user.screen_name, pic_blob))
+        let avatar_img = Reader::new(Cursor::new(avatar_blob))
+            .with_guessed_format()?
+            .decode()?
+            .into_rgb8();
+        let avatar_img = ColorImage::from_rgb(
+            [avatar_img.width() as usize, avatar_img.height() as usize],
+            &avatar_img.into_vec(),
+        );
+        Ok(TaskResponse::UserMeta(
+            uid,
+            user.screen_name,
+            ImageData::Color(avatar_img.into()),
+        ))
     }
 
     async fn handle_short_task_res(&self, result: Result<TaskResponse>) {

@@ -1,6 +1,7 @@
 use std::ops::RangeInclusive;
 
 use anyhow::Error;
+use egui::ImageData;
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -18,11 +19,10 @@ pub enum Task {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
 pub enum TaskResponse {
-    SumOfFavDB(u32, u32),      // remain sum of favorite in weibo and local db
-    UserMeta(String, Vec<u8>), // screen name and avatar picture
-    InProgress(f32, String),   // long time task is in progress
-    Finished(u32, u32),        // long time task is finished
-    Error(Error),              // error occurs
+    SumOfFavDB(u32, u32),             // remain sum of favorite in weibo and local db
+    UserMeta(i64, String, ImageData), // screen name and avatar picture
+    InProgress(f32, String),          // long time task is in progress
+    Finished(u32, u32),               // long time task is finished
+    Error(Error),                     // error occurs
 }
