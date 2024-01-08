@@ -154,10 +154,10 @@ impl Core {
             Err(e) => panic!("{}", e),
         };
         if let Some(task_status) = task_status {
-            match &task_status {
+            match task_status {
                 TaskResponse::SumOfFavDB(web_total, db_total) => {
-                    self.web_total = *web_total;
-                    self.db_total = *db_total;
+                    self.web_total = web_total;
+                    self.db_total = db_total;
                     if self.db_end == 0 {
                         self.db_end = self.db_total;
                     }
@@ -170,14 +170,14 @@ impl Core {
                     );
                 }
                 TaskResponse::InProgress(ratio, msg) => {
-                    self.ratio = *ratio;
+                    self.ratio = ratio;
                     self.message = msg.to_owned()
                 }
                 TaskResponse::Finished(web_total, db_total) => {
                     self.ratio = 1.;
                     self.task_ongoing = false;
-                    self.web_total = *web_total;
-                    self.db_total = *db_total;
+                    self.web_total = web_total;
+                    self.db_total = db_total;
                     self.message = format!(
                         "任务完成!\n账号剩 {} 条收藏\n本地保存有 {} 条收藏",
                         self.web_total, self.db_total
