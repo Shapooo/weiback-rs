@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow;
 use eframe::{
-    egui::{self, vec2, viewport::ViewportBuilder},
+    egui::{self, vec2, viewport::ViewportBuilder, ImageData},
     NativeOptions,
 };
 use log::info;
@@ -63,6 +63,7 @@ pub struct Core {
     login_state: Option<Arc<RwLock<LoginState>>>,
     qrcode_img: Option<egui::TextureHandle>,
     uid_str: String,
+    user_meta: Option<(i64, String, ImageData)>,
 }
 
 impl Default for Core {
@@ -89,6 +90,7 @@ impl Default for Core {
             login_state: Default::default(),
             qrcode_img: Default::default(),
             uid_str: Default::default(),
+            user_meta: Default::default(),
         }
     }
 }
@@ -186,7 +188,9 @@ impl Core {
                 TaskResponse::Error(msg) => {
                     self.message = msg.to_string();
                 }
-                TaskResponse::UserMeta(_, _) => todo!(),
+                TaskResponse::UserMeta(id, screen_name, avatar) => {
+                    self.user_meta = Some((id, screen_name, avatar))
+                }
             }
         }
 
@@ -248,7 +252,31 @@ impl Core {
                     if self.tab_type == TabType::BackUpUser {
                         ui.horizontal(|ui| {
                             ui.label("下载用户ID，默认自己：");
-                            ui.text_edit_singleline(&mut self.uid_str);
+                            let uid: i64 = (self.uid_str.len() == 10)
+                                .then(|| self.uid_str.parse().ok())
+                                .flatten()
+                                .unwrap_or_default();
+                            match (uid, self.user_meta.as_ref()) {
+                                (0, _) => {
+                                    ui.text_edit_singleline(&mut self.uid_str);
+                                }
+                                (uid, Some((id, screen_name, avatar))) if &uid == id => {
+                                    ui.text_edit_singleline(&mut self.uid_str)
+                                        .on_hover_ui_at_pointer(|ui| {
+                                            let ref handle = ui.ctx().load_texture(
+                                                "avatar",
+                                                avatar.clone(),
+                                                Default::default(),
+                                            );
+                                            ui.image(handle);
+                                            ui.label(screen_name);
+                                        });
+                                }
+                                (uid, _) => {
+                                    self.executor.as_ref().unwrap().get_user_meta(uid);
+                                    ui.text_edit_singleline(&mut self.uid_str);
+                                }
+                            };
                         });
                     } else {
                         ui.collapsing("高级设置", |ui| {
