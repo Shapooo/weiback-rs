@@ -259,6 +259,22 @@ impl TaskHandler {
             .await
     }
 
+    async fn handle_short_task_res(&self, result: Result<TaskResponse>) {
+        match result {
+            Ok(res) => {
+                info!("task finished");
+                self.task_status_sender.send(res).await.unwrap();
+            }
+            Err(err) => {
+                error!("{err:?}");
+                self.task_status_sender
+                    .send(TaskResponse::Error(err))
+                    .await
+                    .unwrap();
+            }
+        }
+    }
+
     async fn handle_long_task_res(&self, result: Result<()>) {
         let mut db_total = 0;
         let mut web_total = 0;
