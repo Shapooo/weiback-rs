@@ -4,6 +4,7 @@ use crate::{
     html_generator::HTMLGenerator,
     long_text::LongText,
     picture::Picture,
+    search_args::SearchArgs,
     user::User,
     web_fetcher::WebFetcher,
 };
@@ -681,15 +682,11 @@ impl Post {
     pub async fn fetch_posts(
         uid: i64,
         page: u32,
-        hasret: bool,
+        search_args: &SearchArgs,
         fetcher: &WebFetcher,
     ) -> Result<Vec<Post>> {
-        let url = format!(
-            "{POST_SEARCH_API}?uid={}&page={}hasori=1&hasret={}",
-            uid,
-            page,
-            if hasret { 1 } else { 0 }
-        );
+        let mut url = format!("{}?uid={}&page={}", POST_SEARCH_API, uid, page);
+        url = search_args.attach_args(url);
         debug!("fetch meta page, url: {url}");
         let mut json: Value = fetcher.get(url, fetcher.web_client()).await?.json().await?;
         trace!("get json: {json:?}");
