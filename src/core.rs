@@ -316,12 +316,7 @@ impl Core {
                             self.executor
                                 .as_ref()
                                 .expect("core.executor must be unwrapable, bugs in there")
-                                .backup_user(
-                                    uid,
-                                    1..=u32::MAX,
-                                    self.with_pic,
-                                    self.image_definition,
-                                )
+                                .backup_user(uid, self.with_pic, self.image_definition)
                         }
                         TabType::ExportFromLocal => {
                             self.executor
