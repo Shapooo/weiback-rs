@@ -3,6 +3,7 @@ use crate::login::{get_login_info, LoginState, Loginator};
 use crate::message::TaskStatus;
 
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use anyhow;
 use eframe::{
@@ -136,6 +137,7 @@ impl eframe::App for Core {
             MainState::Logining => self.when_logging(ctx, _frame),
             MainState::Logged => self.when_logined(ctx, _frame),
         }
+        ctx.request_repaint_after(Duration::from_millis(200));
     }
 }
 
