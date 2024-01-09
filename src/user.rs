@@ -217,11 +217,7 @@ impl User {
 
     pub async fn fetch(id: i64, fetcher: &WebFetcher) -> Result<Self> {
         let url = format!("{}?uid={}", USER_INFO_API, id);
-        let mut json = fetcher
-            .get(url, fetcher.web_client())
-            .await?
-            .json::<Value>()
-            .await?;
+        let mut json = fetcher.get(url).await?.json::<Value>().await?;
         if json["ok"] != 1 {
             Err(anyhow!("fetch user info failed: {:?}", json))
         } else {
