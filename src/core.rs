@@ -263,7 +263,7 @@ impl Core {
                                 (uid, Some((id, screen_name, avatar))) if &uid == id => {
                                     ui.text_edit_singleline(&mut self.uid_str)
                                         .on_hover_ui_at_pointer(|ui| {
-                                            let ref handle = ui.ctx().load_texture(
+                                            let handle = &ui.ctx().load_texture(
                                                 "avatar",
                                                 avatar.clone(),
                                                 Default::default(),
