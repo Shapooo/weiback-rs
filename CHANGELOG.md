@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.2.0] - 2024-01-09
+**Added**
+- 新增了备份用户时显示名字和头像的功能
+
+**Changed**
+- 非常多的重构，对80%的代码重构，模块划分更合理
+- 微博数据处理的部分完全放到 Post 里
+- 用户数据处理的部分完全放到 User 里
+- 图片下载、存储部分完全放到 picture 模块里
+- 移除 post_processor 模块
+- 使用 channel 而不是共享内存进行 ui 和工作线程通信
+- UI 会主动刷新
+- 数据库字段变更
+- ...
+
 ## [v0.1.6] - 2023-12-30
 
 **Added**
