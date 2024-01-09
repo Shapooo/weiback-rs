@@ -301,10 +301,6 @@ impl TaskHandler {
             }
             Err(err) => {
                 error!("{err:?}");
-                self.task_status_sender
-                    .send(TaskResponse::Error(err))
-                    .await
-                    .unwrap();
             }
         }
     }
