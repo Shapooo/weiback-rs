@@ -26,7 +26,7 @@ WeiBack-rs 是一个使用Rust🦀开发的开源软件，它可以帮助你备�
 ## 安装 💻
 ### 下载预编译可执行文件
 
-从[Releases](https://github.com/Shapooo/WeiBack/releases)下载最新版本对应平台的预编译文件压缩包，解压即可。
+从[Releases](https://github.com/Shapooo/weiback-rs/releases)下载最新版本对应平台的预编译文件压缩包，解压即可。
 
 ### 从源码编译
 
