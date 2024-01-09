@@ -199,7 +199,7 @@ impl Core {
             ui.group(|ui| {
                 ui.set_enabled(!self.task_ongoing);
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.tab_type, TabType::BackUpFav, "  收藏备份  ");
+                    ui.selectable_value(&mut self.tab_type, TabType::BackUpFav, "  备份收藏  ");
                     ui.selectable_value(&mut self.tab_type, TabType::BackUpUser, "  备份用户  ");
                     ui.selectable_value(
                         &mut self.tab_type,
