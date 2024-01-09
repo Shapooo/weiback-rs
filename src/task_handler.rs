@@ -113,6 +113,8 @@ impl TaskHandler {
                 page += 1;
             }
         }
+        let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        User::mark_user_backed_up(uid, conn.as_mut()).await?;
         Ok(())
     }
 
@@ -134,11 +136,6 @@ impl TaskHandler {
             &self.web_fetcher,
         )
         .await?;
-        // mark_user_backed_up should be called after all posts inserted,
-        // to ensure the user info is persisted
-        let mut trans = self.persister.db().as_ref().unwrap().begin().await?;
-        User::mark_user_backed_up(uid, trans.as_mut()).await?;
-        trans.commit().await?;
 
         Ok(result)
     }
