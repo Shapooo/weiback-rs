@@ -6,6 +6,7 @@ use log::{info, LevelFilter};
 use weiback_rs::core::Core;
 
 fn main() -> Result<()> {
+    std::env::set_var("RUST_BACKTRACE", "1");
     init_logger()?;
     info!("start running...");
     let core = Core::new();
