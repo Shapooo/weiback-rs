@@ -89,13 +89,6 @@ WeiBack-rs 是一个使用Rust🦀开发的开源软件，它可以帮助你备�
 
 *目前界面操作还比较凌乱，后续将进行优化*
 
-## 截图或演示 📷
-
-![未登录](img/unlogged.png)
-![登录中](img/logging.png)
-![微博下载](img/download.png)
-![本地导出](img/export.png)
-
 ------
 
 ## 开发计划 📅
