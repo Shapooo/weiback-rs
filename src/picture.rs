@@ -105,7 +105,7 @@ impl Picture {
     async fn fetch_blob(&self, fetcher: &WebFetcher) -> Result<Bytes> {
         let url = self.get_url();
         debug!("fetch pic, url: {}", url);
-        let res = fetcher.get(url, fetcher.pic_client()).await?;
+        let res = fetcher.get(url).await?;
         let res_bytes = res.bytes().await?;
         trace!("fetched pic size: {}", res_bytes.len());
         Ok(res_bytes)
@@ -227,7 +227,7 @@ impl PictureBlob {
         let result = sqlx::query("INSERT OR IGNORE INTO picture_blob VALUES (?, ?, ?)")
             .bind(&self.url)
             .bind(&self.id)
-            .bind(&self.blob.as_ref())
+            .bind(self.blob.as_ref())
             .execute(&mut *executor)
             .await?;
         trace!(

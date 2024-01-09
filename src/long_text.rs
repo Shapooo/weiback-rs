@@ -30,9 +30,9 @@ impl LongText {
     }
 
     pub async fn fetch_long_text(mblogid: &str, fetcher: &WebFetcher) -> Result<Option<String>> {
-        let url = format!("{STATUSES_LONGTEXT_API}?id={mblogid}");
+        let url = format!("{}?id={}", STATUSES_LONGTEXT_API, mblogid);
         debug!("fetch long text, url: {url}");
-        let res = fetcher.get(url, fetcher.web_client()).await?;
+        let res = fetcher.get(url).await?;
         let long_text_meta = match res.json::<LongText>().await {
             Ok(res) => res,
             Err(e) if e.is_decode() => {

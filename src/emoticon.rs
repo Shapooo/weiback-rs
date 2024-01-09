@@ -12,7 +12,7 @@ const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 pub async fn init_emoticon(fetcher: &WebFetcher) -> Result<()> {
     let url = STATUSES_CONFIG_API;
     debug!("fetch emoticon, url: {url}");
-    let res = fetcher.get(url, fetcher.web_client()).await?;
+    let res = fetcher.get(url).await?;
     let mut json: Value = res.json().await?;
     if json["ok"] != 1 {
         return Err(anyhow!("fetched emoticon is not ok: {json:?}"));

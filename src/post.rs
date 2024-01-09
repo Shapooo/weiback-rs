@@ -653,11 +653,7 @@ impl Post {
     {
         let idstr = id.to_string();
         let res = fetcher
-            .post(
-                DESTROY_FAVORITES,
-                fetcher.web_client(),
-                &serde_json::json!({ "id": idstr }),
-            )
+            .post(DESTROY_FAVORITES, &serde_json::json!({ "id": idstr }))
             .await?;
         let status_code = res.status().as_u16();
 
@@ -688,7 +684,7 @@ impl Post {
         let mut url = format!("{}?uid={}&page={}", POST_SEARCH_API, uid, page);
         url = search_args.attach_args(url);
         debug!("fetch meta page, url: {url}");
-        let mut json: Value = fetcher.get(url, fetcher.web_client()).await?.json().await?;
+        let mut json: Value = fetcher.get(url).await?.json().await?;
         trace!("get json: {json:?}");
         if json["ok"] != 1 {
             Err(anyhow!("fetched data is not ok: {json:?}"))
@@ -715,7 +711,7 @@ impl Post {
     pub async fn fetch_fav_posts(uid: i64, page: u32, fetcher: &WebFetcher) -> Result<Vec<Post>> {
         let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
         debug!("fetch fav meta page, url: {url}");
-        let mut posts: Value = fetcher.get(url, fetcher.web_client()).await?.json().await?;
+        let mut posts: Value = fetcher.get(url).await?.json().await?;
         trace!("get json: {posts:?}");
         if posts["ok"] != 1 {
             Err(anyhow!("fetched data is not ok: {posts:?}"))
@@ -759,11 +755,7 @@ impl Post {
         // let mobile_client = &self.mobile_client;
         let url = format!("{}{}", MOBILE_POST_API, mblogid);
         info!("fetch client only post url: {}", &url);
-        let mut res: Value = fetcher
-            .get(url, fetcher.mobile_client())
-            .await?
-            .json()
-            .await?;
+        let mut res: Value = fetcher.get(url).await?.json().await?;
         if res["ok"] == 1 {
             // let post = Self::convert_mobile2pc_post(res["data"].take())?;
             let post = res["data"].take().try_into()?;
