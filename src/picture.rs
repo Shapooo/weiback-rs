@@ -4,7 +4,7 @@ use std::ops::DerefMut;
 
 use anyhow::Result;
 use bytes::Bytes;
-use log::{debug, trace};
+use log::{debug, error, trace};
 use sqlx::{Executor, FromRow, Sqlite};
 
 const PIC_TYPE_AVATAR: u8 = 0;
@@ -90,7 +90,13 @@ impl Picture {
         match self.query_blob(&mut *executor).await? {
             Some(blob) => Ok(Some(blob)),
             None => {
-                let blob = self.fetch_blob(fetcher).await?;
+                let blob = match self.fetch_blob(fetcher).await {
+                    Ok(blob) => blob,
+                    Err(err) => {
+                        error!("fetch pic failed: {}", err);
+                        return Ok(None);
+                    }
+                };
                 let blob = PictureBlob::new(self.get_url(), blob);
                 let inner = PictureInner::from(self);
                 if !self.is_tmp() {
