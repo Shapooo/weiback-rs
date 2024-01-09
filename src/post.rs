@@ -20,7 +20,7 @@ use anyhow::{anyhow, Error, Result};
 use chrono::{DateTime, FixedOffset};
 use futures::future::join_all;
 use lazy_static::lazy_static;
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, to_value, Value};
@@ -689,20 +689,7 @@ impl Post {
         if json["ok"] != 1 {
             Err(anyhow!("fetched data is not ok: {json:?}"))
         } else if let Value::Array(posts) = json["data"]["list"].take() {
-            let posts = posts
-                .into_iter()
-                .map(|post| post.try_into())
-                .collect::<Result<Vec<Post>>>()?;
-            let posts = join_all(posts.into_iter().map(|post| async {
-                post.with_process_client_only(fetcher)
-                    .await?
-                    .with_process_long_text(fetcher)
-                    .await
-            }))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-            Ok(posts)
+            Ok(Post::posts_process(posts, fetcher).await?)
         } else {
             Err(anyhow!("Posts should be a array, maybe api has changed"))
         }
@@ -716,23 +703,37 @@ impl Post {
         if posts["ok"] != 1 {
             Err(anyhow!("fetched data is not ok: {posts:?}"))
         } else if let Value::Array(posts) = posts["data"].take() {
-            let posts = posts
-                .into_iter()
-                .map(|post| post.try_into())
-                .collect::<Result<Vec<Post>>>()?;
-            let posts = join_all(posts.into_iter().map(|post| async {
-                post.with_process_client_only(fetcher)
-                    .await?
-                    .with_process_long_text(fetcher)
-                    .await
-            }))
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-            Ok(posts)
+            Ok(Post::posts_process(posts, fetcher).await?)
         } else {
             Err(anyhow!("Posts should be a array, maybe api has changed"))
         }
+    }
+
+    async fn posts_process(posts: Vec<Value>, fetcher: &WebFetcher) -> Result<Vec<Post>> {
+        let posts = posts
+            .into_iter()
+            .map(|post| post.try_into())
+            .collect::<Result<Vec<Post>>>()?;
+        debug!("get raw {} posts", posts.len());
+        let posts = join_all(posts.into_iter().map(|post| async {
+            post.with_process_client_only(fetcher)
+                .await?
+                .with_process_long_text(fetcher)
+                .await
+        }))
+        .await
+        .into_iter()
+        .filter_map(|post| match post {
+            // network errors usually recoverable, so just ignore it
+            // TODO: collect failed post and retry
+            Ok(post) => Some(post),
+            Err(e) => {
+                error!("process post failed: {}", e);
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+        Ok(posts)
     }
 
     pub async fn with_process_long_text(mut self, fetcher: &WebFetcher) -> Result<Post> {
