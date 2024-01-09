@@ -92,7 +92,6 @@ impl TaskHandler {
 
     async fn _backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) -> Result<()> {
         info!("download user {uid} posts");
-        let mut page = 1;
         let search_args_vec = vec![
             SearchArgs::new().with_ori().with_text(),
             SearchArgs::new().with_ori().with_pic(),
@@ -102,14 +101,27 @@ impl TaskHandler {
             SearchArgs::new().with_ret().with_video(),
             SearchArgs::new().with_ret().with_music(),
         ];
-        for search_args in search_args_vec {
+        let total_category_num = search_args_vec.len();
+        let one_category_ratio = 1.0 / total_category_num as f32;
+        let mut total_page = 1;
+
+        for (i, search_args) in search_args_vec.iter().enumerate() {
+            let mut page = 1;
             loop {
                 let len = self
-                    .backup_one_page(uid, page, &search_args, with_pic, image_definition)
+                    .backup_one_page(uid, page, search_args, with_pic, image_definition)
                     .await?;
+                info!("fetched {} posts in {}th page", len, page);
                 if len == 0 {
                     break;
                 }
+                self.task_status_sender
+                    .send(TaskResponse::InProgress(
+                        (i as f32 + total_page as f32 / 100.) * one_category_ratio,
+                        "备份中...耐心等待，干点别的...".into(),
+                    ))
+                    .await?;
+                total_page += 1;
                 page += 1;
             }
         }
