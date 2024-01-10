@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.2.0-patch1] - 2024-01-09
+**Changed**
+- 收藏备份时最后一页不再等待
+
+**Fixed**
+- 修复用户备份获取完整内容时可能失败的问题
+
 ## [v0.2.0] - 2024-01-09
 **Added**
 - 新增了备份用户时显示名字和头像的功能
