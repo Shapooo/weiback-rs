@@ -315,7 +315,7 @@ impl TaskHandler {
         let mut db_total = 0;
         let mut web_total = 0;
         let result = self
-            ._handle_task_res(result, &mut web_total, &mut db_total)
+            ._handle_long_task_res(result, &mut web_total, &mut db_total)
             .await;
         match result {
             Err(err) => {
@@ -335,7 +335,7 @@ impl TaskHandler {
         }
     }
 
-    async fn _handle_task_res(
+    async fn _handle_long_task_res(
         &self,
         result: Result<()>,
         web_total: &mut u32,
