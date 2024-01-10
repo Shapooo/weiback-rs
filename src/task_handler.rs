@@ -13,6 +13,8 @@ use log::{debug, error, info};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 const SAVING_PERIOD: usize = 200;
+const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
+const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
 pub struct TaskHandler {
@@ -69,7 +71,7 @@ impl TaskHandler {
         for (i, id) in ids.into_iter().enumerate() {
             Post::unfavorite_post(id, trans.as_mut(), &self.web_fetcher).await?;
             info!("post {id} unfavorited");
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(OTHER_TASK_INTERVAL).await;
             let progress = i as f32 / len as f32;
             self.task_status_sender
                 .send(TaskResponse::InProgress(
@@ -123,6 +125,7 @@ impl TaskHandler {
                     .await?;
                 total_page += 1;
                 page += 1;
+                sleep(BACKUP_TASK_INTERVAL).await;
             }
         }
         let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
@@ -244,6 +247,7 @@ impl TaskHandler {
         info!("favorites download range is {range:?}");
         let mut total_downloaded: usize = 0;
         let range = range.start() / 20 + 1..=range.end() / 20;
+        let last_page = range.end() - 1;
         let total_pages = (range.end() - range.start() + 1) as f32;
 
         for (i, page) in range.into_iter().enumerate() {
@@ -259,7 +263,9 @@ impl TaskHandler {
                     format!("已下载第{page}页...耐心等待，先干点别的"),
                 ))
                 .await?;
-            sleep(Duration::from_secs(5)).await;
+            if i != last_page as usize {
+                sleep(BACKUP_TASK_INTERVAL).await;
+            }
         }
         info!("fetched {total_downloaded} posts in total");
         Ok(())
