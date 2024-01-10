@@ -59,6 +59,7 @@ impl TaskHandler {
         Ok(())
     }
 
+    // unfavorite all posts that are in weibo favorites
     pub async fn unfavorite_posts(&self) {
         self.handle_long_task_res(self._unfavorite_posts().await)
             .await
@@ -83,10 +84,12 @@ impl TaskHandler {
         Ok(())
     }
 
+    // backup self posts
     pub async fn backup_self(&self, with_pic: bool, image_definition: u8) {
         self.backup_user(self.uid, with_pic, image_definition).await
     }
 
+    // backup user posts
     pub async fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
         self.handle_long_task_res(self._backup_user(uid, with_pic, image_definition).await)
             .await
@@ -133,6 +136,7 @@ impl TaskHandler {
         Ok(())
     }
 
+    // backup one page of posts of the user
     pub async fn backup_one_page(
         &self,
         uid: i64,
@@ -155,6 +159,7 @@ impl TaskHandler {
         Ok(result)
     }
 
+    // export favorite posts from local database
     pub async fn export_from_local(
         &self,
         range: RangeInclusive<u32>,
@@ -224,6 +229,7 @@ impl TaskHandler {
         Ok(())
     }
 
+    // export favorite posts from weibo
     pub async fn backup_favorites(
         &self,
         range: RangeInclusive<u32>,
@@ -271,6 +277,8 @@ impl TaskHandler {
         Ok(())
     }
 
+    // get user meta info, include avatar, screen_name
+    // ui will show this after uid is inputted
     pub async fn get_user_meta(&self, uid: i64) {
         self.handle_short_task_res(self._get_user_meta(uid).await)
             .await
@@ -299,6 +307,10 @@ impl TaskHandler {
         ))
     }
 
+    // handle short task result, like get_user_meta, which are tasks that take short time and
+    // and return products to ui
+    // different from handle_long_task_res, this function will not send TaskResponse::Finished
+    // to ui, ui will not show task status info about this task
     async fn handle_short_task_res(&self, result: Result<TaskResponse>) {
         match result {
             Ok(res) => {
@@ -311,6 +323,8 @@ impl TaskHandler {
         }
     }
 
+    // handle long task result, like backup_favorites, which are tasks that take long time and
+    // usually request by user, need to send task status info to ui for showing to user
     async fn handle_long_task_res(&self, result: Result<()>) {
         let mut db_total = 0;
         let mut web_total = 0;
@@ -349,6 +363,7 @@ impl TaskHandler {
         Ok(())
     }
 
+    // backup one page of favorites
     pub async fn backup_one_fav_page(
         &self,
         uid: i64,
@@ -389,10 +404,12 @@ impl TaskHandler {
         Post::query_posts(limit, offset, reverse, conn).await
     }
 
+    // get total number of favorites in weibo
     async fn get_web_total_num(&self) -> Result<u32> {
         self.web_fetcher.fetch_fav_total_num().await
     }
 
+    // get total number of favorites in local database
     async fn get_db_total_num(&self) -> Result<u32> {
         let conn = self.persister.db().as_ref().unwrap().acquire().await?;
         Post::query_favorited_sum(conn).await
