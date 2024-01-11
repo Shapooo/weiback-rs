@@ -165,7 +165,7 @@ pub struct Post {
     #[sqlx(skip)]
     pub retweeted_status: Option<Box<Post>>,
     #[sqlx(skip)]
-    #[serde(deserialize_with = "deserialize_user")]
+    #[serde(default, deserialize_with = "deserialize_user")]
     pub user: Option<User>,
 }
 
