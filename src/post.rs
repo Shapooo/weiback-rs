@@ -100,18 +100,19 @@ pub struct Post {
     pub visible: Value,
     pub text: String,
     #[sqlx(default)]
+    #[serde(default)]
     pub attitudes_status: i64,
     #[sqlx(default, rename = "showFeedRepost")]
-    #[serde(rename = "showFeedRepost")]
+    #[serde(default, rename = "showFeedRepost")]
     pub show_feed_repost: bool,
     #[sqlx(default, rename = "showFeedComment")]
-    #[serde(rename = "showFeedComment")]
+    #[serde(default, rename = "showFeedComment")]
     pub show_feed_comment: bool,
     #[sqlx(default, rename = "pictureViewerSign")]
-    #[serde(rename = "pictureViewerSign")]
+    #[serde(default, rename = "pictureViewerSign")]
     pub picture_viewer_sign: bool,
-    #[serde(rename = "showPictureViewer")]
     #[sqlx(default, rename = "showPictureViewer")]
+    #[serde(default, rename = "showPictureViewer")]
     pub show_picture_viewer: bool,
     #[sqlx(default)]
     #[serde(default)]
