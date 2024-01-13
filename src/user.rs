@@ -24,9 +24,10 @@ pub struct User {
     #[serde(default)]
     pub avatar_hd: String,
     #[sqlx(default)]
+    #[serde(default)]
     pub planet_video: bool,
     #[sqlx(default)]
-    #[serde(deserialize_with = "parse_v_plus")]
+    #[serde(default, deserialize_with = "parse_v_plus")]
     pub v_plus: i64,
     #[sqlx(default)]
     #[serde(default)]
