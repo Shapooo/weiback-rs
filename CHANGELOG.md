@@ -4,18 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.2.1] - 2024-01-19
+
+### Fixed
+
+- 修复手机版网页的Post和User的部分字段可能不存在导致的错误
+
 ## [v0.2.0-patch1] - 2024-01-09
-**Changed**
+
+### Changed
+
 - 收藏备份时最后一页不再等待
 
-**Fixed**
+### Fixed
+
 - 修复用户备份获取完整内容时可能失败的问题
 
 ## [v0.2.0] - 2024-01-09
-**Added**
+
+### Added
+
 - 新增了备份用户时显示名字和头像的功能
 
-**Changed**
+### Changed
+
 - 非常多的重构，对80%的代码重构，模块划分更合理
 - 微博数据处理的部分完全放到 Post 里
 - 用户数据处理的部分完全放到 User 里
@@ -28,40 +40,49 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.1.6] - 2023-12-30
 
-**Added**
+### Added
+
 - 新增了备份自己和指定用户微博的功能
 - 新增了数据库升级工具
 
-**Changed**
+### Changed
+
 - 数据库变动：created_at 字段变为使用时间戳
 - 数据库变动：用户增加 backedup 字段
 - 数据库变动：增加 Picture 表
 
-**Fixed**
+### Fixed
+
 - 修复了因移动端微博API变动导致的无法登录的问题
 
-**NOTICE**
+### NOTICE
+
 - 老用户需要升级数据库，详见 README
 
 ## [v0.1.5] - 2023-12-10
 
-**Changed**
+### Changed
+
 - filter unecessary module logs
 - update version of dependencies
 
-**Fixed**
+### Fixed
+
 - export range wrong
 
 ## [v0.1.4] - 2023-08-26
 
-**Added**
+### Added
+
 - Support to url_objects of data from mobile web
 
-**Changed**
+### Changed
+
 - Use another api for client-only posts
 - Change log level of fetching client-only post from debug to info
 
-**Fixed**
+### Fixed
+
 - clippy warnings
 - forget to mark client-only post favorited
 - wrong field type in post json
@@ -69,31 +90,38 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.1.3] - 2023-08-25
 
-**Added**
+### Added
+
 - Add mobile web login
 - Support backup client only posts
 
-**Changed**
+### Changed
+
 - Save all cookies (include expired) to login_info.json
 - Update version of dependencies
 
-**Fixed**
+### Fixed
+
 - Unfavorite unfavorited posts break app down
 
 ## [v0.1.2] - 2023-08-05
 
-**Added**
+### Added
+
 - Retry when http request return server error
 
-**Changed**
+### Changed
+
 - change default log level to INFO
 
-**Fixed**
+### Fixed
+
 - wrong favorited status in database
 
 ## [v0.1.1] - 2023-07-22
 
-**Added**
+### Added
+
 - github rust-clippy check action
 - more information when error occur
 - support status peek when unfavorite posts
@@ -101,18 +129,21 @@ All notable changes to this project will be documented in this file.
 - support for returning remaining amount of posts after a task
 - github release action
 
-**Changed**
+### Changed
+
 - change some detail of UI
 - use DragValue to get range of download and export
 - it won't stop when get zero post from weibo
 
-**Fixed**
+### Fixed
+
 - follow rust-clippy, fix coding style problem
 - wrong favorite status in database
 
 ## [v0.1.0] - 2023-07-20
 
 First Edition, with features:
+
 - support for downloading raw data of weibo posts
 - support for extraction img url from weibo
 - support for persist data to db
