@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.2.2] - 2024-02-26
+
+### Fixed
+
+- 修复因没有提取转发头像导致的导出时报错
+
+### Changed
+
+- task handler 初始化阶段的报错发送到主线程，以便日志记录
+
 ## [v0.2.1] - 2024-01-19
 
 ### Fixed
