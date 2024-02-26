@@ -47,16 +47,18 @@ impl TaskHandler {
     }
 
     // initialize database、get emoticon data
-    pub async fn init(&mut self) -> Result<()> {
+    pub async fn init(&mut self) {
+        let res = self._init().await;
+        self.handle_short_task_res(res).await;
+    }
+
+    async fn _init(&mut self) -> Result<TaskResponse> {
         init_emoticon(&self.web_fetcher).await?;
         self.persister.init().await?;
         let (web_total, db_total) = tokio::join!(self.get_web_total_num(), self.get_db_total_num());
         let web_total = web_total?;
         debug!("initing...");
-        self.task_status_sender
-            .send(TaskResponse::SumOfFavDB(web_total, db_total?))
-            .await?;
-        Ok(())
+        Ok(TaskResponse::SumOfFavDB(web_total, db_total?))
     }
 
     // unfavorite all posts that are in weibo favorites

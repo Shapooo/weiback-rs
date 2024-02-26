@@ -27,7 +27,7 @@ impl Executor {
             debug!("new a async runtime succeed");
             let mut th = TaskHandler::new(login_info, task_status_sender).unwrap();
             rt.block_on(async move {
-                th.init().await?;
+                th.init().await;
                 debug!("task handler init succeed");
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
