@@ -283,12 +283,25 @@ impl Post {
             pictures.insert(avatar);
             avatar_file
         });
+        let retweeter_avatar_file = self
+            .retweeted_status
+            .as_ref()
+            .and_then(|retweeted| retweeted.user.as_ref())
+            .map(|user| {
+                let avatar = user.get_avatar_pic(image_definition);
+                let avatar_file = resource_dir.join(avatar.get_file_name());
+                pictures.insert(avatar);
+                avatar_file
+            });
 
         let mut post = to_value(self)?;
         if !pic_locs.is_empty() {
             post["pics"] = to_value(pic_locs).unwrap();
         }
         post["poster_avatar"] = to_value(avatar_file).unwrap();
+        if post["retweeted_status"].is_object() && post["retweeted_status"]["user"].is_object() {
+            post["retweeted_status"]["poster_avatar"] = to_value(retweeter_avatar_file)?
+        }
 
         Ok(post)
     }
