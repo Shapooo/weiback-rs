@@ -76,8 +76,7 @@ impl Persister {
         Post::create_table(conn.as_mut()).await?;
         User::create_table(conn.as_mut()).await?;
         Picture::create_table(conn).await?;
-        sqlx::query("PRAGMA user_version = ?")
-            .bind(VALIDE_DB_VERSION)
+        sqlx::query(format!("PRAGMA user_version = {};", VALIDE_DB_VERSION).as_str())
             .execute(self.db_pool.as_ref().unwrap())
             .await?;
         Ok(())
