@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.2.3] - 2024-02-27
+
+### Fixed
+
+- 修复数据库初始化过程中 pragma 导致的错误
+
+### Changed
+
+- 取消收藏失败将不再影响其它任务
+
 ## [v0.2.2] - 2024-02-26
 
 ### Fixed
