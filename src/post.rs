@@ -20,7 +20,7 @@ use anyhow::{anyhow, Error, Result};
 use chrono::{DateTime, FixedOffset};
 use futures::future::join_all;
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, to_value, Value};
@@ -691,25 +691,13 @@ impl Post {
         for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
     {
         let idstr = id.to_string();
-        let res = fetcher
+        if let Err(err) = fetcher
             .post(DESTROY_FAVORITES, &serde_json::json!({ "id": idstr }))
-            .await?;
-        let status_code = res.status().as_u16();
-
-        if !res.status().is_success() {
-            let res_json = res.json::<Value>().await;
-            if status_code == 400
-                && res_json.is_ok()
-                && res_json.unwrap()["message"] == "not your collection!"
-            {
-                warn!("post {} have been unfavorited", idstr);
-            } else {
-                warn!(
-                    "cannot unfavorite post {}, with http code {}",
-                    idstr, status_code
-                );
-            }
-        }
+            .await
+        {
+            error!("unfavorite {id} post failed, because {err}");
+            return Ok(());
+        };
         Self::mark_post_unfavorited(id, executor).await?;
         Ok(())
     }
