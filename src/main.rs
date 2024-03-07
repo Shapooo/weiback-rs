@@ -31,7 +31,7 @@ fn init_logger() -> Result<()> {
         .truncate(true)
         .open(log_path)?;
     Builder::new()
-        .filter_level(LevelFilter::Info)
+        .filter_level(LevelFilter::Debug)
         .parse_default_env()
         .filter_module("sqlx", LevelFilter::Error)
         .filter_module("zbus", LevelFilter::Warn)
