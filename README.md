@@ -92,6 +92,11 @@ WeiBack-rs 是一个使用Rust🦀开发的开源软件，它可以帮助你备�
 - 考虑到数千数万条收藏导出到单一HTML文件带来阅读不便，默认导出每个HTML文件包含50条博文。高级选项中可设置。
 *目前界面操作还比较凌乱，后续将进行优化*
 
+### 其它技巧
+
+- HTML导出使用了 [tera](https://keats.github.io/tera)，如果不满意目前的 HTML 样式，可以根据 [DOC](https://keats.github.io/tera/docs/) 自行修改 `templates/posts.html` 文件。
+- 备份的所有数据都保存在 `res/weiback.db` sqlite3 数据库文件里。目前包含四个表 posts、users、picture和picture_blob，分别是博文数据、用户数据、图片信息以及图片内容数据。在 weiback 的导出、浏览和搜索功能还不完善或未实现的现在，完全可以使用数据库工具直接查看、搜索所备份的内容。
+
 ------
 
 ## 开发计划 📅
