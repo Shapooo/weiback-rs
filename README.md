@@ -97,6 +97,16 @@ WeiBack-rs 是一个使用Rust🦀开发的开源软件，它可以帮助你备�
 - HTML导出使用了 [tera](https://keats.github.io/tera)，如果不满意目前的 HTML 样式，可以根据 [DOC](https://keats.github.io/tera/docs/) 自行修改 `templates/posts.html` 文件。
 - 备份的所有数据都保存在 `res/weiback.db` sqlite3 数据库文件里。目前包含四个表 posts、users、picture和picture_blob，分别是博文数据、用户数据、图片信息以及图片内容数据。在 weiback 的导出、浏览和搜索功能还不完善或未实现的现在，完全可以使用数据库工具直接查看、搜索所备份的内容。
 
+**面向数据库纯新手的简单入门教程**：
+1. Windows 用户可以免费在 Windows 应用商店安装 DBeaver CE 数据库管理软件，Linux 或 Mac 用户可以自行用包管理器安装 sqlite3，以下教程皆以 DBeaver 为例，Linux/Mac 用户自行搜索 sqlite3 使用方法。
+2. 安装 Dbeaver 并打开，在左上角选择新建数据库连接，然后在弹出界面指定 weiback.db 的路径：
+![新建数据库连接](img/newsql.png)
+3. 左侧可以看到一些表，表里便存储有你备份的全部数据，双击打开，选到上方 data 页，便可以看到你的全部数据了：
+![查看全部数据](img/dbdata.png)
+4. 还可以使用 SQL 语句指定你想查看的数据，如 `SELECT id, text_raw FROM posts WHERE text_raw LIKE '%西北旺%';` 可以看到包含"西北旺"的所有微博；比如你还限制一下用户可以这样 `SELECT id, text_raw FROM posts WHERE text_raw LIKE '%在西北旺，美团的“美食榜单%' LIMIT 1 AND uid = 10101010;`；或者，你觉得这个查询需要把整个 db 文件遍历一遍，太慢了，而你只需要其中的一条 `SELECT id, text_raw FROM posts WHERE text_raw LIKE '%在西北旺，美团的“美食榜单%' LIMIT 1 LIMIT 1;`。要使用语句只需要在上方新建一个 SQL 脚本，输入你需要的语句，然后 Ctrl+Enter 即可执行：
+![使用SQL语句](img/sqlscript.png)
+更多 SQL 使用方法请自行搜索学习，此举是为了方便 weiback-rs 未完全开发时想看看自己备份内容的用户。
+
 ------
 
 ## 开发计划 📅
