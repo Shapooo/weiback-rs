@@ -11,22 +11,21 @@ default-run = "weiback-rs"
 anyhow = { version = "1.0.79", features = ["backtrace"] }
 bytes = "1.5.0"
 chrono = { version = "0.4.31", default-features = false }
-eframe = "0.26.2"
-egui = "0.26.2"
+eframe = "0.27.1"
+egui = "0.27.1"
 env_logger = "0.11.2"
 futures = "0.3.30"
-image = "0.24.7"
+image = "0.25.1"
 lazy_static = "1.4.0"
 log = "0.4.20"
 regex = "1.10.2"
-reqwest = { version = "0.11.23", features = [
+reqwest = { version = "0.12.2", features = [
     "json",
     "gzip",
-    "rustls",
     "blocking",
     "cookies",
 ] }
-reqwest_cookie_store = "0.6.0"
+reqwest_cookie_store = "0.7.0"
 serde = { version = "1.0.195", features = ["serde_derive"] }
 serde_json = "1.0.111"
 sqlx = { version = "0.7.3", features = ["sqlite", "runtime-tokio-rustls"] }
