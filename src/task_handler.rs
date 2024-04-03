@@ -99,7 +99,7 @@ impl TaskHandler {
 
     async fn _backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) -> Result<()> {
         info!("download user {uid} posts");
-        let search_args_vec = vec![
+        let search_args_vec = [
             SearchArgs::new().with_ori().with_text(),
             SearchArgs::new().with_ori().with_pic(),
             SearchArgs::new().with_ori().with_video(),
