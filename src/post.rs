@@ -696,7 +696,6 @@ impl Post {
             .await
         {
             error!("unfavorite {id} post failed, because {err}");
-            return Ok(());
         };
         Self::mark_post_unfavorited(id, executor).await?;
         Ok(())
