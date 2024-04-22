@@ -1,7 +1,7 @@
 {% for post in posts %}
 <div class="bk-post-wrapper">
     <div class="bk-post">
-        {% if post.user is defined %}
+        {% if post.user is object and post.user.id is defined %}
         <div class="bk-poster">
             <img class="bk-poster-avatar" alt="头像" src="{{post.poster_avatar}}">
             <a class="bk-poster-name"
