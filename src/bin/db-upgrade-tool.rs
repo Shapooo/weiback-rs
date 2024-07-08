@@ -3,7 +3,7 @@ use std::env::current_exe;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, TimeZone};
 use env_logger::Builder;
 use log::{error, info, warn, LevelFilter};
 use serde_json::{from_str, Value};
@@ -244,10 +244,11 @@ impl Upgrader {
         .fetch_all(trans.as_mut())
         .await?;
         for (id, timestamp, tz) in query_res {
-            let dt = DateTime::<FixedOffset>::from_naive_utc_and_offset(
-                chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap(),
-                tz.parse().unwrap(),
-            );
+            let dt = tz
+                .parse::<FixedOffset>()
+                .unwrap()
+                .timestamp_opt(timestamp, 0)
+                .unwrap();
             sqlx::query("UPDATE posts SET created_at = ? WHERE id = ?;")
                 .bind(dt.to_string())
                 .bind(id)
