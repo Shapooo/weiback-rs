@@ -110,7 +110,7 @@ impl Core {
             },
             Box::new(|cc| {
                 set_font(cc);
-                Box::new(self)
+                Ok(Box::new(self))
             }),
         )
         .unwrap();
@@ -196,169 +196,175 @@ impl Core {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| ui.heading("WeiBack"));
-            ui.group(|ui| {
-                ui.set_enabled(!self.task_ongoing);
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.tab_type, TabType::BackUpFav, "  备份收藏  ");
-                    ui.selectable_value(&mut self.tab_type, TabType::BackUpUser, "  备份用户  ");
-                    ui.selectable_value(
-                        &mut self.tab_type,
-                        TabType::ExportFromLocal,
-                        "  本地导出  ",
-                    );
-                    ui.selectable_value(&mut self.tab_type, TabType::About, "      关于      ");
-                });
-
-                if self.tab_type == TabType::About {
-                    use egui::special_emojis;
-                    ui.heading("WeiBack-rs");
-                    ui.label("WeiBack-rs 是一个开源微博备份工具。");
-                    ui.label(format!(
-                        "SUPPORTED PLATFORM: {} Linux/{} Windows",
-                        special_emojis::OS_LINUX,
-                        special_emojis::OS_WINDOWS
-                    ));
-                    ui.label(format!(
-                        "You can build by yourself on {} macOS",
-                        special_emojis::OS_APPLE
-                    ));
-                    ui.label("AUTHER: Shapooo");
-                    ui.label("LICENSE: MIT");
-                    ui.hyperlink_to(
-                        format!("{} REPOSITORY LINK", special_emojis::GITHUB),
-                        "https://github.com/shapooo/weiback-rs",
-                    );
-                } else {
+            ui.add_enabled_ui(!self.task_ongoing, |ui| {
+                ui.group(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label("图片清晰度：");
-                        ui.selectable_value(&mut self.image_definition, 0, "最低");
-                        ui.selectable_value(&mut self.image_definition, 1, "中等");
-                        ui.selectable_value(&mut self.image_definition, 2, "最高");
+                        ui.selectable_value(&mut self.tab_type, TabType::BackUpFav, "  备份收藏  ");
+                        ui.selectable_value(
+                            &mut self.tab_type,
+                            TabType::BackUpUser,
+                            "  备份用户  ",
+                        );
+                        ui.selectable_value(
+                            &mut self.tab_type,
+                            TabType::ExportFromLocal,
+                            "  本地导出  ",
+                        );
+                        ui.selectable_value(&mut self.tab_type, TabType::About, "      关于      ");
                     });
-                    if self.tab_type == TabType::ExportFromLocal {
-                        ui.checkbox(&mut self.reverse, "按时间逆序")
-                            .on_hover_text("时间逆序即最上方的微博为最新的微博");
-                        if ui.button("对本地微博取消收藏").clicked() {
-                            self.task_ongoing = true;
-                            self.executor
-                                .as_ref()
-                                .expect("core.executor must be unwrapable, bugs in there")
-                                .unfavorite_posts();
-                        }
-                    } else {
-                        ui.checkbox(&mut self.with_pic, "同时下载图片");
-                    }
 
-                    if self.tab_type == TabType::BackUpUser {
+                    if self.tab_type == TabType::About {
+                        use egui::special_emojis;
+                        ui.heading("WeiBack-rs");
+                        ui.label("WeiBack-rs 是一个开源微博备份工具。");
+                        ui.label(format!(
+                            "SUPPORTED PLATFORM: {} Linux/{} Windows",
+                            special_emojis::OS_LINUX,
+                            special_emojis::OS_WINDOWS
+                        ));
+                        ui.label(format!(
+                            "You can build by yourself on {} macOS",
+                            special_emojis::OS_APPLE
+                        ));
+                        ui.label("AUTHER: Shapooo");
+                        ui.label("LICENSE: MIT");
+                        ui.hyperlink_to(
+                            format!("{} REPOSITORY LINK", special_emojis::GITHUB),
+                            "https://github.com/shapooo/weiback-rs",
+                        );
+                    } else {
                         ui.horizontal(|ui| {
-                            ui.label("下载用户ID，默认自己：");
-                            let uid: i64 = (self.uid_str.len() == 10)
-                                .then(|| self.uid_str.parse().ok())
-                                .flatten()
-                                .unwrap_or_default();
-                            match (uid, self.user_meta.as_ref()) {
-                                (0, _) => {
-                                    ui.text_edit_singleline(&mut self.uid_str);
-                                }
-                                (uid, Some((id, screen_name, avatar))) if &uid == id => {
-                                    ui.text_edit_singleline(&mut self.uid_str)
-                                        .on_hover_ui_at_pointer(|ui| {
-                                            let handle = &ui.ctx().load_texture(
-                                                "avatar",
-                                                avatar.clone(),
-                                                Default::default(),
-                                            );
-                                            ui.image(handle);
-                                            ui.label(screen_name);
-                                        });
-                                }
-                                (uid, _) => {
-                                    self.executor.as_ref().unwrap().get_user_meta(uid);
-                                    ui.text_edit_singleline(&mut self.uid_str);
-                                }
-                            };
+                            ui.label("图片清晰度：");
+                            ui.selectable_value(&mut self.image_definition, 0, "最低");
+                            ui.selectable_value(&mut self.image_definition, 1, "中等");
+                            ui.selectable_value(&mut self.image_definition, 2, "最高");
                         });
-                    } else {
-                        ui.collapsing("高级设置", |ui| {
-                            ui.horizontal(|ui| {
-                                if self.tab_type == TabType::ExportFromLocal {
-                                    ui.label("导出范围：");
-                                } else {
-                                    ui.label("下载范围：");
-                                }
-
-                                let (start, end, total, speed) =
-                                    if self.tab_type == TabType::BackUpFav {
-                                        (
-                                            &mut self.web_start,
-                                            &mut self.web_end,
-                                            (self.web_total + 19) / 20 * 20,
-                                            20,
-                                        )
-                                    } else {
-                                        (
-                                            &mut self.db_start,
-                                            &mut self.db_end,
-                                            self.db_total,
-                                            self.period,
-                                        )
-                                    };
-
-                                ui.add(egui::DragValue::new(start).clamp_range(1..=*end).speed(20));
-                                ui.label("-");
-                                ui.add(
-                                    egui::DragValue::new(end)
-                                        .clamp_range(speed..=total)
-                                        .speed(speed),
-                                )
-                            });
-                            if self.tab_type == TabType::ExportFromLocal {
-                                ui.add(egui::Slider::new(&mut self.period, 10..=200).text("每页"))
-                                    .on_hover_text("导出时默认50条博文分割为一个html文件");
+                        if self.tab_type == TabType::ExportFromLocal {
+                            ui.checkbox(&mut self.reverse, "按时间逆序")
+                                .on_hover_text("时间逆序即最上方的微博为最新的微博");
+                            if ui.button("对本地微博取消收藏").clicked() {
+                                self.task_ongoing = true;
+                                self.executor
+                                    .as_ref()
+                                    .expect("core.executor must be unwrapable, bugs in there")
+                                    .unfavorite_posts();
                             }
-                        });
+                        } else {
+                            ui.checkbox(&mut self.with_pic, "同时下载图片");
+                        }
+
+                        if self.tab_type == TabType::BackUpUser {
+                            ui.horizontal(|ui| {
+                                ui.label("下载用户ID，默认自己：");
+                                let uid: i64 = (self.uid_str.len() == 10)
+                                    .then(|| self.uid_str.parse().ok())
+                                    .flatten()
+                                    .unwrap_or_default();
+                                match (uid, self.user_meta.as_ref()) {
+                                    (0, _) => {
+                                        ui.text_edit_singleline(&mut self.uid_str);
+                                    }
+                                    (uid, Some((id, screen_name, avatar))) if &uid == id => {
+                                        ui.text_edit_singleline(&mut self.uid_str)
+                                            .on_hover_ui_at_pointer(|ui| {
+                                                let handle = &ui.ctx().load_texture(
+                                                    "avatar",
+                                                    avatar.clone(),
+                                                    Default::default(),
+                                                );
+                                                ui.image(handle);
+                                                ui.label(screen_name);
+                                            });
+                                    }
+                                    (uid, _) => {
+                                        self.executor.as_ref().unwrap().get_user_meta(uid);
+                                        ui.text_edit_singleline(&mut self.uid_str);
+                                    }
+                                };
+                            });
+                        } else {
+                            ui.collapsing("高级设置", |ui| {
+                                ui.horizontal(|ui| {
+                                    if self.tab_type == TabType::ExportFromLocal {
+                                        ui.label("导出范围：");
+                                    } else {
+                                        ui.label("下载范围：");
+                                    }
+
+                                    let (start, end, total, speed) =
+                                        if self.tab_type == TabType::BackUpFav {
+                                            (
+                                                &mut self.web_start,
+                                                &mut self.web_end,
+                                                (self.web_total + 19) / 20 * 20,
+                                                20,
+                                            )
+                                        } else {
+                                            (
+                                                &mut self.db_start,
+                                                &mut self.db_end,
+                                                self.db_total,
+                                                self.period,
+                                            )
+                                        };
+
+                                    ui.add(egui::DragValue::new(start).range(1..=*end).speed(20));
+                                    ui.label("-");
+                                    ui.add(
+                                        egui::DragValue::new(end).range(speed..=total).speed(speed),
+                                    )
+                                });
+                                if self.tab_type == TabType::ExportFromLocal {
+                                    ui.add(
+                                        egui::Slider::new(&mut self.period, 10..=200).text("每页"),
+                                    )
+                                    .on_hover_text("导出时默认50条博文分割为一个html文件");
+                                }
+                            });
+                        }
                     }
-                }
+                });
             });
-            ui.vertical_centered(|ui| {
-                ui.set_enabled(!self.task_ongoing);
-                if ui.button("开始").clicked() {
-                    self.task_ongoing = true;
-                    match self.tab_type {
-                        TabType::BackUpFav => {
-                            self.executor
-                                .as_ref()
-                                .expect("core.executor must be unwrapable, bugs in there")
-                                .backup_fav(
-                                    self.web_start..=self.web_end,
-                                    self.with_pic,
-                                    self.image_definition,
-                                );
+            ui.add_enabled_ui(!self.task_ongoing, |ui| {
+                ui.vertical_centered(|ui| {
+                    if ui.button("开始").clicked() {
+                        self.task_ongoing = true;
+                        match self.tab_type {
+                            TabType::BackUpFav => {
+                                self.executor
+                                    .as_ref()
+                                    .expect("core.executor must be unwrapable, bugs in there")
+                                    .backup_fav(
+                                        self.web_start..=self.web_end,
+                                        self.with_pic,
+                                        self.image_definition,
+                                    );
+                            }
+                            TabType::BackUpUser => {
+                                let uid = if self.uid_str.is_empty() {
+                                    0
+                                } else {
+                                    self.uid_str.parse().unwrap()
+                                };
+                                self.executor
+                                    .as_ref()
+                                    .expect("core.executor must be unwrapable, bugs in there")
+                                    .backup_user(uid, self.with_pic, self.image_definition)
+                            }
+                            TabType::ExportFromLocal => {
+                                self.executor
+                                    .as_ref()
+                                    .expect("core.executor must be unwrapable, bugs in there")
+                                    .export_from_local(
+                                        self.db_start..=self.db_end,
+                                        self.reverse,
+                                        self.image_definition,
+                                    );
+                            }
+                            _ => {}
                         }
-                        TabType::BackUpUser => {
-                            let uid = if self.uid_str.is_empty() {
-                                0
-                            } else {
-                                self.uid_str.parse().unwrap()
-                            };
-                            self.executor
-                                .as_ref()
-                                .expect("core.executor must be unwrapable, bugs in there")
-                                .backup_user(uid, self.with_pic, self.image_definition)
-                        }
-                        TabType::ExportFromLocal => {
-                            self.executor
-                                .as_ref()
-                                .expect("core.executor must be unwrapable, bugs in there")
-                                .export_from_local(
-                                    self.db_start..=self.db_end,
-                                    self.reverse,
-                                    self.image_definition,
-                                );
-                        }
-                        _ => {}
                     }
-                }
+                });
             });
             ui.add(egui::ProgressBar::new(self.ratio).show_percentage());
             ui.vertical_centered(|ui| {
