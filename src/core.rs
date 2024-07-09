@@ -173,7 +173,7 @@ impl Core {
                 }
                 TaskResponse::InProgress(ratio, msg) => {
                     self.ratio = ratio;
-                    self.message = msg.to_owned()
+                    self.message = msg;
                 }
                 TaskResponse::Finished(web_total, db_total) => {
                     self.ratio = 1.;

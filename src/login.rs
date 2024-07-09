@@ -117,7 +117,7 @@ impl Loginator {
         self.qrid = json["data"]["qrid"]
             .as_str()
             .expect("qrcode id get failed")
-            .to_owned();
+            .into();
         let img = self.client.get(img_url).send()?.bytes()?;
         let img = Reader::new(Cursor::new(img))
             .with_guessed_format()?
