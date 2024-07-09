@@ -2,7 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [v0.2.4] - 2024-07-09
+
+### Added
+
+- README 中添加高级功能使用教程
+
+### Fixed
+
+- 取消收藏时，因已经取消的收藏导致的报错直接忽略
+- posts.html 模板增加更仔细的字段检查，避免因字段不存在导致的闪退
+
+### Changed
+
+- 更新依赖版本
+- 依 clippy 建议进行修改
+- 设置默认日志等级到 debug，方便问题排查
 
 ## [v0.2.3] - 2024-02-27
 
