@@ -858,7 +858,7 @@ impl Post {
         };
         post["id"] = Value::Number(serde_json::Number::from(id));
         post["mblogid"] = post["bid"].take();
-        post["text_raw"] = post["text"].to_owned();
+        post["text_raw"] = post["text"].clone();
         post["favorited"] = Value::Bool(true);
         if let Value::Array(arr) = post["url_objects"].take() {
             post["url_struct"] = Value::Array(
