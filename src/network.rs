@@ -1,4 +1,4 @@
-use crate::login::{save_login_info, to_login_info};
+use crate::auth::{save_login_info, to_login_info};
 
 use std::sync::Arc;
 

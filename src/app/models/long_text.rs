@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::web_fetcher::WebFetcher;
+use crate::network::WebFetcher;
 
 use anyhow::{anyhow, Result};
 use log::{debug, warn};

@@ -1,8 +1,16 @@
 use crate::{
-    emoticon::init_emoticon, exporter::Exporter, login::LoginInfo, message::TaskResponse,
-    persister::Persister, picture::Picture, post::Post, search_args::SearchArgs, user::User,
-    web_fetcher::WebFetcher,
+    app::{
+        models::{picture::Picture, post::Post, user::User},
+        service::search_args::SearchArgs,
+    },
+    auth::LoginInfo,
+    exporter::Exporter,
+    network::WebFetcher,
+    storage::Persister,
+    ui::message::TaskResponse,
 };
+
+use super::emoticon::init_emoticon;
 
 use std::{io::Cursor, ops::RangeInclusive, time::Duration};
 

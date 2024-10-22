@@ -4,10 +4,10 @@ use log::{debug, error, info};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{channel, Sender};
 
-use crate::login::LoginInfo;
-use crate::message::Task;
-use crate::message::TaskResponse;
-use crate::task_handler::TaskHandler;
+use super::message::Task;
+use super::message::TaskResponse;
+use crate::app::service::task_handler::TaskHandler;
+use crate::auth::LoginInfo;
 
 pub struct Executor {
     rt: Runtime,

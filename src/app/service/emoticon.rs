@@ -1,4 +1,4 @@
-use crate::web_fetcher::WebFetcher;
+use crate::network::WebFetcher;
 
 use std::collections::HashMap;
 

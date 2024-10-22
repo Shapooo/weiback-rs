@@ -1,4 +1,5 @@
-use crate::{picture::Picture, web_fetcher::WebFetcher};
+use super::picture::Picture;
+use crate::network::WebFetcher;
 
 use std::ops::DerefMut;
 
@@ -243,7 +244,7 @@ mod user_test {
     }
 
     async fn load_test_case() -> Result<Vec<Value>> {
-        let gz = include_bytes!("../res/full.json.gz");
+        let gz = include_bytes!("../../../res/full.json.gz");
         let mut de = GzDecoder::new(gz.as_ref());
         let mut text = String::new();
         de.read_to_string(&mut text)?;
