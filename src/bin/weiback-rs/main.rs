@@ -3,7 +3,7 @@ use anyhow::Result;
 use env_logger::Builder;
 use log::{info, LevelFilter};
 
-use weiback_rs::core::Core;
+use weiback::ui::Core;
 
 fn main() -> Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");

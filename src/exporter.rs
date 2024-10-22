@@ -1,3 +1,5 @@
+pub mod html_generator;
+
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 

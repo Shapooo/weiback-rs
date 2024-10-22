@@ -5,7 +5,17 @@ edition = "2021"
 default-run = "weiback-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "weiback"
+path = "src/lib.rs"
 
+[[bin]]
+name = "weiback-rs"
+path = "src/bin/weiback-rs/main.rs"
+
+[[bin]]
+name = "db-upgrade-tool"
+path = "src/bin/db-upgrade-tool.rs"
 
 [dependencies]
 anyhow = { version = "1.0.90", features = ["backtrace"] }

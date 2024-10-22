@@ -1,4 +1,4 @@
-use crate::{picture::Picture, post::Post, user::User};
+use super::app::models::{picture::Picture, post::Post, user::User};
 
 use std::path::PathBuf;
 

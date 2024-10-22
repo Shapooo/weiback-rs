@@ -1,12 +1,11 @@
+use super::super::{
+    models::long_text::LongText,
+    service::{emoticon::emoticon_get, search_args::SearchArgs},
+};
+use super::{picture::Picture, user::User};
 use crate::{
-    emoticon::emoticon_get,
-    exporter::{HTMLPage, HTMLPicture},
-    html_generator::HTMLGenerator,
-    long_text::LongText,
-    picture::Picture,
-    search_args::SearchArgs,
-    user::User,
-    web_fetcher::WebFetcher,
+    exporter::{html_generator::HTMLGenerator, HTMLPage, HTMLPicture},
+    network::WebFetcher,
 };
 
 use std::{
@@ -1141,7 +1140,7 @@ mod post_test {
     }
 
     fn load_test_case() -> anyhow::Result<String> {
-        let gz = include_bytes!("../res/full.json.gz");
+        let gz = include_bytes!("../../../res/full.json.gz");
         let mut de = GzDecoder::new(gz.as_ref());
         let mut txt = String::new();
         de.read_to_string(&mut txt).unwrap();
