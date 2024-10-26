@@ -1,56 +1,42 @@
-use crate::{
-    app::{
-        models::{picture::Picture, post::Post, user::User},
-        service::search_args::SearchArgs,
-    },
-    auth::LoginInfo,
-    exporter::Exporter,
-    network::WebFetcher,
-    storage::Persister,
-    ui::message::TaskResponse,
-};
+use std::io::Cursor;
+use std::ops::RangeInclusive;
+use std::time::Duration;
 
-use super::emoticon::init_emoticon;
-
-use std::{io::Cursor, ops::RangeInclusive, time::Duration};
-
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use egui::{ColorImage, ImageData};
 use image::ImageReader;
-use log::{debug, error, info};
+use log::{error, info};
 use tokio::{sync::mpsc::Sender, time::sleep};
+
+use super::search_args::SearchArgs;
+use crate::app::models::{picture::Picture, post::Post, user::User};
+use crate::app::{Exporter, Network, Service, Storage, TaskResponse};
 
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
-pub struct TaskHandler {
-    web_fetcher: WebFetcher,
-    persister: Persister,
+pub struct TaskHandler<N: Network, S: Storage, E: Exporter> {
+    network: N,
+    storage: S,
+    exporter: E,
     task_status_sender: Sender<TaskResponse>,
-    uid: i64,
 }
 
-impl TaskHandler {
+impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
     pub fn new(
-        mut login_info: LoginInfo,
+        // mut login_info: LoginInfo,
+        network: N,
+        storage: S,
+        exporter: E,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
-        let uid = if let serde_json::Value::Number(uid) = &login_info["uid"] {
-            uid.as_i64().unwrap()
-        } else {
-            return Err(anyhow!("no uid field in login_info: {:?}", login_info));
-        };
-        let web_fetcher =
-            WebFetcher::from_cookies(uid, serde_json::from_value(login_info["cookies"].take())?)?;
-        let persister = Persister::new();
-
         Ok(TaskHandler {
-            web_fetcher,
-            persister,
+            network,
+            storage,
+            exporter,
             task_status_sender,
-            uid,
         })
     }
 
@@ -61,26 +47,20 @@ impl TaskHandler {
     }
 
     async fn _init(&mut self) -> Result<TaskResponse> {
-        init_emoticon(&self.web_fetcher).await?;
-        self.persister.init().await?;
+        init_emoticon(&self.network).await?;
+        self.storage.init().await?;
         let (web_total, db_total) = tokio::join!(self.get_web_total_num(), self.get_db_total_num());
         let web_total = web_total?;
         debug!("initing...");
         Ok(TaskResponse::SumOfFavDB(web_total, db_total?))
     }
 
-    // unfavorite all posts that are in weibo favorites
-    pub async fn unfavorite_posts(&self) {
-        self.handle_long_task_res(self._unfavorite_posts().await)
-            .await
-    }
-
     async fn _unfavorite_posts(&self) -> Result<()> {
-        let mut trans = self.persister.db().unwrap().acquire().await?;
+        let mut trans = self.storage.db().unwrap().acquire().await?;
         let ids = Post::query_posts_to_unfavorite(trans.as_mut()).await?;
         let len = ids.len();
         for (i, id) in ids.into_iter().enumerate() {
-            Post::unfavorite_post(id, trans.as_mut(), &self.web_fetcher).await?;
+            Post::unfavorite_post(id, trans.as_mut(), &self.network).await?;
             info!("post {id} unfavorited");
             tokio::time::sleep(OTHER_TASK_INTERVAL).await;
             let progress = i as f32 / len as f32;
@@ -97,12 +77,6 @@ impl TaskHandler {
     // backup self posts
     pub async fn backup_self(&self, with_pic: bool, image_definition: u8) {
         self.backup_user(self.uid, with_pic, image_definition).await
-    }
-
-    // backup user posts
-    pub async fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
-        self.handle_long_task_res(self._backup_user(uid, with_pic, image_definition).await)
-            .await
     }
 
     async fn _backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) -> Result<()> {
@@ -141,7 +115,7 @@ impl TaskHandler {
                 sleep(BACKUP_TASK_INTERVAL).await;
             }
         }
-        let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        let mut conn = self.storage.db().as_ref().unwrap().acquire().await?;
         User::mark_user_backed_up(uid, conn.as_mut()).await?;
         Ok(())
     }
@@ -155,33 +129,18 @@ impl TaskHandler {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = Post::fetch_posts(uid, page, search_args, &self.web_fetcher).await?;
+        let posts = Post::fetch_posts(uid, page, search_args, &self.network).await?;
         let result = posts.len();
         Post::persist_posts(
             posts,
             with_pic,
             image_definition,
-            self.persister.db().as_ref().unwrap(),
-            &self.web_fetcher,
+            self.storage.db().as_ref().unwrap(),
+            &self.network,
         )
         .await?;
 
         Ok(result)
-    }
-
-    // export favorite posts from local database
-    pub async fn export_from_local(
-        &self,
-        range: RangeInclusive<u32>,
-        reverse: bool,
-        image_definition: u8,
-    ) {
-        info!("fetch posts from local and export");
-        self.handle_long_task_res(
-            self._export_from_local(range, reverse, image_definition)
-                .await,
-        )
-        .await;
     }
 
     async fn _export_from_local(
@@ -197,7 +156,7 @@ impl TaskHandler {
         let posts_sum = local_posts.len();
         info!("fetched {} posts from local", posts_sum);
 
-        let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        let mut conn = self.storage.db().as_ref().unwrap().acquire().await?;
         let mut index = 1;
         loop {
             let subtask_name = format!("weiback-{index}");
@@ -207,7 +166,7 @@ impl TaskHandler {
                     &subtask_name,
                     image_definition,
                     conn.as_mut(),
-                    &self.web_fetcher,
+                    &self.network,
                 )
                 .await?;
                 Exporter::export_page(&subtask_name, html, &target_dir).await?;
@@ -218,7 +177,7 @@ impl TaskHandler {
                     &subtask_name,
                     image_definition,
                     conn.as_mut(),
-                    &self.web_fetcher,
+                    &self.network,
                 )
                 .await?;
                 Exporter::export_page(&subtask_name, html, &target_dir).await?;
@@ -237,20 +196,6 @@ impl TaskHandler {
             index += 1;
         }
         Ok(())
-    }
-
-    // export favorite posts from weibo
-    pub async fn backup_favorites(
-        &self,
-        range: RangeInclusive<u32>,
-        with_pic: bool,
-        image_definition: u8,
-    ) {
-        self.handle_long_task_res(
-            self._backup_favorites(range, with_pic, image_definition)
-                .await,
-        )
-        .await;
     }
 
     async fn _backup_favorites(
@@ -287,19 +232,12 @@ impl TaskHandler {
         Ok(())
     }
 
-    // get user meta info, include avatar, screen_name
-    // ui will show this after uid is inputted
-    pub async fn get_user_meta(&self, uid: i64) {
-        self.handle_short_task_res(self._get_user_meta(uid).await)
-            .await
-    }
-
     async fn _get_user_meta(&self, uid: i64) -> Result<TaskResponse> {
-        let user = User::fetch(uid, &self.web_fetcher).await?;
+        let user = User::fetch(uid, &self.network).await?;
         let avatar = Picture::tmp(&user.profile_image_url);
-        let mut conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        let mut conn = self.storage.db().as_ref().unwrap().acquire().await?;
         let avatar_blob = avatar
-            .get_blob(conn.as_mut(), &self.web_fetcher)
+            .get_blob(conn.as_mut(), &self.network)
             .await?
             .unwrap_or_default();
         let avatar_img = ImageReader::new(Cursor::new(avatar_blob))
@@ -381,20 +319,20 @@ impl TaskHandler {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = Post::fetch_fav_posts(uid, page, &self.web_fetcher).await?;
+        let posts = Post::fetch_fav_posts(uid, page, &self.network).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
         Post::persist_posts(
             posts,
             with_pic,
             image_definition,
-            self.persister.db().as_ref().unwrap(),
-            &self.web_fetcher,
+            self.storage.db().as_ref().unwrap(),
+            &self.network,
         )
         .await?;
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
-        let mut trans = self.persister.db().as_ref().unwrap().begin().await?;
+        let mut trans = self.storage.db().as_ref().unwrap().begin().await?;
         for id in ids {
             Post::mark_post_favorited(id, trans.as_mut()).await?;
         }
@@ -410,18 +348,68 @@ impl TaskHandler {
     ) -> Result<Vec<Post>> {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
-        let conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        let conn = self.storage.db().as_ref().unwrap().acquire().await?;
         Post::query_posts(limit, offset, reverse, conn).await
     }
 
     // get total number of favorites in weibo
     async fn get_web_total_num(&self) -> Result<u32> {
-        self.web_fetcher.fetch_fav_total_num().await
+        self.network.fetch_fav_total_num().await
     }
 
     // get total number of favorites in local database
     async fn get_db_total_num(&self) -> Result<u32> {
-        let conn = self.persister.db().as_ref().unwrap().acquire().await?;
+        let conn = self.storage.db().as_ref().unwrap().acquire().await?;
         Post::query_favorited_sum(conn).await
+    }
+}
+
+impl<N: Network, S: Storage, E: Exporter> Service for TaskHandler<N, S, E> {
+    // unfavorite all posts that are in weibo favorites
+    async fn unfavorite_posts(&self) {
+        self.handle_long_task_res(self._unfavorite_posts().await)
+            .await
+    }
+
+    // backup user posts
+    async fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
+        self.handle_long_task_res(self._backup_user(uid, with_pic, image_definition).await)
+            .await
+    }
+
+    // export favorite posts from local database
+    async fn export_from_local(
+        &self,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+        image_definition: u8,
+    ) {
+        info!("fetch posts from local and export");
+        self.handle_long_task_res(
+            self._export_from_local(range, reverse, image_definition)
+                .await,
+        )
+        .await;
+    }
+
+    // export favorite posts from weibo
+    async fn backup_favorites(
+        &self,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    ) {
+        self.handle_long_task_res(
+            self._backup_favorites(range, with_pic, image_definition)
+                .await,
+        )
+        .await;
+    }
+
+    // get user meta info, include avatar, screen_name
+    // ui will show this after uid is inputted
+    async fn get_user_meta(&self, uid: i64) {
+        self.handle_short_task_res(self._get_user_meta(uid).await)
+            .await
     }
 }

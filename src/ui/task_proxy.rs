@@ -4,8 +4,8 @@ use log::{debug, error, info};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{channel, Sender};
 
-use super::service::task_handler::TaskHandler;
-use super::{Task, TaskResponse};
+use crate::app::service::task_handler::TaskHandler;
+use crate::app::{Exporter, Network, Service, Storage, Task, TaskResponse};
 
 pub struct TaskProxy {
     rt: Runtime,
@@ -13,7 +13,12 @@ pub struct TaskProxy {
 }
 
 impl TaskProxy {
-    pub fn new(login_info: LoginInfo, task_status_sender: Sender<TaskResponse>) -> Self {
+    pub fn new<N: Network, S: Storage, E: Exporter>(
+        network: N,
+        storage: S,
+        exporter: E,
+        task_status_sender: Sender<TaskResponse>,
+    ) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
@@ -23,14 +28,14 @@ impl TaskProxy {
                 .build()
                 .unwrap();
             debug!("new a async runtime succeed");
-            let mut th = TaskHandler::new(login_info, task_status_sender).unwrap();
+            let mut th = TaskHandler::new(network, storage, exporter, task_status_sender).unwrap();
             rt.block_on(async move {
                 th.init().await;
                 debug!("task handler init succeed");
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
-                        Task::DownloadFav(range, with_pic, image_definition) => {
+                        Task::BackupFavorites(range, with_pic, image_definition) => {
                             th.backup_favorites(range, with_pic, image_definition).await
                         }
                         Task::ExportFromLocal(range, rev, image_definition) => {
@@ -70,7 +75,7 @@ impl TaskProxy {
     }
 }
 
-impl super::ports::Service for TaskProxy {
+impl TaskProxy {
     fn unfavorite_posts(&self) {
         debug!("send task: unfavorite posts");
         self.send_task(Task::UnfavoritePosts)
@@ -78,7 +83,7 @@ impl super::ports::Service for TaskProxy {
 
     fn backup_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
         debug!("send task: download meta");
-        self.send_task(Task::DownloadFav(range, with_pic, image_definition))
+        self.send_task(Task::BackupFavorites(range, with_pic, image_definition))
     }
 
     fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {

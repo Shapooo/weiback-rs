@@ -9,7 +9,7 @@ pub enum Task {
     // to fetch user meta data, include screen name and avatar
     FetchUserMeta(i64),
     // to download favorites (range, with pic, image definition level)
-    DownloadFav(RangeInclusive<u32>, bool, u8),
+    BackupFavorites(RangeInclusive<u32>, bool, u8),
     // to export favorites from local db (range, with pic, image definition level)
     ExportFromLocal(RangeInclusive<u32>, bool, u8),
     // to unfavorite favorite post
@@ -26,3 +26,27 @@ pub enum TaskResponse {
     Finished(u32, u32),               // long time task is finished
     Error(Error),                     // error occurs
 }
+
+pub trait Service {
+    async fn unfavorite_posts(&self);
+    async fn backup_favorites(
+        &self,
+        range: RangeInclusive<u32>,
+        with_pic: bool,
+        image_definition: u8,
+    );
+    async fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8);
+    async fn get_user_meta(&self, id: i64);
+    async fn export_from_local(
+        &self,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+        image_definition: u8,
+    );
+}
+
+pub trait Storage: 'static + Clone + Send + Sync {}
+
+pub trait Network: 'static + Clone + Send + Sync {}
+
+pub trait Exporter: 'static + Clone + Send + Sync {}
