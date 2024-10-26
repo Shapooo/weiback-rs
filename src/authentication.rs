@@ -98,6 +98,10 @@ impl Loginator {
         }
     }
 
+    pub fn get_cookie_store(&self) -> Arc<CookieStoreMutex> {
+        self.cookie_store.clone()
+    }
+
     pub fn get_login_qrcode(&mut self) -> Result<egui::ImageData> {
         self.time_stamp = chrono::Local::now().timestamp_millis();
         let text = self
