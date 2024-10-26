@@ -1,5 +1,3 @@
-mod auth;
-
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -8,24 +6,27 @@ use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response, StatusCode,
 };
-use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
+use reqwest_cookie_store::CookieStoreMutex;
 use serde_json::Value;
-
-use auth::{save_login_info, to_login_info};
 
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const RETRY_COUNT: i32 = 3;
 
-#[derive(Debug)]
-pub struct WebFetcher {
-    uid: i64,
-    cookie: Arc<CookieStoreMutex>,
-    http_client: Client,
+#[derive(Debug, PartialEq, Clone)]
+enum AuthStatus {
+    UnsignedIn,
+    SignedIn,
 }
 
-impl WebFetcher {
-    pub fn from_cookies(uid: i64, cookie_store: CookieStore) -> Result<Self> {
-        let cookie_store = Arc::new(CookieStoreMutex::new(cookie_store));
+#[derive(Debug)]
+pub struct NetworkImpl {
+    uid: Option<i64>,
+    http_client: Client,
+    auth_status: AuthStatus,
+}
+
+impl NetworkImpl {
+    pub fn new(cookie_store: Arc<CookieStoreMutex>) -> Result<Self> {
         let web_headers = HeaderMap::from_iter([
             (header::ACCEPT, HeaderValue::from_static("*/*")),
             (
@@ -80,14 +81,14 @@ impl WebFetcher {
 
         let web_client = reqwest::Client::builder()
             .cookie_store(true)
-            .cookie_provider(cookie_store.clone())
+            .cookie_provider(cookie_store)
             .default_headers(web_headers)
             .build()?;
 
-        Ok(WebFetcher {
-            uid,
-            cookie: cookie_store.clone(),
+        Ok(NetworkImpl {
+            uid: None,
             http_client: web_client,
+            auth_status: AuthStatus::UnsignedIn,
         })
     }
 
@@ -142,23 +143,5 @@ impl WebFetcher {
                 ))
                 .map(|v| v as u32)
         }
-    }
-}
-
-impl Drop for WebFetcher {
-    fn drop(&mut self) {
-        self.cookie
-            .lock()
-            .map_or(
-                Err(anyhow::anyhow!(
-                    "PoisonError: cannot lock Arc<MutexCookieStore>"
-                )),
-                |mutex_cookie_store| to_login_info(self.uid, &mutex_cookie_store),
-            )
-            .map(|login_info| save_login_info(&login_info))
-            .map_or_else(
-                |err| warn!("when save cookie, raise {}", err),
-                |_| info!("login_info saved succ"),
-            );
     }
 }
