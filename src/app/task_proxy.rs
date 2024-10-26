@@ -4,17 +4,15 @@ use log::{debug, error, info};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{channel, Sender};
 
-use super::message::Task;
-use super::message::TaskResponse;
-use crate::app::service::task_handler::TaskHandler;
-use crate::auth::LoginInfo;
+use super::service::task_handler::TaskHandler;
+use super::{Task, TaskResponse};
 
-pub struct Executor {
+pub struct TaskProxy {
     rt: Runtime,
     tx: Sender<Task>,
 }
 
-impl Executor {
+impl TaskProxy {
     pub fn new(login_info: LoginInfo, task_status_sender: Sender<TaskResponse>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
@@ -59,36 +57,6 @@ impl Executor {
         }
     }
 
-    pub fn unfavorite_posts(&self) {
-        debug!("send task: unfavorite posts");
-        self.send_task(Task::UnfavoritePosts)
-    }
-
-    pub fn backup_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
-        debug!("send task: download meta");
-        self.send_task(Task::DownloadFav(range, with_pic, image_definition))
-    }
-
-    pub fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
-        debug!("send task: backup user");
-        self.send_task(Task::BackupUser(uid, with_pic, image_definition))
-    }
-
-    pub fn get_user_meta(&self, id: i64) {
-        debug!("send task: get user meta");
-        self.send_task(Task::FetchUserMeta(id))
-    }
-
-    pub fn export_from_local(
-        &self,
-        range: RangeInclusive<u32>,
-        reverse: bool,
-        image_definition: u8,
-    ) {
-        debug!("send task: export from local");
-        self.send_task(Task::ExportFromLocal(range, reverse, image_definition))
-    }
-
     fn send_task(&self, task: Task) {
         match self.rt.block_on(self.tx.send(task)) {
             Ok(()) => {
@@ -99,5 +67,32 @@ impl Executor {
                 panic!("{:?}", e)
             }
         }
+    }
+}
+
+impl super::ports::Service for TaskProxy {
+    fn unfavorite_posts(&self) {
+        debug!("send task: unfavorite posts");
+        self.send_task(Task::UnfavoritePosts)
+    }
+
+    fn backup_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
+        debug!("send task: download meta");
+        self.send_task(Task::DownloadFav(range, with_pic, image_definition))
+    }
+
+    fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
+        debug!("send task: backup user");
+        self.send_task(Task::BackupUser(uid, with_pic, image_definition))
+    }
+
+    fn get_user_meta(&self, id: i64) {
+        debug!("send task: get user meta");
+        self.send_task(Task::FetchUserMeta(id))
+    }
+
+    fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool, image_definition: u8) {
+        debug!("send task: export from local");
+        self.send_task(Task::ExportFromLocal(range, reverse, image_definition))
     }
 }
