@@ -1,4 +1,4 @@
-use crate::auth::{save_login_info, to_login_info};
+mod auth;
 
 use std::sync::Arc;
 
@@ -10,6 +10,8 @@ use reqwest::{
 };
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use serde_json::Value;
+
+use auth::{save_login_info, to_login_info};
 
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const RETRY_COUNT: i32 = 3;
