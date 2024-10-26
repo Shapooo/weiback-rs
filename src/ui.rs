@@ -2,7 +2,7 @@ pub mod executor;
 pub mod message;
 
 use crate::auth::{get_login_info, LoginState, Loginator};
-use executor::Executor;
+mod task_proxy;
 use message::TaskResponse;
 
 use std::sync::{Arc, RwLock};
