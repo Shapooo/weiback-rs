@@ -52,6 +52,12 @@ pub trait Storage: 'static + Clone + Send + Sync {}
 pub trait Network: 'static + Clone + Send + Sync {
     async fn get_favorite_num(&self) -> Result<u32>;
     async fn get_user(&self, id: i64) -> Result<User>;
+    async fn get_posts(
+        &self,
+        uid: i64,
+        page: u32,
+        search_args: &crate::app::service::search_args::SearchArgs,
+    ) -> Result<Vec<Post>>;
     async fn unfavorite_post(&self, id: i64) -> Result<()>;
 }
 

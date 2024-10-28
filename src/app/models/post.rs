@@ -11,9 +11,8 @@ use std::{
 
 use anyhow::{anyhow, Error, Result};
 use chrono::{DateTime, FixedOffset};
-use futures::future::join_all;
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace};
+use log::{debug, trace};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, to_value, Value};
@@ -682,99 +681,18 @@ impl Post {
         DESTROY_FAVORITES.into()
     }
 
-    pub async fn fetch_posts(
-        uid: i64,
-        page: u32,
-        search_args: &SearchArgs,
-        fetcher: &WebFetcher,
-    ) -> Result<Vec<Post>> {
+    pub fn get_posts_download_url(uid: i64, page: u32, search_args: &SearchArgs) -> String {
         let mut url = format!("{}?uid={}&page={}", POST_SEARCH_API, uid, page);
         url = search_args.attach_args(url);
-        debug!("fetch meta page, url: {url}");
-        let mut json: Value = fetcher.get(url).await?.json().await?;
-        trace!("get json: {json:?}");
-        if json["ok"] != 1 {
-            Err(anyhow!("fetched data is not ok: {json:?}"))
-        } else if let Value::Array(posts) = json["data"]["list"].take() {
-            Ok(Post::posts_process(posts, fetcher).await?)
-        } else {
-            Err(anyhow!("Posts should be a array, maybe api has changed"))
-        }
+        url
     }
 
-    pub async fn fetch_fav_posts(uid: i64, page: u32, fetcher: &WebFetcher) -> Result<Vec<Post>> {
-        let url = format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}");
-        debug!("fetch fav meta page, url: {url}");
-        let mut posts: Value = fetcher.get(url).await?.json().await?;
-        trace!("get json: {posts:?}");
-        if posts["ok"] != 1 {
-            Err(anyhow!("fetched data is not ok: {posts:?}"))
-        } else if let Value::Array(posts) = posts["data"].take() {
-            Ok(Post::posts_process(posts, fetcher).await?)
-        } else {
-            Err(anyhow!("Posts should be a array, maybe api has changed"))
-        }
+    pub fn get_favorite_download_url(uid: i64, page: u32) -> String {
+        format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}")
     }
-
-    async fn posts_process(posts: Vec<Value>, fetcher: &WebFetcher) -> Result<Vec<Post>> {
-        let posts = posts
-            .into_iter()
-            .map(|post| post.try_into())
-            .collect::<Result<Vec<Post>>>()?;
-        debug!("get raw {} posts", posts.len());
-        let posts = join_all(posts.into_iter().map(|post| async {
-            post.with_process_client_only(fetcher)
-                .await?
-                .with_process_long_text(fetcher)
-                .await
-        }))
-        .await
-        .into_iter()
-        .filter_map(|post| match post {
-            // network errors usually recoverable, so just ignore it
-            // TODO: collect failed post and retry
-            Ok(post) => Some(post),
-            Err(e) => {
-                error!("process post failed: {}", e);
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-        Ok(posts)
-    }
-
-    pub async fn with_process_long_text(mut self, fetcher: &WebFetcher) -> Result<Post> {
-        if self.is_long_text {
-            if let Some(content) = LongText::fetch_long_text(&self.mblogid, fetcher).await? {
-                self.text_raw = content;
-            }
-        }
-        Ok(self)
-    }
-
-    pub async fn with_process_client_only(mut self, fetcher: &WebFetcher) -> Result<Post> {
-        if self.client_only {
-            self = Self::fetch_mobile_page(&self.mblogid, fetcher).await?;
-        }
-        Ok(self)
-    }
-
-    pub async fn fetch_mobile_page(mblogid: &str, fetcher: &WebFetcher) -> Result<Post> {
+    pub fn get_mobile_download_url(mblogid: &str) -> String {
         // let mobile_client = &self.mobile_client;
-        let url = format!("{}{}", MOBILE_POST_API, mblogid);
-        info!("fetch client only post url: {}", &url);
-        let mut res: Value = fetcher.get(url).await?.json().await?;
-        if res["ok"] == 1 {
-            // let post = Self::convert_mobile2pc_post(res["data"].take())?;
-            let post = res["data"].take().try_into()?;
-            Ok(post)
-        } else {
-            Err(anyhow!(
-                "fetch mobile post {} failed, with message {}",
-                mblogid,
-                res["message"]
-            ))
-        }
+        format!("{}{}", MOBILE_POST_API, mblogid)
     }
 
     pub async fn persist_posts(
