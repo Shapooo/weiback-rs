@@ -122,64 +122,6 @@ impl User {
         Ok(())
     }
 
-    pub async fn insert<E>(&self, mut db: E) -> Result<()>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        debug!("insert user: {}", self.id);
-        trace!("insert user: {:?}", self);
-        let result = sqlx::query(
-            "INSERT OR IGNORE INTO users (\
-             id,\
-             profile_url,\
-             screen_name,\
-             profile_image_url,\
-             avatar_large,\
-             avatar_hd,\
-             planet_video,\
-             v_plus,\
-             pc_new,\
-             verified,\
-             verified_type,\
-             domain,\
-             weihao,\
-             verified_type_ext,\
-             follow_me,\
-             following,\
-             mbrank,\
-             mbtype,\
-             icon_list,\
-             backedup)\
-             VALUES \
-             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(self.id)
-        .bind(&self.profile_url)
-        .bind(&self.screen_name)
-        .bind(&self.profile_image_url)
-        .bind(&self.avatar_large)
-        .bind(&self.avatar_hd)
-        .bind(self.planet_video)
-        .bind(self.v_plus)
-        .bind(self.pc_new)
-        .bind(self.verified)
-        .bind(self.verified_type)
-        .bind(&self.domain)
-        .bind(&self.weihao)
-        .bind(self.verified_type_ext)
-        .bind(self.follow_me)
-        .bind(self.following)
-        .bind(self.mbrank)
-        .bind(self.mbtype)
-        .bind(self.icon_list.as_ref().and_then(|v| to_string(&v).ok()))
-        .bind(false)
-        .execute(&mut *db)
-        .await?;
-        trace!("insert user {self:?}, result {result:?}");
-        Ok(())
-    }
-
     // mark_user_backed_up must be called after all posts inserted,
     // to ensure the user info is persisted
     pub async fn mark_user_backed_up<E>(uid: i64, mut db: E) -> Result<()>
