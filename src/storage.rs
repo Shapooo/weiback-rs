@@ -1,23 +1,26 @@
-use super::app::models::{picture::Picture, post::Post, user::User};
-
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use log::{debug, info};
+use log::{debug, info, trace};
+use serde_json::to_string;
 use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+
+use super::app::models::{Picture, Post, User};
+use crate::app::Storage;
 
 const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
 
-#[derive(Debug)]
-pub struct Persister {
+#[derive(Debug, Clone)]
+pub struct StorageImpl {
     db_path: PathBuf,
     db_pool: Option<SqlitePool>,
 }
 
-impl Persister {
+impl StorageImpl {
     pub fn new() -> Self {
-        Persister {
+        StorageImpl {
             db_path: std::env::current_exe()
                 .unwrap()
                 .parent()
@@ -84,5 +87,61 @@ impl Persister {
 
     pub fn db(&self) -> Option<&SqlitePool> {
         self.db_pool.as_ref()
+    }
+}
+
+impl Storage for Arc<StorageImpl> {
+    async fn save_user(&mut self, user: User) -> Result<()> {
+        debug!("insert user: {}", user.id);
+        trace!("insert user: {:?}", user);
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO users (\
+             id,\
+             profile_url,\
+             screen_name,\
+             profile_image_url,\
+             avatar_large,\
+             avatar_hd,\
+             planet_video,\
+             v_plus,\
+             pc_new,\
+             verified,\
+             verified_type,\
+             domain,\
+             weihao,\
+             verified_type_ext,\
+             follow_me,\
+             following,\
+             mbrank,\
+             mbtype,\
+             icon_list,\
+             backedup)\
+             VALUES \
+             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(user.id)
+        .bind(&user.profile_url)
+        .bind(&user.screen_name)
+        .bind(&user.profile_image_url)
+        .bind(&user.avatar_large)
+        .bind(&user.avatar_hd)
+        .bind(user.planet_video)
+        .bind(user.v_plus)
+        .bind(user.pc_new)
+        .bind(user.verified)
+        .bind(user.verified_type)
+        .bind(&user.domain)
+        .bind(&user.weihao)
+        .bind(user.verified_type_ext)
+        .bind(user.follow_me)
+        .bind(user.following)
+        .bind(user.mbrank)
+        .bind(user.mbtype)
+        .bind(user.icon_list.as_ref().and_then(|v| to_string(&v).ok()))
+        .bind(false)
+        .execute(self.db_pool.as_ref().unwrap())
+        .await?;
+        trace!("insert user {user:?}, result {result:?}");
+        Ok(())
     }
 }

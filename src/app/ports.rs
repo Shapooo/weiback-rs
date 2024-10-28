@@ -47,7 +47,9 @@ pub trait Service {
     );
 }
 
-pub trait Storage: 'static + Clone + Send + Sync {}
+pub trait Storage: 'static + Clone + Send + Sync {
+    async fn save_user(&mut self, user: User) -> Result<()>;
+}
 
 pub trait Network: 'static + Clone + Send + Sync {
     async fn get_favorite_num(&self) -> Result<u32>;
