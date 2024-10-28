@@ -1,7 +1,9 @@
 use std::ops::RangeInclusive;
 
-use anyhow::Error;
+use anyhow::{Error, Result};
 use egui::ImageData;
+
+use super::models::{LongText, Picture, Post, User};
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -47,6 +49,8 @@ pub trait Service {
 
 pub trait Storage: 'static + Clone + Send + Sync {}
 
-pub trait Network: 'static + Clone + Send + Sync {}
+pub trait Network: 'static + Clone + Send + Sync {
+    async fn get_user(&self, id: i64) -> Result<User>;
+}
 
 pub trait Exporter: 'static + Clone + Send + Sync {}

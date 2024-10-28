@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response, StatusCode,
 };
 use reqwest_cookie_store::CookieStoreMutex;
-use serde_json::Value;
+use serde_json::{from_value, Value};
+
+use crate::app::models;
+use crate::app::Network;
 
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const RETRY_COUNT: i32 = 3;
@@ -126,7 +129,7 @@ impl NetworkImpl {
             url_str,
             status_code
         ))
-    }
+}
 
     pub async fn fetch_fav_total_num(&self) -> Result<u32> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
@@ -144,4 +147,17 @@ impl NetworkImpl {
                 .map(|v| v as u32)
         }
     }
+}
+
+impl Network for Arc<NetworkImpl> {
+    async fn get_user(&self, id: i64) -> Result<models::User> {
+        let url = models::User::get_download_url(id);
+        let mut json = self.get(url).await?.json::<Value>().await?;
+        if json["ok"] != 1 {
+            Err(anyhow!("fetch user info failed: {:?}", json))
+        } else {
+            Ok(from_value(json["data"]["user"].take())?)
+        }
+    }
+
 }
