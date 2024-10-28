@@ -1,6 +1,4 @@
 #![allow(unused)]
-use crate::network::WebFetcher;
-
 use anyhow::{anyhow, Result};
 use log::{debug, warn};
 use serde::Deserialize;
@@ -21,7 +19,7 @@ struct LongTextContent {
 }
 
 impl LongText {
-    fn get_content(self) -> Result<String> {
+    pub fn get_content(self) -> Result<String> {
         if self.ok == 1 && self.http_code == 200 {
             Ok(self.data.long_text_content)
         } else {
@@ -29,19 +27,8 @@ impl LongText {
         }
     }
 
-    pub async fn fetch_long_text(mblogid: &str, fetcher: &WebFetcher) -> Result<Option<String>> {
-        let url = format!("{}?id={}", STATUSES_LONGTEXT_API, mblogid);
-        debug!("fetch long text, url: {url}");
-        let res = fetcher.get(url).await?;
-        let long_text_meta = match res.json::<LongText>().await {
-            Ok(res) => res,
-            Err(e) if e.is_decode() => {
-                // bypass post pictures folding
-                return Ok(None);
-            }
-            Err(e) => return Err(e.into()),
-        };
-        long_text_meta.get_content().map(Some)
+    pub fn get_long_text_url(mblogid: &str) -> String {
+        format!("{}?id={}", STATUSES_LONGTEXT_API, mblogid)
     }
 }
 
