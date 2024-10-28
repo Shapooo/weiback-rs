@@ -91,6 +91,14 @@ impl StorageImpl {
 }
 
 impl Storage for Arc<StorageImpl> {
+    async fn get_user(&mut self, id: i64) -> Result<Option<User>> {
+        let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(user)
+    }
+
     async fn save_user(&mut self, user: User) -> Result<()> {
         debug!("insert user: {}", user.id);
         trace!("insert user: {:?}", user);

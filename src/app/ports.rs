@@ -49,6 +49,7 @@ pub trait Service {
 
 pub trait Storage: 'static + Clone + Send + Sync {
     async fn save_user(&mut self, user: User) -> Result<()>;
+    async fn get_user(&mut self, id: i64) -> Result<Option<User>>;
 }
 
 pub trait Network: 'static + Clone + Send + Sync {

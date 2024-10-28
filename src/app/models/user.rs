@@ -137,18 +137,6 @@ impl User {
         Ok(())
     }
 
-    pub async fn query<E>(id: i64, mut executor: E) -> Result<Option<Self>>
-    where
-        E: DerefMut,
-        for<'b> &'b mut E::Target: Executor<'b, Database = Sqlite>,
-    {
-        let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
-            .bind(id)
-            .fetch_optional(&mut *executor)
-            .await?;
-        Ok(user)
-    }
-
     pub fn get_avatar_pic(&self, image_definition: u8) -> Picture {
         match image_definition {
             0 => Picture::avatar(self.profile_image_url.as_str(), self.id),
