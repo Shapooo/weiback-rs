@@ -59,6 +59,7 @@ pub trait Network: 'static + Clone + Send + Sync {
         search_args: &crate::app::service::search_args::SearchArgs,
     ) -> Result<Vec<Post>>;
     async fn unfavorite_post(&self, id: i64) -> Result<()>;
+    async fn get_favorate_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
 }
 
 pub trait Exporter: 'static + Clone + Send + Sync {}
