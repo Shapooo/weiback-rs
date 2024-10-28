@@ -130,8 +130,10 @@ impl NetworkImpl {
             status_code
         ))
 }
+}
 
-    pub async fn fetch_fav_total_num(&self) -> Result<u32> {
+impl Network for Arc<NetworkImpl> {
+    async fn get_favorite_num(&self) -> Result<u32> {
         debug!("fetch fav page sum, url: {}", FAVORITES_TAGS_API);
         let ret_json: Value = self.get(FAVORITES_TAGS_API).await?.json().await?;
         trace!("get fav tag data: {:?}", ret_json);
