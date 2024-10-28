@@ -50,6 +50,7 @@ pub trait Service {
 pub trait Storage: 'static + Clone + Send + Sync {}
 
 pub trait Network: 'static + Clone + Send + Sync {
+    async fn get_favorite_num(&self) -> Result<u32>;
     async fn get_user(&self, id: i64) -> Result<User>;
 }
 
