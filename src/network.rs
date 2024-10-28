@@ -131,7 +131,7 @@ impl NetworkImpl {
             url_str,
             status_code
         ))
-}
+    }
 
     async fn get_long_text(&self, mblogid: &str) -> Result<Option<String>> {
         let url = LongText::get_long_text_url(mblogid);
@@ -243,6 +243,24 @@ impl Network for Arc<NetworkImpl> {
         if json["ok"] != 1 {
             Err(anyhow!("fetched data is not ok: {json:?}"))
         } else if let Value::Array(posts) = json["data"]["list"].take() {
+            Ok(self.posts_process(posts).await?)
+        } else {
+            Err(anyhow!("Posts should be a array, maybe api has changed"))
+        }
+    }
+
+    async fn get_favorate_posts(
+        &self,
+        uid: i64,
+        page: u32,
+    ) -> Result<Vec<Post>> {
+        let url = Post::get_favorite_download_url(uid, page);
+        debug!("fetch fav meta page, url: {url}");
+        let mut posts: Value = self.get(url).await?.json().await?;
+        trace!("get json: {posts:?}");
+        if posts["ok"] != 1 {
+            Err(anyhow!("fetched data is not ok: {posts:?}"))
+        } else if let Value::Array(posts) = posts["data"].take() {
             Ok(self.posts_process(posts).await?)
         } else {
             Err(anyhow!("Posts should be a array, maybe api has changed"))
