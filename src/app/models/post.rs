@@ -1,12 +1,6 @@
-use super::super::{
-    models::long_text::LongText,
-    service::{emoticon::emoticon_get, search_args::SearchArgs},
-};
+use super::super::service::{emoticon::emoticon_get, search_args::SearchArgs};
 use super::{picture::Picture, user::User};
-use crate::{
-    exporter::{html_generator::HTMLGenerator, HTMLPage, HTMLPicture},
-    network::WebFetcher,
-};
+use crate::exporter::{html_generator::HTMLGenerator, HTMLPage, HTMLPicture};
 
 use std::{
     borrow::Cow::{self, Borrowed, Owned},
@@ -684,20 +678,8 @@ impl Post {
         )
     }
 
-    pub async fn unfavorite_post<E>(id: i64, executor: E, fetcher: &WebFetcher) -> Result<()>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        let idstr = id.to_string();
-        if let Err(err) = fetcher
-            .post(DESTROY_FAVORITES, &serde_json::json!({ "id": idstr }))
-            .await
-        {
-            error!("unfavorite {id} post failed, because {err}");
-        };
-        Self::mark_post_unfavorited(id, executor).await?;
-        Ok(())
+    pub fn get_unfavorite_url() -> String {
+        DESTROY_FAVORITES.into()
     }
 
     pub async fn fetch_posts(

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use log::{debug, trace, warn};
+use log::{debug, error, info, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client, IntoUrl, Response, StatusCode,
@@ -9,7 +9,7 @@ use reqwest::{
 use reqwest_cookie_store::CookieStoreMutex;
 use serde_json::{from_value, Value};
 
-use crate::app::models;
+use crate::app::models::{LongText, Post, User};
 use crate::app::Network;
 
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
@@ -149,11 +149,8 @@ impl Network for Arc<NetworkImpl> {
                 .map(|v| v as u32)
         }
     }
-}
-
-impl Network for Arc<NetworkImpl> {
-    async fn get_user(&self, id: i64) -> Result<models::User> {
-        let url = models::User::get_download_url(id);
+    async fn get_user(&self, id: i64) -> Result<User> {
+        let url = User::get_download_url(id);
         let mut json = self.get(url).await?.json::<Value>().await?;
         if json["ok"] != 1 {
             Err(anyhow!("fetch user info failed: {:?}", json))
@@ -162,4 +159,17 @@ impl Network for Arc<NetworkImpl> {
         }
     }
 
+    async fn unfavorite_post(&self, id: i64) -> Result<()> {
+        let idstr = id.to_string();
+        if let Err(err) = self
+            .post(
+                Post::get_unfavorite_url(),
+                &serde_json::json!({ "id": idstr }),
+            )
+            .await
+        {
+            error!("unfavorite {id} post failed, because {err}");
+        };
+        Ok(())
+    }
 }
