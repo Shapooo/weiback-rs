@@ -110,6 +110,22 @@ impl StorageImpl {
         }
         Ok(None)
     }
+
+    async fn load_complete_post(&self, post: &mut Post) -> Result<()> {
+        if let Some(uid) = post.uid {
+            post.user = self._get_user(uid).await?;
+        }
+        if let Some(retweeted_id) = post.retweeted_id {
+            post.retweeted_status = Some(Box::new(self._get_post(retweeted_id).await?.ok_or(
+                anyhow!(
+                    "cannot find retweeted post {} of post {}",
+                    retweeted_id,
+                    post.id
+                ),
+            )?));
+        }
+        Ok(())
+    }
 }
 
 impl Storage for Arc<StorageImpl> {
@@ -143,6 +159,25 @@ impl Storage for Arc<StorageImpl> {
         } else {
             Ok(None)
         }
+    }
+
+    async fn get_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<Post>> {
+        debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
+        let sql_expr = if reverse {
+            "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+        } else {
+            "SELECT * FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+        };
+        let mut posts = sqlx::query_as::<sqlx::Sqlite, Post>(sql_expr)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(self.db_pool.as_ref().unwrap())
+            .await?;
+        for post in posts.iter_mut() {
+            self.load_complete_post(post).await?;
+        }
+        debug!("geted {} post from local", posts.len());
+        Ok(posts)
     }
 
     async fn get_user(&self, id: i64) -> Result<Option<User>> {

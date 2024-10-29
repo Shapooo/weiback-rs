@@ -529,56 +529,6 @@ impl Post {
         Ok(())
     }
 
-    pub async fn query_posts<E>(
-        limit: u32,
-        offset: u32,
-        reverse: bool,
-        mut executor: E,
-    ) -> Result<Vec<Post>>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
-        let sql_expr = if reverse {
-            "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
-        } else {
-            "SELECT * FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
-        };
-        let mut posts = sqlx::query_as::<sqlx::Sqlite, Post>(sql_expr)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&mut *executor)
-            .await?;
-        for post in posts.iter_mut() {
-            post.load_complete_post(executor.deref_mut()).await?;
-        }
-        debug!("geted {} post from local", posts.len());
-        Ok(posts)
-    }
-
-    async fn load_complete_post<E>(&mut self, mut executor: E) -> Result<()>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite> + Send,
-    {
-        if let Some(uid) = self.uid {
-            self.user = User::query(uid, &mut *executor).await?;
-        }
-        if let Some(retweeted_id) = self.retweeted_id {
-            self.retweeted_status = Some(Box::new(
-                Post::_query(retweeted_id, &mut *executor)
-                    .await?
-                    .ok_or(anyhow!(
-                        "cannot find retweeted post {} of post {}",
-                        retweeted_id,
-                        self.id
-                    ))?,
-            ));
-        }
-        Ok(())
-    }
-
     pub async fn query_posts_to_unfavorite<E>(mut executor: E) -> Result<Vec<i64>>
     where
         E: DerefMut,
