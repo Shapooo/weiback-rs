@@ -55,6 +55,8 @@ pub trait Storage: 'static + Clone + Send + Sync {
     async fn get_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<Post>>;
     async fn save_posts(&self, posts: &Vec<Post>) -> Result<()>;
     async fn get_post(&self, id: i64) -> Result<Option<Post>>;
+    async fn get_favorited_sum(&self) -> Result<u32>;
+    async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
 }
 
 pub trait Network: 'static + Clone + Send + Sync {

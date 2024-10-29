@@ -317,6 +317,27 @@ impl StorageImpl {
         .await?;
         Ok(())
     }
+
+    async fn _get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
+        debug!("query all posts to unfavorite");
+        Ok(sqlx::query_as::<Sqlite, (i64,)>(
+            "SELECT id FROM posts WHERE unfavorited == false and favorited;",
+        )
+        .fetch_all(self.db_pool.as_ref().unwrap())
+        .await?
+        .into_iter()
+        .map(|t| t.0)
+        .collect())
+    }
+
+    async fn _get_favorited_sum(&self) -> Result<u32> {
+        Ok(
+            sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
+                .fetch_one(self.db_pool.as_ref().unwrap())
+                .await?
+                .0,
+        )
+    }
 }
 
 impl Storage for Arc<StorageImpl> {
@@ -389,5 +410,13 @@ impl Storage for Arc<StorageImpl> {
 
     async fn save_user(&self, user: &User) -> Result<()> {
         self._save_user(&user).await
+    }
+
+    async fn get_favorited_sum(&self) -> Result<u32> {
+        self._get_favorited_sum().await
+    }
+
+    async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
+        self._get_posts_id_to_unfavorite().await
     }
 }

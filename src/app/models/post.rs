@@ -373,35 +373,6 @@ impl Post {
         Ok(())
     }
 
-    pub async fn query_posts_to_unfavorite<E>(mut executor: E) -> Result<Vec<i64>>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        debug!("query all posts to unfavorite");
-        Ok(sqlx::query_as::<Sqlite, (i64,)>(
-            "SELECT id FROM posts WHERE unfavorited == false and favorited;",
-        )
-        .fetch_all(&mut *executor)
-        .await?
-        .into_iter()
-        .map(|t| t.0)
-        .collect())
-    }
-
-    pub async fn query_favorited_sum<E>(mut executor: E) -> Result<u32>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        Ok(
-            sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
-                .fetch_one(&mut *executor)
-                .await?
-                .0,
-        )
-    }
-
     pub fn get_unfavorite_url() -> String {
         DESTROY_FAVORITES.into()
     }
