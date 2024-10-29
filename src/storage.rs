@@ -91,7 +91,7 @@ impl StorageImpl {
 }
 
 impl Storage for Arc<StorageImpl> {
-    async fn mark_post_unfavorited(&mut self, id: i64) -> Result<()> {
+    async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
         debug!("unfav post {} in db", id);
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
             .bind(id)
@@ -100,7 +100,7 @@ impl Storage for Arc<StorageImpl> {
         Ok(())
     }
 
-    async fn mark_post_favorited(&mut self, id: i64) -> Result<()> {
+    async fn mark_post_favorited(&self, id: i64) -> Result<()> {
         debug!("mark favorited post {} in db", id);
         sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
             .bind(id)
@@ -109,7 +109,7 @@ impl Storage for Arc<StorageImpl> {
         Ok(())
     }
 
-    async fn get_user(&mut self, id: i64) -> Result<Option<User>> {
+    async fn get_user(&self, id: i64) -> Result<Option<User>> {
         let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
             .bind(id)
             .fetch_optional(self.db_pool.as_ref().unwrap())
@@ -117,7 +117,7 @@ impl Storage for Arc<StorageImpl> {
         Ok(user)
     }
 
-    async fn save_user(&mut self, user: User) -> Result<()> {
+    async fn save_user(&self, user: User) -> Result<()> {
         debug!("insert user: {}", user.id);
         trace!("insert user: {:?}", user);
         let result = sqlx::query(
