@@ -529,49 +529,6 @@ impl Post {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub async fn query<E>(id: i64, mut executor: E) -> Result<Option<Post>>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        debug!("query post, id: {id}");
-        if let Some(mut post) = Post::_query(id, &mut *executor).await? {
-            if let Some(retweeted_id) = post.retweeted_id {
-                post.retweeted_status = Some(Box::new(
-                    Post::_query(retweeted_id, &mut *executor)
-                        .await?
-                        .ok_or(anyhow!(
-                            "cannot find retweeted post {} of post {}",
-                            retweeted_id,
-                            id
-                        ))?,
-                ));
-            }
-            Ok(Some(post))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn _query<E>(id: i64, mut executor: E) -> Result<Option<Post>>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        if let Some(mut post) = sqlx::query_as::<Sqlite, Post>("SELECT * FROM posts WHERE id = ?")
-            .bind(id)
-            .fetch_optional(&mut *executor)
-            .await?
-        {
-            if let Some(uid) = post.uid {
-                post.user = User::query(uid, executor).await?;
-            }
-            return Ok(Some(post));
-        }
-        Ok(None)
-    }
-
     pub async fn query_posts<E>(
         limit: u32,
         offset: u32,
