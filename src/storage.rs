@@ -88,6 +88,28 @@ impl StorageImpl {
     pub fn db(&self) -> Option<&SqlitePool> {
         self.db_pool.as_ref()
     }
+
+    async fn _get_user(&self, id: i64) -> Result<Option<User>> {
+        let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(user)
+    }
+
+    async fn _get_post(&self, id: i64) -> Result<Option<Post>> {
+        if let Some(mut post) = sqlx::query_as::<Sqlite, Post>("SELECT * FROM posts WHERE id = ?")
+            .bind(id)
+            .fetch_optional(self.db_pool.as_ref().unwrap())
+            .await?
+        {
+            if let Some(uid) = post.uid {
+                post.user = self._get_user(uid).await?;
+            }
+            return Ok(Some(post));
+        }
+        Ok(None)
+    }
 }
 
 impl Storage for Arc<StorageImpl> {
@@ -109,12 +131,22 @@ impl Storage for Arc<StorageImpl> {
         Ok(())
     }
 
+    async fn get_post(&self, id: i64) -> Result<Option<Post>> {
+        debug!("query post, id: {id}");
+        if let Some(mut post) = self._get_post(id).await? {
+            if let Some(retweeted_id) = post.retweeted_id {
+                post.retweeted_status = Some(Box::new(self._get_post(retweeted_id).await?.ok_or(
+                    anyhow!("cannot find retweeted post {} of post {}", retweeted_id, id),
+                )?));
+            }
+            Ok(Some(post))
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn get_user(&self, id: i64) -> Result<Option<User>> {
-        let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
-            .bind(id)
-            .fetch_optional(self.db_pool.as_ref().unwrap())
-            .await?;
-        Ok(user)
+        self._get_user(id).await
     }
 
     async fn save_user(&self, user: User) -> Result<()> {
