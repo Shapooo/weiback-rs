@@ -97,6 +97,60 @@ impl StorageImpl {
         Ok(user)
     }
 
+    async fn _save_user(&self, user: &User) -> Result<()> {
+        debug!("insert user: {}", user.id);
+        trace!("insert user: {:?}", user);
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO users (\
+             id,\
+             profile_url,\
+             screen_name,\
+             profile_image_url,\
+             avatar_large,\
+             avatar_hd,\
+             planet_video,\
+             v_plus,\
+             pc_new,\
+             verified,\
+             verified_type,\
+             domain,\
+             weihao,\
+             verified_type_ext,\
+             follow_me,\
+             following,\
+             mbrank,\
+             mbtype,\
+             icon_list,\
+             backedup)\
+             VALUES \
+             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(user.id)
+        .bind(&user.profile_url)
+        .bind(&user.screen_name)
+        .bind(&user.profile_image_url)
+        .bind(&user.avatar_large)
+        .bind(&user.avatar_hd)
+        .bind(user.planet_video)
+        .bind(user.v_plus)
+        .bind(user.pc_new)
+        .bind(user.verified)
+        .bind(user.verified_type)
+        .bind(&user.domain)
+        .bind(&user.weihao)
+        .bind(user.verified_type_ext)
+        .bind(user.follow_me)
+        .bind(user.following)
+        .bind(user.mbrank)
+        .bind(user.mbtype)
+        .bind(user.icon_list.as_ref().and_then(|v| to_string(&v).ok()))
+        .bind(false)
+        .execute(self.db_pool.as_ref().unwrap())
+        .await?;
+        trace!("insert user {user:?}, result {result:?}");
+        Ok(())
+    }
+
     async fn _get_post(&self, id: i64) -> Result<Option<Post>> {
         if let Some(mut post) = sqlx::query_as::<Sqlite, Post>("SELECT * FROM posts WHERE id = ?")
             .bind(id)
@@ -184,57 +238,7 @@ impl Storage for Arc<StorageImpl> {
         self._get_user(id).await
     }
 
-    async fn save_user(&self, user: User) -> Result<()> {
-        debug!("insert user: {}", user.id);
-        trace!("insert user: {:?}", user);
-        let result = sqlx::query(
-            "INSERT OR IGNORE INTO users (\
-             id,\
-             profile_url,\
-             screen_name,\
-             profile_image_url,\
-             avatar_large,\
-             avatar_hd,\
-             planet_video,\
-             v_plus,\
-             pc_new,\
-             verified,\
-             verified_type,\
-             domain,\
-             weihao,\
-             verified_type_ext,\
-             follow_me,\
-             following,\
-             mbrank,\
-             mbtype,\
-             icon_list,\
-             backedup)\
-             VALUES \
-             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(user.id)
-        .bind(&user.profile_url)
-        .bind(&user.screen_name)
-        .bind(&user.profile_image_url)
-        .bind(&user.avatar_large)
-        .bind(&user.avatar_hd)
-        .bind(user.planet_video)
-        .bind(user.v_plus)
-        .bind(user.pc_new)
-        .bind(user.verified)
-        .bind(user.verified_type)
-        .bind(&user.domain)
-        .bind(&user.weihao)
-        .bind(user.verified_type_ext)
-        .bind(user.follow_me)
-        .bind(user.following)
-        .bind(user.mbrank)
-        .bind(user.mbtype)
-        .bind(user.icon_list.as_ref().and_then(|v| to_string(&v).ok()))
-        .bind(false)
-        .execute(self.db_pool.as_ref().unwrap())
-        .await?;
-        trace!("insert user {user:?}, result {result:?}");
-        Ok(())
+    async fn save_user(&self, user: &User) -> Result<()> {
+        self._save_user(&user).await
     }
 }
