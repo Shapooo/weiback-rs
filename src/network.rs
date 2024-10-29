@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use futures::future::join_all;
 use log::{debug, error, info, trace, warn};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -133,30 +132,6 @@ impl NetworkImpl {
         ))
     }
 
-    async fn get_long_text(&self, mblogid: &str) -> Result<Option<String>> {
-        let url = LongText::get_long_text_url(mblogid);
-        debug!("fetch long text, url: {url}");
-        let res = self.get(url).await?;
-        let long_text_meta = match res.json::<LongText>().await {
-            Ok(res) => res,
-            Err(e) if e.is_decode() => {
-                // bypass post pictures folding
-                return Ok(None);
-            }
-            Err(e) => return Err(e.into()),
-        };
-
-        Ok(Some(long_text_meta.get_content()?))
-    }
-
-    async fn get_mobile_post(&self, mblogid: &str) -> Result<Post> {
-        let url = Post::get_mobile_download_url(mblogid);
-        info!("fetch client only post url: {}", &url);
-        let mut res: Value = self.get(url).await?.json().await?;
-        if res["ok"] == 1 {
-            // let post = Self::convert_mobile2pc_post(res["data"].take())?;
-            let post = res["data"].take().try_into()?;
-            Ok(post)
         } else {
             Err(anyhow!(
                 "fetch mobile post {} failed, with message {}",
@@ -275,5 +250,37 @@ impl Network for Arc<NetworkImpl> {
             error!("unfavorite {id} post failed, because {err}");
         };
         Ok(())
+    }
+
+    async fn get_mobile_post(&self, mblogid: &str) -> Result<Post> {
+        let url = Post::get_mobile_download_url(mblogid);
+        info!("fetch client only post url: {}", &url);
+        let mut res: Value = self.get(url).await?.json().await?;
+        if res["ok"] == 1 {
+            // let post = Self::convert_mobile2pc_post(res["data"].take())?;
+            let post = res["data"].take().try_into()?;
+            Ok(post)
+        } else {
+            Err(anyhow!(
+                "fetch mobile post {} failed, with message {}",
+                mblogid,
+                res["message"]
+            ))
+        }
+    }
+
+    async fn get_long_text(&self, mblogid: &str) -> Result<Option<String>> {
+        let url = LongText::get_long_text_url(mblogid);
+        debug!("fetch long text, url: {url}");
+        let res = self.get(url).await?;
+        let long_text_meta = match res.json::<LongText>().await {
+            Ok(res) => res,
+            Err(e) if e.is_decode() => {
+                // bypass post pictures folding
+                return Ok(None);
+            }
+            Err(e) => return Err(e.into()),
+        };
+        Ok(Some(long_text_meta.get_content()?))
     }
 }
