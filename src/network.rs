@@ -132,54 +132,20 @@ impl NetworkImpl {
         ))
     }
 
+    async fn _get_posts(&self, url: String) -> Result<Vec<Post>> {
+        let mut posts: Value = self.get(url).await?.json().await?;
+        trace!("get json: {posts:?}");
+        if posts["ok"] != 1 {
+            Err(anyhow!("fetched data is not ok: {posts:?}"))
+        } else if let Value::Array(posts) = posts["data"].take() {
+            let posts = posts
+                .into_iter()
+                .map(from_value::<Post>)
+                .collect::<Result<Vec<Post>, serde_json::Error>>()?;
+            Ok(posts)
         } else {
-            Err(anyhow!(
-                "fetch mobile post {} failed, with message {}",
-                mblogid,
-                res["message"]
-            ))
+            Err(anyhow!("Posts should be a array, maybe api has changed"))
         }
-    }
-
-    fn with_process_long_text(mut post: Post, long_text: String) -> Post {
-        if post.is_long_text {
-            post.text_raw = long_text;
-        }
-        post
-    }
-
-    async fn with_process_client_only(&self, mut post: Post) -> Result<Post> {
-        if post.client_only {
-            post = self.get_mobile_post(&post.mblogid).await?;
-        }
-        Ok(post)
-    }
-
-    async fn posts_process(&self, posts: Vec<Value>) -> Result<Vec<Post>> {
-        let posts = posts
-            .into_iter()
-            .map(|post| post.try_into())
-            .collect::<Result<Vec<Post>>>()?;
-        debug!("get raw {} posts", posts.len());
-        let posts = join_all(posts.into_iter().map(|post| async {
-            let post = self.with_process_client_only(post).await?;
-            // self.with_process_long_text(fetcher)
-            // .await
-            anyhow::Ok(post)
-        }))
-        .await
-        .into_iter()
-        .filter_map(|post| match post {
-            // network errors usually recoverable, so just ignore it
-            // TODO: collect failed post and retry
-            Ok(post) => Some(post),
-            Err(e) => {
-                error!("process post failed: {}", e);
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-        Ok(posts)
     }
 }
 
@@ -200,6 +166,7 @@ impl Network for Arc<NetworkImpl> {
                 .map(|v| v as u32)
         }
     }
+
     async fn get_user(&self, id: i64) -> Result<User> {
         let url = User::get_download_url(id);
         let mut json = self.get(url).await?.json::<Value>().await?;
@@ -213,29 +180,13 @@ impl Network for Arc<NetworkImpl> {
     async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>> {
         let url = Post::get_posts_download_url(uid, page, search_args);
         debug!("fetch meta page, url: {url}");
-        let mut json: Value = self.get(url).await?.json().await?;
-        trace!("get json: {json:?}");
-        if json["ok"] != 1 {
-            Err(anyhow!("fetched data is not ok: {json:?}"))
-        } else if let Value::Array(posts) = json["data"]["list"].take() {
-            Ok(self.posts_process(posts).await?)
-        } else {
-            Err(anyhow!("Posts should be a array, maybe api has changed"))
-        }
+        self._get_posts(url).await
     }
 
     async fn get_favorate_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
         let url = Post::get_favorite_download_url(uid, page);
         debug!("fetch fav meta page, url: {url}");
-        let mut posts: Value = self.get(url).await?.json().await?;
-        trace!("get json: {posts:?}");
-        if posts["ok"] != 1 {
-            Err(anyhow!("fetched data is not ok: {posts:?}"))
-        } else if let Value::Array(posts) = posts["data"].take() {
-            Ok(self.posts_process(posts).await?)
-        } else {
-            Err(anyhow!("Posts should be a array, maybe api has changed"))
-        }
+        self._get_posts(url).await
     }
 
     async fn unfavorite_post(&self, id: i64) -> Result<()> {
