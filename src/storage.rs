@@ -91,6 +91,24 @@ impl StorageImpl {
 }
 
 impl Storage for Arc<StorageImpl> {
+    async fn mark_post_unfavorited(&mut self, id: i64) -> Result<()> {
+        debug!("unfav post {} in db", id);
+        sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
+            .bind(id)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(())
+    }
+
+    async fn mark_post_favorited(&mut self, id: i64) -> Result<()> {
+        debug!("mark favorited post {} in db", id);
+        sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
+            .bind(id)
+            .execute(self.db_pool.as_ref().unwrap())
+            .await?;
+        Ok(())
+    }
+
     async fn get_user(&mut self, id: i64) -> Result<Option<User>> {
         let user = sqlx::query_as::<Sqlite, User>("SELECT * FROM users WHERE id = ?")
             .bind(id)

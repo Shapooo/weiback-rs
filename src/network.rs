@@ -249,11 +249,7 @@ impl Network for Arc<NetworkImpl> {
         }
     }
 
-    async fn get_favorate_posts(
-        &self,
-        uid: i64,
-        page: u32,
-    ) -> Result<Vec<Post>> {
+    async fn get_favorate_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
         let url = Post::get_favorite_download_url(uid, page);
         debug!("fetch fav meta page, url: {url}");
         let mut posts: Value = self.get(url).await?.json().await?;

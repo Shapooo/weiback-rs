@@ -622,32 +622,6 @@ impl Post {
         Ok(())
     }
 
-    async fn mark_post_unfavorited<E>(id: i64, mut executor: E) -> Result<()>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        debug!("unfav post {} in db", id);
-        sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
-            .bind(id)
-            .execute(&mut *executor)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn mark_post_favorited<E>(id: i64, mut executor: E) -> Result<()>
-    where
-        E: DerefMut,
-        for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-    {
-        debug!("mark favorited post {} in db", id);
-        sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
-            .bind(id)
-            .execute(&mut *executor)
-            .await?;
-        Ok(())
-    }
-
     pub async fn query_posts_to_unfavorite<E>(mut executor: E) -> Result<Vec<i64>>
     where
         E: DerefMut,
@@ -690,6 +664,7 @@ impl Post {
     pub fn get_favorite_download_url(uid: i64, page: u32) -> String {
         format!("{FAVORITES_ALL_FAV_API}?uid={uid}&page={page}")
     }
+
     pub fn get_mobile_download_url(mblogid: &str) -> String {
         // let mobile_client = &self.mobile_client;
         format!("{}{}", MOBILE_POST_API, mblogid)
