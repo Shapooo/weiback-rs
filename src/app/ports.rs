@@ -48,10 +48,10 @@ pub trait Service {
 }
 
 pub trait Storage: 'static + Clone + Send + Sync {
-    async fn save_user(&mut self, user: User) -> Result<()>;
-    async fn get_user(&mut self, id: i64) -> Result<Option<User>>;
-    async fn mark_post_unfavorited(&mut self, id: i64) -> Result<()>;
-    async fn mark_post_favorited(&mut self, id: i64) -> Result<()>;
+    async fn save_user(&self, user: User) -> Result<()>;
+    async fn get_user(&self, id: i64) -> Result<Option<User>>;
+    async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
+    async fn mark_post_favorited(&self, id: i64) -> Result<()>;
 }
 
 pub trait Network: 'static + Clone + Send + Sync {
