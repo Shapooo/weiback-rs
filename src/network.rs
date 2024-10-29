@@ -97,12 +97,12 @@ impl NetworkImpl {
         })
     }
 
-    pub async fn post(&self, url: impl IntoUrl, body: &Value) -> Result<Response> {
+    async fn post(&self, url: impl IntoUrl, body: &Value) -> Result<Response> {
         let request = self.http_client.post(url).json(body).build()?;
         self._http_common(request).await
     }
 
-    pub async fn get(&self, url: impl IntoUrl) -> Result<Response> {
+    async fn get(&self, url: impl IntoUrl) -> Result<Response> {
         let request = self.http_client.get(url).build()?;
         self._http_common(request).await
     }
