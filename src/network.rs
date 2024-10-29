@@ -220,7 +220,7 @@ impl Network for Arc<NetworkImpl> {
         }
     }
 
-    async fn get_long_text(&self, mblogid: &str) -> Result<Option<String>> {
+    async fn get_long_text(&self, mblogid: &str) -> Result<Option<LongText>> {
         let url = LongText::get_long_text_url(mblogid);
         debug!("fetch long text, url: {url}");
         let res = self.get(url).await?;
@@ -232,6 +232,6 @@ impl Network for Arc<NetworkImpl> {
             }
             Err(e) => return Err(e.into()),
         };
-        Ok(Some(long_text_meta.get_content()?))
+        Ok(Some(long_text_meta))
     }
 }
