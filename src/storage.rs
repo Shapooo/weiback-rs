@@ -180,6 +180,143 @@ impl StorageImpl {
         }
         Ok(())
     }
+
+    async fn _save_post(&self, post: &Post, overwrite: bool) -> Result<()> {
+        if let Some(user) = post.user.as_ref() {
+            self._save_user(user).await?;
+        }
+        sqlx::query(
+            format!(
+                "INSERT OR {} INTO posts (\
+             id,\
+             mblogid,\
+             text_raw,\
+             source,\
+             region_name,\
+             deleted,\
+             uid,\
+             pic_ids,\
+             pic_num,\
+             retweeted_id,\
+             url_struct,\
+             topic_struct,\
+             tag_struct,\
+             tags,\
+             customIcons,\
+             number_display_strategy,\
+             mix_media_info,\
+             visible,\
+             text,\
+             attitudes_status,\
+             showFeedRepost,\
+             showFeedComment,\
+             pictureViewerSign,\
+             showPictureViewer,\
+             favorited,\
+             can_edit,\
+             is_paid,\
+             share_repost_type,\
+             rid,\
+             pic_infos,\
+             cardid,\
+             pic_bg_new,\
+             mark,\
+             mblog_vip_type,\
+             reposts_count,\
+             comments_count,\
+             attitudes_count,\
+             mlevel,\
+             complaint,\
+             content_auth,\
+             is_show_bulletin,\
+             repost_type,\
+             edit_count,\
+             mblogtype,\
+             textLength,\
+             isLongText,\
+             rcList,\
+             annotations,\
+             geo,\
+             pic_focus_point,\
+             page_info,\
+             title,\
+             continue_tag,\
+             comment_manage_info,\
+             client_only,\
+             unfavorited,\
+             created_at,\
+             created_at_timestamp,\
+             created_at_tz)\
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                if overwrite { "REPLACE" } else { "IGNORE" }
+            )
+            .as_str(),
+        )
+        .bind(post.id)
+        .bind(&post.mblogid)
+        .bind(&post.text_raw)
+        .bind(&post.source)
+        .bind(&post.region_name)
+        .bind(post.deleted)
+        .bind(post.uid)
+        .bind(&post.pic_ids)
+        .bind(post.pic_num)
+        .bind(post.retweeted_id)
+        .bind(&post.url_struct)
+        .bind(&post.topic_struct)
+        .bind(&post.tag_struct)
+        .bind(&post.tags)
+        .bind(&post.custom_icons)
+        .bind(&post.number_display_strategy)
+        .bind(&post.mix_media_info)
+        .bind(&post.visible)
+        .bind(&post.text)
+        .bind(post.attitudes_status)
+        .bind(post.show_feed_repost)
+        .bind(post.show_feed_comment)
+        .bind(post.picture_viewer_sign)
+        .bind(post.show_picture_viewer)
+        .bind(post.favorited)
+        .bind(post.can_edit)
+        .bind(post.is_paid)
+        .bind(post.share_repost_type)
+        .bind(&post.rid)
+        .bind(&post.pic_infos)
+        .bind(&post.cardid)
+        .bind(&post.pic_bg_new)
+        .bind(&post.mark)
+        .bind(post.mblog_vip_type)
+        .bind(post.reposts_count)
+        .bind(post.comments_count)
+        .bind(post.attitudes_count)
+        .bind(post.mlevel)
+        .bind(&post.complaint)
+        .bind(post.content_auth)
+        .bind(post.is_show_bulletin)
+        .bind(post.repost_type)
+        .bind(post.edit_count)
+        .bind(post.mblogtype)
+        .bind(post.text_length)
+        .bind(post.is_long_text)
+        .bind(&post.rc_list)
+        .bind(&post.annotations)
+        .bind(&post.geo)
+        .bind(&post.pic_focus_point)
+        .bind(&post.page_info)
+        .bind(&post.title)
+        .bind(&post.continue_tag)
+        .bind(&post.comment_manage_info)
+        .bind(post.client_only)
+        .bind(post.unfavorited)
+        .bind(&post.created_at)
+        .bind(post.created_at_timestamp)
+        .bind(&post.created_at_tz)
+        .execute(self.db_pool.as_ref().unwrap())
+        .await?;
+        Ok(())
+    }
 }
 
 impl Storage for Arc<StorageImpl> {
@@ -232,6 +369,18 @@ impl Storage for Arc<StorageImpl> {
         }
         debug!("geted {} post from local", posts.len());
         Ok(posts)
+    }
+
+    async fn save_posts(&self, posts: &Vec<Post>) -> Result<()> {
+        for post in posts {
+            debug!("insert post: {}", post.id);
+            trace!("insert post: {:?}", post);
+            self._save_post(post, true).await?;
+            if let Some(ref retweeted_post) = post.retweeted_status {
+                self._save_post(&retweeted_post, false).await?;
+            }
+        }
+        Ok(())
     }
 
     async fn get_user(&self, id: i64) -> Result<Option<User>> {
