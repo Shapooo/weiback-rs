@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use log::{debug, info, trace};
@@ -7,7 +6,7 @@ use serde_json::to_string;
 use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
 
 use super::app::models::{Picture, Post, User};
-use crate::app::Storage;
+use crate::app::{FavoriteStorage, PostStorage, Storage, UserStorage};
 
 const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
@@ -317,30 +316,9 @@ impl StorageImpl {
         .await?;
         Ok(())
     }
-
-    async fn _get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
-        debug!("query all posts to unfavorite");
-        Ok(sqlx::query_as::<Sqlite, (i64,)>(
-            "SELECT id FROM posts WHERE unfavorited == false and favorited;",
-        )
-        .fetch_all(self.db_pool.as_ref().unwrap())
-        .await?
-        .into_iter()
-        .map(|t| t.0)
-        .collect())
-    }
-
-    async fn _get_favorited_sum(&self) -> Result<u32> {
-        Ok(
-            sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
-                .fetch_one(self.db_pool.as_ref().unwrap())
-                .await?
-                .0,
-        )
-    }
 }
 
-impl Storage for Arc<StorageImpl> {
+impl Storage for StorageImpl {
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
         debug!("unfav post {} in db", id);
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
@@ -357,6 +335,27 @@ impl Storage for Arc<StorageImpl> {
             .execute(self.db_pool.as_ref().unwrap())
             .await?;
         Ok(())
+    }
+
+    async fn get_favorited_sum(&self) -> Result<u32> {
+        Ok(
+            sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
+                .fetch_one(self.db_pool.as_ref().unwrap())
+                .await?
+                .0,
+        )
+    }
+
+    async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
+        debug!("query all posts to unfavorite");
+        Ok(sqlx::query_as::<Sqlite, (i64,)>(
+            "SELECT id FROM posts WHERE unfavorited == false and favorited;",
+        )
+        .fetch_all(self.db_pool.as_ref().unwrap())
+        .await?
+        .into_iter()
+        .map(|t| t.0)
+        .collect())
     }
 
     async fn get_post(&self, id: i64) -> Result<Option<Post>> {
@@ -392,15 +391,10 @@ impl Storage for Arc<StorageImpl> {
         Ok(posts)
     }
 
-    async fn save_posts(&self, posts: &Vec<Post>) -> Result<()> {
-        for post in posts {
-            debug!("insert post: {}", post.id);
-            trace!("insert post: {:?}", post);
-            self._save_post(post, true).await?;
-            if let Some(ref retweeted_post) = post.retweeted_status {
-                self._save_post(&retweeted_post, false).await?;
-            }
-        }
+    async fn save_post(&self, post: &Post) -> Result<()> {
+        debug!("insert post: {}", post.id);
+        trace!("insert post: {:?}", post);
+        self._save_post(post, true).await?;
         Ok(())
     }
 
@@ -410,13 +404,5 @@ impl Storage for Arc<StorageImpl> {
 
     async fn save_user(&self, user: &User) -> Result<()> {
         self._save_user(&user).await
-    }
-
-    async fn get_favorited_sum(&self) -> Result<u32> {
-        self._get_favorited_sum().await
-    }
-
-    async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
-        self._get_posts_id_to_unfavorite().await
     }
 }
