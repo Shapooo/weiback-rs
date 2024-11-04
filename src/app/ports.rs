@@ -1,4 +1,5 @@
 use std::ops::RangeInclusive;
+use std::sync::Arc;
 
 use anyhow::{Error, Result};
 use egui::ImageData;
@@ -47,31 +48,58 @@ pub trait Service {
     );
 }
 
-pub trait Storage: 'static + Clone + Send + Sync {
+pub trait Storage {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, id: i64) -> Result<Option<User>>;
+    async fn get_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<Post>>;
+    async fn save_post(&self, post: &Post) -> Result<()>;
+    async fn get_post(&self, id: i64) -> Result<Option<Post>>;
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
-    async fn get_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<Post>>;
-    async fn save_posts(&self, posts: &Vec<Post>) -> Result<()>;
-    async fn get_post(&self, id: i64) -> Result<Option<Post>>;
     async fn get_favorited_sum(&self) -> Result<u32>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
+    async fn save_picture(&self, picture: &Picture) -> Result<()>;
 }
 
-pub trait Network: 'static + Clone + Send + Sync {
-    async fn get_favorite_num(&self) -> Result<u32>;
-    async fn get_user(&self, id: i64) -> Result<User>;
-    async fn get_posts(
-        &self,
-        uid: i64,
-        page: u32,
-        search_args: &crate::app::service::search_args::SearchArgs,
-    ) -> Result<Vec<Post>>;
-    async fn unfavorite_post(&self, id: i64) -> Result<()>;
-    async fn get_favorate_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-    async fn get_mobile_post(&self, mblogid: &str) -> Result<Post>;
-    async fn get_long_text(&self, mblogid: &str) -> Result<Option<LongText>>;
+impl<S: Storage> Storage for Arc<S> {
+    async fn save_user(&self, user: &User) -> Result<()> {
+        self.as_ref().save_user(user).await
+    }
+
+    async fn get_user(&self, id: i64) -> Result<Option<User>> {
+        self.as_ref().get_user(id).await
+    }
+    async fn get_post(&self, id: i64) -> Result<Option<Post>> {
+        self.as_ref().get_post(id).await
+    }
+
+    async fn get_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<Post>> {
+        self.as_ref().get_posts(limit, offset, reverse).await
+    }
+
+    async fn save_post(&self, post: &Post) -> Result<()> {
+        self.as_ref().save_post(post).await
+    }
+
+    async fn get_favorited_sum(&self) -> Result<u32> {
+        self.as_ref().get_favorited_sum().await
+    }
+
+    async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
+        self.as_ref().get_posts_id_to_unfavorite().await
+    }
+
+    async fn mark_post_favorited(&self, id: i64) -> Result<()> {
+        self.as_ref().mark_post_favorited(id).await
+    }
+
+    async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
+        self.as_ref().mark_post_unfavorited(id).await
+    }
+    async fn save_picture(&self, picture: &Picture) -> Result<()> {
+        self.as_ref().save_picture(picture).await
+    }
 }
+
 
 pub trait Exporter: 'static + Clone + Send + Sync {}
