@@ -261,11 +261,6 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
     let content = fs::read_to_string(path)?;
     let login_info: Value = from_str(&content)?;
     let cookie_store: CookieStore = from_value(login_info["cookies"].clone())?;
-    let xsrf_token = cookie_store
-        .get("weibo.com", "/", "XSRF-TOKEN")
-        .ok_or(anyhow::anyhow!("xsrf-token-not-found"))?
-        .value()
-        .to_owned();
     let headers = HeaderMap::from_iter([
         (
             header::ACCEPT,
@@ -314,10 +309,6 @@ pub fn get_login_info() -> Result<Option<LoginInfo>> {
         (
             HeaderName::from_static("sec-fetch-site"),
             HeaderValue::from_static("same-origin"),
-        ),
-        (
-            HeaderName::from_static("x-xsrf-token"),
-            HeaderValue::from_str(xsrf_token.as_str())?,
         ),
         (header::TE, HeaderValue::from_static("trailers")),
     ]);
