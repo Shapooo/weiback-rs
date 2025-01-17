@@ -8,7 +8,7 @@ use std::{io::Cursor, ops::RangeInclusive, time::Duration};
 
 use anyhow::{anyhow, Result};
 use egui::{ColorImage, ImageData};
-use image::io::Reader;
+use image::ImageReader;
 use log::{debug, error, info};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
@@ -294,7 +294,7 @@ impl TaskHandler {
             .get_blob(conn.as_mut(), &self.web_fetcher)
             .await?
             .unwrap_or_default();
-        let avatar_img = Reader::new(Cursor::new(avatar_blob))
+        let avatar_img = ImageReader::new(Cursor::new(avatar_blob))
             .with_guessed_format()?
             .decode()?
             .into_rgb8();

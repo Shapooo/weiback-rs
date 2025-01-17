@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use egui::ColorImage;
-use image::io::Reader;
+use image::ImageReader;
 use log::debug;
 use reqwest::{
     blocking::Client,
@@ -119,7 +119,7 @@ impl Loginator {
             .expect("qrcode id get failed")
             .into();
         let img = self.client.get(img_url).send()?.bytes()?;
-        let img = Reader::new(Cursor::new(img))
+        let img = ImageReader::new(Cursor::new(img))
             .with_guessed_format()?
             .decode()?
             .into_rgb8();
