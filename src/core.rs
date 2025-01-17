@@ -122,7 +122,9 @@ fn set_font(cc: &eframe::CreationContext) {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert(
         "source".into(),
-        egui::FontData::from_static(include_bytes!("../res/fonts/SourceHanSansCN-Medium.otf")),
+        Arc::new(egui::FontData::from_static(include_bytes!(
+            "../res/fonts/SourceHanSansCN-Medium.otf"
+        ))),
     );
     fonts
         .families
