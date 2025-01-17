@@ -8,29 +8,29 @@ default-run = "weiback-rs"
 
 
 [dependencies]
-anyhow = { version = "1.0.86", features = ["backtrace"] }
-bytes = "1.6.0"
+anyhow = { version = "1.0.90", features = ["backtrace"] }
+bytes = "1.8.0"
 chrono = { version = "0.4.38", default-features = false }
-eframe = "0.28.1"
-egui = "0.28.1"
-env_logger = "0.11.3"
-futures = "0.3.30"
-image = "0.25.1"
+eframe = "0.30.0"
+egui = "0.30.0"
+env_logger = "0.11.5"
+futures = "0.3.31"
+image = "0.25.4"
 lazy_static = "1.5.0"
 log = "0.4.22"
-regex = "1.10.5"
-reqwest = { version = "0.12.5", features = [
+regex = "1.11.0"
+reqwest = { version = "0.12.8", features = [
     "json",
     "gzip",
     "blocking",
     "cookies",
 ] }
 reqwest_cookie_store = "0.8.0"
-serde = { version = "1.0.204", features = ["serde_derive"] }
-serde_json = "1.0.120"
-sqlx = { version = "0.7.4", features = ["sqlite", "runtime-tokio-rustls"] }
+serde = { version = "1.0.211", features = ["serde_derive"] }
+serde_json = "1.0.132"
+sqlx = { version = "0.8.2", features = ["sqlite", "runtime-tokio-rustls"] }
 tera = "1.20.0"
-tokio = { version = "1.38.0", features = [
+tokio = { version = "1.40.0", features = [
     "macros",
     "rt-multi-thread",
     "time",
@@ -38,4 +38,4 @@ tokio = { version = "1.38.0", features = [
 ] }
 
 [dev-dependencies]
-flate2 = "1.0.30"
+flate2 = "1.0.34"
