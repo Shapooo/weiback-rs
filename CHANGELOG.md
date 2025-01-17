@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.5] - 2025-01-17
+
+### Fixed
+
+- 修复登录闪退问题
+
 ## [v0.2.4] - 2024-07-09
 
 ### Added
