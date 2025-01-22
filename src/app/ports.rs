@@ -112,4 +112,34 @@ pub trait Network {
     async fn get_long_text(&self, mblogid: &str) -> Result<Option<LongText>>;
 }
 
+impl<N: Network> Network for Arc<N> {
+    async fn get_favorite_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
+        self.as_ref().get_favorite_posts(uid, page).await
+    }
+
+    async fn unfavorite_post(&self, id: i64) -> Result<()> {
+        self.as_ref().unfavorite_post(id).await
+    }
+
+    async fn get_favorite_num(&self) -> Result<u32> {
+        self.as_ref().get_favorite_num().await
+    }
+
+    async fn get_mobile_post(&self, mblogid: &str) -> Result<Post> {
+        self.as_ref().get_mobile_post(mblogid).await
+    }
+
+    async fn get_long_text(&self, mblogid: &str) -> Result<Option<LongText>> {
+        self.as_ref().get_long_text(mblogid).await
+    }
+
+    async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>> {
+        self.as_ref().get_posts(uid, page, search_args).await
+    }
+
+    async fn get_user(&self, id: i64) -> Result<User> {
+        self.as_ref().get_user(id).await
+    }
+}
+
 pub trait Exporter: 'static + Clone + Send + Sync {}
