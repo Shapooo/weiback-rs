@@ -5,6 +5,7 @@ use anyhow::{Error, Result};
 use egui::ImageData;
 
 use super::models::{LongText, Picture, Post, User};
+use super::service::search_args::SearchArgs;
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -101,5 +102,14 @@ impl<S: Storage> Storage for Arc<S> {
     }
 }
 
+pub trait Network {
+    async fn get_user(&self, id: i64) -> Result<User>;
+    async fn get_favorite_num(&self) -> Result<u32>;
+    async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>>;
+    async fn get_favorite_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
+    async fn unfavorite_post(&self, id: i64) -> Result<()>;
+    async fn get_mobile_post(&self, mblogid: &str) -> Result<Post>;
+    async fn get_long_text(&self, mblogid: &str) -> Result<Option<LongText>>;
+}
 
 pub trait Exporter: 'static + Clone + Send + Sync {}
