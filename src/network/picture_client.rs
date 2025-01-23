@@ -1,24 +1,21 @@
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PictureType {
-    InPost { url: String, post_id: i64 },
-    Avatar { url: String, user_id: i64 },
-    Emoji { url: String },
-    Temporary { url: String },
+use anyhow::Result;
+use log::{debug, trace};
+
+use super::NetworkImpl;
+use crate::app::models::Picture;
+
+struct PictureClient<'a> {
+    network: &'a NetworkImpl,
 }
 
-#[derive(Debug, Clone)]
-pub struct PictureInternal {
-    pub type_: PictureType,
-    pub blob: Option<PictureBlob>,
-}
-
-impl PictureInternal {
-    async fn fetch_blob(&self, fetcher: &NetworkImpl) -> Result<Bytes> {
-        let url = self.get_url();
+impl<'a> PictureClient<'a> {
+    async fn fetch_blob(&self, pic: &mut Picture) -> Result<()> {
+        let url = pic.get_url();
         debug!("fetch pic, url: {}", url);
-        let res = fetcher.get(url).await?;
+        let res = self.network.get(url).await?;
         let res_bytes = res.bytes().await?;
         trace!("fetched pic size: {}", res_bytes.len());
-        Ok(res_bytes)
+        pic.set_blob(res_bytes);
+        Ok(())
     }
 }
