@@ -1,4 +1,4 @@
-use crate::network::WebFetcher;
+use crate::network::NetworkImpl;
 
 use std::collections::HashMap;
 
@@ -9,7 +9,7 @@ use serde_json::Value;
 static mut EMOTICON: Option<HashMap<String, String>> = None;
 const STATUSES_CONFIG_API: &str = "https://weibo.com/ajax/statuses/config";
 
-pub async fn init_emoticon(fetcher: &WebFetcher) -> Result<()> {
+pub async fn init_emoticon(fetcher: &NetworkImpl) -> Result<()> {
     let url = STATUSES_CONFIG_API;
     debug!("fetch emoticon, url: {url}");
     let res = fetcher.get(url).await?;

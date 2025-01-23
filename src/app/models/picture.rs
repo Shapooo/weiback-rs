@@ -1,4 +1,4 @@
-use crate::network::WebFetcher;
+use crate::network::NetworkImpl;
 
 use std::ops::DerefMut;
 
@@ -73,7 +73,7 @@ impl Picture {
         Ok(())
     }
 
-    pub async fn persist<E>(&self, executor: E, fetcher: &WebFetcher) -> Result<()>
+    pub async fn persist<E>(&self, executor: E, fetcher: &NetworkImpl) -> Result<()>
     where
         E: DerefMut,
         for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
@@ -82,7 +82,7 @@ impl Picture {
         Ok(())
     }
 
-    pub async fn get_blob<E>(&self, mut executor: E, fetcher: &WebFetcher) -> Result<Option<Bytes>>
+    pub async fn get_blob<E>(&self, mut executor: E, fetcher: &NetworkImpl) -> Result<Option<Bytes>>
     where
         E: DerefMut,
         for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
@@ -108,7 +108,7 @@ impl Picture {
         }
     }
 
-    async fn fetch_blob(&self, fetcher: &WebFetcher) -> Result<Bytes> {
+    async fn fetch_blob(&self, fetcher: &NetworkImpl) -> Result<Bytes> {
         let url = self.get_url();
         debug!("fetch pic, url: {}", url);
         let res = fetcher.get(url).await?;

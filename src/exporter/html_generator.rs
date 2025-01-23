@@ -1,4 +1,4 @@
-use crate::app::models::post::Post;
+use crate::app::models::Post;
 
 use anyhow::Result;
 use lazy_static::lazy_static;

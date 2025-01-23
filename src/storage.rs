@@ -6,7 +6,7 @@ use serde_json::to_string;
 use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
 
 use super::app::models::{Picture, Post, User};
-use crate::app::{FavoriteStorage, PostStorage, Storage, UserStorage};
+use crate::app::Storage;
 
 const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
