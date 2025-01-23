@@ -1,3 +1,4 @@
+mod picture_client;
 mod post_client;
 mod user_client;
 
@@ -12,9 +13,10 @@ use reqwest::{
 use reqwest_cookie_store::CookieStoreMutex;
 use serde_json::{from_value, Value};
 
-use crate::app::models::{LongText, Post, User};
-use crate::app::service::search_args::SearchArgs;
-use crate::app::Network;
+use crate::app::{
+    models::{LongText, Post, User},
+    ports::Network,
+};
 
 const FAVORITES_TAGS_API: &str = "https://weibo.com/ajax/favorites/tags?page=1&is_show_total=1";
 const RETRY_COUNT: i32 = 3;
