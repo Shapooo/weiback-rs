@@ -1,4 +1,5 @@
 mod post_client;
+mod user_client;
 
 use std::sync::Arc;
 
