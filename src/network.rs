@@ -1,3 +1,5 @@
+mod post_client;
+
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
