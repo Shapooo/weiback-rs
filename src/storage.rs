@@ -1,6 +1,6 @@
-mod picture_client;
-mod post_client;
-mod user_client;
+mod picture_storage;
+mod post_storage;
+mod user_storage;
 
 use std::path::PathBuf;
 
