@@ -18,22 +18,22 @@ pub struct Picture {
 
 impl Picture {
     pub fn in_post(url: &str, post_id: i64) -> Self {
-        let url = strip_url_queries(url).into();
+        let url = Self::strip_url_queries(url).into();
         Self::InPost(url, post_id)
     }
 
     pub fn avatar(url: &str, uid: i64) -> Self {
-        let url = strip_url_queries(url).into();
+        let url = Self::strip_url_queries(url).into();
         Self::Avatar(url, uid)
     }
 
     pub fn emoji(url: &str) -> Self {
-        let url = strip_url_queries(url).into();
+        let url = Self::strip_url_queries(url).into();
         Self::Emoji(url)
     }
 
     pub fn tmp(url: &str) -> Self {
-        let url = strip_url_queries(url).into();
+        let url = Self::strip_url_queries(url).into();
         Self::Tmp(url)
     }
 
@@ -52,32 +52,36 @@ impl Picture {
 
     #[allow(unused)]
     pub fn get_id(&self) -> &str {
-        pic_url_to_id(self.get_url())
+        Self::pic_url_to_id(self.get_url())
     }
 
     pub fn get_file_name(&self) -> &str {
-        pic_url_to_file(self.get_url())
+        Self::pic_url_to_file(self.get_url())
     }
-}
 
-// TODO: handle exception
-fn pic_url_to_file(url: &str) -> &str {
-    url.rsplit('/')
-        .next()
-        .expect("it is not a valid picture url")
-        .split('?')
-        .next()
-        .expect("it is not a valid picture url")
-}
+    pub fn set_blob(&mut self, blob: Bytes) {
+        self.blob = Some(blob);
+    }
 
-fn pic_url_to_id(url: &str) -> &str {
-    let file = pic_url_to_file(url);
-    let i = file.rfind('.').expect("it is not a valid picture url");
-    &file[..i]
-}
+    // TODO: handle exception
+    pub fn pic_url_to_file(url: &str) -> &str {
+        url.rsplit('/')
+            .next()
+            .expect("it is not a valid picture url")
+            .split('?')
+            .next()
+            .expect("it is not a valid picture url")
+    }
 
-fn strip_url_queries(url: &str) -> &str {
-    url.split('?').next().unwrap()
+    pub fn pic_url_to_id(url: &str) -> &str {
+        let file = Self::pic_url_to_file(url);
+        let i = file.rfind('.').expect("it is not a valid picture url");
+        &file[..i]
+    }
+
+    pub fn strip_url_queries(url: &str) -> &str {
+        url.split('?').next().unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -86,14 +90,14 @@ mod picture_tests {
     #[test]
     fn pic_url_to_file_test() {
         let a = "https://baidu.com/hhhh.jpg?a=1&b=2";
-        let res = pic_url_to_file(a);
+        let res = Picture::pic_url_to_file(a);
         dbg!(res);
     }
 
     #[test]
     fn pic_url_to_id_test() {
         let a = "https://baidu.com/hhhh.jpg?a=1&b=2";
-        let res = pic_url_to_id(a);
+        let res = Picture::pic_url_to_id(a);
         dbg!(res);
     }
 }
