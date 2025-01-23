@@ -1,3 +1,4 @@
+mod picture_client;
 mod post_client;
 mod user_client;
 
