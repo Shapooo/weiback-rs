@@ -9,7 +9,7 @@ use log::{error, info};
 use tokio::{sync::mpsc::Sender, time::sleep};
 
 use super::search_args::SearchArgs;
-use crate::app::models::{picture::Picture, post::Post, user::User};
+use crate::app::models::{Picture, Post, User};
 use crate::app::{Exporter, Network, Service, Storage, TaskResponse};
 
 const SAVING_PERIOD: usize = 200;

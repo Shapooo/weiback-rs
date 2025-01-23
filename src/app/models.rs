@@ -1,7 +1,7 @@
-mod long_text;
-mod picture;
-mod post;
-mod user;
+pub mod long_text;
+pub mod picture;
+pub mod post;
+pub mod user;
 
 pub use long_text::LongText;
 pub use picture::Picture;
