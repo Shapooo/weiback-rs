@@ -1,3 +1,5 @@
+mod post_client;
+
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
