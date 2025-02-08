@@ -1,4 +1,5 @@
 mod http_client;
+mod picture_internal;
 mod post_internal;
 mod user_internal;
 
