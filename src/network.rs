@@ -1,6 +1,6 @@
 mod picture_client;
-mod post_client;
-mod user_client;
+mod post_internal;
+mod user_internal;
 
 use std::sync::Arc;
 
