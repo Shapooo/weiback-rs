@@ -4,8 +4,8 @@ use std::sync::Arc;
 use anyhow::{Error, Result};
 use egui::ImageData;
 
-use super::models::{LongText, Picture, Post, User};
-use super::service::search_args::SearchArgs;
+use super::app::search_args::SearchArgs;
+use super::models::{LongText, Post, User, Picture};
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -103,7 +103,6 @@ impl<S: Storage> Storage for Arc<S> {
 }
 
 pub trait Network {
-    async fn get_user(&self, id: i64) -> Result<User>;
     async fn get_favorite_num(&self) -> Result<u32>;
     async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>>;
     async fn get_favorite_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
@@ -135,10 +134,6 @@ impl<N: Network> Network for Arc<N> {
 
     async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>> {
         self.as_ref().get_posts(uid, page, search_args).await
-    }
-
-    async fn get_user(&self, id: i64) -> Result<User> {
-        self.as_ref().get_user(id).await
     }
 }
 
