@@ -195,15 +195,7 @@ struct PostInternal {
     pub title: Option<Value>,
     pub continue_tag: Option<Value>,
     pub comment_manage_info: Option<Value>,
-    #[serde(skip)]
-    pub client_only: bool,
-    #[serde(skip)]
-    pub unfavorited: bool,
     pub created_at: String,
-    #[serde(skip)]
-    pub created_at_timestamp: i64,
-    #[serde(skip)]
-    pub created_at_tz: String,
     pub retweeted_status: Option<Box<PostInternal>>,
     #[serde(default, deserialize_with = "deserialize_user")]
     pub user: Option<UserInternal>,
@@ -385,6 +377,62 @@ impl PostClient {
             Ok(posts)
         } else {
             Err(anyhow!("Posts should be a array, maybe api has changed"))
+        }
+    }
+}
+
+#[cfg(test)]
+mod post_test {
+    mod post_internal_test {
+        use super::super::*;
+        use flate2::read::GzDecoder;
+        use std::io::prelude::*;
+
+        fn load_test_case() -> anyhow::Result<String> {
+            let gz = include_bytes!("../../res/full.json.gz");
+            let mut de = GzDecoder::new(gz.as_ref());
+            let mut txt = String::new();
+            de.read_to_string(&mut txt).unwrap();
+            Ok(txt)
+        }
+
+        #[test]
+        fn deserialize_posts() {
+            let test_case = load_test_case().unwrap();
+            let test_case_val = serde_json::from_str::<Value>(&test_case).unwrap();
+            let test_case_val_vec = serde_json::from_str::<Vec<Value>>(&test_case).unwrap();
+
+            let _: Vec<PostInternal> = serde_json::from_str(&test_case).unwrap();
+            let _: Vec<PostInternal> = serde_json::from_value(test_case_val).unwrap();
+            let _: Vec<PostInternal> = test_case_val_vec
+                .into_iter()
+                .map(|v| serde_json::from_value(v).unwrap())
+                .collect();
+        }
+
+        #[test]
+        fn posts_try_from_value() {
+            let test_case = load_test_case().unwrap();
+            let posts: Vec<Value> = serde_json::from_str(&test_case).unwrap();
+            for post in posts {
+                let postb = post.clone();
+                let _: PostInternal = from_value(post)
+                    .map_err(|e| {
+                        format!(
+                            "failed to convert post {post:?} to Post: {e}",
+                            post = postb,
+                            e = e
+                        )
+                    })
+                    .unwrap();
+            }
+        }
+
+        #[test]
+        fn parse_datetime() {
+            parse_created_at("Mon May 29 19:29:32 +0800 2023").unwrap();
+            parse_created_at("Mon May 29 19:45:00 +0800 2023").unwrap();
+            parse_created_at("Tue May 30 04:07:49 +0800 2023").unwrap();
         }
     }
 }
