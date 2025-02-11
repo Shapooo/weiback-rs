@@ -279,16 +279,9 @@ impl TryFrom<Value> for PostInternal {
     }
 }
 
-impl TryInto<Value> for PostInternal {
+impl TryFrom<PostInternal> for Post {
     type Error = Error;
-    fn try_into(self) -> Result<Value> {
-        Ok(to_value(self)?)
-    }
-}
-
-impl TryInto<Post> for PostInternal {
-    type Error = Error;
-    fn try_into(self) -> std::result::Result<Post, Self::Error> {
+    fn try_from(value: PostInternal) -> std::result::Result<Self, Self::Error> {
         todo!()
     }
 }
@@ -349,8 +342,8 @@ impl PostClient {
         let mut res: Value = self.http_client.get(&url).await?.json().await?;
         if res["ok"] == 1 {
             // let post = Self::convert_mobile2pc_post(res["data"].take())?;
-            let post = res["data"].take().try_into()?;
-            Ok(post)
+            let post: PostInternal = res["data"].take().try_into()?;
+            Ok(post.try_into()?)
         } else {
             Err(anyhow!(
                 "fetch mobile post {} failed, with message {}",
@@ -385,7 +378,11 @@ impl PostClient {
                 .into_iter()
                 .map(from_value::<PostInternal>)
                 .collect::<Result<Vec<PostInternal>, serde_json::Error>>()?;
-            Ok(posts.try_into())
+            let posts = posts
+                .into_iter()
+                .map(Post::try_from)
+                .collect::<Result<Vec<Post>>>()?;
+            Ok(posts)
         } else {
             Err(anyhow!("Posts should be a array, maybe api has changed"))
         }
