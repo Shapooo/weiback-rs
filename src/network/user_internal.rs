@@ -67,3 +67,42 @@ impl TryInto<Value> for UserInternal {
         serde_json::to_value(self)
     }
 }
+
+#[cfg(test)]
+mod user_test {
+    use super::UserInternal;
+    use anyhow::Result;
+    use flate2::read::GzDecoder;
+    use serde_json::{from_str, Value};
+    use std::io::Read;
+
+    async fn load_test_case() -> Result<Vec<Value>> {
+        let gz = include_bytes!("../../res/full.json.gz");
+        let mut de = GzDecoder::new(gz.as_ref());
+        let mut text = String::new();
+        de.read_to_string(&mut text)?;
+
+        let test_case_post: Vec<Value> = from_str(&text)?;
+        let test_case = test_case_post
+            .into_iter()
+            .filter_map(|mut v| v["user"].is_object().then_some(v["user"].take()))
+            .collect();
+        Ok(test_case)
+    }
+
+    async fn parse_users(test_case: Vec<Value>) -> Result<Vec<UserInternal>> {
+        test_case
+            .into_iter()
+            .map(|user| {
+                let user: UserInternal = user.try_into()?;
+                Ok(user)
+            })
+            .collect::<Result<Vec<_>>>()
+    }
+
+    #[tokio::test]
+    async fn parse_from_json() {
+        let test_case = load_test_case().await.unwrap();
+        parse_users(test_case).await.unwrap();
+    }
+}
