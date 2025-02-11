@@ -12,9 +12,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, to_value, Value};
 
-use super::{user_internal::UserInternal, HttpClient};
+use super::{long_text::LongText, user_internal::UserInternal, HttpClient};
 use crate::app::search_args::SearchArgs;
-use crate::models::{LongText, Post};
+use crate::models::Post;
 
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
