@@ -7,15 +7,11 @@ mod user_internal;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Ok, Result};
-use log::{debug, trace, warn};
+use log::{debug, trace};
 use reqwest_cookie_store::CookieStoreMutex;
 use serde_json::Value;
 
-use super::{
-    app::search_args::SearchArgs,
-    models::{LongText, Post},
-    ports::Network,
-};
+use super::{app::search_args::SearchArgs, models::Post, ports::Network};
 use http_client::HttpClient;
 use post_internal::PostClient;
 
@@ -84,13 +80,5 @@ impl Network for NetworkImpl {
 
     async fn unfavorite_post(&self, id: i64) -> Result<()> {
         self.post_client.unfavorite_post(id).await
-    }
-
-    async fn get_mobile_post(&self, mblogid: &str) -> Result<Post> {
-        self.post_client.get_mobile_post(mblogid).await
-    }
-
-    async fn get_long_text(&self, mblogid: &str) -> Result<Option<LongText>> {
-        self.post_client.get_long_text(mblogid).await
     }
 }
