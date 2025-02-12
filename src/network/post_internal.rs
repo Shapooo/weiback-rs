@@ -1,20 +1,16 @@
-use std::{
-    borrow::Cow::{self, Borrowed, Owned},
-    collections::{HashMap, HashSet},
-    ops::DerefMut,
-};
+use std::collections::HashMap;
 
 use anyhow::{anyhow, Error, Result};
 use chrono::{DateTime, FixedOffset};
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use serde_json::{from_value, to_value, Value};
+use serde::Deserialize;
+use serde_json::{from_value, Value};
 
 use super::{long_text::LongText, user_internal::UserInternal, HttpClient};
 use crate::app::search_args::SearchArgs;
-use crate::models::Post;
+use crate::models::{Post, User};
 
 const FAVORITES_ALL_FAV_API: &str = "https://weibo.com/ajax/favorites/all_fav";
 const MOBILE_POST_API: &str = "https://m.weibo.cn/statuses/show?id=";
@@ -262,19 +258,56 @@ impl TryFrom<Value> for PostInternal {
             retweeted_status.uid = retweeted_status.user.as_ref().map(|user| user.id);
             post.retweeted_status = Some(retweeted_status);
         }
+    }
+}
 
-        if let Some(mut retweet) = post.retweeted_status.take() {
-            retweet.page_info = post.page_info.take();
-            post.retweeted_status = Some(retweet);
-        }
-        Ok(post)
+impl TryFrom<Box<PostInternal>> for Box<Post> {
+    type Error = Error;
+    fn try_from(value: Box<PostInternal>) -> Result<Self, Self::Error> {
+        Ok(Box::new((*value).try_into()?))
     }
 }
 
 impl TryFrom<PostInternal> for Post {
     type Error = Error;
-    fn try_from(value: PostInternal) -> std::result::Result<Self, Self::Error> {
-        todo!()
+    fn try_from(value: PostInternal) -> Result<Self, Self::Error> {
+        Ok(Post {
+            id: value.id,
+            mblogid: value.mblogid,
+            text_raw: value.text_raw,
+            source: value.source,
+            region_name: value.region_name,
+            deleted: value.deleted,
+            pic_ids: value.pic_ids,
+            pic_num: value.pic_num,
+            url_struct: value.url_struct,
+            topic_struct: value.topic_struct,
+            tag_struct: value.tag_struct,
+            tags: value.tags,
+            number_display_strategy: value.number_display_strategy,
+            mix_media_info: value.mix_media_info,
+            visible: value.visible,
+            text: value.text,
+            attitudes_status: value.attitudes_status,
+            favorited: value.favorited,
+            pic_infos: value.pic_infos,
+            reposts_count: value.reposts_count,
+            comments_count: value.comments_count,
+            attitudes_count: value.attitudes_count,
+            repost_type: value.repost_type,
+            edit_count: value.edit_count,
+            text_length: value.text_length,
+            is_long_text: value.is_long_text,
+            geo: value.geo,
+            page_info: value.page_info,
+            unfavorited: false,
+            created_at: parse_created_at(&value.created_at)?,
+            retweeted_status: value
+                .retweeted_status
+                .map(Box::<Post>::try_from)
+                .transpose()?,
+            user: value.user.map(User::from),
+        })
     }
 }
 
