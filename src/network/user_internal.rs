@@ -2,6 +2,8 @@ use anyhow::Error;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::models::User;
+
 const USER_INFO_API: &str = "https://weibo.com/ajax/profile/info";
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -57,6 +59,25 @@ impl TryFrom<Value> for UserInternal {
 
     fn try_from(value: Value) -> std::result::Result<Self, Self::Error> {
         Ok(serde_json::from_value(value)?)
+    }
+}
+
+impl From<UserInternal> for User {
+    fn from(value: UserInternal) -> Self {
+        User {
+            id: value.id,
+            profile_url: value.profile_url,
+            screen_name: value.screen_name,
+            profile_image_url: value.profile_image_url,
+            avatar_large: value.avatar_large,
+            avatar_hd: value.avatar_hd,
+            verified: value.verified,
+            verified_type: value.verified_type,
+            domain: value.domain,
+            follow_me: value.follow_me,
+            following: value.following,
+            backedup: value.backedup,
+        }
     }
 }
 
