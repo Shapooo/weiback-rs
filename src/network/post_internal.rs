@@ -125,7 +125,7 @@ const IMG_TYPES: &[&[&str; 6]; 3] = &[
  *
  * 部分 post 从网页接口拿不到，只能手机客户端和网页端能看到，这里先从网页端拿。网页端的字段略有不同，包含"ab_switcher", "ad_state"等字段，这里予以忽略，后面有必要删除不必要的字段，并增加 Repository 层以及 DTO 类型
  */
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 struct PostInternal {
     pub id: i64,
     pub mblogid: String,
@@ -134,7 +134,7 @@ struct PostInternal {
     pub region_name: Option<String>,
     #[serde(default, deserialize_with = "deserialize_deleted")]
     pub deleted: bool,
-    pub pic_ids: Option<Value>,
+    pub pic_ids: Option<Vec<String>>,
     pub pic_num: Option<i64>,
     pub url_struct: Option<Value>,
     pub topic_struct: Option<Value>,
@@ -167,7 +167,7 @@ struct PostInternal {
     pub is_paid: Option<bool>,
     pub share_repost_type: Option<i64>,
     pub rid: Option<String>,
-    pub pic_infos: Option<Value>,
+    pub pic_infos: Option<HashMap<String, Value>>,
     pub cardid: Option<String>,
     pub pic_bg_new: Option<String>,
     pub mark: Option<String>,
@@ -334,7 +334,7 @@ impl PostClient {
         let mut res: Value = self.http_client.get(&url).await?.json().await?;
         if res["ok"] == 1 {
             // let post = Self::convert_mobile2pc_post(res["data"].take())?;
-            let post: PostInternal = res["data"].take().try_into()?;
+            let post: PostInternal = from_value(res["data"].take())?;
             Ok(post.try_into()?)
         } else {
             Err(anyhow!(
