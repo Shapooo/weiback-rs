@@ -1,5 +1,3 @@
-use serde_json::Value;
-
 /** 用户数据
  * 从微博 API 获取的每条 post 会附带 user 字段，原始数据为 Json 格式，包含如下字段：
  * avatar_hd            高清头像URL，字符串格式
@@ -35,18 +33,10 @@ pub struct User {
     pub profile_image_url: String,
     pub avatar_large: String,
     pub avatar_hd: String,
-    pub planet_video: bool,
-    pub v_plus: i64,
-    pub pc_new: i64,
     pub verified: bool,
     pub verified_type: i64,
     pub domain: String,
-    pub weihao: String,
-    pub verified_type_ext: Option<i64>,
     pub follow_me: bool,
     pub following: bool,
-    pub mbrank: i64,
-    pub mbtype: i64,
-    pub icon_list: Option<Value>,
     pub backedup: bool,
 }
