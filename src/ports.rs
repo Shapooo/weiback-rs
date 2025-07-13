@@ -1,11 +1,11 @@
-use std::ops::RangeInclusive;
 use std::sync::Arc;
+use std::{ops::RangeInclusive, path::Path};
 
 use anyhow::{Error, Result};
 use egui::ImageData;
+use weibosdk_rs::{Post, User};
 
-use super::app::search_args::SearchArgs;
-use super::models::{Picture, Post, User};
+use super::models::Picture;
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -40,7 +40,6 @@ pub trait Service {
         image_definition: u8,
     );
     async fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8);
-    async fn get_user_meta(&self, id: i64);
     async fn export_from_local(
         &self,
         range: RangeInclusive<u32>,
@@ -102,29 +101,15 @@ impl<S: Storage> Storage for Arc<S> {
     }
 }
 
-pub trait Network {
-    async fn get_favorite_num(&self) -> Result<u32>;
-    async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>>;
-    async fn get_favorite_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-    async fn unfavorite_post(&self, id: i64) -> Result<()>;
+pub trait Exporter: 'static + Clone + Send + Sync {
+    async fn export_page(
+        &self,
+        task_name: &str,
+        html: &str,
+        target_dir: impl AsRef<Path>,
+    ) -> Result<()>;
 }
 
-impl<N: Network> Network for Arc<N> {
-    async fn get_favorite_posts(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        self.as_ref().get_favorite_posts(uid, page).await
-    }
-
-    async fn unfavorite_post(&self, id: i64) -> Result<()> {
-        self.as_ref().unfavorite_post(id).await
-    }
-
-    async fn get_favorite_num(&self) -> Result<u32> {
-        self.as_ref().get_favorite_num().await
-    }
-
-    async fn get_posts(&self, uid: i64, page: u32, search_args: &SearchArgs) -> Result<Vec<Post>> {
-        self.as_ref().get_posts(uid, page, search_args).await
-    }
+pub trait Processer: 'static + Clone + Send + Sync {
+    async fn generate_html(&self) -> Result<String>;
 }
-
-pub trait Exporter: 'static + Clone + Send + Sync {}

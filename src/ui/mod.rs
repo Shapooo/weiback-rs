@@ -1,9 +1,4 @@
-pub mod executor;
-pub mod message;
-
-use crate::auth::{get_login_info, LoginState, Loginator};
 mod task_proxy;
-use message::TaskResponse;
 
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -15,6 +10,19 @@ use eframe::{
 };
 use log::info;
 use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver};
+
+use crate::app::TaskResponse;
+use task_proxy::TaskProxy;
+
+pub trait Tab {
+    fn ui(&mut self, ctx: &egui::Context, ui: &mut egui::Ui);
+    fn name(&self) -> &'static str;
+}
+
+pub trait Window {
+    fn show(&mut self, ctx: &egui::Context);
+    fn name(&self) -> &'static str;
+}
 
 pub enum MainState {
     Unlogined,
@@ -43,6 +51,8 @@ impl Default for TabType {
 }
 
 pub struct Core {
+    tabs: &'static [Box<dyn Tab>],
+    current_tab_idx: usize,
     state: MainState,
     task_status_receiver: Option<Receiver<TaskResponse>>,
     executor: Option<Executor>,
@@ -72,6 +82,8 @@ pub struct Core {
 impl Default for Core {
     fn default() -> Self {
         Self {
+            tabs: &[],
+            current_tab_idx: 0,
             state: Default::default(),
             task_status_receiver: Default::default(),
             executor: Default::default(),
@@ -126,7 +138,7 @@ fn set_font(cc: &eframe::CreationContext) {
     fonts.font_data.insert(
         "source".into(),
         Arc::new(egui::FontData::from_static(include_bytes!(
-            "../res/fonts/SourceHanSansCN-Medium.otf"
+            "../../res/fonts/SourceHanSansCN-Medium.otf"
         ))),
     );
     fonts

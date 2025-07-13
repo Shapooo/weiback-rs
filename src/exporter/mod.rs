@@ -1,5 +1,3 @@
-pub mod html_generator;
-
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
@@ -10,11 +8,25 @@ use log::info;
 use tokio::fs::{DirBuilder, File};
 use tokio::io::AsyncWriteExt;
 
-#[derive(Debug, Clone)]
-pub struct Exporter();
+pub mod html_generator;
 
-impl Exporter {
-    pub async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
+#[derive(Debug, Clone)]
+pub struct ExporterImpl();
+
+#[derive(Debug, Clone)]
+pub struct HTMLPage {
+    pub html: String,
+    pub pics: Vec<HTMLPicture>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HTMLPicture {
+    pub name: String,
+    pub blob: Bytes,
+}
+
+impl ExporterImpl {
+    async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
     where
         N: AsRef<str>,
         P: AsRef<Path>,
@@ -56,21 +68,9 @@ impl Exporter {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct HTMLPage {
-    pub html: String,
-    pub pics: Vec<HTMLPicture>,
-}
-
-#[derive(Debug, Clone)]
-pub struct HTMLPicture {
-    pub name: String,
-    pub blob: Bytes,
-}
-
 #[cfg(test)]
 mod exporter_test {
-    use super::{Exporter, HTMLPage, HTMLPicture};
+    use super::{ExporterImpl, HTMLPage, HTMLPicture};
     #[tokio::test]
     async fn export_page() {
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
@@ -83,7 +83,7 @@ mod exporter_test {
             .into_iter()
             .collect(),
         };
-        Exporter::export_page("test_task", page, "./export_page")
+        ExporterImpl::export_page("test_task", page, "./export_page")
             .await
             .unwrap();
         std::fs::remove_dir_all("export_page").unwrap();

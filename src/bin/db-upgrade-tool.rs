@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use anyhow::Result;
 use chrono::{DateTime, FixedOffset, TimeZone};
 use env_logger::Builder;
-use log::{error, info, warn, LevelFilter};
-use serde_json::{from_str, Value};
+use log::{LevelFilter, error, info, warn};
+use serde_json::{Value, from_str};
 use sqlx::{Sqlite, SqlitePool};
 use tokio::{
-    fs::{remove_file, File, OpenOptions},
+    fs::{File, OpenOptions, remove_file},
     io::{AsyncReadExt, AsyncWriteExt},
 };
 
