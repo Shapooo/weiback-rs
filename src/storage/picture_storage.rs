@@ -1,4 +1,12 @@
+use std::ops::DerefMut;
+
+use anyhow::Result;
+use bytes::Bytes;
+use log::{debug, trace};
 use sqlx::{Executor, FromRow, Sqlite};
+
+use crate::models::picture::Picture;
+use crate::network::NetworkImpl;
 
 const PIC_TYPE_AVATAR: u8 = 0;
 const PIC_TYPE_INPOST: u8 = 1;
@@ -144,9 +152,7 @@ impl PictureBlob {
             .await?;
         trace!(
             "insert img blob {}-{}, result: {:?}",
-            self.id,
-            self.url,
-            result
+            self.id, self.url, result
         );
         Ok(())
     }

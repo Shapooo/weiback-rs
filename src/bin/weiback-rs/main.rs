@@ -1,18 +1,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 use anyhow::Result;
 use env_logger::Builder;
-use log::{info, LevelFilter};
+use log::{LevelFilter, info};
 
 use weiback::ui::Core;
 
 fn main() -> Result<()> {
-    std::env::set_var("RUST_BACKTRACE", "1");
-    init_logger()?;
-    info!("start running...");
-    let core = Core::new();
-    core.run()?;
+    // std::env::set_var("RUST_BACKTRACE", "1");
+    // init_logger()?;
+    // info!("start running...");
+    // let core = Core::new();
+    // core.run()?;
 
-    info!("done");
+    // info!("done");
     Ok(())
 }
 

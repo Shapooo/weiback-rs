@@ -1,66 +1,70 @@
-use std::io::Cursor;
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
 use anyhow::Result;
-use egui::{ColorImage, ImageData};
-use image::ImageReader;
 use log::{error, info};
-use tokio::{sync::mpsc::Sender, time::sleep};
+use tokio::{self, sync::mpsc::Sender, time::sleep};
+use weibosdk_rs::{Post, WeiboAPI};
 
 use super::search_args::SearchArgs;
-use crate::app::models::{Picture, Post, User};
-use crate::app::{Exporter, Network, Service, Storage, TaskResponse};
+use crate::models::Picture;
+use crate::ports::{Exporter, Processer, Service, Storage, TaskResponse};
 
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
-pub struct TaskHandler<N: Network, S: Storage, E: Exporter> {
-    network: N,
+pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> {
+    network: Option<W>,
     storage: S,
     exporter: E,
+    processer: P,
     task_status_sender: Sender<TaskResponse>,
+    uid: i64,
 }
 
-impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
+impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P> {
     pub fn new(
         // mut login_info: LoginInfo,
-        network: N,
+        network: W,
         storage: S,
         exporter: E,
+        processer: P,
         task_status_sender: Sender<TaskResponse>,
+        uid: i64,
     ) -> Result<Self> {
         Ok(TaskHandler {
-            network,
+            network: Some(network),
             storage,
             exporter,
+            processer,
             task_status_sender,
+            uid,
         })
     }
 
     // initialize database、get emoticon data
-    pub async fn init(&mut self) {
-        let res = self._init().await;
-        self.handle_short_task_res(res).await;
-    }
+    // pub async fn init(&mut self) {
+    //     let res = self._init().await;
+    //     self.handle_short_task_res(res).await;
+    // }
 
-    async fn _init(&mut self) -> Result<TaskResponse> {
-        init_emoticon(&self.network).await?;
-        self.storage.init().await?;
-        let (web_total, db_total) = tokio::join!(self.get_web_total_num(), self.get_db_total_num());
-        let web_total = web_total?;
-        debug!("initing...");
-        Ok(TaskResponse::SumOfFavDB(web_total, db_total?))
-    }
+    // async fn _init(&mut self) -> Result<TaskResponse> {
+    //     init_emoticon(&self.network).await?;
+    //     self.storage.init().await?;
+    //     let (web_total, db_total) = tokio::join!(self.get_web_total_num(), self.get_db_total_num());
+    //     let web_total = web_total?;
+    //     debug!("initing...");
+    //     Ok(TaskResponse::SumOfFavDB(web_total, db_total?))
+    // }
 
     async fn _unfavorite_posts(&self) -> Result<()> {
-        let mut trans = self.storage.db().unwrap().acquire().await?;
-        let ids = Post::query_posts_to_unfavorite(trans.as_mut()).await?;
+        // let mut trans = self.storage.db().unwrap().acquire().await?;
+        let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         for (i, id) in ids.into_iter().enumerate() {
-            Post::unfavorite_post(id, trans.as_mut(), &self.network).await?;
+            self.network.as_ref().unwrap().favorites_destroy(id).await?;
             info!("post {id} unfavorited");
             tokio::time::sleep(OTHER_TASK_INTERVAL).await;
             let progress = i as f32 / len as f32;
@@ -75,9 +79,9 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
     }
 
     // backup self posts
-    pub async fn backup_self(&self, with_pic: bool, image_definition: u8) {
-        self.backup_user(self.uid, with_pic, image_definition).await
-    }
+    // pub async fn backup_self(&self, with_pic: bool, image_definition: u8) {
+    //     self.backup_user(self.uid, with_pic, image_definition).await
+    // }
 
     async fn _backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) -> Result<()> {
         info!("download user {uid} posts");
@@ -115,8 +119,6 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
                 sleep(BACKUP_TASK_INTERVAL).await;
             }
         }
-        let mut conn = self.storage.db().as_ref().unwrap().acquire().await?;
-        User::mark_user_backed_up(uid, conn.as_mut()).await?;
         Ok(())
     }
 
@@ -129,16 +131,16 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = Post::fetch_posts(uid, page, search_args, &self.network).await?;
+        let posts = self
+            .network
+            .as_ref()
+            .unwrap()
+            .profile_statuses(uid, page)
+            .await?;
         let result = posts.len();
-        Post::persist_posts(
-            posts,
-            with_pic,
-            image_definition,
-            self.storage.db().as_ref().unwrap(),
-            &self.network,
-        )
-        .await?;
+        for post in posts.iter() {
+            self.storage.save_post(post).await?;
+        }
 
         Ok(result)
     }
@@ -152,35 +154,24 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
-        let mut local_posts = self.load_fav_posts_from_db(range, reverse).await?;
+        let local_posts = self.load_fav_posts_from_db(range, reverse).await?;
         let posts_sum = local_posts.len();
         info!("fetched {} posts from local", posts_sum);
 
-        let mut conn = self.storage.db().as_ref().unwrap().acquire().await?;
         let mut index = 1;
         loop {
             let subtask_name = format!("weiback-{index}");
             if local_posts.len() < SAVING_PERIOD {
-                let html = Post::generate_html(
-                    local_posts,
-                    &subtask_name,
-                    image_definition,
-                    conn.as_mut(),
-                    &self.network,
-                )
-                .await?;
-                Exporter::export_page(&subtask_name, html, &target_dir).await?;
+                let html = self.processer.generate_html().await?;
+                self.exporter
+                    .export_page(&subtask_name, &html, &target_dir)
+                    .await?;
                 break;
             } else {
-                let html = Post::generate_html(
-                    local_posts.split_off(SAVING_PERIOD),
-                    &subtask_name,
-                    image_definition,
-                    conn.as_mut(),
-                    &self.network,
-                )
-                .await?;
-                Exporter::export_page(&subtask_name, html, &target_dir).await?;
+                let html = self.processer.generate_html().await?;
+                self.exporter
+                    .export_page(&subtask_name, &html, &target_dir)
+                    .await?;
             }
             let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
             self.task_status_sender
@@ -230,29 +221,6 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
         }
         info!("fetched {total_downloaded} posts in total");
         Ok(())
-    }
-
-    async fn _get_user_meta(&self, uid: i64) -> Result<TaskResponse> {
-        let user = User::fetch(uid, &self.network).await?;
-        let avatar = Picture::tmp(&user.profile_image_url);
-        let mut conn = self.storage.db().as_ref().unwrap().acquire().await?;
-        let avatar_blob = avatar
-            .get_blob(conn.as_mut(), &self.network)
-            .await?
-            .unwrap_or_default();
-        let avatar_img = ImageReader::new(Cursor::new(avatar_blob))
-            .with_guessed_format()?
-            .decode()?
-            .into_rgb8();
-        let avatar_img = ColorImage::from_rgb(
-            [avatar_img.width() as usize, avatar_img.height() as usize],
-            &avatar_img.into_vec(),
-        );
-        Ok(TaskResponse::UserMeta(
-            uid,
-            user.screen_name,
-            ImageData::Color(avatar_img.into()),
-        ))
     }
 
     // handle short task result, like get_user_meta, which are tasks that take short time and
@@ -319,24 +287,18 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
         with_pic: bool,
         image_definition: u8,
     ) -> Result<usize> {
-        let posts = Post::fetch_fav_posts(uid, page, &self.network).await?;
+        // let posts = Post::fetch_fav_posts(uid, page, &self.network).await?;
+        let posts = self.network.as_ref().unwrap().favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
-        Post::persist_posts(
-            posts,
-            with_pic,
-            image_definition,
-            self.storage.db().as_ref().unwrap(),
-            &self.network,
-        )
-        .await?;
+        for post in posts.iter() {
+            self.storage.save_post(post).await?;
+        }
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
-        let mut trans = self.storage.db().as_ref().unwrap().begin().await?;
         for id in ids {
-            Post::mark_post_favorited(id, trans.as_mut()).await?;
+            self.storage.mark_post_favorited(id).await?;
         }
-        trans.commit().await?;
 
         Ok(result)
     }
@@ -348,23 +310,16 @@ impl<N: Network, S: Storage, E: Exporter> TaskHandler<N, S, E> {
     ) -> Result<Vec<Post>> {
         let limit = (range.end() - range.start()) + 1;
         let offset = *range.start() - 1;
-        let conn = self.storage.db().as_ref().unwrap().acquire().await?;
-        Post::query_posts(limit, offset, reverse, conn).await
-    }
-
-    // get total number of favorites in weibo
-    async fn get_web_total_num(&self) -> Result<u32> {
-        self.network.fetch_fav_total_num().await
+        self.storage.get_posts(limit, offset, reverse).await
     }
 
     // get total number of favorites in local database
     async fn get_db_total_num(&self) -> Result<u32> {
-        let conn = self.storage.db().as_ref().unwrap().acquire().await?;
-        Post::query_favorited_sum(conn).await
+        self.storage.get_favorited_sum().await
     }
 }
 
-impl<N: Network, S: Storage, E: Exporter> Service for TaskHandler<N, S, E> {
+impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler<W, S, E, P> {
     // unfavorite all posts that are in weibo favorites
     async fn unfavorite_posts(&self) {
         self.handle_long_task_res(self._unfavorite_posts().await)
@@ -404,12 +359,5 @@ impl<N: Network, S: Storage, E: Exporter> Service for TaskHandler<N, S, E> {
                 .await,
         )
         .await;
-    }
-
-    // get user meta info, include avatar, screen_name
-    // ui will show this after uid is inputted
-    async fn get_user_meta(&self, uid: i64) {
-        self.handle_short_task_res(self._get_user_meta(uid).await)
-            .await
     }
 }

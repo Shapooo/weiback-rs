@@ -1,47 +1,43 @@
-#[derive(Deserialize, Serialize, Debug, Clone, FromRow, PartialEq)]
-struct PostInternal {
+use std::ops::DerefMut;
+
+use anyhow::Result;
+use serde_json::Value;
+use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
+use weibosdk_rs::User;
+
+use crate::models::Picture;
+
+#[derive(Debug, Clone, FromRow, PartialEq)]
+pub struct PostStorage {
     pub id: i64,
     pub mblogid: String,
     pub text_raw: String,
     pub source: String,
     pub region_name: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_deleted")]
     pub deleted: bool,
     pub pic_ids: Option<Value>,
     pub pic_num: Option<i64>,
     pub url_struct: Option<Value>,
     pub topic_struct: Option<Value>,
     pub tag_struct: Option<Value>,
-    #[serde(default, deserialize_with = "deserialize_vec_value")]
     pub tags: Option<Value>,
     #[sqlx(rename = "customIcons")]
-    #[serde(
-        default,
-        rename = "customIcons",
-        deserialize_with = "deserialize_vec_value"
-    )]
     pub custom_icons: Option<Value>,
     pub number_display_strategy: Option<Value>,
     pub mix_media_info: Option<Value>,
     pub visible: Value,
     pub text: String,
     #[sqlx(default)]
-    #[serde(default)]
     pub attitudes_status: i64,
     #[sqlx(default, rename = "showFeedRepost")]
-    #[serde(default, rename = "showFeedRepost")]
     pub show_feed_repost: bool,
     #[sqlx(default, rename = "showFeedComment")]
-    #[serde(default, rename = "showFeedComment")]
     pub show_feed_comment: bool,
     #[sqlx(default, rename = "pictureViewerSign")]
-    #[serde(default, rename = "pictureViewerSign")]
     pub picture_viewer_sign: bool,
     #[sqlx(default, rename = "showPictureViewer")]
-    #[serde(default, rename = "showPictureViewer")]
     pub show_picture_viewer: bool,
     #[sqlx(default)]
-    #[serde(default)]
     pub favorited: bool,
     pub can_edit: Option<bool>,
     pub is_paid: Option<bool>,
@@ -63,13 +59,10 @@ struct PostInternal {
     pub edit_count: Option<i64>,
     pub mblogtype: Option<i64>,
     #[sqlx(rename = "textLength")]
-    #[serde(rename = "textLength")]
     pub text_length: Option<i64>,
     #[sqlx(default, rename = "isLongText")]
-    #[serde(default, rename = "isLongText")]
     pub is_long_text: bool,
     #[sqlx(rename = "rcList")]
-    #[serde(default, rename = "rcList", deserialize_with = "deserialize_vec_value")]
     pub rc_list: Option<Value>,
     pub annotations: Option<Value>,
     pub geo: Option<Value>,
@@ -79,24 +72,19 @@ struct PostInternal {
     pub continue_tag: Option<Value>,
     pub comment_manage_info: Option<Value>,
     #[sqlx(default)]
-    #[serde(skip)]
     pub client_only: bool,
     #[sqlx(default)]
-    #[serde(skip)]
     pub unfavorited: bool,
     pub created_at: String,
-    #[serde(skip)]
     pub created_at_timestamp: i64,
-    #[serde(skip)]
     pub created_at_tz: String,
     #[sqlx(skip)]
-    pub retweeted_status: Option<Box<PostInternal>>,
+    pub retweeted_status: Option<Box<PostStorage>>,
     #[sqlx(skip)]
-    #[serde(default, deserialize_with = "deserialize_user")]
     pub user: Option<User>,
 }
 
-impl PostInternal {
+impl PostStorage {
     pub async fn create_table<E>(mut executor: E) -> Result<()>
     where
         E: DerefMut,
@@ -170,7 +158,7 @@ impl PostInternal {
         Ok(())
     }
     pub async fn persist_posts(
-        posts: Vec<PostInternal>,
+        posts: Vec<PostStorage>,
         with_pic: bool,
         image_definition: u8,
         db: &SqlitePool,
