@@ -33,10 +33,10 @@ pub enum TaskResponse {
 }
 
 pub trait Service {
-    async fn unfavorite_posts(&self);
-    async fn backup_favorites(&self, options: TaskOptions);
-    async fn backup_user(&self, options: TaskOptions);
-    async fn export_from_local(&self, options: TaskOptions);
+    async fn unfavorite_posts(&self) -> Result<()>;
+    async fn backup_favorites(&self, options: TaskOptions) -> Result<()>;
+    async fn backup_user(&self, options: TaskOptions) -> Result<()>;
+    async fn export_from_local(&self, options: TaskOptions) -> Result<()>;
 }
 
 pub trait Storage {
