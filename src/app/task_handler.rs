@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use anyhow::{Ok, Result};
 use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::{Post, WeiboAPI};
 
+use crate::error::{Error, Result};
 use crate::ports::{Exporter, Processer, Service, Storage, TaskOptions, TaskResponse};
 
 const SAVING_PERIOD: usize = 200;
@@ -22,14 +22,14 @@ pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> {
 
 impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P> {
     pub fn new(
-        network: W,
+        network: Option<W>,
         storage: S,
         exporter: E,
         processer: P,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
         Ok(TaskHandler {
-            network: Some(network),
+            network,
             storage,
             exporter,
             processer,
@@ -42,7 +42,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
         let posts = self
             .network
             .as_ref()
-            .unwrap()
+            .ok_or(Error::NotLoggedIn)?
             .profile_statuses(uid, page)
             .await?;
         let result = posts.len();
@@ -55,7 +55,12 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
 
     // backup one page of favorites
     pub async fn backup_one_fav_page(&self, page: u32) -> Result<usize> {
-        let posts = self.network.as_ref().unwrap().favorites(page).await?;
+        let posts = self
+            .network
+            .as_ref()
+            .ok_or(Error::NotLoggedIn)?
+            .favorites(page)
+            .await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
         for post in posts.iter() {
@@ -85,11 +90,14 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
 impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler<W, S, E, P> {
     // unfavorite all posts that are in weibo favorites
     async fn unfavorite_posts(&self) -> Result<()> {
-        // let mut trans = self.storage.db().unwrap().acquire().await?;
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         for (i, id) in ids.into_iter().enumerate() {
-            self.network.as_ref().unwrap().favorites_destroy(id).await?;
+            self.network
+                .as_ref()
+                .ok_or(Error::NotLoggedIn)?
+                .favorites_destroy(id)
+                .await?;
             info!("post {id} unfavorited");
             tokio::time::sleep(OTHER_TASK_INTERVAL).await;
             let progress = i as f32 / len as f32;
