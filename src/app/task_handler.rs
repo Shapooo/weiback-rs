@@ -13,7 +13,7 @@ const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> {
-    network: Option<W>,
+    api_client: Option<W>,
     storage: S,
     exporter: E,
     processer: P,
@@ -22,14 +22,14 @@ pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> {
 
 impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P> {
     pub fn new(
-        network: Option<W>,
+        api_client: Option<W>,
         storage: S,
         exporter: E,
         processer: P,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
         Ok(TaskHandler {
-            network,
+            api_client,
             storage,
             exporter,
             processer,
@@ -40,7 +40,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
     // backup one page of posts of the user
     pub async fn backup_one_page(&self, uid: i64, page: u32) -> Result<usize> {
         let posts = self
-            .network
+            .api_client
             .as_ref()
             .ok_or(Error::NotLoggedIn)?
             .profile_statuses(uid, page)
@@ -56,7 +56,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
     // backup one page of favorites
     pub async fn backup_one_fav_page(&self, page: u32) -> Result<usize> {
         let posts = self
-            .network
+            .api_client
             .as_ref()
             .ok_or(Error::NotLoggedIn)?
             .favorites(page)
@@ -93,7 +93,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         for (i, id) in ids.into_iter().enumerate() {
-            self.network
+            self.api_client
                 .as_ref()
                 .ok_or(Error::NotLoggedIn)?
                 .favorites_destroy(id)
