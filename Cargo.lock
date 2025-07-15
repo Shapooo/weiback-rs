@@ -5504,6 +5504,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tera",
+ "thiserror 2.0.12",
  "tokio",
  "weibosdk-rs",
 ]
