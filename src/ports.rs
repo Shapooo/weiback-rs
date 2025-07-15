@@ -2,10 +2,10 @@
 use std::sync::Arc;
 use std::{ops::RangeInclusive, path::Path};
 
-use anyhow::{Error, Result};
 use egui::ImageData;
 use weibosdk_rs::{Post, User};
 
+use crate::error::{Error, Result};
 use super::models::Picture;
 
 #[allow(unused)]
