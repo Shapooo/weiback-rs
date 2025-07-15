@@ -18,6 +18,7 @@ pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> {
     exporter: E,
     processer: P,
     task_status_sender: Sender<TaskResponse>,
+    uid: Option<i64>,
 }
 
 impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P> {
@@ -34,7 +35,16 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
             exporter,
             processer,
             task_status_sender,
+            uid: None,
         })
+    }
+
+    pub fn set_client(&mut self, client: W) {
+        self.api_client = Some(client)
+    }
+
+    pub fn set_uid(&mut self, uid: i64) {
+        self.uid = Some(uid)
     }
 
     // backup one page of posts of the user
