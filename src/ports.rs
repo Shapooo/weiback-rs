@@ -5,8 +5,8 @@ use std::{ops::RangeInclusive, path::Path};
 use egui::ImageData;
 use weibosdk_rs::{Post, User};
 
-use crate::error::{Error, Result};
 use super::models::Picture;
+use crate::error::{Error, Result};
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -36,6 +36,7 @@ pub trait Service {
     async fn unfavorite_posts(&self) -> Result<()>;
     async fn backup_favorites(&self, options: TaskOptions) -> Result<()>;
     async fn backup_user(&self, options: TaskOptions) -> Result<()>;
+    async fn backup_self(&self, options: TaskOptions) -> Result<()>;
     async fn export_from_local(&self, options: TaskOptions) -> Result<()>;
 }
 

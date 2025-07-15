@@ -145,6 +145,11 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler
         Ok(())
     }
 
+    async fn backup_self(&self, options: TaskOptions) -> Result<()> {
+        self.backup_user(options.with_user(self.uid.ok_or(Error::NotLoggedIn)?))
+            .await
+    }
+
     // export favorite posts from local database
     async fn export_from_local(&self, options: TaskOptions) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
