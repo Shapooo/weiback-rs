@@ -119,6 +119,7 @@ pub struct TaskOptions {
     pub with_pic: bool,
     pub post_id: i64,
     pub uid: i64,
+    pub pic_quality: PictureDefinition,
     pub reverse: bool,
     pub range: Option<RangeInclusive<u32>>,
     pub post_filter: UserPostFilter,
@@ -130,6 +131,7 @@ impl Default for TaskOptions {
             with_pic: false,
             post_id: 0,
             uid: 0,
+            pic_quality: PictureDefinition::default(),
             reverse: false,
             range: None,
             post_filter: UserPostFilter::default(),
@@ -157,6 +159,7 @@ impl TaskOptions {
         self
     }
 
+    pub fn pic_quality(mut self, quality: PictureDefinition) -> Self {
         self.pic_quality = quality;
         self
     }
@@ -174,5 +177,29 @@ impl TaskOptions {
     pub fn post_filter(mut self, filter: UserPostFilter) -> Self {
         self.post_filter = filter;
         self
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum PictureDefinition {
+    Thumbnail,
+    Bmiddle,
+    Large,
+    Original,
+    #[default]
+    Largest,
+    Mw2000,
+}
+
+impl From<PictureDefinition> for &str {
+    fn from(value: PictureDefinition) -> Self {
+        match value {
+            PictureDefinition::Thumbnail => "thumbnail",
+            PictureDefinition::Bmiddle => "bmiddle",
+            PictureDefinition::Large => "large",
+            PictureDefinition::Original => "original",
+            PictureDefinition::Largest => "largest",
+            PictureDefinition::Mw2000 => "mw2000",
+        }
     }
 }
