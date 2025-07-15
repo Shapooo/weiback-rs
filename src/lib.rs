@@ -1,5 +1,5 @@
 pub mod app;
-// pub mod authentication;
+pub mod error;
 // pub mod exporter;
 pub mod models;
 // pub mod storage;
