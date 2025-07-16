@@ -7,9 +7,11 @@ use std::path::PathBuf;
 use anyhow::{Result, anyhow};
 use log::{debug, info, trace};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
-use weibosdk_rs::{Post, User};
 
-use crate::{models::Picture, ports::Storage};
+use crate::{
+    models::{Picture, Post, User},
+    ports::Storage,
+};
 use post_storage::PostStorage;
 use user_storage::UserStorage;
 

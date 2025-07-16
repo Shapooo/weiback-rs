@@ -3,9 +3,8 @@ use std::sync::Arc;
 use std::{ops::RangeInclusive, path::Path};
 
 use egui::ImageData;
-use weibosdk_rs::{Post, User};
 
-use super::models::Picture;
+use super::models::{Picture, Post, User};
 use crate::error::{Error, Result};
 
 #[allow(unused)]
