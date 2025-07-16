@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
-use weibosdk_rs::{Post, WeiboAPI};
+use weibosdk_rs::WeiboAPI;
 
 use crate::error::{Error, Result};
+use crate::models::Post;
 use crate::ports::{Exporter, Processer, Service, Storage, TaskOptions, TaskResponse};
 
 const SAVING_PERIOD: usize = 200;
