@@ -92,7 +92,7 @@ impl<S: Storage> Storage for Arc<S> {
     }
 }
 
-pub trait Exporter: 'static + Clone + Send + Sync {
+pub trait Exporter: Send + Sync {
     async fn export_page(
         &self,
         task_name: &str,
@@ -101,8 +101,9 @@ pub trait Exporter: 'static + Clone + Send + Sync {
     ) -> Result<()>;
 }
 
-pub trait Processer: 'static + Clone + Send + Sync {
-    async fn generate_html(&self) -> Result<String>;
+pub trait Processer: Send + Sync {
+    async fn process(&self, post: &mut Post, options: TaskOptions) -> Result<()>;
+    async fn generate_html(&self, posts: &[Post], options: TaskOptions) -> Result<String>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
