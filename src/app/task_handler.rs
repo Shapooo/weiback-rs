@@ -6,28 +6,29 @@ use weibosdk_rs::WeiboAPI;
 
 use crate::error::{Error, Result};
 use crate::models::Post;
-use crate::ports::{Exporter, Processer, Service, Storage, TaskOptions, TaskResponse};
+use crate::ports::{Exporter, Service, Storage, TaskOptions, TaskResponse};
+use crate::processing::PostProcesser;
 
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
-pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> {
+pub struct TaskHandler<'a, W: WeiboAPI, S: Storage, E: Exporter> {
     api_client: Option<W>,
     storage: S,
     exporter: E,
-    processer: P,
+    processer: PostProcesser<'a, W, S>,
     task_status_sender: Sender<TaskResponse>,
     uid: Option<i64>,
 }
 
-impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P> {
+impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
     pub fn new(
         api_client: Option<W>,
         storage: S,
         exporter: E,
-        processer: P,
+        processer: PostProcesser<'a, W, S>,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
         Ok(TaskHandler {
@@ -65,14 +66,17 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
     }
 
     // backup one page of favorites
-    pub async fn backup_one_fav_page(&self, page: u32) -> Result<usize> {
-        let posts = self
+    pub async fn backup_one_fav_page(&self, page: u32, options: TaskOptions) -> Result<usize> {
+        let mut posts = self
             .api_client
             .as_ref()
             .ok_or(Error::NotLoggedIn)?
             .favorites(page)
             .await?;
         let result = posts.len();
+        for post in posts.iter_mut() {
+            self.processer.process(post, &options).await?;
+        }
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
         for post in posts.iter() {
             self.storage.save_post(post).await?;
@@ -98,7 +102,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> TaskHandler<W, S, E, P>
     }
 }
 
-impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler<W, S, E, P> {
+impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S, E> {
     // unfavorite all posts that are in weibo favorites
     async fn unfavorite_posts(&self) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
@@ -156,7 +160,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
-        let local_posts = self.load_fav_posts_from_db(options).await?;
+        let local_posts = self.load_fav_posts_from_db(options.clone()).await?;
         let posts_sum = local_posts.len();
         info!("fetched {} posts from local", posts_sum);
 
@@ -164,13 +168,13 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler
         loop {
             let subtask_name = format!("weiback-{index}");
             if local_posts.len() < SAVING_PERIOD {
-                let html = self.processer.generate_html().await?;
+                let html = self.processer.generate_html(&local_posts, &options).await?;
                 self.exporter
                     .export_page(&subtask_name, &html, &target_dir)
                     .await?;
                 break;
             } else {
-                let html = self.processer.generate_html().await?;
+                let html = self.processer.generate_html(&local_posts, &options).await?;
                 self.exporter
                     .export_page(&subtask_name, &html, &target_dir)
                     .await?;
@@ -202,7 +206,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, P: Processer> Service for TaskHandler
         let total_pages = (page_range.end() - page_range.start() + 1) as f32;
 
         for (i, page) in page_range.into_iter().enumerate() {
-            let posts_sum = self.backup_one_fav_page(page).await?;
+            let posts_sum = self.backup_one_fav_page(page, options.clone()).await?;
             total_downloaded += posts_sum;
             info!("fetched {} posts in {}th page", posts_sum, page);
 

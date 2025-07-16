@@ -2,6 +2,7 @@
 use std::sync::Arc;
 use std::{ops::RangeInclusive, path::Path};
 
+use bytes::Bytes;
 use egui::ImageData;
 
 use super::models::{Picture, Post, User};
@@ -39,7 +40,7 @@ pub trait Service {
     async fn export_from_local(&self, options: TaskOptions) -> Result<()>;
 }
 
-pub trait Storage {
+pub trait Storage: Send + Sync {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, options: TaskOptions) -> Result<Option<User>>;
     async fn get_posts(&self, options: TaskOptions) -> Result<Vec<Post>>;
@@ -50,6 +51,7 @@ pub trait Storage {
     async fn get_favorited_sum(&self) -> Result<u32>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
     async fn save_picture(&self, picture: &Picture) -> Result<()>;
+    async fn get_picture(&self, url: &str) -> Result<Option<bytes::Bytes>>;
 }
 
 impl<S: Storage> Storage for Arc<S> {
@@ -99,11 +101,6 @@ pub trait Exporter: Send + Sync {
         html: &str,
         target_dir: impl AsRef<Path>,
     ) -> Result<()>;
-}
-
-pub trait Processer: Send + Sync {
-    async fn process(&self, post: &mut Post, options: TaskOptions) -> Result<()>;
-    async fn generate_html(&self, posts: &[Post], options: TaskOptions) -> Result<String>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
