@@ -19,6 +19,14 @@ impl PictureMeta {
     pub fn other(url: String) -> Self {
         PictureMeta::Other { url }
     }
+
+    pub fn url(&self) -> &str {
+        match self {
+            PictureMeta::InPost { url, .. } => url,
+            PictureMeta::Avatar { url, .. } => url,
+            PictureMeta::Other { url } => url,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
