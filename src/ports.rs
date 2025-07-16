@@ -1,4 +1,5 @@
 #![allow(async_fn_in_trait)]
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::{ops::RangeInclusive, path::Path};
 
@@ -101,6 +102,51 @@ pub trait Exporter: Send + Sync {
         html: &str,
         target_dir: impl AsRef<Path>,
     ) -> Result<()>;
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportOptions {
+    pub pic_quality: PictureDefinition,
+    pub export_path: PathBuf,
+    pub export_task_name: String,
+    pub posts_per_html: u32,
+}
+
+impl Default for ExportOptions {
+    fn default() -> Self {
+        Self {
+            pic_quality: PictureDefinition::default(),
+            export_path: PathBuf::from("."),
+            export_task_name: "weiback_export.html".to_string(),
+            posts_per_html: 1000,
+        }
+    }
+}
+
+impl ExportOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn pic_quality(mut self, quality: PictureDefinition) -> Self {
+        self.pic_quality = quality;
+        self
+    }
+
+    pub fn export_path(mut self, path: PathBuf) -> Self {
+        self.export_path = path;
+        self
+    }
+
+    pub fn export_task_name(mut self, name: String) -> Self {
+        self.export_task_name = name;
+        self
+    }
+
+    pub fn posts_per_html(mut self, count: u32) -> Self {
+        self.posts_per_html = count;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
