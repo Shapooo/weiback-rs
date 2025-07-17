@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::{ops::RangeInclusive, path::Path};
 
-use bytes::Bytes;
 use egui::ImageData;
 
 use super::models::{Picture, Post, User};
@@ -38,13 +37,13 @@ pub trait Service {
     async fn backup_favorites(&self, options: TaskOptions) -> Result<()>;
     async fn backup_user(&self, options: TaskOptions) -> Result<()>;
     async fn backup_self(&self, options: TaskOptions) -> Result<()>;
-    async fn export_from_local(&self, options: TaskOptions) -> Result<()>;
+    async fn export_from_local(&self, options: ExportOptions) -> Result<()>;
 }
 
 pub trait Storage: Send + Sync {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, options: TaskOptions) -> Result<Option<User>>;
-    async fn get_posts(&self, options: TaskOptions) -> Result<Vec<Post>>;
+    async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn get_post(&self, options: TaskOptions) -> Result<Option<Post>>;
     async fn mark_post_unfavorited(&self, options: TaskOptions) -> Result<()>;
@@ -67,7 +66,7 @@ impl<S: Storage> Storage for Arc<S> {
         self.as_ref().get_post(options).await
     }
 
-    async fn get_posts(&self, options: TaskOptions) -> Result<Vec<Post>> {
+    async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
         self.as_ref().get_posts(options).await
     }
 
@@ -90,8 +89,13 @@ impl<S: Storage> Storage for Arc<S> {
     async fn mark_post_unfavorited(&self, options: TaskOptions) -> Result<()> {
         self.as_ref().mark_post_unfavorited(options).await
     }
+
     async fn save_picture(&self, picture: &Picture) -> Result<()> {
         self.as_ref().save_picture(picture).await
+    }
+
+    async fn get_picture(&self, url: &str) -> Result<Option<bytes::Bytes>> {
+        self.as_ref().get_picture(url).await
     }
 }
 

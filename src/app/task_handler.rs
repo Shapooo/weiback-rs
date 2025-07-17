@@ -6,7 +6,7 @@ use weibosdk_rs::WeiboAPI;
 
 use crate::error::{Error, Result};
 use crate::models::Post;
-use crate::ports::{Exporter, Service, Storage, TaskOptions, TaskResponse};
+use crate::ports::{ExportOptions, Exporter, Service, Storage, TaskOptions, TaskResponse};
 use crate::processing::PostProcesser;
 
 const SAVING_PERIOD: usize = 200;
@@ -67,20 +67,15 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
 
     // backup one page of favorites
     pub async fn backup_one_fav_page(&self, page: u32, options: TaskOptions) -> Result<usize> {
-        let mut posts = self
+        let posts = self
             .api_client
             .as_ref()
             .ok_or(Error::NotLoggedIn)?
             .favorites(page)
             .await?;
         let result = posts.len();
-        for post in posts.iter_mut() {
-            self.processer.process(post, &options).await?;
-        }
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
-        for post in posts.iter() {
-            self.storage.save_post(post).await?;
-        }
+        self.processer.process(posts, &options).await?;
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
         for id in ids {
@@ -92,7 +87,7 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
         Ok(result)
     }
 
-    pub async fn load_fav_posts_from_db(&self, options: TaskOptions) -> Result<Vec<Post>> {
+    pub async fn load_fav_posts_from_db(&self, options: &ExportOptions) -> Result<Vec<Post>> {
         self.storage.get_posts(options).await
     }
 
@@ -156,11 +151,11 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
     }
 
     // export favorite posts from local database
-    async fn export_from_local(&self, options: TaskOptions) -> Result<()> {
+    async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
-        let local_posts = self.load_fav_posts_from_db(options.clone()).await?;
+        let local_posts = self.load_fav_posts_from_db(&options).await?;
         let posts_sum = local_posts.len();
         info!("fetched {} posts from local", posts_sum);
 

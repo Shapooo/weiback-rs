@@ -34,15 +34,6 @@ lazy_static! {
 pub struct HTMLGenerator();
 
 impl HTMLGenerator {
-    #[allow(unused)]
-    pub fn generate_post(mut post: Post) -> Result<String> {
-        let mut context = Context::new();
-        context.insert("post", &post);
-        let html = TEMPLATES.render("post.html", &context)?;
-
-        Ok(html)
-    }
-
     pub fn generate_posts(posts: Vec<Value>) -> Result<String> {
         let mut context = Context::new();
         context.insert("posts", &posts);
