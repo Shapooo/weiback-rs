@@ -25,14 +25,13 @@ pub struct TaskHandler<'a, W: WeiboAPI, S: Storage, E: Exporter> {
 
 impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
     pub fn new(
-        api_client: Option<W>,
         storage: S,
         exporter: E,
         processer: PostProcesser<'a, W, S>,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
         Ok(TaskHandler {
-            api_client,
+            api_client: None,
             storage,
             exporter,
             processer,
@@ -41,8 +40,9 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
         })
     }
 
-    pub fn set_client(&mut self, client: W) {
-        self.api_client = Some(client)
+    pub fn set_client(&'a mut self, client: W) {
+        self.api_client = Some(client);
+        self.processer.set_client(self.api_client.as_ref().unwrap());
     }
 
     pub fn set_uid(&mut self, uid: i64) {
@@ -102,7 +102,14 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
     async fn unfavorite_posts(&self) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
-        for (i, id) in ids.into_iter().enumerate() {
+        self.task_status_sender
+            .send(TaskResponse::InProgress(
+                0.,
+                format!("即将开始，共{len}条..."),
+            ))
+            .await?;
+        for (mut i, id) in ids.into_iter().enumerate() {
+            i = i + 1;
             self.api_client
                 .as_ref()
                 .ok_or(Error::NotLoggedIn)?
@@ -110,7 +117,7 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
                 .await?;
             info!("post {id} unfavorited");
             tokio::time::sleep(OTHER_TASK_INTERVAL).await;
-            let progress = i as f32 / len as f32;
+            let progress = (i) as f32 / len as f32;
             self.task_status_sender
                 .send(TaskResponse::InProgress(
                     progress,
@@ -129,7 +136,7 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
         let mut page = 1;
         loop {
             let len = self.backup_one_page(uid, page).await?;
-            info!("fetched {} posts in {}th page", len, page);
+            info!("fetched {len} posts in {page}th page");
             if len == 0 {
                 break;
             }

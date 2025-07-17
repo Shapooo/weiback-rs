@@ -3,24 +3,22 @@ pub mod html_generator;
 use std::{
     borrow::Cow::{self, Borrowed, Owned},
     collections::{HashMap, HashSet},
-    f64::consts::E,
     path::Path,
 };
 
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde_json::{Value, to_value};
-use weibosdk_rs::{WeiboAPI, emoji, long_text};
+use serde_json::Value;
+use weibosdk_rs::WeiboAPI;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::models::{
     Post,
     picture::{Picture, PictureMeta},
 };
 use crate::ports::{ExportOptions, PictureDefinition, Storage, TaskOptions};
-use crate::utils::{pic_url_to_file, pic_url_to_id};
-use html_generator::HTMLGenerator;
+use crate::utils::pic_url_to_file;
 
 lazy_static! {
     static ref NEWLINE_EXPR: Regex = Regex::new(r"\n").unwrap();
@@ -36,18 +34,22 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct PostProcesser<'a, W: WeiboAPI, S: Storage> {
-    api_client: &'a W,
+    api_client: Option<&'a W>,
     storage: &'a S,
     emoji_map: Option<HashMap<String, String>>,
 }
 
 impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
-    pub fn new(api_client: &'a W, storage: &'a S) -> Self {
+    pub fn new(storage: &'a S) -> Self {
         Self {
-            api_client,
+            api_client: None,
             storage,
             emoji_map: None,
         }
+    }
+
+    pub fn set_client(&mut self, api_client: &'a W) {
+        self.api_client = Some(api_client);
     }
 
     pub async fn process(&self, posts: Vec<Post>, options: &TaskOptions) -> Result<()> {
@@ -59,7 +61,11 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
 
         for mut post in posts {
             if post.is_long_text
-                && let Ok(long_text) = self.api_client.get_long_text(post.id).await
+                && let Ok(long_text) = self
+                    .api_client
+                    .ok_or(Error::NotLoggedIn)?
+                    .get_long_text(post.id)
+                    .await
             {
                 post.text = long_text
             }
@@ -137,10 +143,14 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
         if let Some(_) = self.storage.get_picture(pic_meta.url()).await? {
             Ok(())
         } else {
-            let blob = self.api_client.download_picture(pic_meta.url()).await?;
+            let blob = self
+                .api_client
+                .ok_or(Error::NotLoggedIn)?
+                .download_picture(pic_meta.url())
+                .await?;
             let pic = Picture {
                 meta: pic_meta,
-                blob: blob,
+                blob,
             };
             self.storage.save_picture(&pic).await?;
             Ok(())
@@ -165,10 +175,14 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
                 blob,
             })
         } else {
-            let blob = self.api_client.download_picture(pic_meta.url()).await?;
+            let blob = self
+                .api_client
+                .ok_or(Error::NotLoggedIn)?
+                .download_picture(pic_meta.url())
+                .await?;
             let pic = Picture {
                 meta: pic_meta,
-                blob: blob,
+                blob,
             };
             self.storage.save_picture(&pic).await?;
             Ok(pic)
