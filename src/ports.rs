@@ -16,7 +16,7 @@ pub enum Task {
     // to download favorites (range, with pic, image definition level)
     BackupFavorites(TaskOptions),
     // to export favorites from local db (range, with pic, image definition level)
-    ExportFromLocal(TaskOptions),
+    ExportFromLocal(ExportOptions),
     // to unfavorite favorite post
     UnfavoritePosts,
     // to backup user (id, with pic, image definition level)
@@ -114,6 +114,8 @@ pub struct ExportOptions {
     pub export_path: PathBuf,
     pub export_task_name: String,
     pub posts_per_html: u32,
+    pub reverse: bool,
+    pub range: Option<RangeInclusive<u32>>,
 }
 
 impl Default for ExportOptions {
@@ -123,6 +125,8 @@ impl Default for ExportOptions {
             export_path: PathBuf::from("."),
             export_task_name: "weiback_export.html".to_string(),
             posts_per_html: 1000,
+            reverse: false,
+            range: None,
         }
     }
 }
@@ -149,6 +153,16 @@ impl ExportOptions {
 
     pub fn posts_per_html(mut self, count: u32) -> Self {
         self.posts_per_html = count;
+        self
+    }
+
+    pub fn range(mut self, range: RangeInclusive<u32>) -> Self {
+        self.range = Some(range);
+        self
+    }
+
+    pub fn reverse(mut self, reverse: bool) -> Self {
+        self.reverse = reverse;
         self
     }
 }
@@ -192,8 +206,8 @@ impl TaskOptions {
         Self::default()
     }
 
-    pub fn with_pic(mut self) -> Self {
-        self.with_pic = true;
+    pub fn with_pic(mut self, with_pic: bool) -> Self {
+        self.with_pic = with_pic;
         self
     }
 
@@ -212,8 +226,8 @@ impl TaskOptions {
         self
     }
 
-    pub fn reverse(mut self) -> Self {
-        self.reverse = true;
+    pub fn reverse(mut self, reverse: bool) -> Self {
+        self.reverse = reverse;
         self
     }
 
