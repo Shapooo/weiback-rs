@@ -2,10 +2,13 @@ use std::ops::RangeInclusive;
 
 use log::{debug, error, info};
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::sync::mpsc::{Sender, channel};
+use weibosdk_rs::WeiboAPIImpl;
 
-use crate::app::service::task_handler::TaskHandler;
-use crate::app::{Exporter, Network, Service, Storage, Task, TaskResponse};
+use crate::app::TaskHandler;
+use crate::ports::{
+    ExportOptions, PictureDefinition, Service, Storage, Task, TaskOptions, TaskResponse,
+};
 
 pub struct TaskProxy {
     rt: Runtime,
@@ -13,12 +16,7 @@ pub struct TaskProxy {
 }
 
 impl TaskProxy {
-    pub fn new<N: Network, S: Storage, E: Exporter>(
-        network: N,
-        storage: S,
-        exporter: E,
-        task_status_sender: Sender<TaskResponse>,
-    ) -> Self {
+    pub fn new(task_status_sender: Sender<TaskResponse>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
@@ -28,6 +26,7 @@ impl TaskProxy {
                 .build()
                 .unwrap();
             debug!("new a async runtime succeed");
+
             let mut th = TaskHandler::new(network, storage, exporter, task_status_sender).unwrap();
             rt.block_on(async move {
                 th.init().await;
@@ -73,31 +72,47 @@ impl TaskProxy {
             }
         }
     }
-}
 
-impl TaskProxy {
     fn unfavorite_posts(&self) {
         debug!("send task: unfavorite posts");
         self.send_task(Task::UnfavoritePosts)
     }
 
-    fn backup_fav(&self, range: RangeInclusive<u32>, with_pic: bool, image_definition: u8) {
+    fn backup_fav(&self, range: RangeInclusive<u32>, with_pic: bool, pic_def: PictureDefinition) {
         debug!("send task: download meta");
-        self.send_task(Task::BackupFavorites(range, with_pic, image_definition))
+        let options = TaskOptions::new()
+            .pic_quality(pic_def)
+            .range(range)
+            .with_pic(with_pic);
+        self.send_task(Task::BackupFavorites(options))
     }
 
-    fn backup_user(&self, uid: i64, with_pic: bool, image_definition: u8) {
+    fn backup_user(&self, uid: i64, with_pic: bool, pic_def: PictureDefinition) {
         debug!("send task: backup user");
-        self.send_task(Task::BackupUser(uid, with_pic, image_definition))
+        let options = TaskOptions::new()
+            .with_user(uid)
+            .with_pic(with_pic)
+            .pic_quality(pic_def);
+        self.send_task(Task::BackupUser(options))
     }
 
     fn get_user_meta(&self, id: i64) {
         debug!("send task: get user meta");
-        self.send_task(Task::FetchUserMeta(id))
+        let options = TaskOptions::new().with_user(id);
+        self.send_task(Task::FetchUserMeta(options))
     }
 
-    fn export_from_local(&self, range: RangeInclusive<u32>, reverse: bool, image_definition: u8) {
+    fn export_from_local(
+        &self,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+        pic_def: PictureDefinition,
+    ) {
         debug!("send task: export from local");
-        self.send_task(Task::ExportFromLocal(range, reverse, image_definition))
+        let options = ExportOptions::new()
+            .reverse(reverse)
+            .range(range)
+            .pic_quality(pic_def);
+        self.send_task(Task::ExportFromLocal(options))
     }
 }
