@@ -3,23 +3,23 @@ pub mod html_generator;
 use std::{
     borrow::Cow::{self, Borrowed, Owned},
     collections::{HashMap, HashSet},
+    f64::consts::E,
     path::Path,
 };
 
+use itertools::Itertools;
 use lazy_static::lazy_static;
-use bytes::Bytes;
 use regex::Regex;
 use serde_json::{Value, to_value};
-use weibosdk_rs::{WeiboAPI, emoji};
+use weibosdk_rs::{WeiboAPI, emoji, long_text};
 
-use crate::{
-    error::Result,
-    models::{
-        Post,
-        picture::{Picture, PictureMeta},
-    },
-    ports::{Storage, TaskOptions},
+use crate::error::Result;
+use crate::models::{
+    Post,
+    picture::{Picture, PictureMeta},
 };
+use crate::ports::{ExportOptions, PictureDefinition, Storage, TaskOptions};
+use crate::utils::{pic_url_to_file, pic_url_to_id};
 use html_generator::HTMLGenerator;
 
 lazy_static! {
@@ -50,73 +50,35 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
         }
     }
 
-    pub async fn process(&self, post: &mut Post, options: &TaskOptions) -> Result<()> {
-        let mut pictures = HashSet::new();
-        let emoji_urls = self.extract_emoji_urls(&post.text);
-        let pic_urls = self.extract_pic_urls(post, &options);
+    pub async fn process(&self, posts: Vec<Post>, options: &TaskOptions) -> Result<()> {
+        let pic_metas = self.extract_pic_metas(&posts, options.pic_quality);
 
-        for url in emoji_urls {
-            pictures.insert(PictureMeta::other(url.to_string()));
-        }
-        for url in pic_urls {
-            pictures.insert(PictureMeta::in_post(url.to_string(), post.id));
+        for meta in pic_metas {
+            self.save_picture(meta).await?;
         }
 
-        for pic in pictures {
-            self.storage.save_picture(&pic).await?;
-        }
-
-        if post.is_long_text {
-            if let Ok(long_text_post) = self.api_client.get_long_text(post.id).await {
-                post.text = long_text_post;
+        for mut post in posts {
+            if post.is_long_text
+                && let Ok(long_text) = self.api_client.get_long_text(post.id).await
+            {
+                post.text = long_text
             }
+            self.storage.save_post(&post).await?;
         }
         Ok(())
     }
 
-    pub async fn generate_html(&self, posts: &[Post], options: &TaskOptions) -> Result<String> {
-        let mut pic_to_fetch = HashSet::new();
-        let posts_context = posts
-            .iter()
-            .map(|post| {
-                let mut post = post.clone();
-                let pic_urls = self.extract_pic_urls(&post, &options);
-                let emoji_urls = self.extract_emoji_urls(&post.text);
-
-                let pic_locs: Vec<_> = pic_urls
-                    .iter()
-                    .map(|url| {
-                        let pic = PictureMeta::in_post(url.to_string(), post.id);
-                        let file_name = pic.get_file_name();
-                        pic_to_fetch.insert(pic);
-                        Path::new("./resources").join(file_name)
-                    })
-                    .collect();
-
-                emoji_urls.iter().for_each(|url| {
-                    pic_to_fetch.insert(PictureMeta::other(url.to_string()));
-                });
-
-                let new_text = self
-                    .trans_text(&post, Path::new("./resources"))
-                    .unwrap_or_default();
-                post.text = new_text;
-
-                let mut context = to_value(post).unwrap();
-                if !pic_locs.is_empty() {
-                    context["pics"] = to_value(pic_locs).unwrap();
-                }
-                context
-            })
-            .collect::<Vec<_>>();
-
-        for pic in pic_to_fetch {
-            self.storage.save_picture(&pic).await?;
-        }
-
-        let inner_html = HTMLGenerator::generate_posts(posts_context)?;
-        let html = HTMLGenerator::generate_page(&inner_html)?;
-        Ok(html)
+    pub async fn generate_html(&self, posts: &[Post], options: &ExportOptions) -> Result<String> {
+        let pic_metas = self.extract_pic_metas(posts, options.pic_quality);
+        let pic = pic_metas
+            .into_iter()
+            .map(|m| self.load_picture_from_local(m));
+        // TODO: tackle errs
+        let (pics, _): (Vec<_>, Vec<_>) = futures::future::join_all(pic)
+            .await
+            .into_iter()
+            .partition_result();
+        todo!()
     }
 
     fn extract_emojis(text: &str) -> Vec<&str> {
@@ -148,38 +110,102 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
             .collect()
     }
 
-    fn extract_pic_urls(&self, post: &'a Post, options: &TaskOptions) -> Vec<&str> {
+    fn extract_in_post_pic_urls(&self, post: &'a Post, definition: PictureDefinition) -> Vec<&str> {
         let mut pic_vec = post
             .pic_ids
             .as_ref()
             .map(|pic_ids| {
-                post.pic_infos.as_ref().map(|pic_infos| {
-                    Self::pic_ids_to_urls(pic_ids, pic_infos, options.pic_quality.into())
-                })
+                post.pic_infos
+                    .as_ref()
+                    .map(|pic_infos| Self::pic_ids_to_urls(pic_ids, pic_infos, definition.into()))
             })
             .flatten()
             .unwrap_or_default();
+        post.user.as_ref().map(|user| pic_vec.push(&user.avatar_hd));
         if let Some(retweeted_post) = &post.retweeted_status {
-            let mut retweeted_pic_vec = self.extract_pic_urls(retweeted_post, options);
+            let mut retweeted_pic_vec = self.extract_in_post_pic_urls(retweeted_post, definition);
             pic_vec.append(&mut retweeted_pic_vec);
+            retweeted_post
+                .user
+                .as_ref()
+                .map(|user| pic_vec.push(&user.avatar_hd));
         }
         pic_vec
     }
 
-    async fn get_pictures(&self, post: &Post, options: &TaskOptions) -> Result<Vec<Picture>> {
-        let mut pic_urls = self.extract_pic_urls(post, options);
-        let mut emoji_urls = self.find_emoji_urls(&post.text);
-        pic_urls.append(&mut emoji_urls);
-        let mut pics = Vec::new();
-        for url in pic_urls {
-            let blob = self.api_client.download_picture(&url).await?;
-            pics.push(Picture {
-                meta: PictureMeta::InPost {
-                    url: url.to_string(),
-                    post_id: post.id,
-                },
+    async fn save_picture(&self, pic_meta: PictureMeta) -> Result<()> {
+        if let Some(_) = self.storage.get_picture(pic_meta.url()).await? {
+            Ok(())
+        } else {
+            let blob = self.api_client.download_picture(pic_meta.url()).await?;
+            let pic = Picture {
+                meta: pic_meta,
+                blob: blob,
+            };
+            self.storage.save_picture(&pic).await?;
+            Ok(())
+        }
+    }
+
+    async fn load_picture_from_local(&self, pic_meta: PictureMeta) -> Result<Option<Picture>> {
+        Ok(self
+            .storage
+            .get_picture(pic_meta.url())
+            .await?
+            .map(|blob| Picture {
+                meta: pic_meta,
                 blob,
-            });
+            }))
+    }
+
+    async fn load_picture_from_local_or_server(&self, pic_meta: PictureMeta) -> Result<Picture> {
+        if let Some(blob) = self.storage.get_picture(pic_meta.url()).await? {
+            Ok(Picture {
+                meta: pic_meta,
+                blob,
+            })
+        } else {
+            let blob = self.api_client.download_picture(pic_meta.url()).await?;
+            let pic = Picture {
+                meta: pic_meta,
+                blob: blob,
+            };
+            self.storage.save_picture(&pic).await?;
+            Ok(pic)
+        }
+    }
+
+    fn extract_pic_metas(
+        &self,
+        posts: &[Post],
+        definition: PictureDefinition,
+    ) -> HashSet<PictureMeta> {
+        let mut pic_metas: HashSet<PictureMeta> = posts
+            .into_iter()
+            .flat_map(|post| {
+                self.extract_in_post_pic_urls(post, definition)
+                    .into_iter()
+                    .map(|url| PictureMeta::in_post(url.to_string(), post.id))
+            })
+            .collect();
+        let emoji_metas = posts.into_iter().flat_map(|post| {
+            self.extract_emoji_urls(&post.text)
+                .into_iter()
+                .map(|url| PictureMeta::other(url.to_string()))
+        });
+        pic_metas.extend(emoji_metas);
+        pic_metas
+    }
+
+    async fn get_pictures(
+        &self,
+        posts: &[Post],
+        definition: PictureDefinition,
+    ) -> Result<Vec<Picture>> {
+        let pic_metas = self.extract_pic_metas(posts, definition);
+        let mut pics = Vec::new();
+        for metas in pic_metas {
+            pics.push(self.load_picture_from_local_or_server(metas).await?);
         }
         Ok(pics)
     }
@@ -231,7 +257,9 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
                         acc + &text[i..m.start()]
-                            + self.trans_emoji(&text[m.start()..m.end()], pic_folder),
+                            + self
+                                .trans_emoji(&text[m.start()..m.end()], pic_folder)
+                                .unwrap(),
                         m.end(),
                     )
                 });
@@ -240,11 +268,11 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
         Ok(text.to_string())
     }
 
-    fn trans_emoji(&self, s: &'a str, pic_folder: &'a Path) -> Cow<'a, str> {
-        if let Some(url) = self.emoji_map.unwrap().get(s) {
+    fn trans_emoji(&self, s: &'a str, pic_folder: &'a Path) -> Result<Cow<'a, str>> {
+        if let Some(url) = self.emoji_map.as_ref().unwrap().get(s) {
             let pic = PictureMeta::other(url.to_string());
-            let pic_name = pic.get_file_name();
-            Borrowed(r#"<img class="bk-emoji" alt=""#)
+            let pic_name = pic_url_to_file(pic.url())?;
+            Ok(Borrowed(r#"<img class="bk-emoji" alt=""#)
                 + s
                 + r#"" title=""#
                 + s
@@ -256,9 +284,9 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
                         .into_string()
                         .unwrap(),
                 )
-                + r#"" />"#
+                + r#"" />"#)
         } else {
-            Borrowed(s)
+            Ok(Borrowed(s))
         }
     }
 
@@ -274,7 +302,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
             + "</a>"
     }
 
-    fn trans_url(&self, post:&Post, s: &'a str) -> Cow<'a, str> {
+    fn trans_url(&self, post: &Post, s: &'a str) -> Cow<'a, str> {
         let mut url_title = Borrowed("网页链接");
         let mut url = Borrowed(s);
         if let Some(Value::Array(url_objs)) = post.url_struct.as_ref() {
