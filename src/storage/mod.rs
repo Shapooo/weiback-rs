@@ -1,4 +1,3 @@
-mod picture_storage;
 mod post_storage;
 mod user_storage;
 
