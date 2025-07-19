@@ -1,4 +1,62 @@
-pub mod picture;
+use bytes::Bytes;
 
-pub use picture::Picture;
 pub use weibosdk_rs::{Post, User};
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum PictureDefinition {
+    Thumbnail,
+    Bmiddle,
+    Large,
+    Original,
+    #[default]
+    Largest,
+    Mw2000,
+}
+
+impl From<PictureDefinition> for &str {
+    fn from(value: PictureDefinition) -> Self {
+        match value {
+            PictureDefinition::Thumbnail => "thumbnail",
+            PictureDefinition::Bmiddle => "bmiddle",
+            PictureDefinition::Large => "large",
+            PictureDefinition::Original => "original",
+            PictureDefinition::Largest => "largest",
+            PictureDefinition::Mw2000 => "mw2000",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PictureMeta {
+    InPost { url: String, post_id: i64 },
+    Avatar { url: String, user_id: i64 },
+    Other { url: String },
+}
+
+impl PictureMeta {
+    pub fn in_post(url: String, post_id: i64) -> Self {
+        PictureMeta::InPost { url, post_id }
+    }
+
+    pub fn avatar(url: String, user_id: i64) -> Self {
+        PictureMeta::Avatar { url, user_id }
+    }
+
+    pub fn other(url: String) -> Self {
+        PictureMeta::Other { url }
+    }
+
+    pub fn url(&self) -> &str {
+        match self {
+            PictureMeta::InPost { url, .. } => url,
+            PictureMeta::Avatar { url, .. } => url,
+            PictureMeta::Other { url } => url,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Picture {
+    pub meta: PictureMeta,
+    pub blob: Bytes,
+}

@@ -11,14 +11,27 @@ use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 
 use crate::{
     error::{Error, Result},
+    exporter::ExportOptions,
     models::{Picture, Post, User},
-    ports::{ExportOptions, Storage, TaskOptions},
 };
 use processer::Processer;
 
 const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
 const PICTURE_PATH: &str = "res/pictures";
+
+pub trait Storage: Send + Sync {
+    async fn save_user(&self, user: &User) -> Result<()>;
+    async fn get_user(&self, uid: i64) -> Result<Option<User>>;
+    async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>>;
+    async fn save_post(&self, post: &Post) -> Result<()>;
+    async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
+    async fn mark_post_favorited(&self, id: i64) -> Result<()>;
+    async fn get_favorited_sum(&self) -> Result<u32>;
+    async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
+    async fn save_picture(&self, picture: &Picture) -> Result<()>;
+    async fn get_picture_blob(&self, url: &str) -> Result<Option<bytes::Bytes>>;
+}
 
 #[derive(Debug, Clone)]
 pub struct StorageImpl {

@@ -1,19 +1,54 @@
+pub mod options;
 mod task_handler;
 
 use std::time::Duration;
 
+use egui::ImageData;
 use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
 use crate::error::{Error, Result};
+use crate::exporter::{ExportOptions, Exporter};
 use crate::models::Post;
-use crate::ports::{ExportOptions, Exporter, Service, Storage, TaskOptions, TaskResponse};
 use crate::processing::PostProcesser;
+use crate::storage::Storage;
+pub use options::{TaskOptions, UserPostFilter};
 
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
+
+pub trait Service {
+    async fn unfavorite_posts(&self) -> Result<()>;
+    async fn backup_favorites(&self, options: TaskOptions) -> Result<()>;
+    async fn backup_user(&self, options: TaskOptions) -> Result<()>;
+    async fn backup_self(&self, options: TaskOptions) -> Result<()>;
+    async fn export_from_local(&self, options: ExportOptions) -> Result<()>;
+}
+
+#[derive(Debug, Clone)]
+pub enum Task {
+    // to fetch user meta data, include screen name and avatar
+    FetchUserMeta(TaskOptions),
+    // to download favorites (range, with pic, image definition level)
+    BackupFavorites(TaskOptions),
+    // to export favorites from local db (range, with pic, image definition level)
+    ExportFromLocal(ExportOptions),
+    // to unfavorite favorite post
+    UnfavoritePosts,
+    // to backup user (id, with pic, image definition level)
+    BackupUser(TaskOptions),
+}
+
+#[allow(unused)]
+pub enum TaskResponse {
+    SumOfFavDB(u32, u32),             // remain sum of favorite in weibo and local db
+    UserMeta(i64, String, ImageData), // screen name and avatar picture
+    InProgress(f32, String),          // long time task is in progress
+    Finished(u32, u32),               // long time task is finished
+    Error(Error),                     // error occurs
+}
 
 #[derive(Debug)]
 pub struct TaskHandler<'a, W: WeiboAPI, S: Storage, E: Exporter> {
@@ -171,15 +206,19 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
             let subtask_name = format!("weiback-{index}");
             if local_posts.len() < SAVING_PERIOD {
                 let html = self.processer.generate_html(&local_posts, &options).await?;
-                self.exporter
-                    .export_page(&subtask_name, &html, &target_dir)
-                    .await?;
+                // self.exporter
+                //     .export_page(&subtask_name, &html, &target_dir)
+                //     .await?;
+                // TODO
+                // WTF
                 break;
             } else {
                 let html = self.processer.generate_html(&local_posts, &options).await?;
-                self.exporter
-                    .export_page(&subtask_name, &html, &target_dir)
-                    .await?;
+                // self.exporter
+                //     .export_page(&subtask_name, &html, &target_dir)
+                //     .await?;
+                // TODO
+                // WTF
             }
             let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
             self.task_status_sender
