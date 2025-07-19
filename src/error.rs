@@ -2,24 +2,7 @@ use std::fmt::Debug;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 
-pub type Result<T> = anyhow::Result<T>;
-
-#[derive(Debug, Error)]
-pub enum TokioError {
-    #[error("Failed to send data through channel: {0}")]
-    SendError(String),
-}
-
-// Manually implement From for SendError<T> because it's generic.
-// We convert it to a String to make TokioError non-generic.
-impl<T> From<SendError<T>> for TokioError
-where
-    T: Debug,
-{
-    fn from(err: SendError<T>) -> Self {
-        TokioError::SendError(err.to_string())
-    }
-}
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -42,11 +25,17 @@ pub enum Error {
     Image(#[from] image::ImageError),
 
     #[error("Tokio task-related error: {0}")]
-    Tokio(#[from] TokioError),
+    Tokio(String),
 
     #[error("Not logged in")]
     NotLoggedIn,
 
     #[error("An unexpected error occurred: {0}")]
     Other(String),
+}
+
+impl<T> From<SendError<T>> for Error {
+    fn from(e: SendError<T>) -> Self {
+        Error::Tokio(e.to_string())
+    }
 }
