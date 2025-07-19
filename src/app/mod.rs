@@ -1,5 +1,5 @@
 pub mod options;
-mod task_handler;
+// mod task_handler;
 
 use std::time::Duration;
 
@@ -18,14 +18,6 @@ pub use options::{TaskOptions, UserPostFilter};
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
-
-pub trait Service {
-    async fn unfavorite_posts(&self) -> Result<()>;
-    async fn backup_favorites(&self, options: TaskOptions) -> Result<()>;
-    async fn backup_user(&self, options: TaskOptions) -> Result<()>;
-    async fn backup_self(&self, options: TaskOptions) -> Result<()>;
-    async fn export_from_local(&self, options: ExportOptions) -> Result<()>;
-}
 
 #[derive(Debug, Clone)]
 pub enum Task {
@@ -51,24 +43,25 @@ pub enum TaskResponse {
 }
 
 #[derive(Debug)]
-pub struct TaskHandler<'a, W: WeiboAPI, S: Storage, E: Exporter> {
+pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter> {
     api_client: Option<W>,
     storage: S,
     exporter: E,
-    processer: PostProcesser<'a, W, S>,
+    processer: PostProcesser<W, S>,
     task_status_sender: Sender<TaskResponse>,
     uid: Option<i64>,
 }
 
-impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
+impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
     pub fn new(
+        api_client: Option<W>,
         storage: S,
         exporter: E,
-        processer: PostProcesser<'a, W, S>,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
+        let processer = PostProcesser::new(api_client.clone(), storage.clone());
         Ok(TaskHandler {
-            api_client: None,
+            api_client,
             storage,
             exporter,
             processer,
@@ -77,9 +70,9 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
         })
     }
 
-    pub fn set_client(&'a mut self, client: W) {
-        self.api_client = Some(client);
-        self.processer.set_client(self.api_client.as_ref().unwrap());
+    pub fn set_client(&mut self, client: W) {
+        self.api_client = Some(client.clone());
+        self.processer.set_client(client);
     }
 
     pub fn set_uid(&mut self, uid: i64) {
@@ -132,9 +125,9 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
     }
 }
 
-impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S, E> {
+impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
     // unfavorite all posts that are in weibo favorites
-    async fn unfavorite_posts(&self) -> Result<()> {
+    pub async fn unfavorite_posts(&self) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         self.task_status_sender
@@ -164,7 +157,7 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
     }
 
     // backup user posts
-    async fn backup_user(&self, options: TaskOptions) -> Result<()> {
+    pub async fn backup_user(&self, options: TaskOptions) -> Result<()> {
         let uid = options.uid;
         info!("download user {uid} posts");
 
@@ -187,13 +180,13 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
         Ok(())
     }
 
-    async fn backup_self(&self, options: TaskOptions) -> Result<()> {
+    pub async fn backup_self(&self, options: TaskOptions) -> Result<()> {
         self.backup_user(options.with_user(self.uid.ok_or(Error::NotLoggedIn)?))
             .await
     }
 
     // export favorite posts from local database
-    async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
+    pub async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
         let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
         let target_dir = std::env::current_dir()?.join(task_name);
 
@@ -237,7 +230,7 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> Service for TaskHandler<'a, W, S,
     }
 
     // export favorite posts from weibo
-    async fn backup_favorites(&self, options: TaskOptions) -> Result<()> {
+    pub async fn backup_favorites(&self, options: TaskOptions) -> Result<()> {
         let range = options.range.clone().unwrap_or(1..=2000);
         assert!(range.start() != &0);
         info!("favorites download range is {range:?}");
