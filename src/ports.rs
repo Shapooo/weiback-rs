@@ -42,16 +42,15 @@ pub trait Service {
 
 pub trait Storage: Send + Sync {
     async fn save_user(&self, user: &User) -> Result<()>;
-    async fn get_user(&self, options: TaskOptions) -> Result<Option<User>>;
+    async fn get_user(&self, options: &TaskOptions) -> Result<Option<User>>;
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
-    async fn get_post(&self, options: TaskOptions) -> Result<Option<Post>>;
-    async fn mark_post_unfavorited(&self, options: TaskOptions) -> Result<()>;
-    async fn mark_post_favorited(&self, options: TaskOptions) -> Result<()>;
+    async fn mark_post_unfavorited(&self, options: &TaskOptions) -> Result<()>;
+    async fn mark_post_favorited(&self, options: &TaskOptions) -> Result<()>;
     async fn get_favorited_sum(&self) -> Result<u32>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
     async fn save_picture(&self, picture: &Picture) -> Result<()>;
-    async fn get_picture(&self, url: &str) -> Result<Option<bytes::Bytes>>;
+    async fn get_picture_blob(&self, url: &str) -> Result<Option<bytes::Bytes>>;
 }
 
 impl<S: Storage> Storage for Arc<S> {
@@ -59,11 +58,8 @@ impl<S: Storage> Storage for Arc<S> {
         self.as_ref().save_user(user).await
     }
 
-    async fn get_user(&self, options: TaskOptions) -> Result<Option<User>> {
+    async fn get_user(&self, options: &TaskOptions) -> Result<Option<User>> {
         self.as_ref().get_user(options).await
-    }
-    async fn get_post(&self, options: TaskOptions) -> Result<Option<Post>> {
-        self.as_ref().get_post(options).await
     }
 
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
@@ -82,11 +78,11 @@ impl<S: Storage> Storage for Arc<S> {
         self.as_ref().get_posts_id_to_unfavorite().await
     }
 
-    async fn mark_post_favorited(&self, options: TaskOptions) -> Result<()> {
+    async fn mark_post_favorited(&self, options: &TaskOptions) -> Result<()> {
         self.as_ref().mark_post_favorited(options).await
     }
 
-    async fn mark_post_unfavorited(&self, options: TaskOptions) -> Result<()> {
+    async fn mark_post_unfavorited(&self, options: &TaskOptions) -> Result<()> {
         self.as_ref().mark_post_unfavorited(options).await
     }
 
@@ -94,8 +90,8 @@ impl<S: Storage> Storage for Arc<S> {
         self.as_ref().save_picture(picture).await
     }
 
-    async fn get_picture(&self, url: &str) -> Result<Option<bytes::Bytes>> {
-        self.as_ref().get_picture(url).await
+    async fn get_picture_blob(&self, url: &str) -> Result<Option<bytes::Bytes>> {
+        self.as_ref().get_picture_blob(url).await
     }
 }
 
