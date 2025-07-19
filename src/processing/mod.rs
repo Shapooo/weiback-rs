@@ -140,7 +140,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
     }
 
     async fn save_picture(&self, pic_meta: PictureMeta) -> Result<()> {
-        if let Some(_) = self.storage.get_picture(pic_meta.url()).await? {
+        if let Some(_) = self.storage.get_picture_blob(pic_meta.url()).await? {
             Ok(())
         } else {
             let blob = self
@@ -160,7 +160,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
     async fn load_picture_from_local(&self, pic_meta: PictureMeta) -> Result<Option<Picture>> {
         Ok(self
             .storage
-            .get_picture(pic_meta.url())
+            .get_picture_blob(pic_meta.url())
             .await?
             .map(|blob| Picture {
                 meta: pic_meta,
@@ -169,7 +169,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
     }
 
     async fn load_picture_from_local_or_server(&self, pic_meta: PictureMeta) -> Result<Picture> {
-        if let Some(blob) = self.storage.get_picture(pic_meta.url()).await? {
+        if let Some(blob) = self.storage.get_picture_blob(pic_meta.url()).await? {
             Ok(Picture {
                 meta: pic_meta,
                 blob,
