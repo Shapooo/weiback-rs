@@ -4,6 +4,7 @@ mod user_storage;
 
 use std::env::current_exe;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use log::{debug, info};
@@ -20,7 +21,7 @@ const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
 const PICTURE_PATH: &str = "res/pictures";
 
-pub trait Storage: Send + Sync {
+pub trait Storage: Send + Sync + Clone {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>>;
@@ -40,7 +41,7 @@ pub struct StorageImpl {
     processer: Processer,
 }
 
-impl<'a> StorageImpl {
+impl StorageImpl {
     pub async fn new() -> Result<Self> {
         let db_pool =
             create_db_pool(&current_exe().unwrap().parent().unwrap().join(DATABASE)).await?;
@@ -52,7 +53,7 @@ impl<'a> StorageImpl {
     }
 }
 
-impl Storage for StorageImpl {
+impl Storage for Arc<StorageImpl> {
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
         if options.range.is_none() {
             return Err(Error::Other("".to_string()));
