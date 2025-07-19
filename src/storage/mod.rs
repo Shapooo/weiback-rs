@@ -51,8 +51,8 @@ impl Storage for StorageImpl {
             .await
     }
 
-    async fn get_user(&self, options: &TaskOptions) -> Result<Option<User>> {
-        self.processer.get_user(options.uid).await
+    async fn get_user(&self, uid: i64) -> Result<Option<User>> {
+        self.processer.get_user(uid).await
     }
 
     async fn save_post(&self, post: &Post) -> Result<()> {
@@ -63,8 +63,7 @@ impl Storage for StorageImpl {
         self.processer.save_user(user).await
     }
 
-    async fn mark_post_unfavorited(&self, options: &TaskOptions) -> Result<()> {
-        let id = options.post_id;
+    async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
         debug!("unfav post {} in db", id);
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
             .bind(id)
@@ -73,8 +72,7 @@ impl Storage for StorageImpl {
         Ok(())
     }
 
-    async fn mark_post_favorited(&self, options: &TaskOptions) -> Result<()> {
-        let id = options.post_id;
+    async fn mark_post_favorited(&self, id: i64) -> Result<()> {
         debug!("mark favorited post {} in db", id);
         sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
             .bind(id)

@@ -1,3 +1,5 @@
+mod task_handler;
+
 use std::time::Duration;
 
 use log::info;
@@ -79,9 +81,7 @@ impl<'a, W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<'a, W, S, E> {
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
         for id in ids {
-            self.storage
-                .mark_post_favorited(TaskOptions::new().with_post(id))
-                .await?;
+            self.storage.mark_post_favorited(id).await?;
         }
 
         Ok(result)
