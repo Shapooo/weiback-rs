@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::ops::DerefMut;
 
 use serde_json::{Value, to_string};
-use sqlx::{FromRow, Row};
+use sqlx::{Executor, FromRow, Row, Sqlite};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
@@ -117,4 +117,46 @@ where
             uid: row.try_get("uid")?,
         })
     }
+}
+
+pub async fn create_post_table<E>(mut executor: E) -> Result<()>
+where
+    E: DerefMut,
+    for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+{
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS posts ( \
+             id INTEGER PRIMARY KEY, \
+             mblogid TEXT, \
+             source TEXT, \
+             region_name TEXT, \
+             deleted INTEGER, \
+             pic_ids TEXT, \
+             pic_num INTEGER, \
+             url_struct TEXT, \
+             topic_struct TEXT, \
+             tag_struct TEXT, \
+             number_display_strategy TEXT, \
+             mix_media_info TEXT, \
+             text TEXT, \
+             attitudes_status INTEGER, \
+             favorited INTEGER, \
+             pic_infos TEXT, \
+             reposts_count INTEGER, \
+             comments_count INTEGER, \
+             attitudes_count INTEGER, \
+             repost_type INTEGER, \
+             edit_count INTEGER, \
+             isLongText INTEGER, \
+             geo TEXT, \
+             page_info TEXT, \
+             unfavorited INTEGER, \
+             created_at TEXT, \
+             retweeted_id INTEGER, \
+             uid INTEGER \
+             )",
+    )
+    .execute(&mut *executor)
+    .await?;
+    Ok(())
 }
