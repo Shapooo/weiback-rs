@@ -1,131 +1,84 @@
 mod post_storage;
+mod processer;
 mod user_storage;
 
+use std::env::current_exe;
 use std::path::PathBuf;
 
-use anyhow::{Result, anyhow};
-use log::{debug, info, trace};
+use bytes::Bytes;
+use log::{debug, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 
 use crate::{
+    error::{Error, Result},
     models::{Picture, Post, User},
-    ports::Storage,
+    ports::{ExportOptions, Storage, TaskOptions},
 };
-use post_storage::PostStorage;
-use user_storage::UserStorage;
+use processer::Processer;
 
 const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
+const PICTURE_PATH: &str = "res/pictures";
 
 #[derive(Debug, Clone)]
 pub struct StorageImpl {
-    db_path: PathBuf,
-    db_pool: Option<SqlitePool>,
+    db_pool: SqlitePool,
+    picture_path: PathBuf,
+    processer: Processer,
 }
 
-impl StorageImpl {
-    pub fn new() -> Self {
-        StorageImpl {
-            db_path: std::env::current_exe()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join(DATABASE),
-            db_pool: None,
-        }
-    }
-
-    pub async fn init(&mut self) -> Result<()> {
-        debug!("initing...");
-        if self.db_path.is_file() {
-            info!("db {:?} exists", self.db_path);
-            self.db_pool = Some(SqlitePool::connect(self.db_path.to_str().unwrap()).await?);
-            self.check_db_version().await?;
-        } else {
-            info!("db {:?} not exists, create it", self.db_path);
-            if !self.db_path.parent().unwrap().exists() {
-                let mut dir_builder = tokio::fs::DirBuilder::new();
-                dir_builder.recursive(true);
-                dir_builder
-                    .create(
-                        self.db_path
-                            .parent()
-                            .ok_or(anyhow!("{:?} should have parent", self.db_path))?,
-                    )
-                    .await?;
-            } else if self.db_path.parent().unwrap().is_file() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::AlreadyExists,
-                    "export folder is a already exist file",
-                )
-                .into());
-            }
-            Sqlite::create_database(self.db_path.to_str().unwrap()).await?;
-            self.db_pool = Some(SqlitePool::connect(self.db_path.to_str().unwrap()).await?);
-            self.create_db().await?;
-        }
-        Ok(())
-    }
-
-    async fn check_db_version(&mut self) -> Result<()> {
-        let version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
-            .fetch_one(self.db().unwrap())
-            .await?;
-        debug!("db version: {}", version.0);
-        if version.0 == VALIDE_DB_VERSION {
-            Ok(())
-        } else {
-            Err(anyhow!("Invalid database version, please upgrade db file"))
-        }
-    }
-
-    async fn create_db(&mut self) -> Result<()> {
-        let mut conn = self.db_pool.as_ref().unwrap().acquire().await?;
-        PostStorage::create_table(conn.as_mut()).await?;
-        UserStorage::create_table(conn.as_mut()).await?;
-        Picture::create_table(conn).await?;
-        sqlx::query(format!("PRAGMA user_version = {};", VALIDE_DB_VERSION).as_str())
-            .execute(self.db_pool.as_ref().unwrap())
-            .await?;
-        Ok(())
-    }
-
-    pub fn db(&self) -> Option<&SqlitePool> {
-        self.db_pool.as_ref()
-    }
-
-    async fn load_complete_post(&self, post: &mut Post) -> Result<()> {
-        if let Some(uid) = post.uid {
-            post.user = self._get_user(uid).await?;
-        }
-        if let Some(retweeted_id) = post.retweeted_id {
-            post.retweeted_status = Some(Box::new(self._get_post(retweeted_id).await?.ok_or(
-                anyhow!(
-                    "cannot find retweeted post {} of post {}",
-                    retweeted_id,
-                    post.id
-                ),
-            )?));
-        }
-        Ok(())
+impl<'a> StorageImpl {
+    pub async fn new() -> Result<Self> {
+        let db_pool =
+            create_db_pool(&current_exe().unwrap().parent().unwrap().join(DATABASE)).await?;
+        Ok(StorageImpl {
+            processer: Processer::new(db_pool.clone()),
+            db_pool,
+            picture_path: current_exe().unwrap().parent().unwrap().join(PICTURE_PATH),
+        })
     }
 }
 
 impl Storage for StorageImpl {
-    async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
+    async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
+        if options.range.is_none() {
+            return Err(Error::Other("".to_string()));
+        }
+        let start = options.range.as_ref().unwrap().start();
+        let end = options.range.as_ref().unwrap().end();
+        self.processer
+            .get_posts(*end - *start + 1, *start, options.reverse)
+            .await
+    }
+
+    async fn get_user(&self, options: &TaskOptions) -> Result<Option<User>> {
+        self.processer.get_user(options.uid).await
+    }
+
+    async fn save_post(&self, post: &Post) -> Result<()> {
+        self.processer.save_post(post.clone()).await
+    }
+
+    async fn save_user(&self, user: &User) -> Result<()> {
+        self.processer.save_user(user).await
+    }
+
+    async fn mark_post_unfavorited(&self, options: &TaskOptions) -> Result<()> {
+        let id = options.post_id;
         debug!("unfav post {} in db", id);
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
             .bind(id)
-            .execute(self.db_pool.as_ref().unwrap())
+            .execute(&self.db_pool)
             .await?;
         Ok(())
     }
 
-    async fn mark_post_favorited(&self, id: i64) -> Result<()> {
+    async fn mark_post_favorited(&self, options: &TaskOptions) -> Result<()> {
+        let id = options.post_id;
         debug!("mark favorited post {} in db", id);
         sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
             .bind(id)
-            .execute(self.db_pool.as_ref().unwrap())
+            .execute(&self.db_pool)
             .await?;
         Ok(())
     }
@@ -133,7 +86,7 @@ impl Storage for StorageImpl {
     async fn get_favorited_sum(&self) -> Result<u32> {
         Ok(
             sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
-                .fetch_one(self.db_pool.as_ref().unwrap())
+                .fetch_one(&self.db_pool)
                 .await?
                 .0,
         )
@@ -144,58 +97,80 @@ impl Storage for StorageImpl {
         Ok(sqlx::query_as::<Sqlite, (i64,)>(
             "SELECT id FROM posts WHERE unfavorited == false and favorited;",
         )
-        .fetch_all(self.db_pool.as_ref().unwrap())
+        .fetch_all(&self.db_pool)
         .await?
         .into_iter()
         .map(|t| t.0)
         .collect())
     }
 
-    async fn get_post(&self, id: i64) -> Result<Option<Post>> {
-        debug!("query post, id: {id}");
-        if let Some(mut post) = self._get_post(id).await? {
-            if let Some(retweeted_id) = post.retweeted_id {
-                post.retweeted_status = Some(Box::new(self._get_post(retweeted_id).await?.ok_or(
-                    anyhow!("cannot find retweeted post {} of post {}", retweeted_id, id),
-                )?));
-            }
-            Ok(Some(post))
-        } else {
-            Ok(None)
-        }
+    async fn get_picture_blob(&self, url: &str) -> Result<Option<Bytes>> {
+        todo!()
     }
 
-    async fn get_posts(&self, limit: u32, offset: u32, reverse: bool) -> Result<Vec<Post>> {
-        debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
-        let sql_expr = if reverse {
-            "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
-        } else {
-            "SELECT * FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
-        };
-        let mut posts = sqlx::query_as::<sqlx::Sqlite, Post>(sql_expr)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(self.db_pool.as_ref().unwrap())
-            .await?;
-        for post in posts.iter_mut() {
-            self.load_complete_post(post).await?;
-        }
-        debug!("geted {} post from local", posts.len());
-        Ok(posts)
+    async fn save_picture(&self, picture: &Picture) -> Result<()> {
+        todo!()
     }
+}
 
-    async fn save_post(&self, post: &Post) -> Result<()> {
-        debug!("insert post: {}", post.id);
-        trace!("insert post: {:?}", post);
-        self._save_post(post, true).await?;
+async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
+    let version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
+        .fetch_one(db_pool)
+        .await?;
+    debug!("db version: {}", version.0);
+    if version.0 == VALIDE_DB_VERSION {
         Ok(())
+    } else {
+        Err(Error::Other(
+            "Invalid database version, please upgrade db file".to_string(),
+        ))
     }
+}
 
-    async fn get_user(&self, id: i64) -> Result<Option<User>> {
-        self._get_user(id).await
+async fn create_db_pool(db_path: &PathBuf) -> Result<SqlitePool> {
+    debug!("initing...");
+    let db_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join(DATABASE);
+    if db_path.is_file() {
+        info!("db {:?} exists", db_path);
+        let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
+        check_db_version(&db_pool).await?;
+        Ok(db_pool)
+    } else {
+        info!("db {:?} not exists, create it", db_path);
+        if !db_path.parent().unwrap().exists() {
+            let mut dir_builder = tokio::fs::DirBuilder::new();
+            dir_builder.recursive(true);
+            dir_builder
+                .create(
+                    db_path
+                        .parent()
+                        .ok_or(Error::Other(format!("{:?} should have parent", db_path)))?,
+                )
+                .await?;
+        } else if db_path.parent().unwrap().is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "export folder is a already exist file",
+            )
+            .into());
+        }
+        Sqlite::create_database(db_path.to_str().unwrap()).await?;
+        let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
+        create_tables(&db_pool).await?;
+        Ok(db_pool)
     }
+}
 
-    async fn save_user(&self, user: &User) -> Result<()> {
-        self._save_user(&user).await
-    }
+async fn create_tables(db_pool: &SqlitePool) -> Result<()> {
+    let mut conn = db_pool.acquire().await?;
+    post_storage::create_post_table(conn.as_mut()).await?;
+    user_storage::create_user_table(conn.as_mut()).await?;
+    sqlx::query(format!("PRAGMA user_version = {};", VALIDE_DB_VERSION).as_str())
+        .execute(db_pool)
+        .await?;
+    Ok(())
 }
