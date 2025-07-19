@@ -32,23 +32,24 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
-pub struct PostProcesser<'a, W: WeiboAPI, S: Storage> {
-    api_client: Option<&'a W>,
-    storage: &'a S,
+pub struct PostProcesser<W: WeiboAPI, S: Storage> {
+    api_client: Option<W>,
+    storage: S,
     emoji_map: Option<HashMap<String, String>>,
 }
 
-impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
-    pub fn new(storage: &'a S) -> Self {
+impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
+    pub fn new(api_client: Option<W>, storage: S) -> Self {
         Self {
-            api_client: None,
+            api_client,
             storage,
             emoji_map: None,
         }
     }
 
-    pub fn set_client(&mut self, api_client: &'a W) {
+    pub fn set_client(&mut self, api_client: W) {
         self.api_client = Some(api_client);
+        // TODO
     }
 
     pub async fn process(&self, posts: Vec<Post>, options: &TaskOptions) -> Result<()> {
@@ -62,6 +63,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
             if post.is_long_text
                 && let Ok(long_text) = self
                     .api_client
+                    .as_ref()
                     .ok_or(Error::NotLoggedIn)?
                     .get_long_text(post.id)
                     .await
@@ -99,7 +101,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
             .collect()
     }
 
-    fn pic_ids_to_urls(
+    fn pic_ids_to_urls<'a>(
         pic_ids: &'a [String],
         pic_infos: &'a HashMap<String, Value>,
         quality: &'a str,
@@ -115,7 +117,11 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
             .collect()
     }
 
-    fn extract_in_post_pic_urls(&self, post: &'a Post, definition: PictureDefinition) -> Vec<&str> {
+    fn extract_in_post_pic_urls<'a>(
+        &self,
+        post: &'a Post,
+        definition: PictureDefinition,
+    ) -> Vec<&'a str> {
         let mut pic_vec = post
             .pic_ids
             .as_ref()
@@ -144,6 +150,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
         } else {
             let blob = self
                 .api_client
+                .as_ref()
                 .ok_or(Error::NotLoggedIn)?
                 .download_picture(pic_meta.url())
                 .await?;
@@ -176,6 +183,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
         } else {
             let blob = self
                 .api_client
+                .as_ref()
                 .ok_or(Error::NotLoggedIn)?
                 .download_picture(pic_meta.url())
                 .await?;
@@ -281,7 +289,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
         Ok(text.to_string())
     }
 
-    fn trans_emoji(&self, s: &'a str, pic_folder: &'a Path) -> Result<Cow<'a, str>> {
+    fn trans_emoji<'a>(&self, s: &'a str, pic_folder: &'a Path) -> Result<Cow<'a, str>> {
         if let Some(url) = self.emoji_map.as_ref().unwrap().get(s) {
             let pic = PictureMeta::other(url.to_string());
             let pic_name = pic_url_to_file(pic.url())?;
@@ -315,7 +323,7 @@ impl<'a, W: WeiboAPI, S: Storage> PostProcesser<'a, W, S> {
             + "</a>"
     }
 
-    fn trans_url(&self, post: &Post, s: &'a str) -> Cow<'a, str> {
+    fn trans_url<'a>(&self, post: &Post, s: &'a str) -> Cow<'a, str> {
         let mut url_title = Borrowed("网页链接");
         let mut url = Borrowed(s);
         if let Some(Value::Array(url_objs)) = post.url_struct.as_ref() {
