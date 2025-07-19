@@ -12,12 +12,11 @@ use regex::Regex;
 use serde_json::Value;
 use weibosdk_rs::WeiboAPI;
 
+use crate::app::options::TaskOptions;
 use crate::error::{Error, Result};
-use crate::models::{
-    Post,
-    picture::{Picture, PictureMeta},
-};
-use crate::ports::{ExportOptions, PictureDefinition, Storage, TaskOptions};
+use crate::exporter::ExportOptions;
+use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
+use crate::storage::Storage;
 use crate::utils::pic_url_to_file;
 
 lazy_static! {

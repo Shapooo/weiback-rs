@@ -8,8 +8,7 @@ use sqlx::{Sqlite, SqlitePool};
 use super::post_storage::PostStorage;
 use super::user_storage::UserStorage;
 use crate::error::{Error, Result};
-use crate::models::picture::PictureMeta;
-use crate::models::{Picture, Post, User};
+use crate::models::{Post, User};
 
 #[derive(Debug, Clone)]
 pub struct Processer {

@@ -1,14 +1,24 @@
-use std::io::{Error, ErrorKind};
+use std::io::ErrorKind;
+use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
 use bytes::Bytes;
 use futures::future::join_all;
 use log::info;
-use tokio::fs::{DirBuilder, File};
-use tokio::io::AsyncWriteExt;
+use tokio::{
+    fs::{DirBuilder, File},
+    io::AsyncWriteExt,
+};
 
-pub mod html_generator;
+use crate::error::Result;
+use crate::models::{Picture, PictureDefinition};
+
+pub trait Exporter: Send + Sync {
+    async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
+    where
+        N: AsRef<str>,
+        P: AsRef<Path>;
+}
 
 #[derive(Debug, Clone)]
 pub struct ExporterImpl();
@@ -17,12 +27,6 @@ pub struct ExporterImpl();
 pub struct HTMLPage {
     pub html: String,
     pub pics: Vec<HTMLPicture>,
-}
-
-#[derive(Debug, Clone)]
-pub struct HTMLPicture {
-    pub name: String,
-    pub blob: Bytes,
 }
 
 impl ExporterImpl {
@@ -41,7 +45,7 @@ impl ExporterImpl {
         if !path.as_ref().exists() {
             dir_builder.create(path.as_ref()).await?
         } else if !path.as_ref().is_dir() {
-            return Err(Error::new(
+            return Err(std::io::Error::new(
                 ErrorKind::AlreadyExists,
                 "export folder is a already exist file",
             )
@@ -65,6 +69,77 @@ impl ExporterImpl {
         .await;
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HTMLPicture {
+    pub name: String,
+    pub blob: Bytes,
+}
+
+impl From<Picture> for HTMLPicture {
+    fn from(value: Picture) -> Self {
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportOptions {
+    pub pic_quality: PictureDefinition,
+    pub export_path: PathBuf,
+    pub export_task_name: String,
+    pub posts_per_html: u32,
+    pub reverse: bool,
+    pub range: Option<RangeInclusive<u32>>,
+}
+
+impl Default for ExportOptions {
+    fn default() -> Self {
+        Self {
+            pic_quality: PictureDefinition::default(),
+            export_path: PathBuf::from("."),
+            export_task_name: "weiback_export.html".to_string(),
+            posts_per_html: 1000,
+            reverse: false,
+            range: None,
+        }
+    }
+}
+
+impl ExportOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn pic_quality(mut self, quality: PictureDefinition) -> Self {
+        self.pic_quality = quality;
+        self
+    }
+
+    pub fn export_path(mut self, path: PathBuf) -> Self {
+        self.export_path = path;
+        self
+    }
+
+    pub fn export_task_name(mut self, name: String) -> Self {
+        self.export_task_name = name;
+        self
+    }
+
+    pub fn posts_per_html(mut self, count: u32) -> Self {
+        self.posts_per_html = count;
+        self
+    }
+
+    pub fn range(mut self, range: RangeInclusive<u32>) -> Self {
+        self.range = Some(range);
+        self
+    }
+
+    pub fn reverse(mut self, reverse: bool) -> Self {
+        self.reverse = reverse;
+        self
     }
 }
 
