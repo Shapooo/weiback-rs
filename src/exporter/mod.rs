@@ -29,7 +29,7 @@ pub struct HTMLPage {
     pub pics: Vec<HTMLPicture>,
 }
 
-impl ExporterImpl {
+impl Exporter for ExporterImpl {
     async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
     where
         N: AsRef<str>,
@@ -145,7 +145,7 @@ impl ExportOptions {
 
 #[cfg(test)]
 mod exporter_test {
-    use super::{ExporterImpl, HTMLPage, HTMLPicture};
+    use super::{Exporter, ExporterImpl, HTMLPage, HTMLPicture};
     #[tokio::test]
     async fn export_page() {
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
