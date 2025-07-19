@@ -1,6 +1,6 @@
 use std::ops::DerefMut;
 
-use serde_json::{Value, to_string};
+use serde_json::{Value, from_str, to_string};
 use sqlx::{Executor, FromRow, Row, Sqlite};
 
 use crate::error::{Error, Result};
@@ -70,6 +70,42 @@ impl TryFrom<Post> for PostStorage {
             created_at: post.created_at.to_string(), //TODO
             retweeted_id: post.retweeted_status.map(|r| r.id),
             uid: post.attitudes_count,
+        })
+    }
+}
+
+impl TryInto<Post> for PostStorage {
+    type Error = Error;
+    fn try_into(self) -> Result<Post> {
+        Ok(Post {
+            id: self.id,
+            mblogid: self.mblogid,
+            source: self.source,
+            region_name: self.region_name,
+            deleted: self.deleted,
+            pic_ids: self.pic_ids.map(|s| from_str(&s)).transpose()?,
+            pic_num: self.pic_num,
+            url_struct: self.url_struct,
+            topic_struct: self.topic_struct,
+            tag_struct: self.tag_struct,
+            number_display_strategy: self.number_display_strategy,
+            mix_media_info: self.mix_media_info,
+            text: self.text,
+            attitudes_status: self.attitudes_status,
+            favorited: self.favorited,
+            pic_infos: self.pic_infos.map(|s| from_str(&s)).transpose()?,
+            reposts_count: self.reposts_count,
+            comments_count: self.comments_count,
+            attitudes_count: self.attitudes_count,
+            repost_type: self.repost_type,
+            edit_count: self.edit_count,
+            is_long_text: self.is_long_text,
+            geo: self.geo,
+            page_info: self.page_info,
+            unfavorited: self.unfavorited,
+            created_at: Default::default(), //TODO
+            retweeted_status: None,
+            user: None,
         })
     }
 }
