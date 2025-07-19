@@ -1,5 +1,8 @@
-use sqlx::FromRow;
+use std::ops::DerefMut;
 
+use sqlx::{Executor, FromRow, Sqlite};
+
+use crate::error::Result;
 use crate::models::User;
 
 #[derive(Debug, Clone, FromRow, PartialEq)]
@@ -53,4 +56,28 @@ impl Into<User> for UserStorage {
             following: self.following,
         }
     }
+}
+
+pub async fn create_user_table<E>(mut db: E) -> Result<()>
+where
+    E: DerefMut,
+    for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
+{
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS users ( \
+             id INTEGER PRIMARY KEY, \
+             screen_name TEXT, \
+             profile_image_url TEXT, \
+             avatar_large TEXT, \
+             avatar_hd TEXT, \
+             verified INTEGER, \
+             verified_type INTEGER, \
+             domain TEXT, \
+             follow_me INTEGER, \
+             following INTEGER \
+             )",
+    )
+    .execute(&mut *db)
+    .await?;
+    Ok(())
 }
