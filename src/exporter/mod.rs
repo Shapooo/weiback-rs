@@ -10,8 +10,10 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::models::{Picture, PictureDefinition};
+use crate::utils::pic_url_to_filename;
+use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
     async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
@@ -63,7 +65,7 @@ impl Exporter for ExporterImpl {
         dir_builder.create(operating_path.as_path()).await?;
         let operating_path = operating_path.as_path();
         join_all(page.pics.into_iter().map(|pic| async move {
-            let mut pic_file = File::create(operating_path.join(pic.name)).await?;
+            let mut pic_file = File::create(operating_path.join(pic.file_name)).await?;
             pic_file.write_all(&pic.blob).await
         }))
         .await;
@@ -74,13 +76,21 @@ impl Exporter for ExporterImpl {
 
 #[derive(Debug, Clone)]
 pub struct HTMLPicture {
-    pub name: String,
+    pub file_name: String,
     pub blob: Bytes,
 }
 
-impl From<Picture> for HTMLPicture {
-    fn from(value: Picture) -> Self {
-        todo!()
+impl TryFrom<Picture> for HTMLPicture {
+    type Error = Error;
+
+    fn try_from(value: Picture) -> Result<Self> {
+        let url_str = value.meta.url();
+        let file_name = pic_url_to_filename(url_str)?.to_string();
+
+        Ok(HTMLPicture {
+            file_name,
+            blob: value.blob,
+        })
     }
 }
 
@@ -152,7 +162,7 @@ mod exporter_test {
         let page = HTMLPage {
             html: "testtesttest".into(),
             pics: vec![HTMLPicture {
-                name: "example.jpg".into(),
+                file_name: "example.jpg".into(),
                 blob: pic_blob.into(),
             }]
             .into_iter()
