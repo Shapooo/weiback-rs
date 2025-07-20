@@ -42,6 +42,7 @@ tokio = { version = "1.46.1", features = [
     "fs",
 ] }
 weibosdk-rs = { git = "git://github.com:Shapooo/weibosdk-rs.git" }
+url = "2.5.4"
 
 [dev-dependencies]
 flate2 = "1.0.34"
