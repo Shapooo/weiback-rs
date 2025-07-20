@@ -30,6 +30,9 @@ pub enum Error {
     #[error("Tokio task-related error: {0}")]
     Tokio(String),
 
+    #[error("DateTime parsing error: {0}")]
+    DateTime(#[from] chrono::ParseError),
+
     #[error("Not logged in")]
     NotLoggedIn,
 
