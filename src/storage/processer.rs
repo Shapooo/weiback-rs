@@ -25,14 +25,18 @@ impl Processer {
         mut post: Post,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
-            if let Some(user) = post.user {
+            let uid = post.user.as_ref().map(|u| u.id);
+            if let Some(user) = post.user.take() {
                 self.save_user(&user).await?;
             }
+            let retweeted_id = post.retweeted_status.as_ref().map(|p| p.id);
             if let Some(ret_post) = post.retweeted_status.take() {
                 self.save_post(*ret_post).await?;
             }
-            // self._save_post(&post.try_into()?, overwrite).await?;
-            todo!();
+            let mut post: PostStorage = post.try_into()?;
+            post.uid = uid;
+            post.retweeted_id = retweeted_id;
+            self._save_post(&post, true).await
         })
     }
 
