@@ -26,6 +26,16 @@ impl From<PictureDefinition> for &str {
     }
 }
 
+impl From<u8> for PictureDefinition {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => PictureDefinition::Thumbnail,
+            1 => PictureDefinition::Large,
+            2.. => PictureDefinition::Original,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PictureMeta {
     InPost { url: String, post_id: i64 },
