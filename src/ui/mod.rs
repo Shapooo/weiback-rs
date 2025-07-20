@@ -1,111 +1,58 @@
+mod tabs;
 mod task_proxy;
 
+use std::any::Any;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow;
 use eframe::{
-    egui::{self, vec2, viewport::ViewportBuilder, ImageData},
     NativeOptions,
+    egui::{self, ImageData, vec2, viewport::ViewportBuilder},
 };
 use log::info;
-use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver};
+use tokio::sync::mpsc::{Receiver, channel, error::TryRecvError};
 
 use crate::app::TaskResponse;
+use tabs::{
+    Tab, about_tab::AboutTab, backup_fav_tab::BackupFavTab, backup_user_tab::BackupUserTab,
+    export_from_local_tab::ExportFromLocalTab,
+};
 use task_proxy::TaskProxy;
 
-pub trait Tab {
-    fn ui(&mut self, ctx: &egui::Context, ui: &mut egui::Ui);
-    fn name(&self) -> &'static str;
-}
-
-pub trait Window {
-    fn show(&mut self, ctx: &egui::Context);
-    fn name(&self) -> &'static str;
-}
-
-pub enum MainState {
-    Unlogined,
-    Logining,
-    Logged,
-}
-
-impl Default for MainState {
-    fn default() -> Self {
-        Self::Unlogined
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum TabType {
-    BackUpFav,
-    BackUpUser,
-    ExportFromLocal,
-    About,
-}
-
-impl Default for TabType {
-    fn default() -> Self {
-        Self::BackUpFav
-    }
-}
-
 pub struct Core {
-    tabs: &'static [Box<dyn Tab>],
+    tabs: Vec<Box<dyn Tab>>,
     current_tab_idx: usize,
-    state: MainState,
+
     task_status_receiver: Option<Receiver<TaskResponse>>,
-    executor: Option<Executor>,
+    executor: Option<TaskProxy>,
     task_ongoing: bool,
-    login_checked: bool,
+
+    // View data
+    message: String,
+    ratio: f32,
     web_total: u32,
     db_total: u32,
-    // variables associated with GUI
-    web_start: u32,
-    web_end: u32,
-    db_start: u32,
-    db_end: u32,
-    message: String,
-    tab_type: TabType,
-    with_pic: bool,
-    reverse: bool,
-    image_definition: u8,
-    period: u32,
-    ratio: f32,
-    // variable associated with logining GUI
-    login_state: Option<Arc<RwLock<LoginState>>>,
-    qrcode_img: Option<egui::TextureHandle>,
-    uid_str: String,
-    user_meta: Option<(i64, String, ImageData)>,
 }
 
 impl Default for Core {
     fn default() -> Self {
+        let tabs: Vec<Box<dyn Tab>> = vec![
+            Box::<BackupFavTab>::default(),
+            Box::<BackupUserTab>::default(),
+            Box::<ExportFromLocalTab>::default(),
+            Box::<AboutTab>::default(),
+        ];
         Self {
-            tabs: &[],
+            tabs,
             current_tab_idx: 0,
-            state: Default::default(),
-            task_status_receiver: Default::default(),
-            executor: Default::default(),
-            task_ongoing: Default::default(),
-            login_checked: Default::default(),
-            web_total: Default::default(),
-            db_total: Default::default(),
-            web_start: 1,
-            web_end: Default::default(),
-            db_start: 1,
-            db_end: Default::default(),
-            message: Default::default(),
-            tab_type: Default::default(),
-            with_pic: true,
-            reverse: true,
-            image_definition: 2,
-            period: 50,
-            ratio: Default::default(),
-            login_state: Default::default(),
-            qrcode_img: Default::default(),
-            uid_str: Default::default(),
-            user_meta: Default::default(),
+            task_status_receiver: None,
+            executor: None,
+            task_ongoing: false,
+            message: "请开始任务".into(),
+            ratio: 0.0,
+            web_total: 0,
+            db_total: 0,
         }
     }
 }
@@ -131,57 +78,30 @@ impl Core {
         .unwrap();
         Ok(())
     }
-}
 
-fn set_font(cc: &eframe::CreationContext) {
-    let mut fonts = egui::FontDefinitions::default();
-    fonts.font_data.insert(
-        "source".into(),
-        Arc::new(egui::FontData::from_static(include_bytes!(
-            "../../res/fonts/SourceHanSansCN-Medium.otf"
-        ))),
-    );
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .push("source".into());
-    cc.egui_ctx.set_fonts(fonts);
-}
-
-impl eframe::App for Core {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        match self.state {
-            MainState::Unlogined => self.when_unlogged(ctx, _frame),
-            MainState::Logining => self.when_logging(ctx, _frame),
-            MainState::Logged => self.when_logined(ctx, _frame),
-        }
-        ctx.request_repaint_after(Duration::from_millis(200));
-    }
-}
-
-impl Core {
-    fn when_logined(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let task_status: Option<TaskResponse> = match self
-            .task_status_receiver
-            .as_mut()
-            .expect("core.status must be Some(_), bugs in there")
-            .try_recv()
-        {
-            Ok(status) => Some(status),
-            Err(TryRecvError::Empty) => None,
-            Err(e) => panic!("{}", e),
+    fn handle_task_responses(&mut self) {
+        let task_status: Option<TaskResponse> = match self.task_status_receiver.as_mut() {
+            Some(receiver) => match receiver.try_recv() {
+                Ok(status) => Some(status),
+                Err(TryRecvError::Empty) => None,
+                Err(e) => panic!("{}", e),
+            },
+            None => return,
         };
+
         if let Some(task_status) = task_status {
             match task_status {
                 TaskResponse::SumOfFavDB(web_total, db_total) => {
                     self.web_total = web_total;
                     self.db_total = db_total;
-                    if self.db_end == 0 {
-                        self.db_end = self.db_total;
+                    if let Some(tab) = self.tabs[0].as_any_mut().downcast_mut::<BackupFavTab>() {
+                        tab.set_web_total(web_total);
                     }
-                    if self.web_end == 0 {
-                        self.web_end = self.web_total;
+                    if let Some(tab) = self.tabs[2]
+                        .as_any_mut()
+                        .downcast_mut::<ExportFromLocalTab>()
+                    {
+                        tab.set_db_total(db_total);
                     }
                     self.message = format!(
                         "账号共 {} 条收藏\n本地保存有 {} 条收藏",
@@ -203,183 +123,61 @@ impl Core {
                     );
                 }
                 TaskResponse::Error(msg) => {
+                    self.task_ongoing = false;
                     self.message = msg.to_string();
                 }
                 TaskResponse::UserMeta(id, screen_name, avatar) => {
-                    self.user_meta = Some((id, screen_name, avatar))
+                    // TODO: how to show user meta?
                 }
             }
         }
+    }
+}
 
+fn set_font(cc: &eframe::CreationContext) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "source".into(),
+        egui::FontData::from_static(include_bytes!("../../res/fonts/SourceHanSansCN-Medium.otf"))
+            .into(),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .push("source".into());
+    cc.egui_ctx.set_fonts(fonts);
+}
+
+impl eframe::App for Core {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.handle_task_responses();
+        self.when_logined(ctx, frame);
+        ctx.request_repaint_after(Duration::from_millis(200));
+    }
+}
+
+impl Core {
+    fn when_logined(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| ui.heading("WeiBack"));
             ui.add_enabled_ui(!self.task_ongoing, |ui| {
                 ui.group(|ui| {
                     ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.tab_type, TabType::BackUpFav, "  备份收藏  ");
-                        ui.selectable_value(
-                            &mut self.tab_type,
-                            TabType::BackUpUser,
-                            "  备份用户  ",
-                        );
-                        ui.selectable_value(
-                            &mut self.tab_type,
-                            TabType::ExportFromLocal,
-                            "  本地导出  ",
-                        );
-                        ui.selectable_value(&mut self.tab_type, TabType::About, "      关于      ");
+                        for (i, tab) in self.tabs.iter().enumerate() {
+                            ui.selectable_value(&mut self.current_tab_idx, i, tab.name());
+                        }
                     });
 
-                    if self.tab_type == TabType::About {
-                        use egui::special_emojis;
-                        ui.heading("WeiBack-rs");
-                        ui.label("WeiBack-rs 是一个开源微博备份工具。");
-                        ui.label(format!(
-                            "SUPPORTED PLATFORM: {} Linux/{} Windows",
-                            special_emojis::OS_LINUX,
-                            special_emojis::OS_WINDOWS
-                        ));
-                        ui.label(format!(
-                            "You can build by yourself on {} macOS",
-                            special_emojis::OS_APPLE
-                        ));
-                        ui.label("AUTHER: Shapooo");
-                        ui.label("LICENSE: MIT");
-                        ui.hyperlink_to(
-                            format!("{} REPOSITORY LINK", special_emojis::GITHUB),
-                            "https://github.com/shapooo/weiback-rs",
-                        );
-                    } else {
-                        ui.horizontal(|ui| {
-                            ui.label("图片清晰度：");
-                            ui.selectable_value(&mut self.image_definition, 0, "最低");
-                            ui.selectable_value(&mut self.image_definition, 1, "中等");
-                            ui.selectable_value(&mut self.image_definition, 2, "最高");
-                        });
-                        if self.tab_type == TabType::ExportFromLocal {
-                            ui.checkbox(&mut self.reverse, "按时间逆序")
-                                .on_hover_text("时间逆序即最上方的微博为最新的微博");
-                            if ui.button("对本地微博取消收藏").clicked() {
-                                self.task_ongoing = true;
-                                self.executor
-                                    .as_ref()
-                                    .expect("core.executor must be unwrapable, bugs in there")
-                                    .unfavorite_posts();
-                            }
-                        } else {
-                            ui.checkbox(&mut self.with_pic, "同时下载图片");
-                        }
-
-                        if self.tab_type == TabType::BackUpUser {
-                            ui.horizontal(|ui| {
-                                ui.label("下载用户ID，默认自己：");
-                                let uid: i64 = (self.uid_str.len() == 10)
-                                    .then(|| self.uid_str.parse().ok())
-                                    .flatten()
-                                    .unwrap_or_default();
-                                match (uid, self.user_meta.as_ref()) {
-                                    (0, _) => {
-                                        ui.text_edit_singleline(&mut self.uid_str);
-                                    }
-                                    (uid, Some((id, screen_name, avatar))) if &uid == id => {
-                                        ui.text_edit_singleline(&mut self.uid_str)
-                                            .on_hover_ui_at_pointer(|ui| {
-                                                let handle = &ui.ctx().load_texture(
-                                                    "avatar",
-                                                    avatar.clone(),
-                                                    Default::default(),
-                                                );
-                                                ui.image(handle);
-                                                ui.label(screen_name);
-                                            });
-                                    }
-                                    (uid, _) => {
-                                        self.executor.as_ref().unwrap().get_user_meta(uid);
-                                        ui.text_edit_singleline(&mut self.uid_str);
-                                    }
-                                };
-                            });
-                        } else {
-                            ui.collapsing("高级设置", |ui| {
-                                ui.horizontal(|ui| {
-                                    if self.tab_type == TabType::ExportFromLocal {
-                                        ui.label("导出范围：");
-                                    } else {
-                                        ui.label("下载范围：");
-                                    }
-
-                                    let (start, end, total, speed) =
-                                        if self.tab_type == TabType::BackUpFav {
-                                            (
-                                                &mut self.web_start,
-                                                &mut self.web_end,
-                                                (self.web_total + 19) / 20 * 20,
-                                                20,
-                                            )
-                                        } else {
-                                            (
-                                                &mut self.db_start,
-                                                &mut self.db_end,
-                                                self.db_total,
-                                                self.period,
-                                            )
-                                        };
-
-                                    ui.add(egui::DragValue::new(start).range(1..=*end).speed(20));
-                                    ui.label("-");
-                                    ui.add(
-                                        egui::DragValue::new(end).range(speed..=total).speed(speed),
-                                    )
-                                });
-                                if self.tab_type == TabType::ExportFromLocal {
-                                    ui.add(
-                                        egui::Slider::new(&mut self.period, 10..=200).text("每页"),
-                                    )
-                                    .on_hover_text("导出时默认50条博文分割为一个html文件");
-                                }
-                            });
-                        }
-                    }
-                });
-            });
-            ui.add_enabled_ui(!self.task_ongoing, |ui| {
-                ui.vertical_centered(|ui| {
-                    if ui.button("开始").clicked() {
+                    let tab = &mut self.tabs[self.current_tab_idx];
+                    if let Some(task) = tab.ui(ui) {
                         self.task_ongoing = true;
-                        match self.tab_type {
-                            TabType::BackUpFav => {
-                                self.executor
-                                    .as_ref()
-                                    .expect("core.executor must be unwrapable, bugs in there")
-                                    .backup_fav(
-                                        self.web_start..=self.web_end,
-                                        self.with_pic,
-                                        self.image_definition,
-                                    );
-                            }
-                            TabType::BackUpUser => {
-                                let uid = if self.uid_str.is_empty() {
-                                    0
-                                } else {
-                                    self.uid_str.parse().unwrap()
-                                };
-                                self.executor
-                                    .as_ref()
-                                    .expect("core.executor must be unwrapable, bugs in there")
-                                    .backup_user(uid, self.with_pic, self.image_definition)
-                            }
-                            TabType::ExportFromLocal => {
-                                self.executor
-                                    .as_ref()
-                                    .expect("core.executor must be unwrapable, bugs in there")
-                                    .export_from_local(
-                                        self.db_start..=self.db_end,
-                                        self.reverse,
-                                        self.image_definition,
-                                    );
-                            }
-                            _ => {}
-                        }
+                        self.ratio = 0.0;
+                        self.message = "任务开始...".into();
+                        self.executor
+                            .as_ref()
+                            .expect("core.executor must be unwrapable, bugs in there")
+                            .send_task(task);
                     }
                 });
             });
@@ -389,81 +187,26 @@ impl Core {
             });
         });
     }
+}
 
-    fn when_unlogged(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let check_res = if !self.login_checked {
-            self.login_checked = true;
-            get_login_info().unwrap()
-        } else {
-            None
-        };
-        if let Some(login_info) = check_res {
-            let (task_status_sender, task_status_receiver) = channel(100);
-            let executor = Executor::new(login_info, task_status_sender);
-            self.task_status_receiver = Some(task_status_receiver);
-            self.executor = Some(executor);
-            self.state = MainState::Logged;
-        } else {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.vertical_centered(|ui| ui.heading("WeiBack"));
-                    ui.label("还未登录，请重新登录！\n\n\n\n\n\n");
-                    if ui.button("登录").clicked() {
-                        self.state = MainState::Logining;
-                    }
-                });
-            });
-        }
+// Trait object `dyn Tab` doesn't have a constant size known at compile-time,
+// so we need to implement `as_any_mut` to downcast it.
+trait AsAny: 'static {
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: 'static> AsAny for T {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Tab for Box<dyn Tab> {
+    fn name(&self) -> &str {
+        self.as_ref().name()
     }
 
-    fn when_logging(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let login_state = self
-            .login_state
-            .get_or_insert_with(|| {
-                let login_state: Arc<RwLock<LoginState>> = Default::default();
-                let res = login_state.clone();
-                std::thread::spawn(move || {
-                    let mut loginator = Loginator::new();
-                    let qrcode = loginator.get_login_qrcode().unwrap();
-                    *login_state.write().unwrap() = LoginState::QRCodeGotten(qrcode);
-                    loginator.wait_confirm().unwrap();
-                    *login_state.write().unwrap() = LoginState::Confirmed;
-                    let login_info = loginator.wait_login().unwrap();
-                    *login_state.write().unwrap() = LoginState::Logged(login_info);
-                });
-                res
-            })
-            .try_read()
-            .ok()
-            .map(|a| a.clone());
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(login_state) = login_state {
-                ui.vertical_centered(|ui| match login_state {
-                    LoginState::GettingQRCode => {
-                        ui.label("正在获取二维码，稍等...");
-                    }
-                    LoginState::QRCodeGotten(image_data) => {
-                        let qrcode: &_ = self.qrcode_img.get_or_insert_with(|| {
-                            ui.ctx()
-                                .load_texture("login_qrcode", image_data, Default::default())
-                        });
-                        ui.image(qrcode);
-                        ui.label("请尽快用手机扫描二维码并确认");
-                    }
-                    LoginState::Confirmed => {
-                        ui.label("扫码成功，登录中...");
-                    }
-                    LoginState::Logged(login_info) => {
-                        let (task_status_sender, task_status_receiver) = channel(100);
-                        let executor = Executor::new(login_info, task_status_sender);
-                        self.task_status_receiver = Some(task_status_receiver);
-                        self.executor = Some(executor);
-                        self.state = MainState::Logged;
-                        self.qrcode_img = None;
-                        self.login_state = None;
-                    }
-                });
-            }
-        });
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<crate::app::Task> {
+        self.as_mut().ui(ui)
     }
 }
