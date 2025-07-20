@@ -1,3 +1,4 @@
+use chrono::DateTime;
 use std::ops::DerefMut;
 
 use serde_json::{Value, from_str, to_string};
@@ -67,7 +68,7 @@ impl TryFrom<Post> for PostStorage {
             geo: post.geo,
             page_info: post.page_info,
             unfavorited: post.unfavorited,
-            created_at: post.created_at.to_string(), //TODO
+            created_at: post.created_at.to_rfc3339(),
             retweeted_id: post.retweeted_status.map(|r| r.id),
             uid: post.attitudes_count,
         })
@@ -103,7 +104,7 @@ impl TryInto<Post> for PostStorage {
             geo: self.geo,
             page_info: self.page_info,
             unfavorited: self.unfavorited,
-            created_at: Default::default(), //TODO
+            created_at: DateTime::parse_from_rfc3339(&self.created_at)?,
             retweeted_status: None,
             user: None,
         })
