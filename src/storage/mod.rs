@@ -1,10 +1,12 @@
+#![allow(async_fn_in_trait)]
 mod post_storage;
 mod processer;
 mod user_storage;
 
 use std::env::current_exe;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::fs;
 
 use bytes::Bytes;
 use log::{debug, info};
@@ -14,6 +16,7 @@ use crate::{
     error::{Error, Result},
     exporter::ExportOptions,
     models::{Picture, Post, User},
+    utils::url_to_path,
 };
 use processer::Processer;
 
@@ -116,12 +119,28 @@ impl Storage for Arc<StorageImpl> {
         .collect())
     }
 
+    // TODO: clarify semantic of Result and Option
     async fn get_picture_blob(&self, url: &str) -> Result<Option<Bytes>> {
-        todo!()
+        let path = url_to_path(url)?;
+        let relative_path = Path::new(&path).strip_prefix("/").unwrap();
+        let path = self.picture_path.join(relative_path);
+        match tokio::fs::read(&path).await {
+            Ok(blob) => Ok(Some(Bytes::from(blob))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn save_picture(&self, picture: &Picture) -> Result<()> {
-        todo!()
+        let path = url_to_path(picture.meta.url())?;
+        let relative_path = Path::new(&path).strip_prefix("/").unwrap();
+        let path = self.picture_path.join(relative_path);
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        tokio::fs::write(&path, &picture.blob).await?;
+        debug!("picture {} saved to {}", picture.meta.url(), path.display());
+        Ok(())
     }
 }
 
@@ -139,7 +158,7 @@ async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
     }
 }
 
-async fn create_db_pool(db_path: &PathBuf) -> Result<SqlitePool> {
+async fn create_db_pool(db_path: &Path) -> Result<SqlitePool> {
     debug!("initing...");
     let db_path = std::env::current_exe()
         .unwrap()
