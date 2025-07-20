@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::error::{Error, Result};
 use crate::models::{Picture, PictureDefinition};
-use crate::utils::pic_url_to_filename;
+use crate::utils::url_to_filename;
 use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
@@ -85,7 +85,7 @@ impl TryFrom<Picture> for HTMLPicture {
 
     fn try_from(value: Picture) -> Result<Self> {
         let url_str = value.meta.url();
-        let file_name = pic_url_to_filename(url_str)?.to_string();
+        let file_name = url_to_filename(url_str)?;
 
         Ok(HTMLPicture {
             file_name,

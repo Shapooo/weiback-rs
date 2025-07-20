@@ -24,6 +24,9 @@ pub enum Error {
     #[error("Image processing error: {0}")]
     Image(#[from] image::ImageError),
 
+    #[error("Url parsing error: {0}")]
+    UrlParse(#[from] url::ParseError),
+
     #[error("Tokio task-related error: {0}")]
     Tokio(String),
 
