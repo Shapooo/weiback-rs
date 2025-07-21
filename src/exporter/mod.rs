@@ -1,7 +1,7 @@
 #![allow(async_fn_in_trait)]
 use std::io::ErrorKind;
 use std::ops::RangeInclusive;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bytes::Bytes;
 use futures::future::join_all;
@@ -34,24 +34,24 @@ impl Exporter for ExporterImpl {
 where {
         info!(
             "export {}.html to {}",
-            html_name.as_ref(),
-            path.as_ref().display()
+            options.export_task_name,
+            options.export_path.display()
         );
         let mut dir_builder = DirBuilder::new();
         dir_builder.recursive(true);
-        if !path.as_ref().exists() {
-            dir_builder.create(path.as_ref()).await?
-        } else if !path.as_ref().is_dir() {
+        if !options.export_path.exists() {
+            dir_builder.create(options.export_path.as_path()).await?
+        } else if !options.export_path.is_dir() {
             return Err(std::io::Error::new(
                 ErrorKind::AlreadyExists,
                 "export folder is a already exist file",
             )
             .into());
         }
-        let html_file_name = String::from(html_name.as_ref()) + ".html";
-        let resources_dir_name = String::from(html_name.as_ref()) + "_files";
+        let html_file_name = options.export_task_name.to_owned() + ".html";
+        let resources_dir_name = options.export_task_name.to_owned() + "_files";
 
-        let mut operating_path = PathBuf::from(path.as_ref());
+        let mut operating_path = options.export_path.to_owned();
         operating_path.push(html_file_name);
         let mut html_file = File::create(operating_path.as_path()).await?;
         html_file.write_all(page.html.as_bytes()).await?;
@@ -150,7 +150,7 @@ impl ExportOptions {
 
 #[cfg(test)]
 mod exporter_test {
-    use super::{Exporter, ExporterImpl, HTMLPage, HTMLPicture};
+    use super::{ExportOptions, Exporter, ExporterImpl, HTMLPage, HTMLPicture};
     #[tokio::test]
     async fn export_page() {
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
@@ -163,9 +163,11 @@ mod exporter_test {
             .into_iter()
             .collect(),
         };
-        ExporterImpl::export_page("test_task", page, "./export_page")
-            .await
-            .unwrap();
+        let exporter = ExporterImpl {};
+        let options = ExportOptions::default()
+            .export_task_name("test_task".into())
+            .export_path("./export_page".into());
+        exporter.export_page(page, &options).await.unwrap();
         std::fs::remove_dir_all("export_page").unwrap();
     }
 }
