@@ -13,8 +13,8 @@ pub enum PictureDefinition {
     Mw2000,
 }
 
-impl From<PictureDefinition> for &str {
-    fn from(value: PictureDefinition) -> Self {
+impl From<&PictureDefinition> for &str {
+    fn from(value: &PictureDefinition) -> Self {
         match value {
             PictureDefinition::Thumbnail => "thumbnail",
             PictureDefinition::Bmiddle => "bmiddle",
