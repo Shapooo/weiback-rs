@@ -1,6 +1,7 @@
 pub mod app;
 pub mod error;
 pub mod exporter;
+pub mod media_downloader;
 pub mod models;
 pub mod processing;
 pub mod storage;
