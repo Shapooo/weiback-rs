@@ -1,5 +1,4 @@
 pub mod options;
-// mod task_handler;
 
 use std::time::Duration;
 
@@ -59,7 +58,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
         exporter: E,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
-        let processer = PostProcesser::new(api_client.clone(), storage.clone());
+        let processer = PostProcesser::new(api_client.clone(), storage.clone())?;
         Ok(TaskHandler {
             api_client,
             storage,
@@ -185,46 +184,44 @@ impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
             .await
     }
 
-    // export favorite posts from local database
-    pub async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
-        let task_name = format!("weiback-{}", chrono::Local::now().format("%F-%H-%M"));
-        let target_dir = std::env::current_dir()?.join(task_name);
-
-        let local_posts = self.load_fav_posts_from_db(&options).await?;
-        let posts_sum = local_posts.len();
+    pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
+        let posts_sum = self.get_db_total_num().await?;
         info!("fetched {} posts from local", posts_sum);
+        // let target_dir = options.export_path.clone();
+        let task_name = options.export_task_name.to_owned();
+        let limit = options.posts_per_html;
 
+        let mut offset = 0;
         let mut index = 1;
         loop {
-            let subtask_name = format!("weiback-{index}");
-            if local_posts.len() < SAVING_PERIOD {
-                let html = self.processer.generate_html(&local_posts, &options).await?;
-                // self.exporter
-                //     .export_page(&subtask_name, &html, &target_dir)
-                //     .await?;
-                // TODO
-                // WTF
+            let mut opt = options.clone();
+            opt.range = Some(offset..=offset + limit);
+            let local_posts = self.load_fav_posts_from_db(&opt).await?;
+            if local_posts.is_empty() {
                 break;
-            } else {
-                let html = self.processer.generate_html(&local_posts, &options).await?;
-                // self.exporter
-                //     .export_page(&subtask_name, &html, &target_dir)
-                //     .await?;
-                // TODO
-                // WTF
             }
-            let progress = (posts_sum - local_posts.len()) as f32 / posts_sum as f32;
+
+            let subtask_name = format!("{task_name}_{index}");
+            options.export_task_name = subtask_name;
+            let html = self.processer.generate_html(local_posts, &options).await?;
+            self.exporter.export_page(html, &options).await?;
+
+            let progress = (offset + limit) as f32 / posts_sum as f32;
             self.task_status_sender
                 .send(TaskResponse::InProgress(
                     progress,
                     format!(
                         "已处理{}条，共{}条...\n可能需要下载图片",
-                        posts_sum - local_posts.len(),
+                        offset + limit,
                         posts_sum
                     ),
                 ))
                 .await?;
+            offset += limit;
             index += 1;
+            if offset >= posts_sum {
+                break;
+            }
         }
         Ok(())
     }
