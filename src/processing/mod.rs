@@ -66,8 +66,12 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
         Ok(())
     }
 
-    pub async fn generate_html(&self, posts: &[Post], options: &ExportOptions) -> Result<HTMLPage> {
-        let pic_metas = self.extract_all_pic_metas(posts, options.pic_quality);
+    pub async fn generate_html(
+        &self,
+        posts: Vec<Post>,
+        options: &ExportOptions,
+    ) -> Result<HTMLPage> {
+        let pic_metas = self.extract_all_pic_metas(&posts, options.pic_quality);
         let pic = pic_metas
             .into_iter()
             .map(|m| self.load_picture_from_local(m));

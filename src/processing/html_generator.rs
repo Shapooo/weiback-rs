@@ -1,12 +1,13 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use log::{debug, error};
 use serde_json::Value;
 use tera::{Context, Tera};
 
-use crate::error::Result;
+use super::pic_id_to_url;
+use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
 use crate::models::{PictureMeta, Post};
 use crate::utils::{
@@ -49,16 +50,45 @@ impl HTMLGenerator {
         self.emoji_map = Some(emoji_map);
     }
 
-    pub fn generate_posts(&self, _posts: &[Post], options: &ExportOptions) -> Result<String> {
-        let context = Context::new();
-        // context.insert("posts", &posts)
-        // TODO
-        // let context = Context::from_value(posts)?;
-        let html = self.templates.render("posts.html", &context)?;
+    fn generate_post(&self, mut post: Post, options: &ExportOptions) -> Result<String> {
+        let pic_folder = options.export_task_name.to_owned() + "_files";
+        let in_post_pic_paths = post
+            .pic_ids
+            .as_ref()
+            .map(|ids| {
+                let pic_infos = post
+                    .pic_infos
+                    .as_ref()
+                    .ok_or(Error::Other("()".to_string()))?; // TODO: err info
+                let ids = ids
+                    .iter()
+                    .map(|id| {
+                        let url = pic_id_to_url(id, pic_infos, &options.pic_quality)
+                            .ok_or(Error::Other("()".to_string()))?; //TODO
+                        let file_name = url_to_filename(url)?;
+                        let pic_location = pic_folder.to_owned() + "_files" + file_name.as_str();
+                        Ok(pic_location)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok::<Vec<_>, Error>(ids)
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        let mut context = Context::new();
+        post.text = self.trans_text(&post, PathBuf::from(pic_folder).as_ref())?;
+        context.insert("post", &post);
+        context.insert("pics", &in_post_pic_paths);
+        let html = self.templates.render("post.html", &context)?;
         Ok(html)
     }
 
-    pub fn generate_page(&self, posts: &str) -> Result<String> {
+    pub fn generate_page(&self, posts: Vec<Post>, options: &ExportOptions) -> Result<String> {
+        let posts = posts
+            .into_iter()
+            .map(|p| self.generate_post(p, options))
+            .collect::<Result<Vec<_>>>()?;
+        let posts = posts.join("");
         let mut context = Context::new();
         context.insert("html", &posts);
         let html = self.templates.render("page.html", &context)?;
