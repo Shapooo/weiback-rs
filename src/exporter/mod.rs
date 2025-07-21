@@ -1,3 +1,4 @@
+#![allow(async_fn_in_trait)]
 use std::io::ErrorKind;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
@@ -16,10 +17,7 @@ use crate::utils::url_to_filename;
 use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
-    async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
-    where
-        N: AsRef<str>,
-        P: AsRef<Path>;
+    async fn export_page(&self, page: HTMLPage, options: &ExportOptions) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -32,11 +30,8 @@ pub struct HTMLPage {
 }
 
 impl Exporter for ExporterImpl {
-    async fn export_page<N, P>(html_name: N, page: HTMLPage, path: P) -> Result<()>
-    where
-        N: AsRef<str>,
-        P: AsRef<Path>,
-    {
+    async fn export_page(&self, page: HTMLPage, options: &ExportOptions) -> Result<()>
+where {
         info!(
             "export {}.html to {}",
             html_name.as_ref(),
