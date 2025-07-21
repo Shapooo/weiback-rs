@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use once_cell::sync::Lazy;
+use regex::Regex;
 use url::Url;
 
 use crate::error::{Error, Result};
@@ -9,6 +11,17 @@ macro_rules! here {
         concat!("at ", file!(), " line ", line!(), " column ", column!())
     };
 }
+
+pub static NEWLINE_EXPR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n").unwrap());
+pub static URL_EXPR: Lazy<Regex> =
+    Lazy::new(|| Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}").unwrap());
+pub static AT_EXPR: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"@[\\u4e00-\\u9fa5|\\uE7C7-\\uE7F3|\\w_\\-·]+").unwrap());
+pub static EMOJI_EXPR: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\\[.*?\\])").unwrap());
+pub static EMAIL_EXPR: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\\.)+[A-Za-z]{2,6}").unwrap()
+});
+pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| Regex::new(r"#([^#]+)#").unwrap());
 
 pub fn url_to_path(url: &str) -> Result<String> {
     let url = Url::parse(strip_url_queries(url))?;
