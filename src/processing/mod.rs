@@ -8,7 +8,7 @@ use weibosdk_rs::WeiboAPI;
 
 use crate::app::options::TaskOptions;
 use crate::error::{Error, Result};
-use crate::exporter::{ExportOptions, HTMLPage};
+use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
 use crate::utils::EMOJI_EXPR;
@@ -44,7 +44,7 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
     }
 
     pub async fn process(&self, posts: Vec<Post>, options: &TaskOptions) -> Result<()> {
-        let pic_metas = self.extract_pic_metas(&posts, options.pic_quality);
+        let pic_metas = self.extract_all_pic_metas(&posts, options.pic_quality);
 
         for meta in pic_metas {
             self.download_pic_to_local(meta).await?;
@@ -67,7 +67,7 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
     }
 
     pub async fn generate_html(&self, posts: &[Post], options: &ExportOptions) -> Result<HTMLPage> {
-        let pic_metas = self.extract_pic_metas(posts, options.pic_quality);
+        let pic_metas = self.extract_all_pic_metas(posts, options.pic_quality);
         let pic = pic_metas
             .into_iter()
             .map(|m| self.load_picture_from_local(m));
@@ -76,9 +76,15 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
             .await
             .into_iter()
             .partition_result();
-        let pics: Vec<_> = pics.into_iter().filter_map(|p| p).collect();
-        let content = self.html_generator.generate_posts(posts, options)?;
-        todo!()
+        let pics = pics
+            .into_iter()
+            .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
+            .collect::<Result<Vec<_>>>()?;
+        let content = self.html_generator.generate_page(posts, options)?;
+        Ok(HTMLPage {
+            html: content,
+            pics,
+        })
     }
 
     fn extract_emoji_urls(&self, text: &str) -> Vec<&str> {
@@ -90,49 +96,27 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
             .collect()
     }
 
-    fn extract_pic_metas(
+    fn extract_all_pic_metas(
         &self,
         posts: &[Post],
         definition: PictureDefinition,
     ) -> HashSet<PictureMeta> {
         let mut pic_metas: HashSet<PictureMeta> = posts
             .into_iter()
-            .flat_map(|post| {
-                self.extract_in_post_pic_urls(post, definition)
-                    .into_iter()
-                    .map(|url| PictureMeta::in_post(url.to_string(), post.id))
-            })
+            .flat_map(|post| extract_in_post_pic_metas(post, definition))
             .collect();
         let emoji_metas = posts.into_iter().flat_map(|post| {
             self.extract_emoji_urls(&post.text)
                 .into_iter()
                 .map(|url| PictureMeta::other(url.to_string()))
         });
-        // TODO: get avatars
+        let avatar_metas = posts
+            .into_iter()
+            .flat_map(extract_avatar_metas)
+            .collect::<Vec<_>>();
         pic_metas.extend(emoji_metas);
+        pic_metas.extend(avatar_metas);
         pic_metas
-    }
-
-    fn extract_in_post_pic_urls<'a>(
-        &self,
-        post: &'a Post,
-        definition: PictureDefinition,
-    ) -> Vec<&'a str> {
-        let mut pic_vec = post
-            .pic_ids
-            .as_ref()
-            .map(|pic_ids| {
-                post.pic_infos
-                    .as_ref()
-                    .map(|pic_infos| Self::pic_ids_to_urls(pic_ids, pic_infos, definition.into()))
-            })
-            .flatten()
-            .unwrap_or_default();
-        if let Some(retweeted_post) = &post.retweeted_status {
-            let mut retweeted_pic_vec = self.extract_in_post_pic_urls(retweeted_post, definition);
-            pic_vec.append(&mut retweeted_pic_vec);
-        }
-        pic_vec
     }
 
     async fn download_pic_to_local(&self, pic_meta: PictureMeta) -> Result<()> {
@@ -193,27 +177,65 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
         posts: &[Post],
         definition: PictureDefinition,
     ) -> Result<Vec<Picture>> {
-        let pic_metas = self.extract_pic_metas(posts, definition);
+        let pic_metas = self.extract_all_pic_metas(posts, definition);
         let mut pics = Vec::new();
         for metas in pic_metas {
             pics.push(self.load_picture_from_local_or_server(metas).await?);
         }
         Ok(pics)
     }
+}
 
-    fn pic_ids_to_urls<'a>(
-        pic_ids: &'a [String],
-        pic_infos: &'a HashMap<String, Value>,
-        quality: &'a str,
-    ) -> Vec<&'a str> {
-        pic_ids
-            .iter()
-            .filter_map(|id| {
-                pic_infos
-                    .get(id)
-                    .map(|v| v[quality]["url"].as_str())
-                    .flatten()
-            })
-            .collect()
+pub(self) fn pic_id_to_url<'a>(
+    pic_id: &'a str,
+    pic_infos: &'a HashMap<String, Value>,
+    quality: &'a PictureDefinition,
+) -> Option<&'a str> {
+    pic_infos
+        .get(pic_id)
+        .map(|v| v[Into::<&str>::into(quality)]["url"].as_str())
+        .flatten()
+}
+
+fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
+    let mut res = Vec::new();
+    if let Some(user) = post.user.as_ref() {
+        let meta = PictureMeta::avatar(user.avatar_hd.to_owned(), user.id);
+        res.push(meta)
     }
+    post.retweeted_status
+        .as_ref()
+        .map(|re| re.user.as_ref())
+        .flatten()
+        .map(|u| {
+            let meta = PictureMeta::avatar(u.avatar_hd.to_owned(), u.id);
+            res.push(meta);
+        });
+    res
+}
+
+fn extract_in_post_pic_metas<'a>(
+    post: &'a Post,
+    definition: PictureDefinition,
+) -> Vec<PictureMeta> {
+    let pic_vec = vec![];
+    let mut pic_vec = post
+        .pic_ids
+        .as_ref()
+        .unwrap_or(&pic_vec)
+        .iter()
+        .filter_map(|id| {
+            let pic_infos = HashMap::new();
+            let pic_infos = post.pic_infos.as_ref().unwrap_or(&pic_infos);
+            pic_id_to_url(id, &pic_infos, &definition)
+                .map(|url| PictureMeta::in_post(url.to_string(), post.id))
+        })
+        .collect::<Vec<_>>();
+    // TODO: error handle
+
+    if let Some(retweeted_post) = &post.retweeted_status {
+        let mut retweeted_pic_vec = extract_in_post_pic_metas(retweeted_post, definition);
+        pic_vec.append(&mut retweeted_pic_vec);
+    }
+    pic_vec
 }
