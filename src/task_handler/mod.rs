@@ -39,7 +39,7 @@ pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader>
     storage: S,
     exporter: E,
     processer: PostProcesser<W, S, D>,
-    task_status_sender: Sender<Result<Message>>,
+    msg_sender: Sender<Result<Message>>,
     uid: Option<i64>,
 }
 
@@ -49,7 +49,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         storage: S,
         exporter: E,
         downloader: D,
-        task_status_sender: Sender<Result<Message>>,
+        msg_sender: Sender<Result<Message>>,
     ) -> Result<Self> {
         let processer = PostProcesser::new(api_client.clone(), storage.clone(), downloader)?;
         Ok(TaskHandler {
@@ -57,7 +57,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             storage,
             exporter,
             processer,
-            task_status_sender,
+            msg_sender,
             uid: None,
         })
     }
@@ -122,7 +122,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     pub async fn unfavorite_posts(&self) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
-        self.task_status_sender
+        self.msg_sender
             .send(Ok(Message::InProgress(
                 0.,
                 format!("即将开始，共{len}条..."),
@@ -138,7 +138,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             info!("post {id} unfavorited");
             tokio::time::sleep(OTHER_TASK_INTERVAL).await;
             let progress = (i) as f32 / len as f32;
-            self.task_status_sender
+            self.msg_sender
                 .send(Ok(Message::InProgress(
                     progress,
                     format!("已处理{i}条，共{len}条..."),
@@ -160,7 +160,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             if len == 0 {
                 break;
             }
-            self.task_status_sender
+            self.msg_sender
                 .send(Ok(Message::InProgress(
                     0.0, // Can't calculate progress without total pages
                     format!("已备份{}页", page),
@@ -200,7 +200,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             self.exporter.export_page(html, &options).await?;
 
             let progress = (offset + limit) as f32 / posts_sum as f32;
-            self.task_status_sender
+            self.msg_sender
                 .send(Ok(Message::InProgress(
                     progress,
                     format!(
@@ -234,7 +234,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             total_downloaded += posts_sum;
             info!("fetched {} posts in {}th page", posts_sum, page);
 
-            self.task_status_sender
+            self.msg_sender
                 .send(Ok(Message::InProgress(
                     i as f32 / total_pages,
                     format!("已下载第{page}页...耐心等待，先干点别的"),

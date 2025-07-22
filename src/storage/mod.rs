@@ -11,13 +11,13 @@ use std::sync::Arc;
 use bytes::Bytes;
 use log::{debug, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
+use tokio::sync::mpsc;
 
-use crate::{
-    error::{Error, Result},
-    exporter::ExportOptions,
-    models::{Picture, Post, User},
-    utils::url_to_path,
-};
+use crate::error::{Error, Result};
+use crate::exporter::ExportOptions;
+use crate::message::Message;
+use crate::models::{Picture, Post, User};
+use crate::utils::url_to_path;
 use processer::Processer;
 
 const VALIDE_DB_VERSION: i64 = 2;
@@ -42,16 +42,17 @@ pub struct StorageImpl {
     db_pool: SqlitePool,
     picture_path: PathBuf,
     processer: Processer,
+    msg_sender: mpsc::Sender<Result<Message>>,
 }
 
 impl StorageImpl {
-    pub async fn new() -> Result<Self> {
-        let db_pool =
-            create_db_pool(&current_exe().unwrap().parent().unwrap().join(DATABASE)).await?;
+    pub async fn new(msg_sender: mpsc::Sender<Result<Message>>) -> Result<Self> {
+        let db_pool = create_db_pool().await?;
         Ok(StorageImpl {
             processer: Processer::new(db_pool.clone()),
             db_pool,
             picture_path: current_exe().unwrap().parent().unwrap().join(PICTURE_PATH),
+            msg_sender,
         })
     }
 }
@@ -159,7 +160,7 @@ async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
     }
 }
 
-async fn create_db_pool(db_path: &Path) -> Result<SqlitePool> {
+async fn create_db_pool() -> Result<SqlitePool> {
     debug!("initing...");
     let db_path = std::env::current_exe()
         .unwrap()
