@@ -5,7 +5,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Sender, channel};
 use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers, session::Session};
 
-use crate::app::{Task, TaskHandler, TaskResponse};
+use crate::task_handler::{Task, TaskHandler, TaskResponse};
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
 use crate::storage::StorageImpl;

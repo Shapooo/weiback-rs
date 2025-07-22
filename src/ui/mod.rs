@@ -13,7 +13,7 @@ use eframe::{
 use log::info;
 use tokio::sync::mpsc::{Receiver, channel, error::TryRecvError};
 
-use crate::app::TaskResponse;
+use crate::task_handler::TaskResponse;
 use tabs::{
     Tab, about_tab::AboutTab, backup_fav_tab::BackupFavTab, backup_user_tab::BackupUserTab,
     export_from_local_tab::ExportFromLocalTab,
@@ -206,7 +206,7 @@ impl Tab for Box<dyn Tab> {
         self.as_ref().name()
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<crate::app::Task> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<Task> {
         self.as_mut().ui(ui)
     }
 }
