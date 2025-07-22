@@ -2,7 +2,6 @@ pub mod options;
 
 use std::time::Duration;
 
-use egui::ImageData;
 use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
@@ -10,6 +9,7 @@ use weibosdk_rs::WeiboAPI;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
+use crate::message::Message;
 use crate::models::Post;
 use crate::processing::PostProcesser;
 use crate::storage::Storage;
@@ -33,22 +33,13 @@ pub enum Task {
     BackupUser(TaskOptions),
 }
 
-#[allow(unused)]
-pub enum TaskResponse {
-    SumOfFavDB(u32, u32),             // remain sum of favorite in weibo and local db
-    UserMeta(i64, String, ImageData), // screen name and avatar picture
-    InProgress(f32, String),          // long time task is in progress
-    Finished(u32, u32),               // long time task is finished
-    Error(Error),                     // error occurs
-}
-
 #[derive(Debug)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
     api_client: Option<W>,
     storage: S,
     exporter: E,
     processer: PostProcesser<W, S, D>,
-    task_status_sender: Sender<TaskResponse>,
+    task_status_sender: Sender<Message>,
     uid: Option<i64>,
 }
 
@@ -58,7 +49,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         storage: S,
         exporter: E,
         downloader: D,
-        task_status_sender: Sender<TaskResponse>,
+        task_status_sender: Sender<Message>,
     ) -> Result<Self> {
         let processer = PostProcesser::new(api_client.clone(), storage.clone(), downloader)?;
         Ok(TaskHandler {
@@ -132,10 +123,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         self.task_status_sender
-            .send(TaskResponse::InProgress(
-                0.,
-                format!("即将开始，共{len}条..."),
-            ))
+            .send(Message::InProgress(0., format!("即将开始，共{len}条...")))
             .await?;
         for (mut i, id) in ids.into_iter().enumerate() {
             i = i + 1;
@@ -148,7 +136,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             tokio::time::sleep(OTHER_TASK_INTERVAL).await;
             let progress = (i) as f32 / len as f32;
             self.task_status_sender
-                .send(TaskResponse::InProgress(
+                .send(Message::InProgress(
                     progress,
                     format!("已处理{i}条，共{len}条..."),
                 ))
@@ -170,7 +158,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                 break;
             }
             self.task_status_sender
-                .send(TaskResponse::InProgress(
+                .send(Message::InProgress(
                     0.0, // Can't calculate progress without total pages
                     format!("已备份{}页", page),
                 ))
@@ -210,7 +198,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
             let progress = (offset + limit) as f32 / posts_sum as f32;
             self.task_status_sender
-                .send(TaskResponse::InProgress(
+                .send(Message::InProgress(
                     progress,
                     format!(
                         "已处理{}条，共{}条...\n可能需要下载图片",
@@ -244,7 +232,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             info!("fetched {} posts in {}th page", posts_sum, page);
 
             self.task_status_sender
-                .send(TaskResponse::InProgress(
+                .send(Message::InProgress(
                     i as f32 / total_pages,
                     format!("已下载第{page}页...耐心等待，先干点别的"),
                 ))
