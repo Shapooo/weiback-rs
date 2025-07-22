@@ -3,7 +3,7 @@ pub mod backup_fav_tab;
 pub mod backup_user_tab;
 pub mod export_from_local_tab;
 
-use crate::task_handler::Task;
+use crate::core::Task;
 
 /// The trait that all tab must implement
 pub trait Tab {

@@ -5,12 +5,12 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Sender, channel};
 use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers, session::Session};
 
+use super::{Task, TaskHandler};
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
 use crate::message::Message;
 use crate::storage::StorageImpl;
-use crate::task_handler::{Task, TaskHandler};
 
 pub struct TaskProxy {
     rt: Runtime,

@@ -1,3 +1,4 @@
+pub mod core;
 pub mod error;
 pub mod exporter;
 pub mod media_downloader;
@@ -5,6 +6,5 @@ pub mod message;
 pub mod models;
 pub mod processing;
 pub mod storage;
-pub mod task_handler;
 pub mod ui;
 pub mod utils;

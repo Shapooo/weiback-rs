@@ -1,5 +1,4 @@
 mod tabs;
-mod task_proxy;
 
 use std::any::Any;
 use std::time::Duration;
@@ -12,16 +11,15 @@ use eframe::{
 use log::info;
 use tokio::sync::mpsc::{Receiver, channel, error::TryRecvError};
 
+use crate::core::{Task, TaskProxy};
 use crate::error::Result;
 use crate::message::Message;
-use crate::task_handler::Task;
 use tabs::{
     Tab, about_tab::AboutTab, backup_fav_tab::BackupFavTab, backup_user_tab::BackupUserTab,
     export_from_local_tab::ExportFromLocalTab,
 };
-use task_proxy::TaskProxy;
 
-pub struct Core {
+pub struct UI {
     tabs: Vec<Box<dyn Tab>>,
     current_tab_idx: usize,
 
@@ -36,7 +34,7 @@ pub struct Core {
     db_total: u32,
 }
 
-impl Default for Core {
+impl Default for UI {
     fn default() -> Self {
         let tabs: Vec<Box<dyn Tab>> = vec![
             Box::<BackupFavTab>::default(),
@@ -59,7 +57,7 @@ impl Default for Core {
     }
 }
 
-impl Core {
+impl UI {
     pub fn new() -> Self {
         Self::default()
     }
@@ -148,7 +146,7 @@ fn set_font(cc: &eframe::CreationContext) {
     cc.egui_ctx.set_fonts(fonts);
 }
 
-impl eframe::App for Core {
+impl eframe::App for UI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.handle_task_responses();
         self.when_logined(ctx, frame);
@@ -156,7 +154,7 @@ impl eframe::App for Core {
     }
 }
 
-impl Core {
+impl UI {
     fn when_logined(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| ui.heading("WeiBack"));
