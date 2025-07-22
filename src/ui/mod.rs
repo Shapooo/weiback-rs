@@ -12,6 +12,7 @@ use eframe::{
 use log::info;
 use tokio::sync::mpsc::{Receiver, channel, error::TryRecvError};
 
+use crate::error::Result;
 use crate::message::Message;
 use crate::task_handler::Task;
 use tabs::{
@@ -24,7 +25,7 @@ pub struct Core {
     tabs: Vec<Box<dyn Tab>>,
     current_tab_idx: usize,
 
-    task_status_receiver: Receiver<Message>,
+    task_status_receiver: Receiver<Result<Message>>,
     executor: TaskProxy,
     task_ongoing: bool,
 
@@ -81,7 +82,7 @@ impl Core {
     }
 
     fn handle_task_responses(&mut self) {
-        let task_status: Option<Message> = match self.task_status_receiver.try_recv() {
+        let task_status: Option<Result<Message>> = match self.task_status_receiver.try_recv() {
             Ok(status) => Some(status),
             Err(TryRecvError::Empty) => None,
             Err(e) => panic!("{}", e),
@@ -89,7 +90,7 @@ impl Core {
 
         if let Some(task_status) = task_status {
             match task_status {
-                Message::SumOfFavDB(web_total, db_total) => {
+                Ok(Message::SumOfFavDB(web_total, db_total)) => {
                     self.web_total = web_total;
                     self.db_total = db_total;
                     if let Some(tab) = self.tabs[0].as_any_mut().downcast_mut::<BackupFavTab>() {
@@ -106,11 +107,11 @@ impl Core {
                         self.web_total, self.db_total
                     );
                 }
-                Message::InProgress(ratio, msg) => {
+                Ok(Message::InProgress(ratio, msg)) => {
                     self.ratio = ratio;
                     self.message = msg;
                 }
-                Message::Finished(web_total, db_total) => {
+                Ok(Message::Finished(web_total, db_total)) => {
                     self.ratio = 1.;
                     self.task_ongoing = false;
                     self.web_total = web_total;
@@ -120,12 +121,12 @@ impl Core {
                         self.web_total, self.db_total
                     );
                 }
-                Message::Error(msg) => {
+                Ok(Message::UserMeta(_id, _screen_name, _avatar)) => {
+                    // TODO: how to show user meta?
+                }
+                Err(msg) => {
                     self.task_ongoing = false;
                     self.message = msg.to_string();
-                }
-                Message::UserMeta(_id, _screen_name, _avatar) => {
-                    // TODO: how to show user meta?
                 }
             }
         }
