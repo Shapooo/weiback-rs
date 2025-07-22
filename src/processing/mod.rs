@@ -1,6 +1,8 @@
 pub mod html_generator;
 
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
+use std::pin::Pin;
 
 use itertools::Itertools;
 use serde_json::Value;
@@ -9,21 +11,23 @@ use weibosdk_rs::WeiboAPI;
 use crate::app::options::TaskOptions;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
+use crate::media_downloader::MediaDownloader;
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
 use crate::utils::EMOJI_EXPR;
 use html_generator::{HTMLGenerator, create_tera};
 
 #[derive(Debug, Clone)]
-pub struct PostProcesser<W: WeiboAPI, S: Storage> {
+pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
     api_client: Option<W>,
     storage: S,
+    downloader: D,
     emoji_map: Option<HashMap<String, String>>,
     html_generator: HTMLGenerator,
 }
 
-impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
-    pub fn new(api_client: Option<W>, storage: S) -> Result<Self> {
+impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
+    pub fn new(api_client: Option<W>, storage: S, downloader: D) -> Result<Self> {
         let path = std::env::current_exe().unwrap();
         let tera_path = path
             .parent()
@@ -33,6 +37,7 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
         Ok(Self {
             api_client,
             storage,
+            downloader,
             emoji_map: None,
             html_generator: HTMLGenerator::new(tera),
         })
@@ -127,17 +132,22 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
         if let Some(_) = self.storage.get_picture_blob(pic_meta.url()).await? {
             Ok(())
         } else {
-            let blob = self
-                .api_client
-                .as_ref()
-                .ok_or(Error::NotLoggedIn)?
-                .download_picture(pic_meta.url())
-                .await?;
-            let pic = Picture {
-                meta: pic_meta,
-                blob,
-            };
-            self.storage.save_picture(&pic).await?;
+            let storage = self.storage.clone();
+            let url = pic_meta.url().to_string();
+            let callback = Box::new(
+                move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                    Box::pin(async move {
+                        let pic = Picture {
+                            meta: pic_meta,
+                            blob,
+                        };
+                        storage.save_picture(&pic).await?;
+                        Ok(())
+                    })
+                },
+            );
+
+            self.downloader.download_picture(url, callback).await?;
             Ok(())
         }
     }
@@ -161,18 +171,26 @@ impl<W: WeiboAPI, S: Storage> PostProcesser<W, S> {
                 blob,
             })
         } else {
-            let blob = self
-                .api_client
-                .as_ref()
-                .ok_or(Error::NotLoggedIn)?
-                .download_picture(pic_meta.url())
-                .await?;
-            let pic = Picture {
-                meta: pic_meta,
-                blob,
-            };
-            self.storage.save_picture(&pic).await?;
-            Ok(pic)
+            let storage = self.storage.clone();
+            let url = pic_meta.url().to_string();
+            let (sender, result) = tokio::sync::oneshot::channel();
+            let callback = Box::new(
+                move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                    Box::pin(async move {
+                        let pic = Picture {
+                            meta: pic_meta,
+                            blob,
+                        };
+                        storage.save_picture(&pic).await?;
+                        sender.send(pic).map_err(|pic| {
+                            Error::Tokio(format!("pic {} send failed", pic.meta.url()))
+                        })?;
+                        Ok(())
+                    })
+                },
+            );
+            self.downloader.download_picture(url, callback).await?;
+            Ok(result.await?)
         }
     }
 

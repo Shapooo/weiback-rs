@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
+use tokio::sync::{mpsc::error::SendError, oneshot::error::RecvError};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -42,6 +42,12 @@ pub enum Error {
 
 impl<T> From<SendError<T>> for Error {
     fn from(e: SendError<T>) -> Self {
+        Error::Tokio(e.to_string())
+    }
+}
+
+impl From<RecvError> for Error {
+    fn from(e: RecvError) -> Self {
         Error::Tokio(e.to_string())
     }
 }
