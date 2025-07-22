@@ -5,6 +5,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Sender, channel};
 use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers, session::Session};
 
+use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
 use crate::message::Message;
@@ -17,7 +18,7 @@ pub struct TaskProxy {
 }
 
 impl TaskProxy {
-    pub fn new(task_status_sender: Sender<Message>) -> Self {
+    pub fn new(task_status_sender: Sender<Result<Message>>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
