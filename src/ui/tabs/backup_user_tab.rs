@@ -1,8 +1,7 @@
 use eframe::egui;
 
-use crate::task_handler::{Task, TaskOptions};
-
 use super::Tab;
+use crate::core::{Task, TaskOptions};
 
 pub struct BackupUserTab {
     uid_str: String,

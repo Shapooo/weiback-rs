@@ -1,11 +1,10 @@
-pub mod options;
-
 use std::time::Duration;
 
 use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
+use super::options::TaskOptions;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
@@ -13,7 +12,6 @@ use crate::message::Message;
 use crate::models::Post;
 use crate::processing::PostProcesser;
 use crate::storage::Storage;
-pub use options::{TaskOptions, UserPostFilter};
 
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
