@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use crate::app::{Task, TaskOptions};
+use crate::task_handler::{Task, TaskOptions};
 
 use super::Tab;
 

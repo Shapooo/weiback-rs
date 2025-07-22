@@ -3,7 +3,7 @@ use std::ops::RangeInclusive;
 use eframe::egui::{self, DragValue};
 
 use super::Tab;
-use crate::app::{Task, TaskOptions};
+use crate::task_handler::{Task, TaskOptions};
 
 pub struct BackupFavTab {
     web_total: u32,

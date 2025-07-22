@@ -8,7 +8,7 @@ use itertools::Itertools;
 use serde_json::Value;
 use weibosdk_rs::WeiboAPI;
 
-use crate::app::options::TaskOptions;
+use crate::task_handler::options::TaskOptions;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
