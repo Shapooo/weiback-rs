@@ -2,18 +2,18 @@ mod tabs;
 mod task_proxy;
 
 use std::any::Any;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow;
 use eframe::{
     NativeOptions,
-    egui::{self, ImageData, vec2, viewport::ViewportBuilder},
+    egui::{vec2, viewport::ViewportBuilder},
 };
 use log::info;
 use tokio::sync::mpsc::{Receiver, channel, error::TryRecvError};
 
-use crate::task_handler::TaskResponse;
+use crate::message::Message;
+use crate::task_handler::Task;
 use tabs::{
     Tab, about_tab::AboutTab, backup_fav_tab::BackupFavTab, backup_user_tab::BackupUserTab,
     export_from_local_tab::ExportFromLocalTab,
@@ -24,8 +24,8 @@ pub struct Core {
     tabs: Vec<Box<dyn Tab>>,
     current_tab_idx: usize,
 
-    task_status_receiver: Option<Receiver<TaskResponse>>,
-    executor: Option<TaskProxy>,
+    task_status_receiver: Receiver<Message>,
+    executor: TaskProxy,
     task_ongoing: bool,
 
     // View data
@@ -43,11 +43,12 @@ impl Default for Core {
             Box::<ExportFromLocalTab>::default(),
             Box::<AboutTab>::default(),
         ];
+        let (task_status_sender, task_status_receiver) = channel(100);
         Self {
             tabs,
             current_tab_idx: 0,
-            task_status_receiver: None,
-            executor: None,
+            task_status_receiver,
+            executor: TaskProxy::new(task_status_sender),
             task_ongoing: false,
             message: "请开始任务".into(),
             ratio: 0.0,
@@ -80,18 +81,15 @@ impl Core {
     }
 
     fn handle_task_responses(&mut self) {
-        let task_status: Option<TaskResponse> = match self.task_status_receiver.as_mut() {
-            Some(receiver) => match receiver.try_recv() {
-                Ok(status) => Some(status),
-                Err(TryRecvError::Empty) => None,
-                Err(e) => panic!("{}", e),
-            },
-            None => return,
+        let task_status: Option<Message> = match self.task_status_receiver.try_recv() {
+            Ok(status) => Some(status),
+            Err(TryRecvError::Empty) => None,
+            Err(e) => panic!("{}", e),
         };
 
         if let Some(task_status) = task_status {
             match task_status {
-                TaskResponse::SumOfFavDB(web_total, db_total) => {
+                Message::SumOfFavDB(web_total, db_total) => {
                     self.web_total = web_total;
                     self.db_total = db_total;
                     if let Some(tab) = self.tabs[0].as_any_mut().downcast_mut::<BackupFavTab>() {
@@ -108,11 +106,11 @@ impl Core {
                         self.web_total, self.db_total
                     );
                 }
-                TaskResponse::InProgress(ratio, msg) => {
+                Message::InProgress(ratio, msg) => {
                     self.ratio = ratio;
                     self.message = msg;
                 }
-                TaskResponse::Finished(web_total, db_total) => {
+                Message::Finished(web_total, db_total) => {
                     self.ratio = 1.;
                     self.task_ongoing = false;
                     self.web_total = web_total;
@@ -122,11 +120,11 @@ impl Core {
                         self.web_total, self.db_total
                     );
                 }
-                TaskResponse::Error(msg) => {
+                Message::Error(msg) => {
                     self.task_ongoing = false;
                     self.message = msg.to_string();
                 }
-                TaskResponse::UserMeta(id, screen_name, avatar) => {
+                Message::UserMeta(_id, _screen_name, _avatar) => {
                     // TODO: how to show user meta?
                 }
             }
@@ -174,10 +172,7 @@ impl Core {
                         self.task_ongoing = true;
                         self.ratio = 0.0;
                         self.message = "任务开始...".into();
-                        self.executor
-                            .as_ref()
-                            .expect("core.executor must be unwrapable, bugs in there")
-                            .send_task(task);
+                        self.executor.send_task(task);
                     }
                 });
             });
