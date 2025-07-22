@@ -9,6 +9,7 @@ use weibosdk_rs::WeiboAPI;
 
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, Exporter};
+use crate::media_downloader::MediaDownloader;
 use crate::models::Post;
 use crate::processing::PostProcesser;
 use crate::storage::Storage;
@@ -42,23 +43,24 @@ pub enum TaskResponse {
 }
 
 #[derive(Debug)]
-pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter> {
+pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
     api_client: Option<W>,
     storage: S,
     exporter: E,
-    processer: PostProcesser<W, S>,
+    processer: PostProcesser<W, S, D>,
     task_status_sender: Sender<TaskResponse>,
     uid: Option<i64>,
 }
 
-impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
+impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S, E, D> {
     pub fn new(
         api_client: Option<W>,
         storage: S,
         exporter: E,
+        downloader: D,
         task_status_sender: Sender<TaskResponse>,
     ) -> Result<Self> {
-        let processer = PostProcesser::new(api_client.clone(), storage.clone())?;
+        let processer = PostProcesser::new(api_client.clone(), storage.clone(), downloader)?;
         Ok(TaskHandler {
             api_client,
             storage,
@@ -124,7 +126,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
     }
 }
 
-impl<W: WeiboAPI, S: Storage, E: Exporter> TaskHandler<W, S, E> {
+impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S, E, D> {
     // unfavorite all posts that are in weibo favorites
     pub async fn unfavorite_posts(&self) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;

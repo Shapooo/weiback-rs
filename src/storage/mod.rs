@@ -4,9 +4,9 @@ mod processer;
 mod user_storage;
 
 use std::env::current_exe;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::fs;
 
 use bytes::Bytes;
 use log::{debug, info};
@@ -24,7 +24,7 @@ const VALIDE_DB_VERSION: i64 = 2;
 const DATABASE: &str = "res/weiback.db";
 const PICTURE_PATH: &str = "res/pictures";
 
-pub trait Storage: Send + Sync + Clone {
+pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>>;
@@ -33,7 +33,7 @@ pub trait Storage: Send + Sync + Clone {
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
     async fn get_favorited_sum(&self) -> Result<u32>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
-    async fn save_picture(&self, picture: &Picture) -> Result<()>;
+    fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
     async fn get_picture_blob(&self, url: &str) -> Result<Option<bytes::Bytes>>;
 }
 
@@ -56,6 +56,7 @@ impl StorageImpl {
     }
 }
 
+// TODO: save when download
 impl Storage for Arc<StorageImpl> {
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
         if options.range.is_none() {

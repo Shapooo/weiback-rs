@@ -1,15 +1,24 @@
+#![allow(async_fn_in_trait)]
+use std::future::Future;
+use std::pin::Pin;
+
 use bytes::Bytes;
 use log::{error, info};
 use reqwest::Client;
-use std::future::Future;
-use std::pin::Pin;
 use tokio::sync::mpsc;
 
 use crate::error::{Error, Result};
 
+pub trait MediaDownloader {
+    async fn download_picture(&self, url: String, callback: AsyncDownloadCallback) -> Result<()>;
+}
+
 // The callback is for success cases and is async.
-type AsyncDownloadCallback =
-    Box<dyn FnOnce(Bytes) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send>;
+type AsyncDownloadCallback = Box<
+    dyn FnOnce(Bytes) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
+        + Send
+        + 'static,
+>;
 
 /// A task for the media downloader actor.
 struct DownloadTask {
@@ -19,11 +28,11 @@ struct DownloadTask {
 
 /// A media downloader that handles downloading pictures in a separate actor.
 #[derive(Clone, Debug)]
-pub struct MediaDownloader {
+pub struct MediaDownloaderImpl {
     sender: mpsc::Sender<DownloadTask>,
 }
 
-impl MediaDownloader {
+impl MediaDownloaderImpl {
     /// Creates a new `MediaDownloader` and spawns the background downloader actor.
     ///
     /// # Arguments
@@ -74,22 +83,16 @@ impl MediaDownloader {
 
         Self { sender }
     }
+}
 
+impl MediaDownloader for MediaDownloaderImpl {
     /// Queues a picture for download.
     ///
     /// This method sends a task to the background downloader actor and returns immediately.
     /// The provided async callback will be executed once the download is complete and successful.
     /// If the download fails, the task is discarded and the callback is never called.
-    pub async fn download_picture<F, Fut>(&self, url: String, callback: F) -> Result<()>
-    where
-        F: FnOnce(Bytes) -> Fut + Send + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        let task = DownloadTask {
-            url,
-            // Box the async callback so it can be stored in the struct.
-            callback: Box::new(move |result| Box::pin(callback(result))),
-        };
+    async fn download_picture(&self, url: String, callback: AsyncDownloadCallback) -> Result<()> {
+        let task = DownloadTask { url, callback };
         self.sender.send(task).await.map_err(|e| {
             error!("Failed to send download task to worker: {e}");
             Error::Other("Media downloader channel has been closed".to_string())

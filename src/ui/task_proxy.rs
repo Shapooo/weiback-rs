@@ -1,4 +1,3 @@
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use log::{debug, error, info};
@@ -6,9 +5,9 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Sender, channel};
 use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers, session::Session};
 
-use crate::app::{Task, TaskHandler, TaskOptions, TaskResponse};
-use crate::exporter::{ExportOptions, ExporterImpl};
-use crate::models::PictureDefinition;
+use crate::app::{Task, TaskHandler, TaskResponse};
+use crate::exporter::ExporterImpl;
+use crate::media_downloader::MediaDownloaderImpl;
 use crate::storage::StorageImpl;
 
 pub struct TaskProxy {
@@ -33,10 +32,17 @@ impl TaskProxy {
                 let storage = Arc::new(storage);
                 let exporter = ExporterImpl();
                 let session = Session::load("").ok(); // TODO
-                let api_client =
-                    session.map(|s| WeiboAPIImpl::new(new_client_with_headers().unwrap(), s));
-                let th =
-                    TaskHandler::new(api_client, storage, exporter, task_status_sender).unwrap();
+                let client = new_client_with_headers().unwrap();
+                let api_client = session.map(|s| WeiboAPIImpl::new(client.clone(), s));
+                let downloader = MediaDownloaderImpl::new(client);
+                let th = TaskHandler::new(
+                    api_client,
+                    storage,
+                    exporter,
+                    downloader,
+                    task_status_sender,
+                )
+                .unwrap();
 
                 debug!("task handler init succeed");
                 while let Some(msg) = rx.recv().await {
