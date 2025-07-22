@@ -18,7 +18,7 @@ pub struct TaskProxy {
 }
 
 impl TaskProxy {
-    pub fn new(task_status_sender: Sender<Result<Message>>) -> Self {
+    pub fn new(msg_sender: Sender<Result<Message>>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
@@ -30,21 +30,15 @@ impl TaskProxy {
             debug!("new a async runtime succeed");
 
             rt.block_on(async move {
-                let storage = StorageImpl::new().await.unwrap();
+                let storage = StorageImpl::new(msg_sender.clone()).await.unwrap();
                 let storage = Arc::new(storage);
-                let exporter = ExporterImpl();
+                let exporter = ExporterImpl::new(msg_sender.clone());
                 let session = Session::load("").ok(); // TODO
                 let client = new_client_with_headers().unwrap();
                 let api_client = session.map(|s| WeiboAPIImpl::new(client.clone(), s));
-                let downloader = MediaDownloaderImpl::new(client);
-                let th = TaskHandler::new(
-                    api_client,
-                    storage,
-                    exporter,
-                    downloader,
-                    task_status_sender,
-                )
-                .unwrap();
+                let downloader = MediaDownloaderImpl::new(client, msg_sender.clone());
+                let th = TaskHandler::new(api_client, storage, exporter, downloader, msg_sender)
+                    .unwrap();
 
                 debug!("task handler init succeed");
                 while let Some(msg) = rx.recv().await {

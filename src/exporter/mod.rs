@@ -9,9 +9,11 @@ use log::info;
 use tokio::{
     fs::{DirBuilder, File},
     io::AsyncWriteExt,
+    sync::mpsc::Sender,
 };
 
 use crate::error::{Error, Result};
+use crate::message::Message;
 use crate::models::{Picture, PictureDefinition};
 use crate::utils::url_to_filename;
 use std::convert::TryFrom;
@@ -21,12 +23,20 @@ pub trait Exporter: Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExporterImpl();
-
-#[derive(Debug, Clone)]
 pub struct HTMLPage {
     pub html: String,
     pub pics: Vec<HTMLPicture>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExporterImpl {
+    msg_sender: Sender<Result<Message>>,
+}
+
+impl ExporterImpl {
+    pub fn new(msg_sender: Sender<Result<Message>>) -> Self {
+        Self { msg_sender }
+    }
 }
 
 impl Exporter for ExporterImpl {
@@ -151,6 +161,7 @@ impl ExportOptions {
 #[cfg(test)]
 mod exporter_test {
     use super::{ExportOptions, Exporter, ExporterImpl, HTMLPage, HTMLPicture};
+    use tokio::sync::mpsc::channel;
     #[tokio::test]
     async fn export_page() {
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
@@ -163,7 +174,9 @@ mod exporter_test {
             .into_iter()
             .collect(),
         };
-        let exporter = ExporterImpl {};
+
+        let (tx, _) = channel(1);
+        let exporter = ExporterImpl::new(tx);
         let options = ExportOptions::default()
             .export_task_name("test_task".into())
             .export_path("./export_page".into());
