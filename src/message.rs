@@ -1,10 +1,22 @@
-use egui::ImageData;
-
 use crate::error::Error;
 
+#[derive(Debug, Clone)]
+pub struct UserMeta {
+    pub uid: String,
+    pub name: String,
+    pub posts_count: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskProgress {
+    pub id: u64,
+    pub total_increment: u64,
+    pub current_increment: u64,
+}
+
+#[derive(Debug)]
 pub enum Message {
-    SumOfFavDB(u32, u32),             // remain sum of favorite in weibo and local db
-    UserMeta(i64, String, ImageData), // screen name and avatar picture
-    InProgress(f32, String),          // long time task is in progress
-    Finished(u32, u32),               // long time task is finished
+    UserMeta(UserMeta),
+    TaskProgress(TaskProgress),
+    Err(Error),
 }

@@ -30,11 +30,11 @@ pub struct HTMLPage {
 
 #[derive(Debug, Clone)]
 pub struct ExporterImpl {
-    msg_sender: Sender<Result<Message>>,
+    msg_sender: Sender<Message>,
 }
 
 impl ExporterImpl {
-    pub fn new(msg_sender: Sender<Result<Message>>) -> Self {
+    pub fn new(msg_sender: Sender<Message>) -> Self {
         Self { msg_sender }
     }
 }

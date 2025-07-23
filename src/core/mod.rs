@@ -7,10 +7,7 @@ use tokio::sync::mpsc::{Receiver, channel, error::TryRecvError};
 
 use crate::error::Result;
 use crate::message::Message;
-use crate::ui::{
-    AsAny, UI,
-    tabs::{backup_fav_tab::BackupFavTab, export_from_local_tab::ExportFromLocalTab},
-};
+use crate::ui::UI;
 
 pub use options::{TaskOptions, UserPostFilter};
 pub use task_handler::{Task, TaskHandler};
@@ -18,7 +15,7 @@ pub use task_proxy::TaskProxy;
 
 pub struct Core {
     task_executor: TaskProxy,
-    msg_receiver: Receiver<Result<Message>>,
+    msg_receiver: Receiver<Message>,
     ui: UI,
 }
 
@@ -47,7 +44,7 @@ impl Core {
     }
 
     fn handle_task_responses(&mut self) {
-        let task_status: Option<Result<Message>> = match self.msg_receiver.try_recv() {
+        let task_status: Option<Message> = match self.msg_receiver.try_recv() {
             Ok(status) => Some(status),
             Err(TryRecvError::Empty) => None,
             Err(e) => panic!("{}", e),
@@ -55,41 +52,9 @@ impl Core {
 
         if let Some(task_status) = task_status {
             match task_status {
-                Ok(Message::SumOfFavDB(web_total, db_total)) => {
-                    self.ui.web_total = web_total;
-                    self.ui.db_total = db_total;
-                    if let Some(tab) = self.ui.tabs[0].as_any_mut().downcast_mut::<BackupFavTab>() {
-                        tab.set_web_total(web_total);
-                    }
-                    if let Some(tab) = self.ui.tabs[2]
-                        .as_any_mut()
-                        .downcast_mut::<ExportFromLocalTab>()
-                    {
-                        tab.set_db_total(db_total);
-                    }
-                    self.ui.message = format!(
-                        "账号共 {} 条收藏\n本地保存有 {} 条收藏",
-                        self.ui.web_total, self.ui.db_total
-                    );
-                }
-                Ok(Message::InProgress(ratio, msg)) => {
-                    self.ui.ratio = ratio;
-                    self.ui.message = msg;
-                }
-                Ok(Message::Finished(web_total, db_total)) => {
-                    self.ui.ratio = 1.;
-                    self.ui.task_ongoing = false;
-                    self.ui.web_total = web_total;
-                    self.ui.db_total = db_total;
-                    self.ui.message = format!(
-                        "任务完成!\n账号剩 {} 条收藏\n本地保存有 {} 条收藏",
-                        self.ui.web_total, self.ui.db_total
-                    );
-                }
-                Ok(Message::UserMeta(_id, _screen_name, _avatar)) => {
-                    // TODO: how to show user meta?
-                }
-                Err(msg) => {
+                Message::TaskProgress(tp) => {}
+                Message::UserMeta(um) => {}
+                Message::Err(msg) => {
                     self.ui.task_ongoing = false;
                     self.ui.message = msg.to_string();
                 }

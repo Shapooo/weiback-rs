@@ -39,7 +39,7 @@ impl MediaDownloaderImpl {
     /// # Arguments
     ///
     /// * `client` - A `reqwest::Client` to be used for making HTTP requests.
-    pub fn new(client: Client, message_sender: mpsc::Sender<Result<Message>>) -> Self {
+    pub fn new(client: Client, message_sender: mpsc::Sender<Message>) -> Self {
         // A channel to send download tasks to the downloader actor.
         let (sender, mut receiver) = mpsc::channel::<DownloadTask>(100); // Buffer size of 100
 
@@ -82,7 +82,7 @@ impl MediaDownloaderImpl {
                     }
                 };
                 if let Err(e) = res {
-                    message_sender.send(Err(e)).await.unwrap();
+                    message_sender.send(Message::Err(e)).await.unwrap();
                 }
             }
             info!("Media downloader actor finished.");

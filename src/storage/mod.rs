@@ -42,11 +42,11 @@ pub struct StorageImpl {
     db_pool: SqlitePool,
     picture_path: PathBuf,
     processer: Processer,
-    msg_sender: mpsc::Sender<Result<Message>>,
+    msg_sender: mpsc::Sender<Message>,
 }
 
 impl StorageImpl {
-    pub async fn new(msg_sender: mpsc::Sender<Result<Message>>) -> Result<Self> {
+    pub async fn new(msg_sender: mpsc::Sender<Message>) -> Result<Self> {
         let db_pool = create_db_pool().await?;
         Ok(StorageImpl {
             processer: Processer::new(db_pool.clone()),
