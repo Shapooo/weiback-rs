@@ -18,7 +18,7 @@ pub struct TaskProxy {
 }
 
 impl TaskProxy {
-    pub fn new(msg_sender: Sender<Result<Message>>) -> Self {
+    pub fn new(msg_sender: Sender<Message>) -> Self {
         debug!("new a executor");
         let (tx, mut rx) = channel(1);
         std::thread::spawn(move || {
