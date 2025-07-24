@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use log::{debug, error, info};
@@ -5,16 +6,24 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Sender, channel};
 use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers, session::Session};
 
-use super::{Task, TaskHandler};
-use crate::error::Result;
+use super::{TaskHandler, TaskRequest};
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
 use crate::message::Message;
 use crate::storage::StorageImpl;
 
+pub struct Task {
+    id: u64,
+    total: u64,
+    progress: u64,
+    request: TaskRequest,
+}
+
 pub struct TaskProxy {
     rt: Runtime,
-    tx: Sender<Task>,
+    tx: Sender<TaskRequest>,
+    next_task_id: u64,
+    tasks: HashMap<u64, Task>,
 }
 
 impl TaskProxy {
@@ -44,21 +53,21 @@ impl TaskProxy {
                 while let Some(msg) = rx.recv().await {
                     debug!("worker receive msg {:?}", msg);
                     match msg {
-                        Task::BackupFavorites(options) => {
+                        TaskRequest::BackupFavorites(options) => {
                             th.backup_favorites(options).await.unwrap()
                         }
-                        Task::ExportFromLocal(options) => {
+                        TaskRequest::ExportFromLocal(options) => {
                             th.export_from_local(options).await.unwrap()
                         }
-                        Task::BackupUser(options) => {
+                        TaskRequest::BackupUser(options) => {
                             // if uid == 0 {
                             th.backup_self(options).await.unwrap()
                             // } else {
                             //     th.backup_user(options).await
                             // }
                         }
-                        Task::UnfavoritePosts => th.unfavorite_posts().await.unwrap(),
-                        Task::FetchUserMeta(id) => {} // th.get_user_meta(id).await,
+                        TaskRequest::UnfavoritePosts => th.unfavorite_posts().await.unwrap(),
+                        TaskRequest::FetchUserMeta(id) => {} // th.get_user_meta(id).await,
                     }
                 }
                 Ok::<(), anyhow::Error>(())
@@ -68,10 +77,12 @@ impl TaskProxy {
         Self {
             rt: Runtime::new().unwrap(),
             tx,
+            next_task_id: 0,
+            tasks: Default::default(),
         }
     }
 
-    pub fn send_task(&self, task: Task) {
+    pub fn send_task(&self, task: TaskRequest) {
         match self.rt.block_on(self.tx.send(task)) {
             Ok(()) => {
                 info!("task send succ")

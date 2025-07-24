@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use super::Tab;
-use crate::core::{Task, TaskOptions};
+use crate::core::{TaskRequest, TaskOptions};
 
 pub struct BackupUserTab {
     uid_str: String,
@@ -24,7 +24,7 @@ impl Tab for BackupUserTab {
         "备份用户"
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<Task> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<TaskRequest> {
         let mut task = None;
 
         ui.checkbox(&mut self.with_pic, "同时下载图片");
@@ -50,7 +50,7 @@ impl Tab for BackupUserTab {
                     .with_user(uid)
                     .with_pic(self.with_pic)
                     .pic_quality(self.image_definition.into());
-                task = Some(Task::BackupUser(options));
+                task = Some(TaskRequest::BackupUser(options));
             }
         });
 
