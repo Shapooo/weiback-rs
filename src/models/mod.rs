@@ -1,8 +1,9 @@
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
 pub use weibosdk_rs::{Post, User};
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum PictureDefinition {
     Thumbnail,
     Bmiddle,
@@ -11,6 +12,20 @@ pub enum PictureDefinition {
     #[default]
     Largest,
     Mw2000,
+}
+
+impl From<&str> for PictureDefinition {
+    fn from(value: &str) -> Self {
+        match value {
+            "thumbnail" => PictureDefinition::Thumbnail,
+            "bmiddle" => PictureDefinition::Bmiddle,
+            "large" => PictureDefinition::Large,
+            "original" => PictureDefinition::Original,
+            "largest" => PictureDefinition::Largest,
+            "mw2000" => PictureDefinition::Mw2000,
+            _ => PictureDefinition::Original, // Default case
+        }
+    }
 }
 
 impl From<&PictureDefinition> for &str {
