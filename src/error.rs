@@ -6,6 +6,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("{0}: {1}")]
+    Context(String, Box<Error>),
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -49,5 +52,18 @@ impl<T> From<SendError<T>> for Error {
 impl From<RecvError> for Error {
     fn from(e: RecvError) -> Self {
         Error::Tokio(e.to_string())
+    }
+}
+
+pub trait Context<T, E> {
+    fn context(self, context: &'static str) -> Result<T>;
+}
+
+impl<T, E> Context<T, E> for std::result::Result<T, E>
+where
+    E: Into<Error>,
+{
+    fn context(self, context: &'static str) -> Result<T> {
+        self.map_err(|e| Error::Context(context.to_string(), Box::new(e.into())))
     }
 }
