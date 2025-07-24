@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      # --- 添加此步骤来配置 Git 认证 ---
+      - name: Configure Git for private repo
+        run: |
+          git config --global url."https://oauth2:${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      # ------------------------------------
       - uses: taiki-e/create-gh-release-action@v1
         with:
           # (optional) Path to changelog.
@@ -31,6 +36,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
+      # --- 添加此步骤来配置 Git 认证 ---
+      - name: Configure Git for private repo
+        run: |
+          git config --global url."https://oauth2:${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      # ------------------------------------
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.

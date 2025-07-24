@@ -28,6 +28,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      # --- 添加此步骤来配置 Git 认证 ---
+      - name: Configure Git for private repo
+        run: |
+          git config --global url."https://oauth2:${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      # ------------------------------------
+
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af #@v1
         with:
