@@ -18,7 +18,7 @@ const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
-pub enum Task {
+pub enum TaskRequest {
     // to fetch user meta data, include screen name and avatar
     FetchUserMeta(TaskOptions),
     // to download favorites (range, with pic, image definition level)

@@ -10,7 +10,7 @@ use crate::message::Message;
 use crate::ui::UI;
 
 pub use options::{TaskOptions, UserPostFilter};
-pub use task_handler::{Task, TaskHandler};
+pub use task_handler::{TaskHandler, TaskRequest};
 pub use task_proxy::TaskProxy;
 
 pub struct Core {

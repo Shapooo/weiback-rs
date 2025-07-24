@@ -8,7 +8,7 @@ use eframe::{
     egui::{vec2, viewport::ViewportBuilder},
 };
 
-use crate::core::Task;
+use crate::core::TaskRequest;
 use tabs::{
     Tab, about_tab::AboutTab, backup_fav_tab::BackupFavTab, backup_user_tab::BackupUserTab,
     export_from_local_tab::ExportFromLocalTab,
@@ -60,7 +60,7 @@ impl UI {
         set_font(cc);
     }
 
-    pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<Task> {
+    pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<TaskRequest> {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| ui.heading("WeiBack"));
             ui.add_enabled_ui(!self.task_ongoing, |ui| {
@@ -85,7 +85,7 @@ impl UI {
             });
         });
         ctx.request_repaint_after(Duration::from_millis(200));
-        Some(Task::UnfavoritePosts)
+        Some(TaskRequest::UnfavoritePosts)
     }
 }
 
@@ -121,7 +121,7 @@ impl Tab for Box<dyn Tab> {
         self.as_ref().name()
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<Task> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<TaskRequest> {
         self.as_mut().ui(ui)
     }
 }

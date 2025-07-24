@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use super::{Tab, Task};
+use super::{Tab, TaskRequest};
 
 #[derive(Default)]
 pub struct AboutTab;
@@ -10,7 +10,7 @@ impl Tab for AboutTab {
         "关于"
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<Task> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<TaskRequest> {
         use egui::special_emojis;
         ui.heading("WeiBack-rs");
         ui.label("WeiBack-rs 是一个开源微博备份工具。");

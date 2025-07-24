@@ -3,7 +3,7 @@ use std::ops::RangeInclusive;
 use eframe::egui::{self, DragValue};
 
 use super::Tab;
-use crate::core::{Task, TaskOptions};
+use crate::core::{TaskRequest, TaskOptions};
 
 pub struct BackupFavTab {
     web_total: u32,
@@ -37,7 +37,7 @@ impl Tab for BackupFavTab {
         "备份收藏"
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<Task> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<TaskRequest> {
         let mut task = None;
         ui.checkbox(&mut self.with_pic, "同时下载图片");
         ui.horizontal(|ui| {
@@ -69,7 +69,7 @@ impl Tab for BackupFavTab {
                     .range(self.range.clone())
                     .with_pic(self.with_pic)
                     .pic_quality(self.image_definition.into());
-                task = Some(Task::BackupFavorites(options));
+                task = Some(TaskRequest::BackupFavorites(options));
             }
         });
 

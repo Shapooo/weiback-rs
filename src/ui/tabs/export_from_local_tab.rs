@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 use eframe::egui::{self, DragValue, Slider};
 
-use super::{Tab, Task};
+use super::{Tab, TaskRequest};
 use crate::exporter::ExportOptions;
 
 pub struct ExportFromLocalTab {
@@ -39,7 +39,7 @@ impl Tab for ExportFromLocalTab {
         "本地导出"
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<Task> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<TaskRequest> {
         let mut task = None;
 
         ui.checkbox(&mut self.reverse, "按时间逆序")
@@ -70,7 +70,7 @@ impl Tab for ExportFromLocalTab {
         });
 
         if ui.button("对本地微博取消收藏").clicked() {
-            task = Some(Task::UnfavoritePosts);
+            task = Some(TaskRequest::UnfavoritePosts);
         }
 
         ui.vertical_centered(|ui| {
@@ -79,7 +79,7 @@ impl Tab for ExportFromLocalTab {
                     .reverse(self.reverse)
                     .range(self.range.clone())
                     .pic_quality(self.image_definition.into());
-                task = Some(Task::ExportFromLocal(options));
+                task = Some(TaskRequest::ExportFromLocal(options));
             }
         });
 
