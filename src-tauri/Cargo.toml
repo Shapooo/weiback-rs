@@ -1,0 +1,54 @@
+[package]
+name = "weiback-rs"
+version = "0.2.4"
+edition = "2024"
+default-run = "weiback-rs"
+exclude = ["frontend"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "weiback"
+path = "src/lib.rs"
+
+[[bin]]
+name = "weiback-rs"
+path = "src/bin/weiback-rs/main.rs"
+
+[[bin]]
+name = "db-upgrade-tool"
+path = "src/bin/db-upgrade-tool.rs"
+
+[dependencies]
+anyhow = { version = "1.0.90", features = ["backtrace"] }
+bytes = "1"
+chrono = { version = "0.4", default-features = false }
+dirs = "6"
+env_logger = "0.11"
+futures = "0.3"
+image = "0.25"
+itertools = "0.14"
+log = "0.4"
+once_cell = "1"
+regex = "1"
+reqwest = "0.12"
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["serde_derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls"] }
+tera = "1"
+thiserror = "2"
+tokio = { version = "1.46.1", features = [
+    "macros",
+    "rt-multi-thread",
+    "time",
+    "fs",
+] }
+url = "2.5.4"
+weibosdk-rs = { path = "../../weibosdk-rs" }
+
+[dev-dependencies]
+flate2 = "1.0.34"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
