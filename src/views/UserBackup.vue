@@ -1,85 +1,66 @@
 <template>
-  <div class="container">
-    <h2>用户备份</h2>
-    <div class="input-group">
-      <label for="user-id">用户ID：</label>
-      <input type="text" v-model="userId" placeholder="请输入用户ID" id="user-id" />
-    </div>
-    <div class="input-group">
-      <label for="start-page">备份范围：</label>
-      <input type="number" v-model="startPage" placeholder="起始页" id="start-page" />
-      <span>-</span>
-      <input type="number" v-model="endPage" placeholder="结束页" id="end-page" />
-    </div>
-    <button @click="startBackup">开始备份</button>
-    <p v-if="message">{{ message }}</p>
-  </div>
+  <n-card class="box-card" title="用户备份">
+    <n-form :model="form" label-placement="left" label-width="auto">
+      <n-form-item label="用户ID">
+        <n-input v-model:value="form.userId" placeholder="请输入用户ID" />
+      </n-form-item>
+      <n-form-item label="备份范围">
+        <n-grid :cols="24" :x-gap="8">
+          <n-gi :span="11">
+            <n-input-number v-model:value="form.startPage" :min="1" :step="20" placeholder="起始页" style="width: 100%;" />
+          </n-gi>
+          <n-gi :span="2" style="text-align: center;">-</n-gi>
+          <n-gi :span="11">
+            <n-input-number v-model:value="form.endPage" :min="20" :step="20" placeholder="结束页" style="width: 100%;" />
+          </n-gi>
+        </n-grid>
+      </n-form-item>
+      <n-form-item>
+        <n-button type="primary" tertiary @click="startBackup">开始备份</n-button>
+      </n-form-item>
+    </n-form>
+  </n-card>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { reactive } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { useMessage } from 'naive-ui';
 
-const userId = ref('');
-const startPage = ref<number | null>(null);
-const endPage = ref<number | null>(null);
-const message = ref('');
+const message = useMessage();
+const form = reactive({
+  userId: '',
+  startPage: 1,
+  endPage: 10,
+});
 
 async function startBackup() {
-  if (!userId.value) {
-    message.value = '请输入用户ID。';
+  if (!form.userId) {
+    message.error('请输入用户ID');
     return;
   }
-  if (startPage.value === null || endPage.value === null) {
-    message.value = '请输入完整的备份范围。';
-    return;
-  }
-  if (startPage.value <= 0 || endPage.value <= 0) {
-    message.value = '页码必须是正数。';
-    return;
-  }
-  if (startPage.value > endPage.value) {
-    message.value = '起始页不能大于结束页。';
+  if (form.startPage > form.endPage) {
+    message.error('起始页不能大于结束页');
     return;
   }
 
-  message.value = '正在开始备份，请稍候...';
+  message.info('正在开始备份，请稍候...');
   try {
     await invoke('backup_user', {
-      uid: userId.value,
-      range: [startPage.value, endPage.value],
+      uid: form.userId,
+      range: [form.startPage, form.endPage],
     });
-    message.value = '用户备份任务已成功启动。';
+    message.success('用户备份任务已成功启动');
   } catch (e) {
-    message.value = `备份失败: ${e}`;
+    message.error(`备份失败: ${e}`);
     console.error(e);
   }
 }
 </script>
 
 <style scoped>
-.container {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  align-items: flex-start;
-}
-.input-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-input[type="text"] {
-    width: 200px;
-    padding: 8px;
-}
-input[type="number"] {
-  width: 100px;
-  padding: 8px;
-}
-button {
-  padding: 10px 20px;
-  cursor: pointer;
+.box-card {
+  max-width: 500px;
+  margin: 20px auto;
 }
 </style>
