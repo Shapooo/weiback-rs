@@ -11,6 +11,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use log::{debug, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
+use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
 use crate::error::{Error, Result};
@@ -46,8 +47,8 @@ pub struct StorageImpl {
 }
 
 impl StorageImpl {
-    pub async fn new(msg_sender: mpsc::Sender<Message>) -> Result<Self> {
-        let db_pool = create_db_pool().await?;
+    pub fn new(msg_sender: mpsc::Sender<Message>) -> Result<Self> {
+        let db_pool = Runtime::new().unwrap().block_on(create_db_pool())?;
         Ok(StorageImpl {
             processer: Processer::new(db_pool.clone()),
             db_pool,
@@ -111,9 +112,7 @@ impl Storage for Arc<StorageImpl> {
 
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
         debug!("query all posts to unfavorite");
-        Ok(sqlx::query_as::<Sqlite, (i64,)>(
-            "SELECT id FROM posts WHERE unfavorited == false and favorited;",
-        )
+        Ok(sqlx::query_as::<Sqlite, (i64,)>("SELECT id FROM posts WHERE unfavorited == false and favorited;")
         .fetch_all(&self.db_pool)
         .await?
         .into_iter()
