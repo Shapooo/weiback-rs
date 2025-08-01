@@ -19,7 +19,7 @@ use html_generator::{HTMLGenerator, create_tera};
 
 #[derive(Debug, Clone)]
 pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
-    api_client: Option<W>,
+    api_client: W,
     storage: S,
     downloader: D,
     emoji_map: Option<HashMap<String, String>>,
@@ -27,7 +27,7 @@ pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
 }
 
 impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
-    pub fn new(api_client: Option<W>, storage: S, downloader: D) -> Result<Self> {
+    pub fn new(api_client: W, storage: S, downloader: D) -> Result<Self> {
         let path = std::env::current_exe().unwrap();
         let tera_path = path
             .parent()
@@ -43,11 +43,6 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         })
     }
 
-    pub fn set_client(&mut self, api_client: W) {
-        self.api_client = Some(api_client);
-        // TODO: fetch emoji
-    }
-
     pub async fn process(&self, posts: Vec<Post>, options: &TaskOptions) -> Result<()> {
         let pic_metas = self.extract_all_pic_metas(&posts, options.pic_quality);
 
@@ -57,12 +52,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
 
         for mut post in posts {
             if post.is_long_text
-                && let Ok(long_text) = self
-                    .api_client
-                    .as_ref()
-                    .ok_or(Error::NotLoggedIn)?
-                    .get_long_text(post.id)
-                    .await
+                && let Ok(long_text) = self.api_client.get_long_text(post.id).await
             {
                 post.text = long_text
             }

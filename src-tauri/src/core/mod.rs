@@ -4,18 +4,19 @@ pub mod task_handler;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use log::{debug, info};
 use tokio::sync::mpsc::{self, error::TryRecvError};
-use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers, session::Session};
+use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers};
 
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
-use crate::message::{Message, UiAction};
+use crate::message::Message;
 use crate::storage::StorageImpl;
 pub use options::{TaskOptions, UserPostFilter};
 pub use task_handler::{TaskHandler, TaskRequest};
 
+type TH =
+    TaskHandler<WeiboAPIImpl<reqwest::Client>, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
 pub struct Task {
     id: u64,
     total: u64,
@@ -27,34 +28,36 @@ pub struct Core {
     msg_receiver: mpsc::Receiver<Message>,
     next_task_id: u64,
     tasks: HashMap<u64, Task>,
-    task_handler: TaskHandler<
-        WeiboAPIImpl<reqwest::Client>,
-        Arc<StorageImpl>,
-        ExporterImpl,
-        MediaDownloaderImpl,
-    >,
+    task_handler: TH,
+    http_client: reqwest::Client,
 }
 
 impl Core {
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let (msg_sender, msg_receiver) = mpsc::channel(100);
-
-        let storage = StorageImpl::new(msg_sender.clone()).await.unwrap();
+        let storage = StorageImpl::new(msg_sender.clone()).unwrap();
         let storage = Arc::new(storage);
         let exporter = ExporterImpl::new(msg_sender.clone());
-        let session = Session::load("").ok(); // TODO
-        let client = new_client_with_headers().unwrap();
-        let api_client = session.map(|s| WeiboAPIImpl::new(client.clone(), s));
-        let downloader = MediaDownloaderImpl::new(client, msg_sender.clone());
+        let http_client = new_client_with_headers().unwrap();
+        let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
+        let api_client = WeiboAPIImpl::new(http_client.clone());
         let task_handler =
             TaskHandler::new(api_client, storage, exporter, downloader, msg_sender).unwrap();
-
         Ok(Self {
             tasks: HashMap::new(),
             next_task_id: 0,
             msg_receiver,
             task_handler,
+            http_client,
         })
+    }
+
+    pub fn task_handler(&self) -> &TH {
+        &self.task_handler
+    }
+
+    pub fn http_client(&self) -> &reqwest::Client {
+        &self.http_client
     }
 
     fn handle_task_responses(&mut self) {

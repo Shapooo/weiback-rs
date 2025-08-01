@@ -5,7 +5,7 @@ use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
 use super::options::TaskOptions;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress};
@@ -33,17 +33,16 @@ pub enum TaskRequest {
 
 #[derive(Debug)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
-    api_client: Option<W>,
+    api_client: W,
     storage: S,
     exporter: E,
     processer: PostProcesser<W, S, D>,
     msg_sender: Sender<Message>,
-    uid: Option<i64>,
 }
 
 impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S, E, D> {
     pub fn new(
-        api_client: Option<W>,
+        api_client: W,
         storage: S,
         exporter: E,
         downloader: D,
@@ -56,27 +55,12 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             exporter,
             processer,
             msg_sender,
-            uid: None,
         })
-    }
-
-    pub fn set_client(&mut self, client: W) {
-        self.api_client = Some(client.clone());
-        self.processer.set_client(client);
-    }
-
-    pub fn set_uid(&mut self, uid: i64) {
-        self.uid = Some(uid)
     }
 
     // backup one page of posts of the user
     pub async fn backup_one_page(&self, uid: i64, page: u32) -> Result<usize> {
-        let posts = self
-            .api_client
-            .as_ref()
-            .ok_or(Error::NotLoggedIn)?
-            .profile_statuses(uid, page)
-            .await?;
+        let posts = self.api_client.profile_statuses(uid, page).await?;
         let result = posts.len();
         for post in posts.iter() {
             self.storage.save_post(post).await?;
@@ -87,12 +71,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // backup one page of favorites
     pub async fn backup_one_fav_page(&self, page: u32, options: TaskOptions) -> Result<usize> {
-        let posts = self
-            .api_client
-            .as_ref()
-            .ok_or(Error::NotLoggedIn)?
-            .favorites(page)
-            .await?;
+        let posts = self.api_client.favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
         self.processer.process(posts, &options).await?;
@@ -130,11 +109,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             .await?;
         for (mut i, id) in ids.into_iter().enumerate() {
             i = i + 1;
-            self.api_client
-                .as_ref()
-                .ok_or(Error::NotLoggedIn)?
-                .favorites_destroy(id)
-                .await?;
+            self.api_client.favorites_destroy(id).await?;
             info!("post {id} unfavorited");
             let task_progress = TaskProgress {
                 id: 0,
@@ -174,11 +149,6 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             sleep(BACKUP_TASK_INTERVAL).await;
         }
         Ok(())
-    }
-
-    pub async fn backup_self(&self, options: TaskOptions) -> Result<()> {
-        self.backup_user(options.with_user(self.uid.ok_or(Error::NotLoggedIn)?))
-            .await
     }
 
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
