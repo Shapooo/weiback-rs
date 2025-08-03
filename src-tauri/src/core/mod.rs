@@ -4,8 +4,8 @@ pub mod task_handler;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::mpsc::{self, error::TryRecvError};
-use weibosdk_rs::{WeiboAPIImpl, client::new_client_with_headers};
+use tokio::{sync::mpsc, task};
+use weibosdk_rs::WeiboAPIImpl;
 
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
@@ -25,58 +25,94 @@ pub struct Task {
 }
 
 pub struct Core {
-    msg_receiver: mpsc::Receiver<Message>,
     next_task_id: u64,
     tasks: HashMap<u64, Task>,
-    task_handler: TH,
-    http_client: reqwest::Client,
+    task_sender: mpsc::Sender<TaskRequest>,
 }
 
 impl Core {
-    pub fn new() -> Result<Self> {
-        let (msg_sender, msg_receiver) = mpsc::channel(100);
-        let storage = StorageImpl::new(msg_sender.clone()).unwrap();
-        let storage = Arc::new(storage);
-        let exporter = ExporterImpl::new(msg_sender.clone());
-        let http_client = new_client_with_headers().unwrap();
-        let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
-        let api_client = WeiboAPIImpl::new(http_client.clone());
-        let task_handler =
-            TaskHandler::new(api_client, storage, exporter, downloader, msg_sender).unwrap();
+    pub fn new(task_handler: TH, msg_receiver: mpsc::Receiver<Message>) -> Result<Self> {
+        let (task_sender, task_receiver) = mpsc::channel(100);
+        task::spawn(working_loop(task_handler, task_receiver, msg_receiver));
         Ok(Self {
             tasks: HashMap::new(),
             next_task_id: 0,
-            msg_receiver,
-            task_handler,
-            http_client,
+            task_sender,
         })
     }
 
-    pub fn task_handler(&self) -> &TH {
-        &self.task_handler
+    pub async fn backup_user(&self, options: TaskOptions) -> Result<()> {
+        self.task_sender
+            .send(TaskRequest::BackupUser(options))
+            .await?;
+        Ok(())
     }
 
-    pub fn http_client(&self) -> &reqwest::Client {
-        &self.http_client
+    pub async fn backup_favorites(&self, options: TaskOptions) -> Result<()> {
+        self.task_sender
+            .send(TaskRequest::BackupFavorites(options))
+            .await?;
+        Ok(())
     }
 
-    fn handle_task_responses(&mut self) {
-        let task_status: Option<Message> = match self.msg_receiver.try_recv() {
-            Ok(status) => Some(status),
-            Err(TryRecvError::Empty) => None,
-            Err(e) => panic!("{}", e),
-        };
+    pub async fn unfavorite_posts(&self) -> Result<()> {
+        self.task_sender.send(TaskRequest::UnfavoritePosts).await?;
+        Ok(())
+    }
+}
 
-        if let Some(task_status) = task_status {
-            match task_status {
-                Message::TaskProgress(tp) => {}
-                Message::UserMeta(um) => {}
-                Message::Err(msg) => {}
+async fn working_loop(
+    task_handler: TH,
+    mut task_receiver: mpsc::Receiver<TaskRequest>,
+    mut msg_receiver: mpsc::Receiver<Message>,
+) {
+    let task_handler: &'static mut _ = Box::leak(Box::new(task_handler));
+    loop {
+        tokio::select! {
+            Some(request) = task_receiver.recv() => {
+                task::spawn(handle_task_request(task_handler, request));
+            }
+            Some(msg) = msg_receiver.recv() => {
+                handle_task_responses(msg).await;
+            }
+            else => {
+                break;
             }
         }
     }
+}
 
-    async fn unfavorite_posts(&self) -> Result<()> {
-        self.task_handler.unfavorite_posts().await
+// TODO
+async fn handle_task_responses(msg: Message) {
+    match msg {
+        Message::TaskProgress(tp) => {}
+        Message::UserMeta(um) => {}
+        Message::Err(msg) => {}
     }
+}
+
+async fn handle_task_request(task_handler: &TH, request: TaskRequest) {
+    if let Err(e) = _handle_task_request(task_handler, request).await {
+        task_handler
+            .msg_sender()
+            .send(Message::Err(e))
+            .await
+            .unwrap()
+    }
+}
+
+async fn _handle_task_request(task_handler: &TH, request: TaskRequest) -> Result<()> {
+    // if let Some(request) = task_receiver.recv().await {
+    match request {
+        TaskRequest::BackupUser(options) => {
+            task_handler.backup_user(options).await?;
+        }
+        TaskRequest::UnfavoritePosts => {
+            task_handler.unfavorite_posts().await?;
+        }
+        TaskRequest::BackupFavorites(options) => {
+            task_handler.backup_favorites(options).await?;
+        }
+    }
+    Ok(())
 }

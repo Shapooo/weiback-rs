@@ -19,19 +19,15 @@ const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
 pub enum TaskRequest {
-    // to fetch user meta data, include screen name and avatar
-    FetchUserMeta(TaskOptions),
     // to download favorites (range, with pic, image definition level)
     BackupFavorites(TaskOptions),
-    // to export favorites from local db (range, with pic, image definition level)
-    ExportFromLocal(ExportOptions),
     // to unfavorite favorite post
     UnfavoritePosts,
     // to backup user (id, with pic, image definition level)
     BackupUser(TaskOptions),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
     api_client: W,
     storage: S,
@@ -58,8 +54,12 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         })
     }
 
+    pub fn msg_sender(&self) -> &Sender<Message> {
+        &self.msg_sender
+    }
+
     // backup one page of posts of the user
-    pub async fn backup_one_page(&self, uid: i64, page: u32) -> Result<usize> {
+    async fn backup_one_page(&self, uid: i64, page: u32) -> Result<usize> {
         let posts = self.api_client.profile_statuses(uid, page).await?;
         let result = posts.len();
         for post in posts.iter() {
@@ -70,7 +70,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // backup one page of favorites
-    pub async fn backup_one_fav_page(&self, page: u32, options: TaskOptions) -> Result<usize> {
+    async fn backup_one_fav_page(&self, page: u32, options: TaskOptions) -> Result<usize> {
         let posts = self.api_client.favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
@@ -89,14 +89,11 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // get total number of favorites in local database
-    async fn get_db_total_num(&self) -> Result<u32> {
+    pub async fn get_db_total_num(&self) -> Result<u32> {
         self.storage.get_favorited_sum().await
     }
-}
-
-impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S, E, D> {
     // unfavorite all posts that are in weibo favorites
-    pub async fn unfavorite_posts(&self) -> Result<()> {
+    pub(super) async fn unfavorite_posts(&self) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         let task_progress = TaskProgress {
@@ -125,7 +122,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // backup user posts
-    pub async fn backup_user(&self, options: TaskOptions) -> Result<()> {
+    pub(super) async fn backup_user(&self, options: TaskOptions) -> Result<()> {
         let uid = options.uid;
         info!("download user {uid} posts");
 
@@ -198,7 +195,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // export favorite posts from weibo
-    pub async fn backup_favorites(&self, options: TaskOptions) -> Result<()> {
+    pub(super) async fn backup_favorites(&self, options: TaskOptions) -> Result<()> {
         let range = options.range.clone().unwrap_or(1..=2000);
         assert!(range.start() != &0);
         info!("favorites download range is {range:?}");
