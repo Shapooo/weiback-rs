@@ -112,7 +112,9 @@ impl Storage for Arc<StorageImpl> {
 
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
         debug!("query all posts to unfavorite");
-        Ok(sqlx::query_as::<Sqlite, (i64,)>("SELECT id FROM posts WHERE unfavorited == false and favorited;")
+        Ok(sqlx::query_as::<Sqlite, (i64,)>(
+            "SELECT id FROM posts WHERE unfavorited == false and favorited;",
+        )
         .fetch_all(&self.db_pool)
         .await?
         .into_iter()

@@ -1,43 +1,114 @@
 use std::ops::RangeInclusive;
+use std::sync::Arc;
 
-use tauri;
+use tauri::{self, State};
+use tokio::sync::{Mutex, mpsc};
+use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
-use crate::error::Result;
+use crate::core::{Core, TaskOptions, task_handler::TaskHandler};
+use crate::error::{Error, Result};
+use crate::exporter::{ExportOptions, ExporterImpl};
+use crate::media_downloader::MediaDownloaderImpl;
+use crate::storage::StorageImpl;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
+type WeiboAPIImpl = WAI<reqwest::Client>;
+
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+async fn backup_self(
+    core: State<'_, Core>,
+    api_client: State<'_, WeiboAPIImpl>,
+    range: RangeInclusive<u32>,
+) -> Result<()> {
+    let uid = api_client.session()?.uid.clone();
+    backup_user(core, uid, range).await
 }
 
 #[tauri::command]
-async fn unfavorite_posts() {
-    todo!()
+async fn backup_user(core: State<'_, Core>, uid: String, range: RangeInclusive<u32>) -> Result<()> {
+    let options = TaskOptions::new()
+        .range(range)
+        .with_user(uid.parse().map_err(|er| Error::Other(format!("{er}")))?);
+    core.backup_user(options).await
 }
 
 #[tauri::command]
-async fn backup_user(uid: i32, range:RangeInclusive<u32>) {
-    todo!()
+async fn backup_favorites(core: State<'_, Mutex<Core>>, range: RangeInclusive<u32>) -> Result<()> {
+    let options = TaskOptions::new().range(range);
+    let core = core.lock().await;
+    core.backup_favorites(options).await
 }
 
 #[tauri::command]
-async fn backup_favorites(range: RangeInclusive<u32>) {
-    todo!()
+async fn unfavorite_posts(core: State<'_, Core>) -> Result<()> {
+    core.unfavorite_posts().await
 }
 
 #[tauri::command]
-async fn export_from_local(range: RangeInclusive<u32>) {}
+async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u32>) -> Result<()> {
+    let options = ExportOptions::new().range(range);
+    task_handler.export_from_local(options).await
+}
 
-pub fn run() {
+#[tauri::command]
+async fn send_code(api_client: State<'_, Mutex<WeiboAPIImpl>>, phone_number: String) -> Result<()> {
+    let mut api_client = api_client.lock().await;
+    match api_client.login_state() {
+        LoginState::LoggedIn { .. } => Ok(()),
+        _ => {
+            api_client.get_sms_code(phone_number).await?;
+            Ok(())
+        }
+    }
+}
+
+#[tauri::command]
+async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> Result<()> {
+    let mut api_client = api_client.lock().await;
+    match api_client.login_state() {
+        LoginState::WaitingForCode { .. } => {
+            api_client.login(&sms_code).await?;
+            Ok(())
+        }
+        LoginState::LoggedIn { .. } => Ok(()),
+        LoginState::Init => Err(Error::Other(
+            "FATAL: wrong login state to login".to_string(),
+        )),
+    }
+}
+
+pub fn run() -> Result<()> {
+    let (msg_sender, msg_receiver) = mpsc::channel(100);
+    let storage = StorageImpl::new(msg_sender.clone()).unwrap();
+    let storage = Arc::new(storage);
+    let exporter = ExporterImpl::new(msg_sender.clone());
+    let http_client = new_client_with_headers().unwrap();
+    let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
+    let api_client = WeiboAPIImpl::new(http_client.clone());
+    let task_handler = TaskHandler::new(
+        api_client.clone(),
+        storage,
+        exporter,
+        downloader,
+        msg_sender,
+    )
+    .unwrap();
+    let core = Core::new(task_handler.clone(), msg_receiver)?;
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(Mutex::new(core))
+        .manage(task_handler)
+        .manage(Mutex::new(api_client))
         .invoke_handler(tauri::generate_handler![
-            greet,
-            unfavorite_posts,
             backup_user,
+            backup_self,
             backup_favorites,
-            export_from_local
+            unfavorite_posts,
+            export_from_local,
+            send_code,
+            login
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("error while running tauri application"); // TODO
+    Ok(())
 }
