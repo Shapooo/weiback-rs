@@ -106,7 +106,7 @@ pub struct ExportOptions {
     pub export_task_name: String,
     pub posts_per_html: u32,
     pub reverse: bool,
-    pub range: Option<RangeInclusive<u32>>,
+    pub range: RangeInclusive<u32>,
 }
 
 impl Default for ExportOptions {
@@ -117,7 +117,7 @@ impl Default for ExportOptions {
             export_task_name: "weiback_export.html".to_string(),
             posts_per_html: 1000,
             reverse: false,
-            range: None,
+            range: 0..=u32::MAX,
         }
     }
 }
@@ -148,7 +148,7 @@ impl ExportOptions {
     }
 
     pub fn range(mut self, range: RangeInclusive<u32>) -> Self {
-        self.range = Some(range);
+        self.range = range;
         self
     }
 

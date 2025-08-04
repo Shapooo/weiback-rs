@@ -61,11 +61,8 @@ impl StorageImpl {
 // TODO: save when download
 impl Storage for Arc<StorageImpl> {
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
-        if options.range.is_none() {
-            return Err(Error::Other("".to_string()));
-        }
-        let start = options.range.as_ref().unwrap().start();
-        let end = options.range.as_ref().unwrap().end();
+        let start = options.range.start();
+        let end = options.range.end();
         self.processer
             .get_posts(*end - *start + 1, *start, options.reverse)
             .await

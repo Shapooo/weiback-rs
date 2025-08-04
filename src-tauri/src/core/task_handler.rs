@@ -156,7 +156,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let mut index = 1;
         loop {
             let mut opt = options.clone();
-            opt.range = Some(offset..=offset + limit);
+            opt.range = offset..=offset + limit;
             let local_posts = self.load_fav_posts_from_db(&opt).await?;
             if local_posts.is_empty() {
                 break;
