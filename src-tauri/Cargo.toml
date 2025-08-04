@@ -19,7 +19,6 @@ name = "db-upgrade-tool"
 path = "src/bin/db-upgrade-tool.rs"
 
 [dependencies]
-anyhow = { version = "1.0.90", features = ["backtrace"] }
 bytes = "1"
 chrono = { version = "0.4", default-features = false }
 dirs = "6"

@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-use anyhow::Result;
 use env_logger::Builder;
 use log::{LevelFilter, info};
 
 // use weiback::core::Core;
-use weiback::tauri;
+use weiback::{
+    error::{Error, Result},
+    tauri,
+};
 
 fn main() -> Result<()> {
     // std::env::set_var("RUST_BACKTRACE", "1");
@@ -12,7 +14,7 @@ fn main() -> Result<()> {
     info!("start running...");
     // let core = Core::new();
     // core.run()?;
-    tauri::run();
+    tauri::run()?;
 
     info!("done");
     Ok(())
@@ -22,10 +24,10 @@ fn init_logger() -> Result<()> {
     let log_path = std::env::current_exe()?;
     let log_path = log_path
         .parent()
-        .ok_or(anyhow::anyhow!(
+        .ok_or(Error::Other(format!(
             "the executable: {:?} should have parent, maybe bugs in there",
             std::env::current_exe()
-        ))?
+        )))?
         .join("weiback.log");
     let log_file = std::fs::OpenOptions::new()
         .write(true)
