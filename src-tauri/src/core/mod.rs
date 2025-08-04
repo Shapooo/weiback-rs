@@ -102,7 +102,6 @@ async fn msg_loop(
     }
 }
 
-// TODO
 async fn handle_task_responses(
     app: &AppHandle,
     tasks: &Mutex<HashMap<u64, Task>>,
@@ -140,18 +139,19 @@ async fn handle_task_responses(
     Ok(())
 }
 
-async fn handle_task_request(task_handler: &TH, id: u64, request: TaskRequest) -> Result<()> {
-    // if let Some(request) = task_receiver.recv().await {
-    match request {
-        TaskRequest::BackupUser(options) => {
-            task_handler.backup_user(id, options).await?;
-        }
-        TaskRequest::UnfavoritePosts => {
-            task_handler.unfavorite_posts(id).await?;
-        }
+async fn handle_task_request(task_handler: &TH, task_id: u64, request: TaskRequest) {
+    let res = match request {
+        TaskRequest::BackupUser(options) => task_handler.backup_user(task_id, options).await,
+        TaskRequest::UnfavoritePosts => task_handler.unfavorite_posts(task_id).await,
         TaskRequest::BackupFavorites(options) => {
-            task_handler.backup_favorites(id, options).await?;
+            task_handler.backup_favorites(task_id, options).await
         }
+    };
+    if let Err(err) = res {
+        task_handler
+            .msg_sender()
+            .send(Message::Err { task_id, err })
+            .await
+            .unwrap();
     }
-    Ok(())
 }
