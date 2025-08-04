@@ -82,7 +82,7 @@ impl MediaDownloaderImpl {
                     }
                 };
                 if let Err(e) = res {
-                    message_sender.send(Message::Err(e)).await.unwrap();
+                    message_sender.send(Message::Err(err)).await.unwrap();
                 }
             }
             info!("Media downloader actor finished.");

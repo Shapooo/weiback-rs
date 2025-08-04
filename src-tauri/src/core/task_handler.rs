@@ -82,6 +82,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     pub async fn get_db_total_num(&self) -> Result<u32> {
         self.storage.get_favorited_sum().await
     }
+
     // unfavorite all posts that are in weibo favorites
     pub(super) async fn unfavorite_posts(&self, id: u64) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
@@ -89,7 +90,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let task_progress = TaskProgress {
             id: 0,
             total_increment: 0,
-            current_increment: len as u64,
+            progress_increment: len as u64,
         };
         self.msg_sender
             .send(Message::TaskProgress(task_progress))
@@ -101,7 +102,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             let task_progress = TaskProgress {
                 id: 0,
                 total_increment: 0,
-                current_increment: 1,
+                progress_increment: 1,
             };
             self.msg_sender
                 .send(Message::TaskProgress(task_progress))
@@ -127,7 +128,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             let task_progress = TaskProgress {
                 id: 0,
                 total_increment: len as u64,
-                current_increment: len as u64,
+                progress_increment: len as u64,
             };
             self.msg_sender
                 .send(Message::TaskProgress(task_progress))
@@ -147,7 +148,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let task_progress = TaskProgress {
             id: 0,
             total_increment: posts_sum as u64,
-            current_increment: 0,
+            progress_increment: 0,
         };
         self.msg_sender
             .send(Message::TaskProgress(task_progress))
@@ -170,7 +171,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             let task_progress = TaskProgress {
                 id: 0,
                 total_increment: 0,
-                current_increment: limit as u64,
+                progress_increment: limit as u64,
             };
             self.msg_sender
                 .send(Message::TaskProgress(task_progress))

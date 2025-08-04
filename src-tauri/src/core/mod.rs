@@ -7,13 +7,14 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
+use tauri::{AppHandle, Emitter};
 use tokio::{sync::mpsc, task::spawn};
 use weibosdk_rs::WeiboAPIImpl;
 
 use crate::error::{Error, Result};
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
-use crate::message::Message;
+use crate::message::{Message, TaskProgress};
 use crate::storage::StorageImpl;
 pub use task::{BFOptions, BUOptions, Task, TaskRequest, UserPostFilter};
 pub use task_handler::TaskHandler;
@@ -27,9 +28,13 @@ pub struct Core {
 }
 
 impl Core {
-    pub fn new(task_handler: TH, msg_receiver: mpsc::Receiver<Message>) -> Result<Self> {
+    pub fn new(
+        app: AppHandle,
+        task_handler: TH,
+        msg_receiver: mpsc::Receiver<Message>,
+    ) -> Result<Self> {
         let tasks = Arc::new(Mutex::new(HashMap::new()));
-        spawn(msg_loop(tasks.clone(), msg_receiver));
+        spawn(msg_loop(app, tasks.clone(), msg_receiver));
         let task_handler: &'static mut _ = Box::leak(Box::new(task_handler));
         Ok(Self {
             tasks: tasks,
@@ -81,13 +86,14 @@ impl Core {
 }
 
 async fn msg_loop(
+    app: AppHandle,
     tasks: Arc<Mutex<HashMap<u64, Task>>>,
     mut msg_receiver: mpsc::Receiver<Message>,
 ) {
     loop {
         tokio::select! {
             Some(msg) = msg_receiver.recv() => {
-                handle_task_responses(&tasks, msg).await;
+                handle_task_responses(&app, &tasks, msg).await;
             }
             else => {
                 break;
@@ -97,12 +103,41 @@ async fn msg_loop(
 }
 
 // TODO
-async fn handle_task_responses(tasks: &Mutex<HashMap<u64, Task>>, msg: Message) {
+async fn handle_task_responses(
+    app: &AppHandle,
+    tasks: &Mutex<HashMap<u64, Task>>,
+    msg: Message,
+) -> Result<()> {
     match msg {
-        Message::TaskProgress(tp) => {}
-        Message::UserMeta(um) => {}
-        Message::Err(msg) => {}
+        Message::TaskProgress(TaskProgress {
+            id,
+            total_increment,
+            progress_increment,
+        }) => {
+            let mut tasks = tasks.lock().map_err(|err| Error::Other(err.to_string()))?;
+            let mut total_new = 0;
+            let mut progress_new = 0;
+            tasks.entry(id).and_modify(
+                |Task {
+                     total, progress, ..
+                 }| {
+                    *total += total_increment;
+                    *progress += progress_increment;
+                    total_new = *total;
+                    progress_new = *progress;
+                },
+            );
+            app.emit(
+                "task-progress",
+                serde_json::json!({
+                    "total":total_new,
+                    "progress":progress_new
+                }),
+            )?;
+        }
+        Message::Err { id, err } => app.emit("error", ())?,
     }
+    Ok(())
 }
 
 async fn handle_task_request(task_handler: &TH, id: u64, request: TaskRequest) -> Result<()> {

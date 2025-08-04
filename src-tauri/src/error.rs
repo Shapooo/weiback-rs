@@ -75,3 +75,9 @@ impl Into<InvokeError> for Error {
         todo!()
     }
 }
+
+impl From<tauri::Error> for Error {
+    fn from(value: tauri::Error) -> Self {
+        todo!()
+    }
+}

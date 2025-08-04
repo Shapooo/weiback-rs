@@ -15,14 +15,13 @@ pub struct UserMeta {
 pub struct TaskProgress {
     pub id: u64,
     pub total_increment: u64,
-    pub current_increment: u64,
+    pub progress_increment: u64,
 }
 
 #[derive(Debug)]
 pub enum Message {
-    UserMeta(UserMeta),
     TaskProgress(TaskProgress),
-    Err(Error),
+    Err { id: u64, err: Error },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
