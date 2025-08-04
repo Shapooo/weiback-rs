@@ -11,7 +11,12 @@ use crate::error::{Error, Result};
 use crate::message::Message;
 
 pub trait MediaDownloader {
-    async fn download_picture(&self, url: String, callback: AsyncDownloadCallback) -> Result<()>;
+    async fn download_picture(
+        &self,
+        task_id: u64,
+        url: String,
+        callback: AsyncDownloadCallback,
+    ) -> Result<()>;
 }
 
 // The callback is for success cases and is async.
@@ -23,6 +28,7 @@ type AsyncDownloadCallback = Box<
 
 /// A task for the media downloader actor.
 struct DownloadTask {
+    task_id: u64,
     url: String,
     callback: AsyncDownloadCallback,
 }
@@ -46,15 +52,20 @@ impl MediaDownloaderImpl {
         // TODO: return err msg properly
         tokio::spawn(async move {
             info!("Media downloader actor started.");
-            while let Some(task) = receiver.recv().await {
-                info!("Downloading picture from {}", &task.url);
+            while let Some(DownloadTask {
+                task_id,
+                url,
+                callback,
+            }) = receiver.recv().await
+            {
+                info!("Downloading picture from {}", url);
                 // Use the provided client to make the request
-                let res = match client.get(&task.url).send().await {
+                let res = match client.get(&url).send().await {
                     Ok(response) => {
                         if !response.status().is_success() {
                             error!(
                                 "Download failed for {}: status code {}",
-                                &task.url,
+                                url,
                                 response.status()
                             );
                             // TODO: Report this error back via a dedicated error channel.
@@ -63,27 +74,24 @@ impl MediaDownloaderImpl {
                         match response.bytes().await {
                             Ok(bytes) => {
                                 // Download successful, execute the async callback.
-                                (task.callback)(bytes).await
+                                (callback)(bytes).await
                             }
                             Err(e) => {
-                                error!(
-                                    "Failed to read bytes from response for {}: {}",
-                                    &task.url, e
-                                );
+                                error!("Failed to read bytes from response for {}: {}", &url, e);
                                 Err(Error::Other(e.to_string()))
                                 // TODO: Report this error back via a dedicated error channel.
                             }
                         }
                     }
                     Err(e) => {
-                        error!("Failed to download picture from {}: {}", &task.url, e);
+                        error!("Failed to download picture from {}: {}", url, e);
                         // TODO: Report this error back via a dedicated error channel.
                         Err(Error::Other(e.to_string()))
                     }
                 };
                 if let Err(err) = res {
                     message_sender
-                        .send(Message::Err { id: 0, err })
+                        .send(Message::Err { task_id, err })
                         .await
                         .unwrap();
                 }
@@ -101,8 +109,17 @@ impl MediaDownloader for MediaDownloaderImpl {
     /// This method sends a task to the background downloader actor and returns immediately.
     /// The provided async callback will be executed once the download is complete and successful.
     /// If the download fails, the task is discarded and the callback is never called.
-    async fn download_picture(&self, url: String, callback: AsyncDownloadCallback) -> Result<()> {
-        let task = DownloadTask { url, callback };
+    async fn download_picture(
+        &self,
+        task_id: u64,
+        url: String,
+        callback: AsyncDownloadCallback,
+    ) -> Result<()> {
+        let task = DownloadTask {
+            task_id,
+            url,
+            callback,
+        };
         self.sender.send(task).await.map_err(|e| {
             error!("Failed to send download task to worker: {e}");
             Error::Other("Media downloader channel has been closed".to_string())

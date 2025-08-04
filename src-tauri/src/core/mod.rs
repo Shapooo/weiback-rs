@@ -110,14 +110,14 @@ async fn handle_task_responses(
 ) -> Result<()> {
     match msg {
         Message::TaskProgress(TaskProgress {
-            id,
+            task_id,
             total_increment,
             progress_increment,
         }) => {
             let mut tasks = tasks.lock().map_err(|err| Error::Other(err.to_string()))?;
             let mut total_new = 0;
             let mut progress_new = 0;
-            tasks.entry(id).and_modify(
+            tasks.entry(task_id).and_modify(
                 |Task {
                      total, progress, ..
                  }| {
@@ -135,7 +135,7 @@ async fn handle_task_responses(
                 }),
             )?;
         }
-        Message::Err { id, err } => app.emit("error", ())?,
+        Message::Err { task_id, err } => app.emit("error", ())?,
     }
     Ok(())
 }

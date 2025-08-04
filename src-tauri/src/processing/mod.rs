@@ -52,7 +52,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         })
     }
 
-    pub async fn process(&self, posts: Vec<Post>) -> Result<()> {
+    pub async fn process(&self, task_id: u64, posts: Vec<Post>) -> Result<()> {
         let pic_definition = get_config()
             .read()
             .map_err(|err| Error::Other(err.to_string()))?
@@ -60,7 +60,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         let pic_metas = self.extract_all_pic_metas(&posts, pic_definition);
 
         for meta in pic_metas {
-            self.download_pic_to_local(meta).await?;
+            self.download_pic_to_local(task_id, meta).await?;
         }
 
         for mut post in posts {
@@ -72,7 +72,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
                     Err(e) => {
                         self.msg_sender
                             .send(Message::Err {
-                                id: 0,
+                                task_id,
                                 err: e.into(),
                             })
                             .await;
@@ -141,7 +141,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         pic_metas
     }
 
-    async fn download_pic_to_local(&self, pic_meta: PictureMeta) -> Result<()> {
+    async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
         if let Some(_) = self.storage.get_picture_blob(pic_meta.url()).await? {
             Ok(())
         } else {
@@ -160,7 +160,9 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
                 },
             );
 
-            self.downloader.download_picture(url, callback).await?;
+            self.downloader
+                .download_picture(task_id, url, callback)
+                .await?;
             Ok(())
         }
     }
@@ -177,7 +179,11 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
     }
 
     #[allow(unused)]
-    async fn load_picture_from_local_or_server(&self, pic_meta: PictureMeta) -> Result<Picture> {
+    async fn load_picture_from_local_or_server(
+        &self,
+        task_id: u64,
+        pic_meta: PictureMeta,
+    ) -> Result<Picture> {
         if let Some(blob) = self.storage.get_picture_blob(pic_meta.url()).await? {
             Ok(Picture {
                 meta: pic_meta,
@@ -202,20 +208,27 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
                     })
                 },
             );
-            self.downloader.download_picture(url, callback).await?;
+            self.downloader
+                .download_picture(task_id, url, callback)
+                .await?;
             Ok(result.await?)
         }
     }
 
+    #[allow(unused)]
     async fn get_pictures(
         &self,
+        task_id: u64,
         posts: &[Post],
         definition: PictureDefinition,
     ) -> Result<Vec<Picture>> {
         let pic_metas = self.extract_all_pic_metas(posts, definition);
         let mut pics = Vec::new();
         for metas in pic_metas {
-            pics.push(self.load_picture_from_local_or_server(metas).await?);
+            pics.push(
+                self.load_picture_from_local_or_server(task_id, metas)
+                    .await?,
+            );
         }
         Ok(pics)
     }

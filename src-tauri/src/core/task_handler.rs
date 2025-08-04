@@ -65,11 +65,11 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // backup one page of favorites
-    async fn backup_one_fav_page(&self, page: u32) -> Result<usize> {
+    async fn backup_one_fav_page(&self, task_id: u64, page: u32) -> Result<usize> {
         let posts = self.api_client.favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
-        self.processer.process(posts).await?;
+        self.processer.process(task_id, posts).await?;
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
         for id in ids {
@@ -89,11 +89,11 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // unfavorite all posts that are in weibo favorites
-    pub(super) async fn unfavorite_posts(&self, id: u64) -> Result<()> {
+    pub(super) async fn unfavorite_posts(&self, task_id: u64) -> Result<()> {
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         let task_progress = TaskProgress {
-            id: 0,
+            task_id,
             total_increment: 0,
             progress_increment: len as u64,
         };
@@ -105,7 +105,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             self.api_client.favorites_destroy(id).await?;
             info!("post {id} unfavorited");
             let task_progress = TaskProgress {
-                id: 0,
+                task_id,
                 total_increment: 0,
                 progress_increment: 1,
             };
@@ -118,7 +118,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // backup user posts
-    pub(super) async fn backup_user(&self, id: u64, options: BUOptions) -> Result<()> {
+    pub(super) async fn backup_user(&self, task_id: u64, options: BUOptions) -> Result<()> {
         let uid = options.uid;
         info!("download user {uid} posts");
 
@@ -131,7 +131,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             }
 
             let task_progress = TaskProgress {
-                id: 0,
+                task_id,
                 total_increment: len as u64,
                 progress_increment: len as u64,
             };
@@ -147,17 +147,8 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
         let posts_sum = self.get_db_total_num().await?;
         info!("fetched {} posts from local", posts_sum);
-        // let target_dir = options.export_path.clone();
         let task_name = options.export_task_name.to_owned();
         let limit = options.posts_per_html;
-        let task_progress = TaskProgress {
-            id: 0,
-            total_increment: posts_sum as u64,
-            progress_increment: 0,
-        };
-        self.msg_sender
-            .send(Message::TaskProgress(task_progress))
-            .await?;
         let mut offset = 0;
         let mut index = 1;
         loop {
@@ -173,14 +164,6 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             let html = self.processer.generate_html(local_posts, &options).await?;
             self.exporter.export_page(html, &options).await?;
 
-            let task_progress = TaskProgress {
-                id: 0,
-                total_increment: 0,
-                progress_increment: limit as u64,
-            };
-            self.msg_sender
-                .send(Message::TaskProgress(task_progress))
-                .await?;
             offset += limit;
             index += 1;
             if offset >= posts_sum {
@@ -191,7 +174,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // export favorite posts from weibo
-    pub(super) async fn backup_favorites(&self, id: u64, options: BFOptions) -> Result<()> {
+    pub(super) async fn backup_favorites(&self, task_id: u64, options: BFOptions) -> Result<()> {
         let range = options.range.to_owned();
         assert!(range.start() != &0);
         info!("favorites download range is {range:?}");
@@ -201,7 +184,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let total_pages = (page_range.end() - page_range.start() + 1) as f32;
 
         for (i, page) in page_range.into_iter().enumerate() {
-            let posts_sum = self.backup_one_fav_page(page).await?;
+            let posts_sum = self.backup_one_fav_page(task_id, page).await?;
             total_downloaded += posts_sum;
             info!("fetched {} posts in {}th page", posts_sum, page);
 
