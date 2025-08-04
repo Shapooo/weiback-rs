@@ -1,7 +1,7 @@
 use std::{
     fs,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 use log::debug;
@@ -13,7 +13,7 @@ use crate::error::{Error, Result};
 use crate::models::PictureDefinition;
 
 // 使用 OnceCell 替代 Lazy，以支持可能失败的、显式的初始化。
-static CONFIG: OnceCell<Arc<Mutex<Config>>> = OnceCell::new();
+static CONFIG: OnceCell<Arc<RwLock<Config>>> = OnceCell::new();
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -55,7 +55,7 @@ impl Default for Config {
 pub fn init() -> Result<()> {
     let config = load_or_create()?;
     // set 如果已经初始化，会返回 Err，这里我们忽略这个错误，因为这意味着已经有别的线程初始化了。
-    let _ = CONFIG.set(Arc::new(Mutex::new(config)));
+    let _ = CONFIG.set(Arc::new(RwLock::new(config)));
     Ok(())
 }
 
@@ -66,14 +66,14 @@ pub fn init() -> Result<()> {
 /// - 如果 `init()` 已经被成功调用，它将返回 `init()` 设置的配置。
 /// - 如果 `init()` 从未被调用，它将首次尝试从文件加载配置（但不会创建新文件）。
 ///   如果加载失败（任何原因），它将回退到内存中的默认配置，并确保程序不会崩溃。
-pub fn get_config() -> Arc<Mutex<Config>> {
+pub fn get_config() -> Arc<RwLock<Config>> {
     CONFIG
         .get_or_init(|| {
             // "隐式"初始化路径：尝试加载，如果失败（包括未找到、权限问题等），
             // 则使用默认值。这保证了 get_config 总能成功返回，不会 panic。
             // 这里不写入文件，以避免在运行时产生不可控的 I/O 错误。
             let config = load_from_files().unwrap_or_default();
-            Arc::new(Mutex::new(config))
+            Arc::new(RwLock::new(config))
         })
         .clone()
 }

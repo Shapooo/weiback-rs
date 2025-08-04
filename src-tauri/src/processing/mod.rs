@@ -8,7 +8,7 @@ use itertools::Itertools;
 use serde_json::Value;
 use weibosdk_rs::WeiboAPI;
 
-use crate::core::TaskOptions;
+use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
@@ -43,8 +43,12 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         })
     }
 
-    pub async fn process(&self, posts: Vec<Post>, options: &TaskOptions) -> Result<()> {
-        let pic_metas = self.extract_all_pic_metas(&posts, options.pic_quality);
+    pub async fn process(&self, posts: Vec<Post>) -> Result<()> {
+        let pic_definition = get_config()
+            .read()
+            .map_err(|err| Error::Other(err.to_string()))?
+            .picture_definition;
+        let pic_metas = self.extract_all_pic_metas(&posts, pic_definition);
 
         for meta in pic_metas {
             self.download_pic_to_local(meta).await?;
