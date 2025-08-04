@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use tauri::{self, State};
+use tauri::{self, Manager, State};
 use tokio::sync::{Mutex, mpsc};
 use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
@@ -94,12 +94,15 @@ pub fn run() -> Result<()> {
         msg_sender,
     )
     .unwrap();
-    let core = Core::new(task_handler.clone(), msg_receiver)?;
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(Mutex::new(core))
-        .manage(task_handler)
-        .manage(Mutex::new(api_client))
+        .setup(move |app| {
+            let core = Core::new(app.handle().clone(), task_handler.clone(), msg_receiver)?;
+            app.manage(Mutex::new(core));
+            app.manage(task_handler);
+            app.manage(Mutex::new(api_client));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             backup_user,
             backup_self,
