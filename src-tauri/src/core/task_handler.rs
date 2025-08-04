@@ -34,7 +34,12 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         downloader: D,
         msg_sender: Sender<Message>,
     ) -> Result<Self> {
-        let processer = PostProcesser::new(api_client.clone(), storage.clone(), downloader)?;
+        let processer = PostProcesser::new(
+            api_client.clone(),
+            storage.clone(),
+            downloader,
+            msg_sender.clone(),
+        )?;
         Ok(TaskHandler {
             api_client,
             storage,

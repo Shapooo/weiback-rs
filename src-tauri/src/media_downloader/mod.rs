@@ -81,8 +81,11 @@ impl MediaDownloaderImpl {
                         Err(Error::Other(e.to_string()))
                     }
                 };
-                if let Err(e) = res {
-                    message_sender.send(Message::Err(err)).await.unwrap();
+                if let Err(err) = res {
+                    message_sender
+                        .send(Message::Err { id: 0, err })
+                        .await
+                        .unwrap();
                 }
             }
             info!("Media downloader actor finished.");

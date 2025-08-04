@@ -12,11 +12,9 @@ use bytes::Bytes;
 use log::{debug, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
 
 use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
-use crate::message::Message;
 use crate::models::{Picture, Post, User};
 use crate::utils::url_to_path;
 use processer::Processer;
@@ -43,17 +41,15 @@ pub struct StorageImpl {
     db_pool: SqlitePool,
     picture_path: PathBuf,
     processer: Processer,
-    msg_sender: mpsc::Sender<Message>,
 }
 
 impl StorageImpl {
-    pub fn new(msg_sender: mpsc::Sender<Message>) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let db_pool = Runtime::new().unwrap().block_on(create_db_pool())?;
         Ok(StorageImpl {
             processer: Processer::new(db_pool.clone()),
             db_pool,
             picture_path: current_exe().unwrap().parent().unwrap().join(PICTURE_PATH),
-            msg_sender,
         })
     }
 }

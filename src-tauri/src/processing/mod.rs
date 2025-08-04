@@ -6,12 +6,14 @@ use std::pin::Pin;
 
 use itertools::Itertools;
 use serde_json::Value;
+use tokio::sync::mpsc;
 use weibosdk_rs::WeiboAPI;
 
 use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
+use crate::message::Message;
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
 use crate::utils::EMOJI_EXPR;
@@ -24,10 +26,16 @@ pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
     downloader: D,
     emoji_map: Option<HashMap<String, String>>,
     html_generator: HTMLGenerator,
+    msg_sender: mpsc::Sender<Message>,
 }
 
 impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
-    pub fn new(api_client: W, storage: S, downloader: D) -> Result<Self> {
+    pub fn new(
+        api_client: W,
+        storage: S,
+        downloader: D,
+        msg_sender: mpsc::Sender<Message>,
+    ) -> Result<Self> {
         let path = std::env::current_exe().unwrap();
         let tera_path = path
             .parent()
@@ -40,6 +48,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             downloader,
             emoji_map: None,
             html_generator: HTMLGenerator::new(tera),
+            msg_sender,
         })
     }
 
@@ -55,10 +64,20 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         }
 
         for mut post in posts {
-            if post.is_long_text
-                && let Ok(long_text) = self.api_client.get_long_text(post.id).await
-            {
-                post.text = long_text
+            if post.is_long_text {
+                match self.api_client.get_long_text(post.id).await {
+                    Ok(long_text) => {
+                        post.text = long_text;
+                    }
+                    Err(e) => {
+                        self.msg_sender
+                            .send(Message::Err {
+                                id: 0,
+                                err: e.into(),
+                            })
+                            .await;
+                    }
+                }
             }
             self.storage.save_post(&post).await?;
         }

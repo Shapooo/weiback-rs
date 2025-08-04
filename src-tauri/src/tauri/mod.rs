@@ -80,9 +80,9 @@ async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> 
 
 pub fn run() -> Result<()> {
     let (msg_sender, msg_receiver) = mpsc::channel(100);
-    let storage = StorageImpl::new(msg_sender.clone()).unwrap();
+    let storage = StorageImpl::new().unwrap();
     let storage = Arc::new(storage);
-    let exporter = ExporterImpl::new(msg_sender.clone());
+    let exporter = ExporterImpl::new();
     let http_client = new_client_with_headers().unwrap();
     let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
     let api_client = WeiboAPIImpl::new(http_client.clone());

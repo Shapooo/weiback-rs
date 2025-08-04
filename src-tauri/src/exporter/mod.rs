@@ -29,13 +29,11 @@ pub struct HTMLPage {
 }
 
 #[derive(Debug, Clone)]
-pub struct ExporterImpl {
-    msg_sender: Sender<Message>,
-}
+pub struct ExporterImpl();
 
 impl ExporterImpl {
-    pub fn new(msg_sender: Sender<Message>) -> Self {
-        Self { msg_sender }
+    pub fn new() -> Self {
+        Self()
     }
 }
 
@@ -161,7 +159,6 @@ impl ExportOptions {
 #[cfg(test)]
 mod exporter_test {
     use super::{ExportOptions, Exporter, ExporterImpl, HTMLPage, HTMLPicture};
-    use tokio::sync::mpsc::channel;
     #[tokio::test]
     async fn export_page() {
         let pic_blob = std::fs::read("res/example.jpg").unwrap();
@@ -175,8 +172,7 @@ mod exporter_test {
             .collect(),
         };
 
-        let (tx, _) = channel(1);
-        let exporter = ExporterImpl::new(tx);
+        let exporter = ExporterImpl::new();
         let options = ExportOptions::default()
             .export_task_name("test_task".into())
             .export_path("./export_page".into());
