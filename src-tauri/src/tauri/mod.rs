@@ -5,7 +5,8 @@ use tauri::{self, State};
 use tokio::sync::{Mutex, mpsc};
 use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
-use crate::core::{Core, TaskOptions, task_handler::TaskHandler};
+use crate::core::{BFOptions, BUOptions, TaskRequest};
+use crate::core::{Core, task_handler::TaskHandler};
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, ExporterImpl};
 use crate::media_downloader::MediaDownloaderImpl;
@@ -26,17 +27,17 @@ async fn backup_self(
 
 #[tauri::command]
 async fn backup_user(core: State<'_, Core>, uid: String, range: RangeInclusive<u32>) -> Result<()> {
-    let options = TaskOptions::new()
-        .range(range)
-        .with_user(uid.parse().map_err(|er| Error::Other(format!("{er}")))?);
-    core.backup_user(options).await
+    core.backup_user(TaskRequest::BackupUser(BUOptions {
+        uid: uid.parse().map_err(|err| Error::Other(format!("{err}")))?,
+        range,
+    }))
+    .await
 }
 
 #[tauri::command]
-async fn backup_favorites(core: State<'_, Mutex<Core>>, range: RangeInclusive<u32>) -> Result<()> {
-    let options = TaskOptions::new().range(range);
-    let core = core.lock().await;
-    core.backup_favorites(options).await
+async fn backup_favorites(core: State<'_, Core>, range: RangeInclusive<u32>) -> Result<()> {
+    core.backup_favorites(TaskRequest::BackupFavorites(BFOptions { range }))
+        .await
 }
 
 #[tauri::command]

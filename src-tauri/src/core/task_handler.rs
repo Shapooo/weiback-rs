@@ -4,7 +4,7 @@ use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
-use super::options::TaskOptions;
+use crate::core::task::{BFOptions, BUOptions};
 use crate::error::Result;
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
@@ -16,16 +16,6 @@ use crate::storage::Storage;
 const SAVING_PERIOD: usize = 200;
 const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
 const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
-
-#[derive(Debug, Clone)]
-pub enum TaskRequest {
-    // to download favorites (range, with pic, image definition level)
-    BackupFavorites(TaskOptions),
-    // to unfavorite favorite post
-    UnfavoritePosts,
-    // to backup user (id, with pic, image definition level)
-    BackupUser(TaskOptions),
-}
 
 #[derive(Debug, Clone)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
@@ -70,7 +60,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // backup one page of favorites
-    async fn backup_one_fav_page(&self, page: u32, options: TaskOptions) -> Result<usize> {
+    async fn backup_one_fav_page(&self, page: u32, options: BFOptions) -> Result<usize> {
         let posts = self.api_client.favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
@@ -122,7 +112,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // backup user posts
-    pub(super) async fn backup_user(&self, options: TaskOptions) -> Result<()> {
+    pub(super) async fn backup_user(&self, options: BUOptions) -> Result<()> {
         let uid = options.uid;
         info!("download user {uid} posts");
 
@@ -195,8 +185,8 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     // export favorite posts from weibo
-    pub(super) async fn backup_favorites(&self, options: TaskOptions) -> Result<()> {
-        let range = options.range.clone().unwrap_or(1..=2000);
+    pub(super) async fn backup_favorites(&self, options: BFOptions) -> Result<()> {
+        let range = options.range.to_owned();
         assert!(range.start() != &0);
         info!("favorites download range is {range:?}");
         let mut total_downloaded: usize = 0;
