@@ -14,7 +14,7 @@ use weibosdk_rs::WeiboAPIImpl;
 use crate::error::{Error, Result};
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
-use crate::message::{Message, TaskProgress};
+use crate::message::{ErrMsg, ErrType, Message, TaskProgress};
 use crate::storage::StorageImpl;
 pub use task::{BFOptions, BUOptions, Task, TaskRequest, UserPostFilter};
 pub use task_handler::TaskHandler;
@@ -109,6 +109,7 @@ async fn handle_task_responses(
 ) -> Result<()> {
     match msg {
         Message::TaskProgress(TaskProgress {
+            r#type,
             task_id,
             total_increment,
             progress_increment,
@@ -129,12 +130,24 @@ async fn handle_task_responses(
             app.emit(
                 "task-progress",
                 serde_json::json!({
+                    "type":r#type,
                     "total":total_new,
                     "progress":progress_new
                 }),
             )?;
         }
-        Message::Err { task_id, err } => app.emit("error", ())?,
+        Message::Err(ErrMsg {
+            task_id,
+            err,
+            r#type,
+        }) => app.emit(
+            "error",
+            serde_json::json!({
+                "type": r#type,
+                "task_id":task_id,
+                "err": err.to_string(),
+            }),
+        )?,
     }
     Ok(())
 }
@@ -150,7 +163,11 @@ async fn handle_task_request(task_handler: &TH, task_id: u64, request: TaskReque
     if let Err(err) = res {
         task_handler
             .msg_sender()
-            .send(Message::Err { task_id, err })
+            .send(Message::Err(ErrMsg {
+                r#type: ErrType::LongTaskFail { task_id },
+                task_id,
+                err: err.to_string(),
+            }))
             .await
             .unwrap();
     }

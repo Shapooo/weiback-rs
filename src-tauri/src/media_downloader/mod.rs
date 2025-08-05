@@ -8,7 +8,7 @@ use reqwest::Client;
 use tokio::sync::mpsc;
 
 use crate::error::{Error, Result};
-use crate::message::Message;
+use crate::message::{ErrMsg, ErrType, Message};
 
 pub trait MediaDownloader {
     async fn download_picture(
@@ -91,7 +91,11 @@ impl MediaDownloaderImpl {
                 };
                 if let Err(err) = res {
                     message_sender
-                        .send(Message::Err { task_id, err })
+                        .send(Message::Err(ErrMsg {
+                            r#type: ErrType::DownPicFail { url },
+                            task_id,
+                            err: err.to_string(),
+                        }))
                         .await
                         .unwrap();
                 }

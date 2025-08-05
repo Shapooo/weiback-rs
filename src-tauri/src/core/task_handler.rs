@@ -8,7 +8,7 @@ use crate::core::task::{BFOptions, BUOptions};
 use crate::error::Result;
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
-use crate::message::{Message, TaskProgress};
+use crate::message::{Message, TaskProgress, TaskType};
 use crate::models::Post;
 use crate::processing::PostProcesser;
 use crate::storage::Storage;
@@ -93,6 +93,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         let task_progress = TaskProgress {
+            r#type: TaskType::Unfav,
             task_id,
             total_increment: 0,
             progress_increment: len as u64,
@@ -105,6 +106,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             self.api_client.favorites_destroy(id).await?;
             info!("post {id} unfavorited");
             let task_progress = TaskProgress {
+                r#type: TaskType::Unfav,
                 task_id,
                 total_increment: 0,
                 progress_increment: 1,
@@ -131,6 +133,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             }
 
             let task_progress = TaskProgress {
+                r#type: TaskType::BackUser,
                 task_id,
                 total_increment: len as u64,
                 progress_increment: len as u64,

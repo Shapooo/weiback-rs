@@ -13,7 +13,7 @@ use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
-use crate::message::Message;
+use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
 use crate::utils::EMOJI_EXPR;
@@ -71,11 +71,13 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
                     }
                     Err(e) => {
                         self.msg_sender
-                            .send(Message::Err {
+                            .send(Message::Err(ErrMsg {
+                                r#type: ErrType::LongTextFail { post_id: post.id },
                                 task_id,
-                                err: e.into(),
-                            })
-                            .await;
+                                err: e.to_string(),
+                            }))
+                            .await
+                            .unwrap();
                     }
                 }
             }
