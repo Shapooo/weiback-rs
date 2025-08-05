@@ -5,8 +5,8 @@ use tauri::{self, Manager, State};
 use tokio::sync::{Mutex, mpsc};
 use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
-use crate::core::{BFOptions, BUOptions, TaskRequest};
-use crate::core::{Core, task_handler::TaskHandler};
+use crate::config::get_config;
+use crate::core::{BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler};
 use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, ExporterImpl};
 use crate::media_downloader::MediaDownloaderImpl;
@@ -79,13 +79,18 @@ async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> 
 }
 
 pub fn run() -> Result<()> {
+    let weibo_api_config = get_config()
+        .read()
+        .map_err(|e| Error::Other(e.to_string()))?
+        .weibo_api_config
+        .clone();
     let (msg_sender, msg_receiver) = mpsc::channel(100);
     let storage = StorageImpl::new().unwrap();
     let storage = Arc::new(storage);
     let exporter = ExporterImpl::new();
     let http_client = new_client_with_headers().unwrap();
     let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
-    let api_client = WeiboAPIImpl::new(http_client.clone());
+    let api_client = WeiboAPIImpl::new(http_client.clone(), weibo_api_config);
     let task_handler = TaskHandler::new(
         api_client.clone(),
         storage,

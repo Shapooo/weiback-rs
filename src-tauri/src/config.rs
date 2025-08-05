@@ -10,6 +10,7 @@ use log::debug;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
+use weibosdk_rs::config::Conifg as WeiboApiConfig;
 
 use crate::error::{Error, Result};
 use crate::models::PictureDefinition;
@@ -17,7 +18,7 @@ use crate::models::PictureDefinition;
 // 使用 OnceCell 替代 Lazy，以支持可能失败的、显式的初始化。
 static CONFIG: OnceCell<Arc<RwLock<Config>>> = OnceCell::new();
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub db_path: PathBuf,
@@ -28,6 +29,7 @@ pub struct Config {
     pub backup_task_interval: Duration,
     pub other_task_interval: Duration,
     pub picture_path: PathBuf,
+    pub weibo_api_config: WeiboApiConfig,
 }
 
 impl Default for Config {
@@ -47,6 +49,7 @@ impl Default for Config {
             backup_task_interval: Duration::from_secs(3),
             other_task_interval: Duration::from_secs(1),
             picture_path: PathBuf::from_str("res/pictures").unwrap(),
+            weibo_api_config: Default::default(),
         }
     }
 }
