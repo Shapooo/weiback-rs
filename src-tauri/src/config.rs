@@ -1,7 +1,9 @@
 use std::{
     fs,
     path::PathBuf,
+    str::FromStr,
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use log::debug;
@@ -23,6 +25,9 @@ pub struct Config {
     pub session_path: PathBuf,
     pub download_pictures: bool,
     pub picture_definition: PictureDefinition,
+    pub backup_task_interval: Duration,
+    pub other_task_interval: Duration,
+    pub picture_path: PathBuf,
 }
 
 impl Default for Config {
@@ -39,6 +44,9 @@ impl Default for Config {
             session_path: config_dir.join("session.json"),
             download_pictures: true,
             picture_definition: Default::default(),
+            backup_task_interval: Duration::from_secs(3),
+            other_task_interval: Duration::from_secs(1),
+            picture_path: PathBuf::from_str("res/pictures").unwrap(),
         }
     }
 }

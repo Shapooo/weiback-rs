@@ -1,21 +1,16 @@
-use std::time::Duration;
-
 use log::info;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
+use crate::config::get_config;
 use crate::core::task::{BFOptions, BUOptions};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress, TaskType};
 use crate::models::Post;
 use crate::processing::PostProcesser;
 use crate::storage::Storage;
-
-const SAVING_PERIOD: usize = 200;
-const BACKUP_TASK_INTERVAL: Duration = Duration::from_secs(3);
-const OTHER_TASK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
@@ -90,6 +85,10 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // unfavorite all posts that are in weibo favorites
     pub(super) async fn unfavorite_posts(&self, task_id: u64) -> Result<()> {
+        let task_interval = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .other_task_interval;
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         let task_progress = TaskProgress {
@@ -114,13 +113,17 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             self.msg_sender
                 .send(Message::TaskProgress(task_progress))
                 .await?;
-            tokio::time::sleep(OTHER_TASK_INTERVAL).await;
+            tokio::time::sleep(task_interval).await;
         }
         Ok(())
     }
 
     // backup user posts
     pub(super) async fn backup_user(&self, task_id: u64, options: BUOptions) -> Result<()> {
+        let task_interval = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .backup_task_interval;
         let uid = options.uid;
         info!("download user {uid} posts");
 
@@ -142,7 +145,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                 .send(Message::TaskProgress(task_progress))
                 .await?;
             page += 1;
-            sleep(BACKUP_TASK_INTERVAL).await;
+            sleep(task_interval).await;
         }
         Ok(())
     }
@@ -178,6 +181,10 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // export favorite posts from weibo
     pub(super) async fn backup_favorites(&self, task_id: u64, options: BFOptions) -> Result<()> {
+        let task_interval = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .backup_task_interval;
         let range = options.range.to_owned();
         assert!(range.start() != &0);
         info!("favorites download range is {range:?}");
@@ -198,7 +205,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             //     ))
             //     .await?;
             if i != last_page as usize {
-                sleep(BACKUP_TASK_INTERVAL).await;
+                sleep(task_interval).await;
             }
         }
         info!("fetched {total_downloaded} posts in total");

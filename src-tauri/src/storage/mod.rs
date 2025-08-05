@@ -13,6 +13,7 @@ use log::{debug, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 use tokio::runtime::Runtime;
 
+use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
 use crate::models::{Picture, Post, User};
@@ -20,8 +21,6 @@ use crate::utils::url_to_path;
 use processer::Processer;
 
 const VALIDE_DB_VERSION: i64 = 2;
-const DATABASE: &str = "res/weiback.db";
-const PICTURE_PATH: &str = "res/pictures";
 
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
@@ -45,11 +44,16 @@ pub struct StorageImpl {
 
 impl StorageImpl {
     pub fn new() -> Result<Self> {
+        let picture_path = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .picture_path
+            .clone();
         let db_pool = Runtime::new().unwrap().block_on(create_db_pool())?;
         Ok(StorageImpl {
             processer: Processer::new(db_pool.clone()),
             db_pool,
-            picture_path: current_exe().unwrap().parent().unwrap().join(PICTURE_PATH),
+            picture_path: current_exe().unwrap().parent().unwrap().join(picture_path),
         })
     }
 }
@@ -155,12 +159,17 @@ async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
 }
 
 async fn create_db_pool() -> Result<SqlitePool> {
+    let db_path = get_config()
+        .read()
+        .map_err(|e| Error::Other(e.to_string()))?
+        .db_path
+        .clone();
     debug!("initing...");
     let db_path = std::env::current_exe()
         .unwrap()
         .parent()
         .unwrap()
-        .join(DATABASE);
+        .join(db_path);
     if db_path.is_file() {
         info!("db {:?} exists", db_path);
         let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
