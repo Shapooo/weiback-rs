@@ -28,7 +28,7 @@ impl TaskRequest {
                 let range = o.range.to_owned();
                 range.end() - range.start() + 1
             }
-            TaskRequest::UnfavoritePosts { .. } => 1,
+            TaskRequest::UnfavoritePosts => 0,
         }
     }
 }

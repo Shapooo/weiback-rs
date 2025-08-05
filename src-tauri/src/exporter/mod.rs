@@ -9,11 +9,9 @@ use log::info;
 use tokio::{
     fs::{DirBuilder, File},
     io::AsyncWriteExt,
-    sync::mpsc::Sender,
 };
 
 use crate::error::{Error, Result};
-use crate::message::Message;
 use crate::models::{Picture, PictureDefinition};
 use crate::utils::url_to_filename;
 use std::convert::TryFrom;
@@ -28,12 +26,12 @@ pub struct HTMLPage {
     pub pics: Vec<HTMLPicture>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ExporterImpl();
 
 impl ExporterImpl {
     pub fn new() -> Self {
-        Self()
+        Default::default()
     }
 }
 

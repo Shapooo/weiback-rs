@@ -34,12 +34,8 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let config_dir = dirs::config_dir()
-            .unwrap_or_else(PathBuf::new)
-            .join("weiback");
-        let data_dir = dirs::data_dir()
-            .unwrap_or_else(PathBuf::new)
-            .join("weiback");
+        let config_dir = dirs::config_dir().unwrap_or_default().join("weiback");
+        let data_dir = dirs::data_dir().unwrap_or_default().join("weiback");
         Self {
             db_path: config_dir.join("weiback.db"),
             templates_path: data_dir.join("templates"),
@@ -107,17 +103,14 @@ fn load_or_create() -> Result<Config> {
     // 未找到配置文件，创建并写入默认配置
     let config = Config::default();
     let config_local_path = dirs::config_local_dir()
-        .unwrap_or_else(PathBuf::new)
+        .unwrap_or_default()
         .join("weiback/config.json");
 
     if let Some(parent) = config_local_path.parent() {
         fs::create_dir_all(parent)?;
     }
     fs::write(&config_local_path, serde_json::to_string_pretty(&config)?)?;
-    debug!(
-        "Default configuration file created at: {:?}",
-        config_local_path
-    );
+    debug!("Default configuration file created at: {config_local_path:?}",);
 
     Ok(config)
 }

@@ -6,6 +6,7 @@ use url::Url;
 
 use crate::error::{Error, Result};
 
+#[allow(unused_macros)]
 macro_rules! here {
     () => {
         concat!("at ", file!(), " line ", line!(), " column ", column!())
@@ -32,7 +33,7 @@ pub fn url_to_path(url: &str) -> Result<String> {
 pub fn url_to_filename(url: &str) -> Result<String> {
     let url = Url::parse(strip_url_queries(url))?;
     url.path_segments()
-        .and_then(|segments| segments.last())
+        .and_then(|mut segments| segments.next_back())
         .and_then(|name| {
             if name.is_empty() {
                 None

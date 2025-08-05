@@ -58,7 +58,7 @@ impl MediaDownloaderImpl {
                 callback,
             }) = receiver.recv().await
             {
-                info!("Downloading picture from {}", url);
+                info!("Downloading picture from {url}");
                 // Use the provided client to make the request
                 let res = match client.get(&url).send().await {
                     Ok(response) => {
@@ -77,14 +77,14 @@ impl MediaDownloaderImpl {
                                 (callback)(bytes).await
                             }
                             Err(e) => {
-                                error!("Failed to read bytes from response for {}: {}", &url, e);
+                                error!("Failed to read bytes from response for {url}: {e}");
                                 Err(Error::Other(e.to_string()))
                                 // TODO: Report this error back via a dedicated error channel.
                             }
                         }
                     }
                     Err(e) => {
-                        error!("Failed to download picture from {}: {}", url, e);
+                        error!("Failed to download picture from {url}: {e}");
                         // TODO: Report this error back via a dedicated error channel.
                         Err(Error::Other(e.to_string()))
                     }

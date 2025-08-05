@@ -20,7 +20,7 @@ pub fn create_tera(template_path: &Path) -> Result<Tera> {
         .expect("template path cannot convert to str")
         .to_owned();
     path.push_str("/*.html");
-    debug!("init tera from template: {}", path);
+    debug!("init tera from template: {path}");
     let mut templates = match Tera::new(&path) {
         Ok(t) => t,
         Err(e) => {

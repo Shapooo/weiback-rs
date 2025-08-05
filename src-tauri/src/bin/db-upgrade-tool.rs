@@ -109,7 +109,7 @@ impl Upgrader {
             self.status_file
                 .write_all(format!("{}: {}\n", self.flag, message).as_bytes())
                 .await?;
-            info!("{}...", message);
+            info!("{message}...");
             self.flag += 1;
             self.check_point += 1;
             Ok(false)
@@ -131,7 +131,7 @@ impl Upgrader {
             })
             .max()
             .unwrap_or(0);
-        info!("flag {}", flag);
+        info!("flag {flag}");
         Ok(Self {
             flag,
             check_point: 0,
@@ -395,8 +395,7 @@ impl Upgrader {
                         .await?;
                 } else {
                     warn!(
-                        "Warn: the post/user/emoji not found, which associated to picture {}: {}",
-                        pic_id, url
+                        "Warn: the post/user/emoji not found, which associated to picture {pic_id}: {url}"
                     );
                 }
             }

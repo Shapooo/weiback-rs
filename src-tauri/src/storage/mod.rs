@@ -81,7 +81,7 @@ impl Storage for Arc<StorageImpl> {
     }
 
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
-        debug!("unfav post {} in db", id);
+        debug!("unfav post {id} in db");
         sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
             .bind(id)
             .execute(&self.db_pool)
@@ -90,7 +90,7 @@ impl Storage for Arc<StorageImpl> {
     }
 
     async fn mark_post_favorited(&self, id: i64) -> Result<()> {
-        debug!("mark favorited post {} in db", id);
+        debug!("mark favorited post {id} in db");
         sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
             .bind(id)
             .execute(&self.db_pool)
@@ -171,12 +171,12 @@ async fn create_db_pool() -> Result<SqlitePool> {
         .unwrap()
         .join(db_path);
     if db_path.is_file() {
-        info!("db {:?} exists", db_path);
+        info!("db {db_path:?} exists");
         let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
         check_db_version(&db_pool).await?;
         Ok(db_pool)
     } else {
-        info!("db {:?} not exists, create it", db_path);
+        info!("db {db_path:?} not exists, create it");
         if !db_path.parent().unwrap().exists() {
             let mut dir_builder = tokio::fs::DirBuilder::new();
             dir_builder.recursive(true);
@@ -184,7 +184,7 @@ async fn create_db_pool() -> Result<SqlitePool> {
                 .create(
                     db_path
                         .parent()
-                        .ok_or(Error::Other(format!("{:?} should have parent", db_path)))?,
+                        .ok_or(Error::Other(format!("{db_path:?} should have parent")))?,
                 )
                 .await?;
         } else if db_path.parent().unwrap().is_file() {
@@ -205,7 +205,7 @@ async fn create_tables(db_pool: &SqlitePool) -> Result<()> {
     let mut conn = db_pool.acquire().await?;
     post_storage::create_post_table(conn.as_mut()).await?;
     user_storage::create_user_table(conn.as_mut()).await?;
-    sqlx::query(format!("PRAGMA user_version = {};", VALIDE_DB_VERSION).as_str())
+    sqlx::query(format!("PRAGMA user_version = {VALIDE_DB_VERSION};").as_str())
         .execute(db_pool)
         .await?;
     Ok(())

@@ -129,7 +129,7 @@ impl Processer {
                 .await
                 .into_iter()
                 .partition_result();
-        let posts: Vec<_> = posts.into_iter().filter_map(|p| p).collect();
+        let posts: Vec<_> = posts.into_iter().flatten().collect();
         // TODO: deal with err and none(s)
         debug!("geted {} post from local", posts.len());
         Ok(posts)

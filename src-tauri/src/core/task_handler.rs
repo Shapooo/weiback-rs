@@ -68,8 +68,8 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
         let (mut start, mut end) = range;
         let mut total_downloaded: usize = 0;
-        start = (start + count - 1) / count;
-        end = (end + count - 1) / count;
+        start = start.div_ceil(count);
+        end = end.div_ceil(count);
         self.msg_sender
             .send(Message::TaskProgress(TaskProgress {
                 r#type: task_type.clone(),
@@ -189,7 +189,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
         let posts_sum = self.get_favorited_sum().await?;
-        info!("fetched {} posts from local", posts_sum);
+        info!("fetched {posts_sum} posts from local");
         let (mut start, end) = options.range.into_inner();
         let task_name = options.export_task_name.to_owned();
         let limit = options.posts_per_html;

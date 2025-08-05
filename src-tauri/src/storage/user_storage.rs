@@ -41,19 +41,19 @@ impl From<User> for UserStorage {
     }
 }
 
-impl Into<User> for UserStorage {
-    fn into(self) -> User {
-        User {
-            id: self.id,
-            screen_name: self.screen_name,
-            profile_image_url: self.profile_image_url,
-            avatar_large: self.avatar_large,
-            avatar_hd: self.avatar_hd,
-            verified: self.verified,
-            verified_type: self.verified_type,
-            domain: self.domain,
-            follow_me: self.follow_me,
-            following: self.following,
+impl From<UserStorage> for User {
+    fn from(val: UserStorage) -> Self {
+        Self {
+            id: val.id,
+            screen_name: val.screen_name,
+            profile_image_url: val.profile_image_url,
+            avatar_large: val.avatar_large,
+            avatar_hd: val.avatar_hd,
+            verified: val.verified,
+            verified_type: val.verified_type,
+            domain: val.domain,
+            follow_me: val.follow_me,
+            following: val.following,
         }
     }
 }

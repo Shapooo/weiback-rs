@@ -37,7 +37,7 @@ impl Core {
         spawn(msg_loop(app, tasks.clone(), msg_receiver));
         let task_handler: &'static mut _ = Box::leak(Box::new(task_handler));
         Ok(Self {
-            tasks: tasks,
+            tasks,
             next_task_id: AtomicU64::new(1),
             task_handler,
         })
@@ -93,7 +93,7 @@ async fn msg_loop(
     loop {
         tokio::select! {
             Some(msg) = msg_receiver.recv() => {
-                handle_task_responses(&app, &tasks, msg).await;
+                let _ = handle_task_responses(&app, &tasks, msg).await; // TODO
             }
             else => {
                 break;

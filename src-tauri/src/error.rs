@@ -70,14 +70,14 @@ where
     }
 }
 
-impl Into<InvokeError> for Error {
-    fn into(self) -> InvokeError {
+impl From<Error> for InvokeError {
+    fn from(_value: Error) -> Self {
         todo!()
     }
 }
 
 impl From<tauri::Error> for Error {
-    fn from(value: tauri::Error) -> Self {
+    fn from(_value: tauri::Error) -> Self {
         todo!()
     }
 }
