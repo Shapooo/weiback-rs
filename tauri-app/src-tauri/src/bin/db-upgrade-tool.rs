@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use chrono::{DateTime, FixedOffset, TimeZone};
 use env_logger::Builder;
 use log::{LevelFilter, error, info, warn};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde_json::{Value, from_str};
 use sqlx::{Sqlite, SqlitePool};
 use tokio::{
@@ -420,8 +422,6 @@ pub fn parse_created_at(created_at: &str) -> Result<DateTime<FixedOffset>> {
     Ok(DateTime::parse_from_str(created_at, "%a %b %d %T %z %Y")?)
 }
 
-use once_cell::sync::Lazy;
-use regex::Regex;
 static EMOJI_URL_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^https://face.t.sinajs.cn.*").unwrap());
 

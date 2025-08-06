@@ -7,5 +7,4 @@ pub mod message;
 pub mod models;
 pub mod processing;
 pub mod storage;
-pub mod tauri;
 pub mod utils;

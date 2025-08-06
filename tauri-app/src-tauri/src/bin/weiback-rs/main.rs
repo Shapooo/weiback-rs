@@ -3,10 +3,8 @@ use env_logger::Builder;
 use log::{LevelFilter, info};
 
 // use weiback::core::Core;
-use weiback::{
-    error::{Error, Result},
-    tauri,
-};
+use tauri_app;
+use weiback::error::{Error, Result};
 
 fn main() -> Result<()> {
     // std::env::set_var("RUST_BACKTRACE", "1");
@@ -14,7 +12,7 @@ fn main() -> Result<()> {
     info!("start running...");
     // let core = Core::new();
     // core.run()?;
-    tauri::run()?;
+    tauri_app::run()?;
 
     info!("done");
     Ok(())

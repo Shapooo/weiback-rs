@@ -5,12 +5,12 @@ use tauri::{self, Manager, State};
 use tokio::sync::{Mutex, mpsc};
 use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
-use crate::config::get_config;
-use crate::core::{BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler};
-use crate::error::{Error, Result};
-use crate::exporter::{ExportOptions, ExporterImpl};
-use crate::media_downloader::MediaDownloaderImpl;
-use crate::storage::StorageImpl;
+use weiback::config::get_config;
+use weiback::core::{BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler};
+use weiback::error::{Error, Result};
+use weiback::exporter::{ExportOptions, ExporterImpl};
+use weiback::media_downloader::MediaDownloaderImpl;
+use weiback::storage::StorageImpl;
 
 type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
 type WeiboAPIImpl = WAI<reqwest::Client>;
