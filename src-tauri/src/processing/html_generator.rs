@@ -6,11 +6,11 @@ use log::{debug, error};
 use serde_json::Value;
 use tera::{Context, Tera};
 
-use super::pic_id_to_url;
+use super::{pic_id_to_url, process_in_post_pics};
 use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
-use crate::models::{PictureMeta, Post};
+use crate::models::{PictureDefinition, PictureMeta, Post};
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, url_to_filename,
 };
@@ -52,33 +52,12 @@ impl HTMLGenerator {
     }
 
     fn generate_post(&self, mut post: Post, options: &ExportOptions) -> Result<String> {
+        let pic_folder = options.export_task_name.to_owned() + "_files";
         let pic_quality = get_config()
             .read()
             .map_err(|e| Error::Other(e.to_string()))?
             .picture_definition;
-        let pic_folder = options.export_task_name.to_owned() + "_files";
-        let in_post_pic_paths = post
-            .pic_ids
-            .as_ref()
-            .map(|ids| {
-                let pic_infos = post
-                    .pic_infos
-                    .as_ref()
-                    .ok_or(Error::Other("()".to_string()))?; // TODO: err info
-                let ids = ids
-                    .iter()
-                    .map(|id| {
-                        let url = pic_id_to_url(id, pic_infos, &pic_quality)
-                            .ok_or(Error::Other("()".to_string()))?; //TODO
-                        let file_name = url_to_filename(url)?;
-                        let pic_location = pic_folder.to_owned() + "_files" + file_name.as_str();
-                        Ok(pic_location)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                Ok::<Vec<_>, Error>(ids)
-            })
-            .transpose()?
-            .unwrap_or_default();
+        let in_post_pic_paths = extract_in_post_pic_paths(&post, &pic_folder, pic_quality);
 
         let mut context = Context::new();
         post.text = self.trans_text(&post, PathBuf::from(pic_folder).as_ref())?;
@@ -212,4 +191,21 @@ impl HTMLGenerator {
             + url_title
             + "</a>"
     }
+}
+
+fn extract_in_post_pic_paths(
+    post: &Post,
+    pic_folder: &str,
+    pic_quality: PictureDefinition,
+) -> Vec<String> {
+    process_in_post_pics(post, |id, pic_infos, _| {
+        pic_id_to_url(id, pic_infos, &pic_quality)
+            .and_then(|url| url_to_filename(url).ok())
+            .and_then(|name| {
+                Path::new(pic_folder)
+                    .join(name)
+                    .to_str()
+                    .map(|s| s.to_string())
+            })
+    })
 }

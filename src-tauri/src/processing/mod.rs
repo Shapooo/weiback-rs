@@ -272,21 +272,31 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
 }
 
 fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
+    process_in_post_pics(post, |id, pic_infos, post| {
+        pic_id_to_url(id, pic_infos, &definition)
+            .map(|url| PictureMeta::in_post(url.to_string(), post.id))
+    })
+}
+
+fn process_in_post_pics<T, F>(post: &Post, mut f: F) -> Vec<T>
+where
+    F: FnMut(&str, &HashMap<String, Value>, &Post) -> Option<T>,
+{
     if let Some(retweeted_post) = &post.retweeted_status {
-        extract_in_post_pic_metas(retweeted_post, definition)
+        process_in_post_pics(retweeted_post, f)
     } else if let Some(pic_ids) = post.pic_ids.as_ref()
-        && pic_ids.len() > 0
+        && !pic_ids.is_empty()
     {
         let Some(pic_infos) = post.pic_infos.as_ref() else {
-            error!("Missing pic_infos while pic_ids exists");
+            error!(
+                "Missing pic_infos while pic_ids exists for post {}",
+                post.id
+            );
             return Default::default();
         };
         pic_ids
             .iter()
-            .filter_map(|id| {
-                pic_id_to_url(id, pic_infos, &definition)
-                    .map(|url| PictureMeta::in_post(url.to_string(), post.id))
-            })
+            .filter_map(|id| f(id, pic_infos, post))
             .collect()
     } else {
         Default::default()
