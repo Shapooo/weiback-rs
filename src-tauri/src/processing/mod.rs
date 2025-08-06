@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 
-use itertools::Itertools;
+use futures::future::try_join_all;
+use futures::stream::{self, StreamExt, TryStreamExt};
+use log::error;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use weibosdk_rs::WeiboAPI;
@@ -36,7 +38,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         downloader: D,
         msg_sender: mpsc::Sender<Message>,
     ) -> Result<Self> {
-        let path = std::env::current_exe().unwrap();
+        let path = std::env::current_exe()?;
         let tera_path = path
             .parent()
             .expect("the executable should have parent, maybe bugs in there")
@@ -59,9 +61,12 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .picture_definition;
         let pic_metas = self.extract_all_pic_metas(&posts, pic_definition);
 
-        for meta in pic_metas {
-            self.download_pic_to_local(task_id, meta).await?;
-        }
+        stream::iter(pic_metas)
+            .map(Ok)
+            .try_for_each_concurrent(10, |meta| async move {
+                self.download_pic_to_local(task_id, meta).await
+            })
+            .await?;
 
         for mut post in posts {
             if post.is_long_text {
@@ -99,11 +104,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         let pic = pic_metas
             .into_iter()
             .map(|m| self.load_picture_from_local(m));
-        // TODO: tackle errs
-        let (pics, _): (Vec<_>, Vec<_>) = futures::future::join_all(pic)
-            .await
-            .into_iter()
-            .partition_result();
+        let pics = try_join_all(pic).await?;
         let pics = pics
             .into_iter()
             .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
@@ -152,10 +153,8 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .storage
             .get_picture_blob(pic_meta.url())
             .await?
-            .is_some()
+            .is_none()
         {
-            Ok(())
-        } else {
             let storage = self.storage.clone();
             let url = pic_meta.url().to_string();
             let callback = Box::new(
@@ -174,8 +173,8 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             self.downloader
                 .download_picture(task_id, url, callback)
                 .await?;
-            Ok(())
         }
+        Ok(())
     }
 
     async fn load_picture_from_local(&self, pic_meta: PictureMeta) -> Result<Option<Picture>> {
@@ -273,24 +272,23 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
 }
 
 fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    let pic_vec = vec![];
-    let mut pic_vec = post
-        .pic_ids
-        .as_ref()
-        .unwrap_or(&pic_vec)
-        .iter()
-        .filter_map(|id| {
-            let pic_infos = HashMap::new();
-            let pic_infos = post.pic_infos.as_ref().unwrap_or(&pic_infos);
-            pic_id_to_url(id, pic_infos, &definition)
-                .map(|url| PictureMeta::in_post(url.to_string(), post.id))
-        })
-        .collect::<Vec<_>>();
-    // TODO: error handle
-
     if let Some(retweeted_post) = &post.retweeted_status {
-        let mut retweeted_pic_vec = extract_in_post_pic_metas(retweeted_post, definition);
-        pic_vec.append(&mut retweeted_pic_vec);
+        extract_in_post_pic_metas(retweeted_post, definition)
+    } else if let Some(pic_ids) = post.pic_ids.as_ref()
+        && pic_ids.len() > 0
+    {
+        let Some(pic_infos) = post.pic_infos.as_ref() else {
+            error!("Missing pic_infos while pic_ids exists");
+            return Default::default();
+        };
+        pic_ids
+            .iter()
+            .filter_map(|id| {
+                pic_id_to_url(id, pic_infos, &definition)
+                    .map(|url| PictureMeta::in_post(url.to_string(), post.id))
+            })
+            .collect()
+    } else {
+        Default::default()
     }
-    pic_vec
 }
