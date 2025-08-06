@@ -142,10 +142,14 @@ impl ExportOptions {
 
 #[cfg(test)]
 mod exporter_test {
+    use std::path::PathBuf;
+
     use super::{ExportOptions, Exporter, ExporterImpl, HTMLPage, HTMLPicture};
     #[tokio::test]
     async fn export_page() {
-        let pic_blob = std::fs::read("res/example.jpg").unwrap();
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let example_jpg_path = PathBuf::from(manifest_dir).join("resources/example.jpg");
+        let pic_blob = std::fs::read(example_jpg_path).unwrap();
         let page = HTMLPage {
             html: "testtesttest".into(),
             pics: vec![HTMLPicture {

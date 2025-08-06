@@ -1,7 +1,6 @@
 use std::{
     fs,
     path::PathBuf,
-    str::FromStr,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -46,7 +45,7 @@ impl Default for Config {
             backup_task_interval: Duration::from_secs(3),
             other_task_interval: Duration::from_secs(1),
             posts_per_html: 200,
-            picture_path: PathBuf::from_str("res/pictures").unwrap(),
+            picture_path: PathBuf::from("resources/pictures"),
             weibo_api_config: Default::default(),
         }
     }
