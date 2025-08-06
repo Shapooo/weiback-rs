@@ -28,6 +28,7 @@ pub struct Config {
     pub picture_definition: PictureDefinition,
     pub backup_task_interval: Duration,
     pub other_task_interval: Duration,
+    pub posts_per_html: u32,
     pub picture_path: PathBuf,
     pub weibo_api_config: WeiboApiConfig,
 }
@@ -44,6 +45,7 @@ impl Default for Config {
             picture_definition: Default::default(),
             backup_task_interval: Duration::from_secs(3),
             other_task_interval: Duration::from_secs(1),
+            posts_per_html: 200,
             picture_path: PathBuf::from_str("res/pictures").unwrap(),
             weibo_api_config: Default::default(),
         }

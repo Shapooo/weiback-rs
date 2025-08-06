@@ -91,7 +91,11 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         posts: Vec<Post>,
         options: &ExportOptions,
     ) -> Result<HTMLPage> {
-        let pic_metas = self.extract_all_pic_metas(&posts, options.pic_quality);
+        let pic_quality = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .picture_definition;
+        let pic_metas = self.extract_all_pic_metas(&posts, pic_quality);
         let pic = pic_metas
             .into_iter()
             .map(|m| self.load_picture_from_local(m));

@@ -12,7 +12,7 @@ use tokio::{
 };
 
 use crate::error::{Error, Result};
-use crate::models::{Picture, PictureDefinition};
+use crate::models::Picture;
 use crate::utils::url_to_filename;
 use std::convert::TryFrom;
 
@@ -97,10 +97,8 @@ impl TryFrom<Picture> for HTMLPicture {
 
 #[derive(Debug, Clone)]
 pub struct ExportOptions {
-    pub pic_quality: PictureDefinition,
     pub export_path: PathBuf,
     pub export_task_name: String,
-    pub posts_per_html: u32,
     pub reverse: bool,
     pub range: RangeInclusive<u32>,
 }
@@ -108,10 +106,8 @@ pub struct ExportOptions {
 impl Default for ExportOptions {
     fn default() -> Self {
         Self {
-            pic_quality: PictureDefinition::default(),
             export_path: PathBuf::from("."),
             export_task_name: "weiback_export.html".to_string(),
-            posts_per_html: 1000,
             reverse: false,
             range: 0..=u32::MAX,
         }
@@ -123,11 +119,6 @@ impl ExportOptions {
         Self::default()
     }
 
-    pub fn pic_quality(mut self, quality: PictureDefinition) -> Self {
-        self.pic_quality = quality;
-        self
-    }
-
     pub fn export_path(mut self, path: PathBuf) -> Self {
         self.export_path = path;
         self
@@ -135,11 +126,6 @@ impl ExportOptions {
 
     pub fn export_task_name(mut self, name: String) -> Self {
         self.export_task_name = name;
-        self
-    }
-
-    pub fn posts_per_html(mut self, count: u32) -> Self {
-        self.posts_per_html = count;
         self
     }
 

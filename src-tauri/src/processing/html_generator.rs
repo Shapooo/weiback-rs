@@ -7,6 +7,7 @@ use serde_json::Value;
 use tera::{Context, Tera};
 
 use super::pic_id_to_url;
+use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
 use crate::models::{PictureMeta, Post};
@@ -51,6 +52,10 @@ impl HTMLGenerator {
     }
 
     fn generate_post(&self, mut post: Post, options: &ExportOptions) -> Result<String> {
+        let pic_quality = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .picture_definition;
         let pic_folder = options.export_task_name.to_owned() + "_files";
         let in_post_pic_paths = post
             .pic_ids
@@ -63,7 +68,7 @@ impl HTMLGenerator {
                 let ids = ids
                     .iter()
                     .map(|id| {
-                        let url = pic_id_to_url(id, pic_infos, &options.pic_quality)
+                        let url = pic_id_to_url(id, pic_infos, &pic_quality)
                             .ok_or(Error::Other("()".to_string()))?; //TODO
                         let file_name = url_to_filename(url)?;
                         let pic_location = pic_folder.to_owned() + "_files" + file_name.as_str();

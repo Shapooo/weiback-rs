@@ -188,11 +188,14 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
+        let limit = get_config()
+            .read()
+            .map_err(|e| Error::Other(e.to_string()))?
+            .posts_per_html;
         let posts_sum = self.get_favorited_sum().await?;
         info!("fetched {posts_sum} posts from local");
         let (mut start, end) = options.range.into_inner();
         let task_name = options.export_task_name.to_owned();
-        let limit = options.posts_per_html;
         for index in 1.. {
             options.range = start..=end.min(start + limit);
             let local_posts = self.load_fav_posts_from_db(&options).await?;
