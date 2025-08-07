@@ -1,16 +1,18 @@
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use tauri::{self, Manager, State};
+use tauri::{self, AppHandle, Emitter, Manager, State};
 use tokio::sync::{Mutex, mpsc};
-use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
-
 use weiback::config::get_config;
-use weiback::core::{BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler};
+use weiback::core::{
+    BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler, task_manager::TaskManger,
+};
 use weiback::error::{Error, Result};
 use weiback::exporter::{ExportOptions, ExporterImpl};
 use weiback::media_downloader::MediaDownloaderImpl;
+use weiback::message::{ErrMsg, Message, TaskProgress};
 use weiback::storage::StorageImpl;
+use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
 type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
 type WeiboAPIImpl = WAI<reqwest::Client>;
@@ -99,10 +101,16 @@ pub fn run() -> Result<()> {
         msg_sender,
     )
     .unwrap();
+    let core = Core::new(task_handler.clone())?;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
-            let core = Core::new(app.handle().clone(), task_handler.clone(), msg_receiver)?;
+            tauri::async_runtime::spawn(msg_loop(
+                app.handle().clone(),
+                core.task_manager().clone(),
+                msg_receiver,
+            ));
             app.manage(Mutex::new(core));
             app.manage(task_handler);
             app.manage(Mutex::new(api_client));
@@ -119,5 +127,62 @@ pub fn run() -> Result<()> {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application"); // TODO
+    Ok(())
+}
+
+async fn msg_loop(
+    app: AppHandle,
+    task_manager: TaskManger,
+    mut msg_receiver: mpsc::Receiver<Message>,
+) {
+    loop {
+        tokio::select! {
+            Some(msg) = msg_receiver.recv() => {
+                let _ = handle_task_responses(&app, &task_manager, msg).await; // TODO
+            }
+            else => {
+                break;
+            }
+        }
+    }
+}
+
+async fn handle_task_responses(
+    app: &AppHandle,
+    task_manager: &TaskManger,
+    msg: Message,
+) -> Result<()> {
+    match msg {
+        Message::TaskProgress(TaskProgress {
+            r#type,
+            task_id,
+            total_increment,
+            progress_increment,
+        }) => {
+            let (progress_new, total_new) =
+                task_manager.update_progress(task_id, progress_increment, total_increment)?;
+
+            app.emit(
+                "task-progress",
+                serde_json::json!({
+                    "type":r#type,
+                    "total":total_new,
+                    "progress":progress_new
+                }),
+            )?;
+        }
+        Message::Err(ErrMsg {
+            task_id,
+            err,
+            r#type,
+        }) => app.emit(
+            "error",
+            serde_json::json!({
+                "type": r#type,
+                "task_id":task_id,
+                "err": err.to_string(),
+            }),
+        )?,
+    }
     Ok(())
 }

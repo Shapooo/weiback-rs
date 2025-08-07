@@ -1,46 +1,44 @@
 pub mod task;
 pub mod task_handler;
+pub mod task_manager;
 
-use std::collections::HashMap;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicU64, Ordering},
 };
 
-use tauri::{AppHandle, Emitter};
-use tokio::{sync::mpsc, task::spawn};
+use tokio::task::spawn;
 use weibosdk_rs::WeiboAPIImpl;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderImpl;
-use crate::message::{ErrMsg, ErrType, Message, TaskProgress};
+use crate::message::{ErrMsg, ErrType, Message};
 use crate::storage::StorageImpl;
 pub use task::{BFOptions, BUOptions, Task, TaskRequest, UserPostFilter};
 pub use task_handler::TaskHandler;
+use task_manager::TaskManger;
 
 type TH =
     TaskHandler<WeiboAPIImpl<reqwest::Client>, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
 pub struct Core {
     next_task_id: AtomicU64,
-    tasks: Arc<Mutex<HashMap<u64, Task>>>,
     task_handler: &'static TH,
+    task_manager: TaskManger,
 }
 
 impl Core {
-    pub fn new(
-        app: AppHandle,
-        task_handler: TH,
-        msg_receiver: mpsc::Receiver<Message>,
-    ) -> Result<Self> {
-        let tasks = Arc::new(Mutex::new(HashMap::new()));
-        spawn(msg_loop(app, tasks.clone(), msg_receiver));
+    pub fn new(task_handler: TH) -> Result<Self> {
         let task_handler: &'static mut _ = Box::leak(Box::new(task_handler));
         Ok(Self {
-            tasks,
             next_task_id: AtomicU64::new(1),
             task_handler,
+            task_manager: TaskManger::new(),
         })
+    }
+
+    pub fn task_manager(&self) -> &TaskManger {
+        &self.task_manager
     }
 
     pub async fn backup_user(&self, request: TaskRequest) -> Result<()> {
@@ -74,82 +72,9 @@ impl Core {
             progress: 0,
             request,
         };
-        self.tasks
-            .lock()
-            .unwrap()
-            .insert(id, task)
-            .map_or(Ok(()), |_| {
-                Err(Error::Other("Duplicate task id".to_string()))
-            })?;
+        self.task_manager.new_task(id, task)?;
         Ok(id)
     }
-}
-
-async fn msg_loop(
-    app: AppHandle,
-    tasks: Arc<Mutex<HashMap<u64, Task>>>,
-    mut msg_receiver: mpsc::Receiver<Message>,
-) {
-    loop {
-        tokio::select! {
-            Some(msg) = msg_receiver.recv() => {
-                let _ = handle_task_responses(&app, &tasks, msg).await; // TODO
-            }
-            else => {
-                break;
-            }
-        }
-    }
-}
-
-async fn handle_task_responses(
-    app: &AppHandle,
-    tasks: &Mutex<HashMap<u64, Task>>,
-    msg: Message,
-) -> Result<()> {
-    match msg {
-        Message::TaskProgress(TaskProgress {
-            r#type,
-            task_id,
-            total_increment,
-            progress_increment,
-        }) => {
-            let mut tasks = tasks.lock().map_err(|err| Error::Other(err.to_string()))?;
-            let mut total_new = 0;
-            let mut progress_new = 0;
-            tasks.entry(task_id).and_modify(
-                |Task {
-                     total, progress, ..
-                 }| {
-                    *total += total_increment;
-                    *progress += progress_increment;
-                    total_new = *total;
-                    progress_new = *progress;
-                },
-            );
-            app.emit(
-                "task-progress",
-                serde_json::json!({
-                    "type":r#type,
-                    "total":total_new,
-                    "progress":progress_new
-                }),
-            )?;
-        }
-        Message::Err(ErrMsg {
-            task_id,
-            err,
-            r#type,
-        }) => app.emit(
-            "error",
-            serde_json::json!({
-                "type": r#type,
-                "task_id":task_id,
-                "err": err.to_string(),
-            }),
-        )?,
-    }
-    Ok(())
 }
 
 async fn handle_task_request(task_handler: &TH, task_id: u64, request: TaskRequest) {
