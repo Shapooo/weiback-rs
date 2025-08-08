@@ -19,7 +19,7 @@ pub trait MediaDownloader {
     ) -> Result<()>;
 }
 
-// The callback is for success cases and is async.
+/// The callback is for success cases and is async.
 type AsyncDownloadCallback = Box<
     dyn FnOnce(Bytes) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
         + Send
@@ -46,10 +46,8 @@ impl MediaDownloaderImpl {
     ///
     /// * `client` - A `reqwest::Client` to be used for making HTTP requests.
     pub fn new(client: Client, message_sender: mpsc::Sender<Message>) -> Self {
-        // A channel to send download tasks to the downloader actor.
-        let (sender, mut receiver) = mpsc::channel::<DownloadTask>(100); // Buffer size of 100
+        let (sender, mut receiver) = mpsc::channel::<DownloadTask>(500);
 
-        // TODO: return err msg properly
         tokio::spawn(async move {
             info!("Media downloader actor started.");
             while let Some(DownloadTask {
@@ -59,7 +57,6 @@ impl MediaDownloaderImpl {
             }) = receiver.recv().await
             {
                 info!("Downloading picture from {url}");
-                // Use the provided client to make the request
                 let res = match client.get(&url).send().await {
                     Ok(response) => {
                         if !response.status().is_success() {
@@ -68,24 +65,23 @@ impl MediaDownloaderImpl {
                                 url,
                                 response.status()
                             );
-                            // TODO: Report this error back via a dedicated error channel.
-                            continue; // Discard task on error
-                        }
-                        match response.bytes().await {
-                            Ok(bytes) => {
-                                // Download successful, execute the async callback.
-                                (callback)(bytes).await
-                            }
-                            Err(e) => {
-                                error!("Failed to read bytes from response for {url}: {e}");
-                                Err(Error::Other(e.to_string()))
-                                // TODO: Report this error back via a dedicated error channel.
+                            Err(Error::Other(format!(
+                                "Download failed for {}: status code {}",
+                                url,
+                                response.status()
+                            )))
+                        } else {
+                            match response.bytes().await {
+                                Ok(bytes) => (callback)(bytes).await,
+                                Err(e) => {
+                                    error!("Failed to read bytes from response for {url}: {e}");
+                                    Err(Error::Other(e.to_string()))
+                                }
                             }
                         }
                     }
                     Err(e) => {
-                        error!("Failed to download picture from {url}: {e}");
-                        // TODO: Report this error back via a dedicated error channel.
+                        error!("Failed to send request when download picture from {url}: {e}");
                         Err(Error::Other(e.to_string()))
                     }
                 };
