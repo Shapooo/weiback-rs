@@ -22,7 +22,7 @@ impl TaskManger {
         match tasks.entry(id) {
             Entry::Occupied(_) => {
                 error!("Duplicate task id: {id}");
-                Err(Error::Other("Duplicate task id".to_string()))
+                Err(Error::InconsistentTask("Duplicate task id".to_string()))
             }
             Entry::Vacant(v) => {
                 v.insert(task);
@@ -58,7 +58,7 @@ impl TaskManger {
             }
             Entry::Vacant(_) => {
                 error!("Task with id {task_id} not found for progress update");
-                Err(Error::Other(format!(
+                Err(Error::InconsistentTask(format!(
                     "Task with id {task_id} not found for progress update"
                 )))
             }

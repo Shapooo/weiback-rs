@@ -34,6 +34,9 @@ pub enum Error {
     #[error("Tokio task-related error: {0}")]
     Tokio(String),
 
+    #[error("Task related error: {0}")]
+    InconsistentTask(String),
+
     #[error("Not logged in")]
     NotLoggedIn,
 
