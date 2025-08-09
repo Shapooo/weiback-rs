@@ -2,7 +2,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use log::{debug, error, info};
+use log::{debug, info};
 use serde_json::Value;
 use tera::{Context, Tera};
 
@@ -18,17 +18,13 @@ use crate::utils::{
 pub fn create_tera(template_path: &Path) -> Result<Tera> {
     let mut path = template_path
         .to_str()
-        .expect("template path cannot convert to str")
+        .ok_or(Error::Other(format!(
+            "template path cannot convert to str: {template_path:?}"
+        )))?
         .to_owned();
     path.push_str("/*.html");
     debug!("init tera from template: {path}");
-    let mut templates = match Tera::new(&path) {
-        Ok(t) => t,
-        Err(e) => {
-            error!("tera template parse err: {e}");
-            panic!("tera template parse err: {e}")
-        }
-    };
+    let mut templates = Tera::new(&path)?;
     templates.autoescape_on(Vec::new());
     Ok(templates)
 }
