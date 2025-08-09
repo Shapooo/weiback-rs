@@ -22,9 +22,11 @@ pub enum Error {
     #[error("JSON serialization/deserialization error: {0}")]
     SerdeJson(#[from] serde_json::Error),
 
+    #[error("Network error: {0}")]
+    Network(#[from] reqwest::Error),
+
     #[error("Weibo api client error: {0}")]
     Client(#[from] weibosdk_rs::Error),
-
 
     #[error("Url parsing error: {0}")]
     UrlParse(#[from] url::ParseError),
@@ -66,4 +68,3 @@ where
         self.map_err(|e| Error::Context(context.to_string(), Box::new(e.into())))
     }
 }
-
