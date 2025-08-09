@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use tauri::ipc::InvokeError;
 use thiserror::Error;
 use tokio::sync::{mpsc::error::SendError, oneshot::error::RecvError};
 
@@ -26,8 +25,6 @@ pub enum Error {
     #[error("Weibo api client error: {0}")]
     Client(#[from] weibosdk_rs::Error),
 
-    #[error("Image processing error: {0}")]
-    Image(#[from] image::ImageError),
 
     #[error("Url parsing error: {0}")]
     UrlParse(#[from] url::ParseError),
@@ -70,14 +67,3 @@ where
     }
 }
 
-impl From<Error> for InvokeError {
-    fn from(_value: Error) -> Self {
-        todo!()
-    }
-}
-
-impl From<tauri::Error> for Error {
-    fn from(_value: tauri::Error) -> Self {
-        todo!()
-    }
-}
