@@ -41,14 +41,14 @@ pub fn url_to_filename(url: &str) -> Result<String> {
                 Some(name.to_string())
             }
         })
-        .ok_or_else(|| Error::Other(format!("no filename in url: {url}")))
+        .ok_or_else(|| Error::FormatError(format!("no filename in url: {url}")))
 }
 
 pub fn pic_url_to_id(url: &str) -> Result<String> {
     let file_name = url_to_filename(url)?;
     let path = Path::new(&file_name);
     if path.extension().is_none() {
-        return Err(Error::Other(format!(
+        return Err(Error::FormatError(format!(
             "no extension in filename of url: {url}"
         )));
     }
@@ -61,7 +61,7 @@ pub fn pic_url_to_id(url: &str) -> Result<String> {
                 Some(s.to_string())
             }
         })
-        .ok_or_else(|| Error::Other(format!("not a valid picture url: {url}")))
+        .ok_or_else(|| Error::FormatError(format!("not a valid picture url: {url}")))
 }
 
 pub fn strip_url_queries(url: &str) -> &str {

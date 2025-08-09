@@ -19,8 +19,8 @@ pub enum Error {
     #[error("Template rendering error: {0}")]
     Tera(#[from] tera::Error),
 
-    #[error("JSON serialization/deserialization error: {0}")]
-    SerdeJson(#[from] serde_json::Error),
+    #[error("Parse/deserialize error: {0}")]
+    FormatError(String),
 
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
@@ -31,14 +31,8 @@ pub enum Error {
     #[error("Lock error: {0}")]
     Lock(String),
 
-    #[error("Url parsing error: {0}")]
-    UrlParse(#[from] url::ParseError),
-
     #[error("Tokio task-related error: {0}")]
     Tokio(String),
-
-    #[error("DateTime parsing error: {0}")]
-    DateTime(#[from] chrono::ParseError),
 
     #[error("Not logged in")]
     NotLoggedIn,
@@ -80,8 +74,8 @@ impl From<weibosdk_rs::Error> for Error {
             SDKError::NotLoggedIn => Error::NotLoggedIn,
             SDKError::NetworkError(e) => Error::Network(e),
             SDKError::ApiError(e) => Error::ApiError(e),
-            SDKError::DataConversionError(e) => Error::DataConversionError(e),
-            SDKError::DeserializationError(e) => Error::SerdeJson(e),
+            SDKError::DataConversionError(e) => Error::FormatError(e),
+            SDKError::DeserializationError(e) => Error::FormatError(e.to_string()),
         }
     }
 }
@@ -89,5 +83,23 @@ impl From<weibosdk_rs::Error> for Error {
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(err: std::sync::PoisonError<T>) -> Self {
         Self::Lock(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Self::FormatError(err.to_string())
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Self {
+        Self::FormatError(err.to_string())
+    }
+}
+
+impl From<chrono::ParseError> for Error {
+    fn from(err: chrono::ParseError) -> Self {
+        Self::FormatError(err.to_string())
     }
 }
