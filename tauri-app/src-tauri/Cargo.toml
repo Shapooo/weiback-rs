@@ -27,6 +27,7 @@ sqlx = { workspace = true }
 tokio = { workspace = true }
 weibosdk-rs = { workspace = true }
 weiback-rs = { path = "../../weiback" }
+anyhow = "1.0.98"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::env::current_exe;
 use std::path::PathBuf;
 
+use anyhow::Result;
 use chrono::{DateTime, FixedOffset, TimeZone};
 use env_logger::Builder;
 use log::{LevelFilter, error, info, warn};
@@ -13,7 +14,6 @@ use tokio::{
     fs::{File, OpenOptions, remove_file},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use weiback::error::{Error, Result};
 
 #[tokio::main]
 async fn main() {
@@ -35,7 +35,7 @@ async fn start() -> Result<()> {
         return Ok(());
     } else if user_version < 0 {
         error!("Error: are you kidding? Invalid DB version");
-        return Err(Error::Other("Invalid DB version".to_string()));
+        return Err(anyhow::anyhow!("Invalid DB version".to_string()));
     }
 
     let mut upgrader = Upgrader::new(db).await?;
@@ -58,10 +58,10 @@ fn init_logger() -> Result<()> {
     let log_path = std::env::current_exe()?;
     let log_path = log_path
         .parent()
-        .ok_or(Error::Other(format!(
+        .ok_or(anyhow::anyhow!(
             "the executable: {:?} should have parent, maybe bugs in there",
             std::env::current_exe()
-        )))?
+        ))?
         .join("upgrade-db-tool.log");
     let log_file = std::fs::OpenOptions::new()
         .write(true)

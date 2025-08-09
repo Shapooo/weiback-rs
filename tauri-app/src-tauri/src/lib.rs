@@ -1,3 +1,5 @@
+mod error;
+
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -8,12 +10,13 @@ use weiback::config::get_config;
 use weiback::core::{
     BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler, task_manager::TaskManger,
 };
-use weiback::error::{Error, Result};
 use weiback::exporter::{ExportOptions, ExporterImpl};
 use weiback::media_downloader::MediaDownloaderImpl;
 use weiback::message::{ErrMsg, Message, TaskProgress};
 use weiback::storage::StorageImpl;
 use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
+
+use error::{Error, Result};
 
 type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
 type WeiboAPIImpl = WAI<reqwest::Client>;
@@ -25,7 +28,7 @@ async fn backup_self(
     range: RangeInclusive<u32>,
 ) -> Result<()> {
     info!("backup_self called with range: {range:?}");
-    let uid = api_client.lock().await.session()?.uid.clone();
+    let uid = api_client.lock().await.session().unwrap().uid.clone();
     backup_user(core, uid, range).await
 }
 
@@ -36,38 +39,40 @@ async fn backup_user(
     range: RangeInclusive<u32>,
 ) -> Result<()> {
     info!("backup_user called with uid: {uid}, range: {range:?}");
-    core.lock()
+    Ok(core
+        .lock()
         .await
         .backup_user(TaskRequest::BackupUser(BUOptions {
             uid: uid.parse().map_err(|err| {
                 error!("Failed to parse uid: {err}");
-                Error::Other(format!("{err}"))
+                err
             })?,
             range,
         }))
-        .await
+        .await?)
 }
 
 #[tauri::command]
 async fn backup_favorites(core: State<'_, Mutex<Core>>, range: RangeInclusive<u32>) -> Result<()> {
     info!("backup_favorites called with range: {range:?}");
-    core.lock()
+    Ok(core
+        .lock()
         .await
         .backup_favorites(TaskRequest::BackupFavorites(BFOptions { range }))
-        .await
+        .await?)
 }
 
 #[tauri::command]
 async fn unfavorite_posts(core: State<'_, Mutex<Core>>) -> Result<()> {
     info!("unfavorite_posts called");
-    core.lock().await.unfavorite_posts().await
+    Ok(core.lock().await.unfavorite_posts().await?)
 }
 
 #[tauri::command]
 async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u32>) -> Result<()> {
     info!("export_from_local called with range: {range:?}");
     let options = ExportOptions::new().range(range);
-    task_handler.export_from_local(options).await
+    Ok(task_handler.export_from_local(options).await?)
 }
 
 #[tauri::command]
@@ -107,9 +112,7 @@ async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> 
         }
         LoginState::Init => {
             error!("Wrong login state to login: Init");
-            Err(Error::Other(
-                "FATAL: wrong login state to login".to_string(),
-            ))
+            Err(Error("FATAL: wrong login state to login".to_string()))
         }
     }
 }
@@ -122,7 +125,7 @@ pub fn run() -> Result<()> {
         .read()
         .map_err(|e| {
             error!("Failed to read config: {e}");
-            Error::Other(e.to_string())
+            Error(e.to_string())
         })?
         .weibo_api_config
         .clone();
@@ -200,7 +203,7 @@ async fn msg_loop(
             Some(msg) = msg_receiver.recv() => {
                 debug!("Received message: {msg:?}");
                 if let Err(e) = handle_task_responses(&app, &task_manager, msg).await {
-                    error!("Error handling task response: {e}");
+                    error!("Error handling task response: {e:?}");
                 }
             }
             else => {

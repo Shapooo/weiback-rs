@@ -5203,6 +5203,7 @@ dependencies = [
 name = "tauri-app"
 version = "0.2.4"
 dependencies = [
+ "anyhow",
  "chrono",
  "env_logger",
  "log",
