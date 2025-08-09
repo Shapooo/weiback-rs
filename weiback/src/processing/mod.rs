@@ -6,7 +6,7 @@ use std::pin::Pin;
 
 use futures::future::try_join_all;
 use futures::stream::{self, StreamExt, TryStreamExt};
-use log::error;
+use log::{debug, error, info};
 use serde_json::Value;
 use tokio::sync::mpsc;
 use weibosdk_rs::WeiboAPI;
@@ -38,28 +38,35 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         downloader: D,
         msg_sender: mpsc::Sender<Message>,
     ) -> Result<Self> {
+        info!("Initializing PostProcesser...");
         let path = std::env::current_exe()?;
         let tera_path = path
             .parent()
             .expect("the executable should have parent, maybe bugs in there")
             .join("templates");
+        debug!("Loading templates from: {tera_path:?}");
         let tera = create_tera(&tera_path)?;
+        let html_generator = HTMLGenerator::new(tera);
+        info!("PostProcesser initialized successfully.");
         Ok(Self {
             api_client,
             storage,
             downloader,
             emoji_map: None,
-            html_generator: HTMLGenerator::new(tera),
+            html_generator,
             msg_sender,
         })
     }
 
     pub async fn process(&self, task_id: u64, posts: Vec<Post>) -> Result<()> {
+        info!("Processing {} posts for task {}.", posts.len(), task_id);
         let pic_definition = get_config()
             .read()
             .map_err(|err| Error::Other(err.to_string()))?
             .picture_definition;
+        debug!("Picture definition set to: {pic_definition:?}");
         let pic_metas = self.extract_all_pic_metas(&posts, pic_definition);
+        info!("Found {} unique pictures to download.", pic_metas.len());
 
         stream::iter(pic_metas)
             .map(Ok)
@@ -68,13 +75,16 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             })
             .await?;
 
+        info!("Finished downloading pictures. Processing posts...");
         for mut post in posts {
             if post.is_long_text {
+                debug!("Fetching long text for post {}.", post.id);
                 match self.api_client.get_long_text(post.id).await {
                     Ok(long_text) => {
                         post.text = long_text;
                     }
                     Err(e) => {
+                        error!("Failed to fetch long text for post {}: {}", post.id, e);
                         self.msg_sender
                             .send(Message::Err(ErrMsg {
                                 r#type: ErrType::LongTextFail { post_id: post.id },
@@ -88,6 +98,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             }
             self.storage.save_post(&post).await?;
         }
+        info!("Finished processing posts for task {task_id}.");
         Ok(())
     }
 
@@ -96,20 +107,28 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         posts: Vec<Post>,
         options: &ExportOptions,
     ) -> Result<HTMLPage> {
+        info!("Generating HTML for {} posts.", posts.len());
         let pic_quality = get_config()
             .read()
             .map_err(|e| Error::Other(e.to_string()))?
             .picture_definition;
+        debug!("Using picture quality: {pic_quality:?}");
         let pic_metas = self.extract_all_pic_metas(&posts, pic_quality);
-        let pic = pic_metas
+        info!(
+            "Found {} unique pictures for HTML generation.",
+            pic_metas.len()
+        );
+        let pic_futures = pic_metas
             .into_iter()
             .map(|m| self.load_picture_from_local(m));
-        let pics = try_join_all(pic).await?;
+        let pics = try_join_all(pic_futures).await?;
         let pics = pics
             .into_iter()
             .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
             .collect::<Result<Vec<_>>>()?;
+        debug!("Loaded {} pictures from local storage.", pics.len());
         let content = self.html_generator.generate_page(posts, options)?;
+        info!("HTML content generated successfully.");
         Ok(HTMLPage {
             html: content,
             pics,
@@ -149,31 +168,30 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
     }
 
     async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
-        if self
-            .storage
-            .get_picture_blob(pic_meta.url())
-            .await?
-            .is_none()
-        {
-            let storage = self.storage.clone();
-            let url = pic_meta.url().to_string();
-            let callback = Box::new(
-                move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
-                    Box::pin(async move {
-                        let pic = Picture {
-                            meta: pic_meta,
-                            blob,
-                        };
-                        storage.save_picture(&pic).await?;
-                        Ok(())
-                    })
-                },
-            );
-
-            self.downloader
-                .download_picture(task_id, url, callback)
-                .await?;
+        let url = pic_meta.url().to_string();
+        // TODO: add method check existance of picture
+        if self.storage.get_picture_blob(&url).await?.is_some() {
+            debug!("Picture {url} already exists in local storage, skipping download.");
+            return Ok(());
         }
+        debug!("Downloading picture {url} to local storage.");
+        let storage = self.storage.clone();
+        let callback = Box::new(
+            move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                Box::pin(async move {
+                    let pic = Picture {
+                        meta: pic_meta,
+                        blob,
+                    };
+                    storage.save_picture(&pic).await?;
+                    Ok(())
+                })
+            },
+        );
+
+        self.downloader
+            .download_picture(task_id, url, callback)
+            .await?;
         Ok(())
     }
 

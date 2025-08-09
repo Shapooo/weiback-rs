@@ -1,6 +1,7 @@
 use chrono::DateTime;
 use std::ops::DerefMut;
 
+use log::info;
 use serde_json::{Value, from_str, to_string};
 use sqlx::{Executor, FromRow, Row, Sqlite};
 
@@ -161,6 +162,7 @@ where
     E: DerefMut,
     for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
 {
+    info!("Creating post table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS posts ( \
              id INTEGER PRIMARY KEY, \
@@ -195,5 +197,6 @@ where
     )
     .execute(&mut *executor)
     .await?;
+    info!("Post table created successfully.");
     Ok(())
 }

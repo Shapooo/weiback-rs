@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use bytes::Bytes;
 use futures::future::join_all;
-use log::info;
+use log::{debug, error, info, warn};
 use tokio::{
     fs::{DirBuilder, File},
     io::AsyncWriteExt,
@@ -39,15 +39,22 @@ impl Exporter for ExporterImpl {
     async fn export_page(&self, page: HTMLPage, options: &ExportOptions) -> Result<()>
 where {
         info!(
-            "export {}.html to {}",
-            options.export_task_name,
-            options.export_path.display()
+            "Exporting page for task '{}' to {:?}",
+            options.export_task_name, options.export_path
         );
         let mut dir_builder = DirBuilder::new();
         dir_builder.recursive(true);
         if !options.export_path.exists() {
+            debug!(
+                "Creating export directory at {}",
+                options.export_path.display()
+            );
             dir_builder.create(options.export_path.as_path()).await?
         } else if !options.export_path.is_dir() {
+            error!(
+                "Export path {} is not a directory",
+                options.export_path.display()
+            );
             return Err(std::io::Error::new(
                 ErrorKind::AlreadyExists,
                 "export folder is a already exist file",
@@ -58,19 +65,46 @@ where {
         let resources_dir_name = options.export_task_name.to_owned() + "_files";
 
         let mut operating_path = options.export_path.to_owned();
+        debug!("Writing HTML to file: {operating_path:?}");
         operating_path.push(html_file_name);
         let mut html_file = File::create(operating_path.as_path()).await?;
         html_file.write_all(page.html.as_bytes()).await?;
-        operating_path.pop();
-        operating_path.push(resources_dir_name);
-        dir_builder.create(operating_path.as_path()).await?;
-        let operating_path = operating_path.as_path();
-        join_all(page.pics.into_iter().map(|pic| async move {
-            let mut pic_file = File::create(operating_path.join(pic.file_name)).await?;
-            pic_file.write_all(&pic.blob).await
-        }))
-        .await;
+        debug!("Successfully wrote HTML to {operating_path:?}");
 
+        operating_path.pop();
+        operating_path.push(resources_dir_name.clone());
+        if !operating_path.exists() {
+            dir_builder.create(operating_path.as_path()).await?;
+        }
+        let operating_path = operating_path.as_path();
+        debug!(
+            "Saving {} picture files to {:?}",
+            page.pics.len(),
+            operating_path
+        );
+        let pic_futures = page.pics.into_iter().map(|pic| async move {
+            let pic_path = operating_path.join(pic.file_name.clone());
+            let mut pic_file = File::create(&pic_path).await.map_err(|e| {
+                error!("Failed to create picture file {pic_path:?}: {e}");
+                e
+            })?;
+
+            pic_file.write_all(&pic.blob).await.map_err(|e| {
+                error!("Failed to write picture {}: {}", pic.file_name, e);
+                e
+            })?;
+            Result::<_>::Ok(())
+        });
+        let fail_sum = join_all(pic_futures)
+            .await
+            .iter()
+            .filter(|r| r.is_err())
+            .count();
+        warn! {"{fail_sum} pictures exports failed"}
+        info!(
+            "Finished exporting page for task '{}'",
+            options.export_task_name
+        );
         Ok(())
     }
 }

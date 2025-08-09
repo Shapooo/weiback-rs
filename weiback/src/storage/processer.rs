@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use itertools::Itertools;
-use log::debug;
+use log::{debug, error};
 use serde_json::to_string;
 use sqlx::{Sqlite, SqlitePool};
 
@@ -25,6 +25,7 @@ impl Processer {
         mut post: Post,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
+            debug!("Saving post with id: {}", post.id);
             let uid = post.user.as_ref().map(|u| u.id);
             if let Some(user) = post.user.take() {
                 self.save_user(&user).await?;
@@ -33,10 +34,19 @@ impl Processer {
             if let Some(ret_post) = post.retweeted_status.take() {
                 self.save_post(*ret_post).await?;
             }
-            let mut post: PostStorage = post.try_into()?;
-            post.uid = uid;
-            post.retweeted_id = retweeted_id;
-            self._save_post(&post, true).await
+            let mut post_storage: PostStorage = post.try_into()?;
+            post_storage.uid = uid;
+            post_storage.retweeted_id = retweeted_id;
+            match self._save_post(&post_storage, true).await {
+                Ok(()) => {
+                    debug!("Post with id: {} saved successfully", post_storage.id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Failed to save post with id: {}: {:?}", post_storage.id, e);
+                    Err(e)
+                }
+            }
         })
     }
 

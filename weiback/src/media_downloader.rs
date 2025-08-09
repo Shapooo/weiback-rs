@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use bytes::Bytes;
-use log::{error, info};
+use log::{debug, error, info};
 use reqwest::Client;
 use tokio::sync::mpsc;
 
@@ -56,7 +56,7 @@ impl MediaDownloaderImpl {
                 callback,
             }) = receiver.recv().await
             {
-                info!("Downloading picture from {url}");
+                debug!("Downloading picture from {url}");
                 let res = match client.get(&url).send().await {
                     Ok(response) => {
                         if !response.status().is_success() {
@@ -72,7 +72,10 @@ impl MediaDownloaderImpl {
                             )))
                         } else {
                             match response.bytes().await {
-                                Ok(bytes) => (callback)(bytes).await,
+                                Ok(bytes) => {
+                                    info!("Successfully downloaded picture from {url}");
+                                    (callback)(bytes).await
+                                }
                                 Err(e) => {
                                     error!("Failed to read bytes from response for {url}: {e}");
                                     Err(Error::Other(e.to_string()))

@@ -1,5 +1,6 @@
 use std::ops::DerefMut;
 
+use log::info;
 use sqlx::{Executor, FromRow, Sqlite};
 
 use crate::error::Result;
@@ -63,6 +64,7 @@ where
     E: DerefMut,
     for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
 {
+    info!("Creating user table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS users ( \
              id INTEGER PRIMARY KEY, \
@@ -79,5 +81,6 @@ where
     )
     .execute(&mut *db)
     .await?;
+    info!("User table created successfully.");
     Ok(())
 }

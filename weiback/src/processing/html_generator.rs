@@ -2,7 +2,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use log::{debug, error};
+use log::{debug, error, info};
 use serde_json::Value;
 use tera::{Context, Tera};
 
@@ -68,14 +68,16 @@ impl HTMLGenerator {
     }
 
     pub fn generate_page(&self, posts: Vec<Post>, options: &ExportOptions) -> Result<String> {
-        let posts = posts
+        info!("Generating page for {} posts", posts.len());
+        let posts_html = posts
             .into_iter()
             .map(|p| self.generate_post(p, options))
             .collect::<Result<Vec<_>>>()?;
-        let posts = posts.join("");
+        let posts_html = posts_html.join("");
         let mut context = Context::new();
-        context.insert("html", &posts);
+        context.insert("html", &posts_html);
         let html = self.templates.render("page.html", &context)?;
+        info!("Successfully generated page");
         Ok(html)
     }
 

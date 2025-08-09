@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use bytes::Bytes;
-use log::{debug, info};
+use log::{debug, error, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 use tokio::runtime::Runtime;
 
@@ -44,21 +44,34 @@ pub struct StorageImpl {
 
 impl StorageImpl {
     pub fn new() -> Result<Self> {
-        let picture_path = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .picture_path
-            .clone();
-        let db_pool = Runtime::new().unwrap().block_on(create_db_pool())?;
+        info!("Initializing storage...");
+        let config = get_config();
+        let config_read = config.read().map_err(|e| {
+            error!("Failed to read config lock: {e}");
+            Error::Other(e.to_string())
+        })?;
+        let picture_path = config_read.picture_path.clone();
+        drop(config_read);
+
+        let db_pool = Runtime::new()
+            .unwrap()
+            .block_on(create_db_pool())
+            .map_err(|e| {
+                error!("Failed to create database pool: {e}");
+                Error::Other(e.to_string())
+            })?;
+
+        let picture_path = current_exe().unwrap().parent().unwrap().join(picture_path);
+        let processer = Processer::new(db_pool.clone());
+        info!("Storage initialized successfully.");
         Ok(StorageImpl {
-            processer: Processer::new(db_pool.clone()),
+            processer,
             db_pool,
-            picture_path: current_exe().unwrap().parent().unwrap().join(picture_path),
+            picture_path,
         })
     }
 }
 
-// TODO: save when download
 impl Storage for Arc<StorageImpl> {
     async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
         let start = options.range.start();
@@ -139,7 +152,7 @@ impl Storage for Arc<StorageImpl> {
             tokio::fs::create_dir_all(parent).await?;
         }
         tokio::fs::write(&path, &picture.blob).await?;
-        debug!("picture {} saved to {}", picture.meta.url(), path.display());
+        debug!("picture {} saved to {:?}", picture.meta.url(), path);
         Ok(())
     }
 }
@@ -164,39 +177,35 @@ async fn create_db_pool() -> Result<SqlitePool> {
         .map_err(|e| Error::Other(e.to_string()))?
         .db_path
         .clone();
-    debug!("initing...");
+    info!("Initializing database pool at path: {db_path:?}");
     let db_path = std::env::current_exe()
         .unwrap()
         .parent()
         .unwrap()
         .join(db_path);
     if db_path.is_file() {
-        info!("db {db_path:?} exists");
+        info!("Database file exists at {db_path:?}. Connecting...");
         let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
-        check_db_version(&db_pool).await?;
+        check_db_version(&db_pool).await.map_err(|e| {
+            error!("Database version check failed: {e}");
+            e
+        })?;
+        info!("Database connection successful.");
         Ok(db_pool)
     } else {
-        info!("db {db_path:?} not exists, create it");
-        if !db_path.parent().unwrap().exists() {
-            let mut dir_builder = tokio::fs::DirBuilder::new();
-            dir_builder.recursive(true);
-            dir_builder
-                .create(
-                    db_path
-                        .parent()
-                        .ok_or(Error::Other(format!("{db_path:?} should have parent")))?,
-                )
-                .await?;
-        } else if db_path.parent().unwrap().is_file() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::AlreadyExists,
-                "export folder is a already exist file",
-            )
-            .into());
+        info!("Database file not found at {db_path:?}. Creating new database...");
+        if let Some(parent) = db_path.parent() {
+            if !parent.exists() {
+                info!("Creating parent directory for database: {parent:?}");
+                tokio::fs::create_dir_all(parent).await?;
+            }
         }
         Sqlite::create_database(db_path.to_str().unwrap()).await?;
+        info!("Database file created. Connecting...");
         let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
+        info!("Creating database tables...");
         create_tables(&db_pool).await?;
+        info!("Database tables created successfully.");
         Ok(db_pool)
     }
 }

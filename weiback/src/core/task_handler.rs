@@ -1,4 +1,4 @@
-use log::info;
+use log::{debug, error, info};
 use std::future::Future;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
@@ -61,6 +61,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         F: Fn(u32) -> Fut,
         Fut: Future<Output = Result<usize>>,
     {
+        info!("Starting backup procedure for task {task_id:?}, type: {task_type:?}");
         let task_interval = get_config()
             .read()
             .map_err(|e| Error::Other(e.to_string()))?
@@ -70,6 +71,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let mut total_downloaded: usize = 0;
         start = start.div_ceil(count);
         end = end.div_ceil(count);
+        debug!("Backup task {task_id} page range: {start}..={end}");
         self.msg_sender
             .send(Message::TaskProgress(TaskProgress {
                 r#type: task_type.clone(),
@@ -80,7 +82,11 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             .await?;
 
         for page in start..=end {
-            let posts_sum = page_backup_fn(page).await?;
+            let posts_sum = page_backup_fn(page).await.map_err(|e| {
+                error!("Failed to backup page {page} for task {task_id}: {e}");
+                e
+            })?;
+
             total_downloaded += posts_sum;
             info!("fetched {posts_sum} posts in {page}th page");
 
@@ -96,7 +102,9 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                 sleep(task_interval).await;
             }
         }
-        info!("fetched {total_downloaded} posts in total");
+        info!(
+            "Backup procedure for task {task_id:?} finished. Fetched {total_downloaded} posts in total"
+        );
         Ok(())
     }
 
@@ -109,16 +117,23 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             .status_count as u32;
         let uid = options.uid;
         let range = options.range.into_inner();
-        info!("download user {uid} posts, from {} to {}", range.0, range.1);
+        info!(
+            "Start backing up user {uid} posts, from {} to {}",
+            range.0, range.1
+        );
 
         self.backup_procedure(task_id, range, count, TaskType::BackUser, |page| {
             self.backup_one_page(task_id, uid, page)
         })
-        .await
+        .await?;
+
+        info!("Finished backing up user {uid} posts.");
+        Ok(())
     }
 
     // backup one page of posts of the user
     async fn backup_one_page(&self, task_id: u64, uid: i64, page: u32) -> Result<usize> {
+        debug!("Backing up page {page} for user {uid}, task {task_id}");
         let posts = self.api_client.profile_statuses(uid, page).await?;
         let result = posts.len();
         self.processer.process(task_id, posts).await?;
@@ -133,16 +148,19 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             .weibo_api_config
             .fav_count as u32;
         let range = options.range.into_inner();
-        info!("favorites download from {} to {}", range.0, range.1);
+        info!("Start backing up favorites from {} to {}", range.0, range.1);
 
         self.backup_procedure(task_id, range, count, TaskType::BackFav, |page| {
             self.backup_one_fav_page(task_id, page)
         })
-        .await
+        .await?;
+        info!("Finished backing up favorites.");
+        Ok(())
     }
 
     // backup one page of favorites
     async fn backup_one_fav_page(&self, task_id: u64, page: u32) -> Result<usize> {
+        debug!("Backing up favorites page {page}, task {task_id}");
         let posts = self.api_client.favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
@@ -157,23 +175,28 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // unfavorite all posts that are in weibo favorites
     pub(super) async fn unfavorite_posts(&self, task_id: u64) -> Result<()> {
+        info!("Starting unfavorite posts task {task_id}");
         let task_interval = get_config()
             .read()
             .map_err(|e| Error::Other(e.to_string()))?
             .other_task_interval;
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
+        info!("Found {len} posts to unfavorite");
         self.msg_sender
             .send(Message::TaskProgress(TaskProgress {
                 r#type: TaskType::Unfav,
                 task_id,
-                total_increment: 0,
-                progress_increment: len as u64,
+                total_increment: len as u64,
+                progress_increment: 0,
             }))
             .await?;
-        for id in ids {
-            self.api_client.favorites_destroy(id).await?;
-            info!("post {id} unfavorited");
+        for (i, id) in ids.into_iter().enumerate() {
+            if let Err(e) = self.api_client.favorites_destroy(id).await {
+                error!("Failed to unfavorite post {id}: {e}");
+                continue;
+            }
+            info!("Post {id} unfavorited successfully");
             self.msg_sender
                 .send(Message::TaskProgress(TaskProgress {
                     r#type: TaskType::Unfav,
@@ -182,24 +205,30 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                     progress_increment: 1,
                 }))
                 .await?;
-            tokio::time::sleep(task_interval).await;
+            if i < len - 1 {
+                tokio::time::sleep(task_interval).await;
+            }
         }
+        info!("Unfavorite posts task {task_id} finished");
         Ok(())
     }
 
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
+        info!("Starting export from local with options: {options:?}");
         let limit = get_config()
             .read()
             .map_err(|e| Error::Other(e.to_string()))?
             .posts_per_html;
         let posts_sum = self.get_favorited_sum().await?;
-        info!("fetched {posts_sum} posts from local");
+        info!("Found {posts_sum} favorited posts in local database");
         let (mut start, end) = options.range.into_inner();
         let task_name = options.export_task_name.to_owned();
         for index in 1.. {
             options.range = start..=end.min(start + limit);
+            debug!("Exporting range: {:?}", options.range);
             let local_posts = self.load_fav_posts_from_db(&options).await?;
             if local_posts.is_empty() {
+                info!("No more posts to export. Exiting loop.");
                 break;
             }
 
@@ -208,11 +237,12 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             let html = self.processer.generate_html(local_posts, &options).await?;
             self.exporter.export_page(html, &options).await?;
 
-            if start == end {
+            if start >= end {
                 break;
             }
             start = end.min(start + limit);
         }
+        info!("Finished exporting from local");
         Ok(())
     }
 

@@ -2,6 +2,7 @@ pub mod task;
 pub mod task_handler;
 pub mod task_manager;
 
+use log::{debug, error, info};
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -65,6 +66,7 @@ impl Core {
 
     async fn record_task(&self, request: TaskRequest) -> Result<u64> {
         let id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
+        info!("Recording new task with id: {id}, request: {request:?}");
         let total = request.total() as u64;
         let task = Task {
             id,
@@ -73,11 +75,14 @@ impl Core {
             request,
         };
         self.task_manager.new_task(id, task)?;
+        debug!("Task {id} recorded successfully");
         Ok(id)
     }
 }
 
 async fn handle_task_request(task_handler: &TH, task_id: u64, request: TaskRequest) {
+    info!("Handling task request for task_id: {task_id}");
+    debug!("Task request details: {request:?}");
     let res = match request {
         TaskRequest::BackupUser(options) => task_handler.backup_user(task_id, options).await,
         TaskRequest::UnfavoritePosts => task_handler.unfavorite_posts(task_id).await,
@@ -86,6 +91,7 @@ async fn handle_task_request(task_handler: &TH, task_id: u64, request: TaskReque
         }
     };
     if let Err(err) = res {
+        error!("Task {task_id} failed: {err}");
         task_handler
             .msg_sender()
             .send(Message::Err(ErrMsg {
@@ -94,6 +100,8 @@ async fn handle_task_request(task_handler: &TH, task_id: u64, request: TaskReque
                 err: err.to_string(),
             }))
             .await
-            .unwrap();
+            .unwrap_or_else(|e| error!("Failed to send error message for task {task_id}: {e}"));
+    } else {
+        info!("Task {task_id} completed successfully");
     }
 }

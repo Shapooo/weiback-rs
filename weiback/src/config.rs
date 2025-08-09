@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use log::debug;
+use log::{debug, info, warn};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
@@ -61,9 +61,11 @@ impl Default for Config {
 /// 如果配置文件存在但无法读取，或者在尝试写入新的默认配置文件时发生 I/O 错误，
 /// 此函数将返回一个错误。
 pub fn init() -> Result<()> {
+    info!("Initializing config...");
     let config = load_or_create()?;
     // set 如果已经初始化，会返回 Err，这里我们忽略这个错误，因为这意味着已经有别的线程初始化了。
     let _ = CONFIG.set(Arc::new(RwLock::new(config)));
+    info!("Config initialized successfully.");
     Ok(())
 }
 
@@ -80,7 +82,11 @@ pub fn get_config() -> Arc<RwLock<Config>> {
             // "隐式"初始化路径：尝试加载，如果失败（包括未找到、权限问题等），
             // 则使用默认值。这保证了 get_config 总能成功返回，不会 panic。
             // 这里不写入文件，以避免在运行时产生不可控的 I/O 错误。
-            let config = load_from_files().unwrap_or_default();
+            warn!("Config not explicitly initialized, trying to load from files or use default.");
+            let config = load_from_files().unwrap_or_else(|e| {
+                warn!("Failed to load config from files, using default: {e}");
+                Config::default()
+            });
             Arc::new(RwLock::new(config))
         })
         .clone()
