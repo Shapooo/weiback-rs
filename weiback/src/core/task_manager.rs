@@ -42,7 +42,7 @@ impl TaskManger {
         );
         let mut tasks = self.tasks.lock().map_err(|err| {
             error!("Failed to lock tasks mutex: {err}");
-            Error::Other(err.to_string())
+            err
         })?;
 
         match tasks.entry(task_id) {

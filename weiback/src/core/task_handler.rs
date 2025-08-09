@@ -5,7 +5,7 @@ use weibosdk_rs::WeiboAPI;
 
 use crate::config::get_config;
 use crate::core::task::{BFOptions, BUOptions};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::exporter::{ExportOptions, Exporter};
 use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress, TaskType};
@@ -62,10 +62,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         Fut: Future<Output = Result<usize>>,
     {
         info!("Starting backup procedure for task {task_id:?}, type: {task_type:?}");
-        let task_interval = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .backup_task_interval;
+        let task_interval = get_config().read()?.backup_task_interval;
 
         let (mut start, mut end) = range;
         let mut total_downloaded: usize = 0;
@@ -110,11 +107,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // backup user posts
     pub(super) async fn backup_user(&self, task_id: u64, options: BUOptions) -> Result<()> {
-        let count = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .weibo_api_config
-            .status_count as u32;
+        let count = get_config().read()?.weibo_api_config.status_count as u32;
         let uid = options.uid;
         let range = options.range.into_inner();
         info!(
@@ -142,11 +135,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // export favorite posts from weibo
     pub(super) async fn backup_favorites(&self, task_id: u64, options: BFOptions) -> Result<()> {
-        let count = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .weibo_api_config
-            .fav_count as u32;
+        let count = get_config().read()?.weibo_api_config.fav_count as u32;
         let range = options.range.into_inner();
         info!("Start backing up favorites from {} to {}", range.0, range.1);
 
@@ -176,10 +165,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     // unfavorite all posts that are in weibo favorites
     pub(super) async fn unfavorite_posts(&self, task_id: u64) -> Result<()> {
         info!("Starting unfavorite posts task {task_id}");
-        let task_interval = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .other_task_interval;
+        let task_interval = get_config().read()?.other_task_interval;
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         info!("Found {len} posts to unfavorite");
@@ -215,10 +201,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
         info!("Starting export from local with options: {options:?}");
-        let limit = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .posts_per_html;
+        let limit = get_config().read()?.posts_per_html;
         let posts_sum = self.get_favorited_sum().await?;
         info!("Found {posts_sum} favorited posts in local database");
         let (mut start, end) = options.range.into_inner();

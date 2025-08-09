@@ -60,10 +60,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
 
     pub async fn process(&self, task_id: u64, posts: Vec<Post>) -> Result<()> {
         info!("Processing {} posts for task {}.", posts.len(), task_id);
-        let pic_definition = get_config()
-            .read()
-            .map_err(|err| Error::Other(err.to_string()))?
-            .picture_definition;
+        let pic_definition = get_config().read()?.picture_definition;
         debug!("Picture definition set to: {pic_definition:?}");
         let pic_metas = self.extract_all_pic_metas(&posts, pic_definition);
         info!("Found {} unique pictures to download.", pic_metas.len());
@@ -108,10 +105,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         options: &ExportOptions,
     ) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
-        let pic_quality = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .picture_definition;
+        let pic_quality = get_config().read()?.picture_definition;
         debug!("Using picture quality: {pic_quality:?}");
         let pic_metas = self.extract_all_pic_metas(&posts, pic_quality);
         info!(

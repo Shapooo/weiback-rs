@@ -48,7 +48,7 @@ impl StorageImpl {
         let config = get_config();
         let config_read = config.read().map_err(|e| {
             error!("Failed to read config lock: {e}");
-            Error::Other(e.to_string())
+            e
         })?;
         let picture_path = config_read.picture_path.clone();
         drop(config_read);
@@ -58,7 +58,7 @@ impl StorageImpl {
             .block_on(create_db_pool())
             .map_err(|e| {
                 error!("Failed to create database pool: {e}");
-                Error::Other(e.to_string())
+                e
             })?;
 
         let picture_path = current_exe().unwrap().parent().unwrap().join(picture_path);
@@ -172,11 +172,7 @@ async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
 }
 
 async fn create_db_pool() -> Result<SqlitePool> {
-    let db_path = get_config()
-        .read()
-        .map_err(|e| Error::Other(e.to_string()))?
-        .db_path
-        .clone();
+    let db_path = get_config().read()?.db_path.clone();
     info!("Initializing database pool at path: {db_path:?}");
     let db_path = std::env::current_exe()
         .unwrap()

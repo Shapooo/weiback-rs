@@ -28,6 +28,9 @@ pub enum Error {
     #[error("Api error: {0:?}")]
     ApiError(weibosdk_rs::err_response::ErrResponse),
 
+    #[error("Lock error: {0}")]
+    Lock(String),
+
     #[error("Url parsing error: {0}")]
     UrlParse(#[from] url::ParseError),
 
@@ -80,5 +83,11 @@ impl From<weibosdk_rs::Error> for Error {
             SDKError::DataConversionError(e) => Error::DataConversionError(e),
             SDKError::DeserializationError(e) => Error::SerdeJson(e),
         }
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(err: std::sync::PoisonError<T>) -> Self {
+        Self::Lock(err.to_string())
     }
 }

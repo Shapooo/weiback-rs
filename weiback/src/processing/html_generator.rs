@@ -49,10 +49,7 @@ impl HTMLGenerator {
 
     fn generate_post(&self, mut post: Post, options: &ExportOptions) -> Result<String> {
         let pic_folder = options.export_task_name.to_owned() + "_files";
-        let pic_quality = get_config()
-            .read()
-            .map_err(|e| Error::Other(e.to_string()))?
-            .picture_definition;
+        let pic_quality = get_config().read()?.picture_definition;
         let in_post_pic_paths = extract_in_post_pic_paths(&post, &pic_folder, pic_quality);
 
         let mut context = Context::new();
