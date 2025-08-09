@@ -25,8 +25,8 @@ pub enum Error {
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
 
-    #[error("Weibo api client error: {0}")]
-    Client(#[from] weibosdk_rs::Error),
+    #[error("Api error: {0:?}")]
+    ApiError(weibosdk_rs::err_response::ErrResponse),
 
     #[error("Url parsing error: {0}")]
     UrlParse(#[from] url::ParseError),
@@ -66,5 +66,19 @@ where
 {
     fn context(self, context: &'static str) -> Result<T> {
         self.map_err(|e| Error::Context(context.to_string(), Box::new(e.into())))
+    }
+}
+
+impl From<weibosdk_rs::Error> for Error {
+    fn from(error: weibosdk_rs::Error) -> Self {
+        use weibosdk_rs::Error as SDKError;
+        match error {
+            SDKError::IoError(e) => Error::Io(e),
+            SDKError::NotLoggedIn => Error::NotLoggedIn,
+            SDKError::NetworkError(e) => Error::Network(e),
+            SDKError::ApiError(e) => Error::ApiError(e),
+            SDKError::DataConversionError(e) => Error::DataConversionError(e),
+            SDKError::DeserializationError(e) => Error::SerdeJson(e),
+        }
     }
 }
