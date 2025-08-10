@@ -1,8 +1,6 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-pub use weibosdk_rs::{Post, User};
-
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum PictureDefinition {
     Thumbnail,
