@@ -88,8 +88,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
                                 task_id,
                                 err: e.to_string(),
                             }))
-                            .await
-                            .unwrap();
+                            .await?;
                     }
                 }
             }

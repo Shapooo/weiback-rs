@@ -18,7 +18,7 @@ impl TaskManger {
     }
 
     pub fn new_task(&self, id: u64, task: Task) -> Result<()> {
-        let mut tasks = self.tasks.lock().unwrap();
+        let mut tasks = self.tasks.lock()?;
         match tasks.entry(id) {
             Entry::Occupied(_) => {
                 error!("Duplicate task id: {id}");

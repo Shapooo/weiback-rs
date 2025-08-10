@@ -53,15 +53,12 @@ impl StorageImpl {
         let picture_path = config_read.picture_path.clone();
         drop(config_read);
 
-        let db_pool = Runtime::new()
-            .unwrap()
-            .block_on(create_db_pool())
-            .map_err(|e| {
-                error!("Failed to create database pool: {e}");
-                e
-            })?;
+        let db_pool = Runtime::new()?.block_on(create_db_pool()).map_err(|e| {
+            error!("Failed to create database pool: {e}");
+            e
+        })?;
 
-        let picture_path = current_exe().unwrap().parent().unwrap().join(picture_path);
+        let picture_path = current_exe()?.parent().unwrap().join(picture_path);
         let processer = Processer::new(db_pool.clone());
         info!("Storage initialized successfully.");
         Ok(StorageImpl {
@@ -135,7 +132,7 @@ impl Storage for Arc<StorageImpl> {
     // TODO: clarify semantic of Result and Option
     async fn get_picture_blob(&self, url: &str) -> Result<Option<Bytes>> {
         let path = url_to_path(url)?;
-        let relative_path = Path::new(&path).strip_prefix("/").unwrap();
+        let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
         let path = self.picture_path.join(relative_path);
         match tokio::fs::read(&path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
@@ -146,7 +143,7 @@ impl Storage for Arc<StorageImpl> {
 
     async fn save_picture(&self, picture: &Picture) -> Result<()> {
         let path = url_to_path(picture.meta.url())?;
-        let relative_path = Path::new(&path).strip_prefix("/").unwrap();
+        let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
         let path = self.picture_path.join(relative_path);
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
@@ -174,11 +171,7 @@ async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
 async fn create_db_pool() -> Result<SqlitePool> {
     let db_path = get_config().read()?.db_path.clone();
     info!("Initializing database pool at path: {db_path:?}");
-    let db_path = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join(db_path);
+    let db_path = std::env::current_exe()?.parent().unwrap().join(db_path);
     if db_path.is_file() {
         info!("Database file exists at {db_path:?}. Connecting...");
         let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;

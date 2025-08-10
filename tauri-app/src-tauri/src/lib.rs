@@ -28,7 +28,7 @@ async fn backup_self(
     range: RangeInclusive<u32>,
 ) -> Result<()> {
     info!("backup_self called with range: {range:?}");
-    let uid = api_client.lock().await.session().unwrap().uid.clone();
+    let uid = api_client.lock().await.session()?.uid.clone();
     backup_user(core, uid, range).await
 }
 
@@ -134,14 +134,14 @@ pub fn run() -> Result<()> {
     let (msg_sender, msg_receiver) = mpsc::channel(100);
     info!("MPSC channel created");
 
-    let storage = StorageImpl::new().unwrap(); // TODO: handle error
+    let storage = StorageImpl::new()?;
     let storage = Arc::new(storage);
     info!("Storage initialized");
 
     let exporter = ExporterImpl::new();
     info!("Exporter initialized");
 
-    let http_client = new_client_with_headers().unwrap(); // TODO: handle error
+    let http_client = new_client_with_headers()?;
     info!("HTTP client created");
 
     let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
@@ -156,8 +156,7 @@ pub fn run() -> Result<()> {
         exporter,
         downloader,
         msg_sender,
-    )
-    .unwrap(); // TODO: handle error
+    )?;
     info!("TaskHandler initialized");
 
     let core = Core::new(task_handler.clone())?;

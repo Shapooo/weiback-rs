@@ -146,7 +146,9 @@ impl HTMLGenerator {
                         .join(pic_name)
                         .into_os_string()
                         .into_string()
-                        .unwrap(),
+                        .map_err(|e| {
+                            Error::FormatError(format!("contain invalid unicode in {e:?}"))
+                        })?,
                 )
                 + r#"" />"#)
         } else {
