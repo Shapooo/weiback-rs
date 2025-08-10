@@ -3,8 +3,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use log::{debug, info};
+use once_cell::sync::OnceCell;
 use serde_json::Value;
 use tera::{Context, Tera};
+use weibosdk_rs::emoji::EmojiUpdateAPI;
 
 use super::{pic_id_to_url, process_in_post_pics};
 use crate::config::get_config;
@@ -30,21 +32,19 @@ pub fn create_tera(template_path: &Path) -> Result<Tera> {
 }
 
 #[derive(Debug, Clone)]
-pub struct HTMLGenerator {
+pub struct HTMLGenerator<E: EmojiUpdateAPI> {
+    api_client: E,
     templates: Tera,
-    emoji_map: Option<HashMap<String, String>>,
+    emoji_map: OnceCell<HashMap<String, String>>,
 }
 
-impl HTMLGenerator {
-    pub fn new(templates: Tera) -> Self {
+impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
+    pub fn new(api_client: E, templates: Tera) -> Self {
         Self {
+            api_client,
             templates,
-            emoji_map: None,
+            emoji_map: OnceCell::new(),
         }
-    }
-
-    pub fn set_emoji(&mut self, emoji_map: HashMap<String, String>) {
-        self.emoji_map = Some(emoji_map);
     }
 
     fn generate_post(&self, mut post: Post, options: &ExportOptions) -> Result<String> {
@@ -72,6 +72,13 @@ impl HTMLGenerator {
         let html = self.templates.render("page.html", &context)?;
         info!("Successfully generated page");
         Ok(html)
+    }
+
+    fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
+        Ok(self.emoji_map.get_or_try_init(|| {
+            let runtime = tokio::runtime::Handle::current();
+            runtime.block_on(async move { self.api_client.emoji_update().await })
+        })?)
     }
 
     fn trans_text(&self, post: &Post, pic_folder: &Path) -> Result<String> {
@@ -133,7 +140,7 @@ impl HTMLGenerator {
     }
 
     fn trans_emoji<'a>(&self, s: &'a str, pic_folder: &'a Path) -> Result<Cow<'a, str>> {
-        if let Some(url) = self.emoji_map.as_ref().unwrap().get(s) {
+        if let Some(url) = self.get_or_try_init_emoji().unwrap().get(s) {
             let pic = PictureMeta::other(url.to_string());
             let pic_name = url_to_filename(pic.url())?;
             Ok(Borrowed(r#"<img class="bk-emoji" alt=""#)

@@ -27,7 +27,7 @@ pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
     storage: S,
     downloader: D,
     emoji_map: Option<HashMap<String, String>>,
-    html_generator: HTMLGenerator,
+    html_generator: HTMLGenerator<W>,
     msg_sender: mpsc::Sender<Message>,
 }
 
@@ -46,7 +46,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .join("templates");
         debug!("Loading templates from: {tera_path:?}");
         let tera = create_tera(&tera_path)?;
-        let html_generator = HTMLGenerator::new(tera);
+        let html_generator = HTMLGenerator::new(api_client.clone(), tera);
         info!("PostProcesser initialized successfully.");
         Ok(Self {
             api_client,
