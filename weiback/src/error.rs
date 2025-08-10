@@ -37,11 +37,11 @@ pub enum Error {
     #[error("Task related error: {0}")]
     InconsistentTask(String),
 
+    #[error("Config error: {0}")]
+    ConfigError(String),
+
     #[error("Not logged in")]
     NotLoggedIn,
-
-    #[error("An unexpected error occurred: {0}")]
-    Other(String),
 }
 
 impl<T> From<SendError<T>> for Error {

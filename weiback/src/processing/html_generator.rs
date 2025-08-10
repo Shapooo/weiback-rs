@@ -18,8 +18,8 @@ use crate::utils::{
 pub fn create_tera(template_path: &Path) -> Result<Tera> {
     let mut path = template_path
         .to_str()
-        .ok_or(Error::Other(format!(
-            "template path cannot convert to str: {template_path:?}"
+        .ok_or(Error::ConfigError(format!(
+            "template path in config cannot convert to str: {template_path:?}"
         )))?
         .to_owned();
     path.push_str("/*.html");
