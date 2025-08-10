@@ -1,24 +1,22 @@
 #![allow(async_fn_in_trait)]
 mod database;
 mod internal;
+mod picture_storage;
 
-use std::env::current_exe;
 use std::future::Future;
-use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::Bytes;
 use itertools::Itertools;
 use log::{debug, error, info};
+use picture_storage::FileSystemPictureStorage;
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 
-use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
 use crate::models::{Picture, Post, User};
-use crate::utils::url_to_path;
 use internal::post::{self, PostInternal};
 use internal::user;
 
@@ -40,32 +38,24 @@ pub trait Storage: Send + Sync + Clone + 'static {
 #[derive(Debug, Clone)]
 pub struct StorageImpl {
     db_pool: SqlitePool,
-    picture_path: PathBuf,
+    pic_storage: FileSystemPictureStorage,
 }
 
 impl StorageImpl {
     pub fn new() -> Result<Self> {
         info!("Initializing storage...");
-        let config = get_config();
-        let config_read = config.read().map_err(|e| {
-            error!("Failed to read config lock: {e}");
-            e
-        })?;
-        let picture_path = config_read.picture_path.clone();
-        drop(config_read);
-
         let db_pool = Runtime::new()?
             .block_on(database::create_db_pool())
             .map_err(|e| {
                 error!("Failed to create database pool: {e}");
                 e
             })?;
+        let pic_storage = FileSystemPictureStorage::new()?;
 
-        let picture_path = current_exe()?.parent().unwrap().join(picture_path);
         info!("Storage initialized successfully.");
         Ok(StorageImpl {
             db_pool,
-            picture_path,
+            pic_storage,
         })
     }
 
@@ -169,25 +159,10 @@ impl Storage for Arc<StorageImpl> {
     }
 
     async fn get_picture_blob(&self, url: &str) -> Result<Option<Bytes>> {
-        let path = url_to_path(url)?;
-        let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
-        let path = self.picture_path.join(relative_path);
-        match tokio::fs::read(&path).await {
-            Ok(blob) => Ok(Some(Bytes::from(blob))),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+        self.pic_storage.get_picture_blob(url).await
     }
 
     async fn save_picture(&self, picture: &Picture) -> Result<()> {
-        let path = url_to_path(picture.meta.url())?;
-        let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
-        let path = self.picture_path.join(relative_path);
-        if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-        tokio::fs::write(&path, &picture.blob).await?;
-        debug!("picture {} saved to {:?}", picture.meta.url(), path);
-        Ok(())
+        self.pic_storage.save_picture(picture).await
     }
 }
