@@ -1,7 +1,6 @@
 #![allow(async_fn_in_trait)]
 mod database;
-mod post_internal;
-mod user_internal;
+mod internal;
 
 use std::env::current_exe;
 use std::future::Future;
@@ -20,8 +19,8 @@ use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
 use crate::models::{Picture, Post, User};
 use crate::utils::url_to_path;
-use post_internal::PostInternal;
-use user_internal::UserInternal;
+use internal::post::{self, PostInternal};
+use internal::user;
 
 const VALIDE_DB_VERSION: i64 = 2;
 
