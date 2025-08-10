@@ -3,12 +3,12 @@ use std::ops::DerefMut;
 
 use log::info;
 use serde_json::{Value, from_str, to_string};
-use sqlx::{Executor, FromRow, Row, Sqlite};
+use sqlx::{Executor, FromRow, Sqlite};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, FromRow)]
 pub struct PostStorage {
     pub id: i64,
     pub mblogid: String,
@@ -31,6 +31,7 @@ pub struct PostStorage {
     pub attitudes_count: Option<i64>,
     pub repost_type: Option<i64>,
     pub edit_count: Option<i64>,
+    #[sqlx(rename = "isLongText")]
     pub is_long_text: bool,
     pub geo: Option<Value>,
     pub page_info: Option<Value>,
@@ -108,51 +109,6 @@ impl TryInto<Post> for PostStorage {
             created_at: DateTime::parse_from_rfc3339(&self.created_at)?,
             retweeted_status: None,
             user: None,
-        })
-    }
-}
-
-impl<'r, R> FromRow<'r, R> for PostStorage
-where
-    R: Row,
-    for<'c> &'c str: sqlx::ColumnIndex<R>,
-    i64: for<'c> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    String: for<'c> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    Option<String>: for<'c> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    bool: for<'c> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    Option<i64>: for<'c> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    Option<Value>: for<'c> sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-{
-    fn from_row(row: &'r R) -> std::result::Result<Self, sqlx::Error> {
-        Ok(PostStorage {
-            id: row.try_get("id")?,
-            mblogid: row.try_get("mblogid")?,
-            source: row.try_get("source")?,
-            region_name: row.try_get("region_name")?,
-            deleted: row.try_get("deleted")?,
-            pic_ids: row.try_get("pic_ids")?,
-            pic_num: row.try_get("pic_num")?,
-            url_struct: row.try_get("url_struct")?,
-            topic_struct: row.try_get("topic_struct")?,
-            tag_struct: row.try_get("tag_struct")?,
-            number_display_strategy: row.try_get("number_display_strategy")?,
-            mix_media_info: row.try_get("mix_media_info")?,
-            text: row.try_get("text")?,
-            attitudes_status: row.try_get("attitudes_status")?,
-            favorited: row.try_get("favorited")?,
-            pic_infos: row.try_get("pic_infos")?,
-            reposts_count: row.try_get("reposts_count")?,
-            comments_count: row.try_get("comments_count")?,
-            attitudes_count: row.try_get("attitudes_count")?,
-            repost_type: row.try_get("repost_type")?,
-            edit_count: row.try_get("edit_count")?,
-            is_long_text: row.try_get("isLongText")?,
-            geo: row.try_get("geo")?,
-            page_info: row.try_get("page_info")?,
-            unfavorited: row.try_get("unfavorited")?,
-            created_at: row.try_get("created_at")?,
-            retweeted_id: row.try_get("retweeted_id")?,
-            uid: row.try_get("uid")?,
         })
     }
 }
