@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 use weibosdk_rs::config::Conifg as WeiboApiConfig;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::models::PictureDefinition;
 
 // 使用 OnceCell 替代 Lazy，以支持可能失败的、显式的初始化。
@@ -83,19 +83,22 @@ pub fn get_config() -> Arc<RwLock<Config>> {
             // 则使用默认值。这保证了 get_config 总能成功返回，不会 panic。
             // 这里不写入文件，以避免在运行时产生不可控的 I/O 错误。
             warn!("Config not explicitly initialized, trying to load from files or use default.");
-            let config = load_from_files().unwrap_or_else(|e| {
-                warn!("Failed to load config from files, using default: {e}");
-                Config::default()
-            });
+            let config = load_from_files()
+                .unwrap_or_else(|e| {
+                    warn!("Failed to load config from files, using default: {e}");
+                    None
+                })
+                .unwrap_or_default();
             Arc::new(RwLock::new(config))
         })
         .clone()
 }
 
 // 尝试从所有已知路径加载配置。
-fn load_from_files() -> Result<Config> {
-    let config_path =
-        find_config_file()?.ok_or(Error::Other("config file not found".to_string()))?;
+fn load_from_files() -> Result<Option<Config>> {
+    let Some(config_path) = find_config_file()? else {
+        return Ok(None);
+    };
     let content = fs::read_to_string(config_path)?;
     Ok(from_str(&content)?)
 }
