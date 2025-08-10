@@ -11,14 +11,14 @@ use weiback::core::{
     BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler, task_manager::TaskManger,
 };
 use weiback::exporter::{ExportOptions, ExporterImpl};
-use weiback::media_downloader::MediaDownloaderImpl;
+use weiback::media_downloader::{MediaDownloaderHandle, create_downloader};
 use weiback::message::{ErrMsg, Message, TaskProgress};
 use weiback::storage::StorageImpl;
 use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
 
 use error::{Error, Result};
 
-type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
+type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderHandle>;
 type WeiboAPIImpl = WAI<reqwest::Client>;
 
 #[tauri::command]
@@ -161,19 +161,14 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let http_client = new_client_with_headers()?;
     info!("HTTP client created");
 
-    let downloader = MediaDownloaderImpl::new(http_client.clone(), msg_sender.clone());
+    let (handle, worker) = create_downloader(100, http_client.clone(), msg_sender.clone());
+    tauri::async_runtime::spawn(worker.run());
     info!("MediaDownloader initialized");
 
     let api_client = WeiboAPIImpl::new(http_client.clone(), weibo_api_config);
     info!("WeiboAPIImpl initialized");
 
-    let task_handler = TaskHandler::new(
-        api_client.clone(),
-        storage,
-        exporter,
-        downloader,
-        msg_sender,
-    )?;
+    let task_handler = TaskHandler::new(api_client.clone(), storage, exporter, handle, msg_sender)?;
     info!("TaskHandler initialized");
 
     let core = Core::new(task_handler.clone())?;

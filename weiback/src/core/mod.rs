@@ -13,15 +13,19 @@ use weibosdk_rs::WeiboAPIImpl;
 
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
-use crate::media_downloader::MediaDownloaderImpl;
+use crate::media_downloader::MediaDownloaderHandle;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::storage::StorageImpl;
 pub use task::{BFOptions, BUOptions, Task, TaskRequest, UserPostFilter};
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
 
-type TH =
-    TaskHandler<WeiboAPIImpl<reqwest::Client>, Arc<StorageImpl>, ExporterImpl, MediaDownloaderImpl>;
+type TH = TaskHandler<
+    WeiboAPIImpl<reqwest::Client>,
+    Arc<StorageImpl>,
+    ExporterImpl,
+    MediaDownloaderHandle,
+>;
 pub struct Core {
     next_task_id: AtomicU64,
     task_handler: &'static TH,
