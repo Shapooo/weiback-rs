@@ -14,7 +14,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     #[error("Database error: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    DbError(String),
 
     #[error("Template rendering error: {0}")]
     Tera(#[from] tera::Error),
@@ -104,5 +104,11 @@ impl From<url::ParseError> for Error {
 impl From<chrono::ParseError> for Error {
     fn from(err: chrono::ParseError) -> Self {
         Self::FormatError(err.to_string())
+    }
+}
+
+impl From<sqlx::Error> for Error {
+    fn from(err: sqlx::Error) -> Self {
+        Self::DbError(err.to_string())
     }
 }

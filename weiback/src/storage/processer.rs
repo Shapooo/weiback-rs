@@ -68,9 +68,9 @@ impl Processer {
 
         let retweeted_status = if let Some(retweeted_id) = post.retweeted_id {
             Some(Box::new(self.get_post(retweeted_id).await?.ok_or(
-                Error::Other(format!(
-                    "cannot find retweeted post {} of post {}",
-                    retweeted_id, post.id
+                Error::DbError(format!(
+                    "there's inconsistent data base status, cannot find  post {}'s retweeted post {}",
+                    post.id, retweeted_id
                 )),
             )?))
         } else {

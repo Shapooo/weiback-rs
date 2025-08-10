@@ -165,7 +165,7 @@ async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
     if version.0 == VALIDE_DB_VERSION {
         Ok(())
     } else {
-        Err(Error::Other(
+        Err(Error::DbError(
             "Invalid database version, please upgrade db file".to_string(),
         ))
     }
