@@ -9,7 +9,7 @@ use crate::error::{Error, Result};
 use crate::models::Post;
 
 #[derive(Debug, Clone, PartialEq, FromRow)]
-pub struct PostStorage {
+pub struct PostInternal {
     pub id: i64,
     pub mblogid: String,
     pub source: Option<String>,
@@ -41,7 +41,7 @@ pub struct PostStorage {
     pub uid: Option<i64>,
 }
 
-impl TryFrom<Post> for PostStorage {
+impl TryFrom<Post> for PostInternal {
     type Error = Error;
     fn try_from(post: Post) -> Result<Self> {
         Ok(Self {
@@ -77,7 +77,7 @@ impl TryFrom<Post> for PostStorage {
     }
 }
 
-impl TryInto<Post> for PostStorage {
+impl TryInto<Post> for PostInternal {
     type Error = Error;
     fn try_into(self) -> Result<Post> {
         Ok(Post {

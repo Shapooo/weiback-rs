@@ -20,8 +20,8 @@ use crate::error::{Error, Result};
 use crate::exporter::ExportOptions;
 use crate::models::{Picture, Post, User};
 use crate::utils::url_to_path;
-use post_internal::PostStorage;
-use user_internal::UserStorage;
+use post_internal::PostInternal;
+use user_internal::UserInternal;
 
 const VALIDE_DB_VERSION: i64 = 2;
 
@@ -81,7 +81,7 @@ impl StorageImpl {
             if let Some(ret_post) = post.retweeted_status.take() {
                 self._save_post(*ret_post).await?;
             }
-            let mut post_storage: PostStorage = post.try_into()?;
+            let mut post_storage: PostInternal = post.try_into()?;
             post_storage.uid = uid;
             post_storage.retweeted_id = retweeted_id;
             match self.do_save_post_sql(&post_storage, true).await {
@@ -106,7 +106,7 @@ impl StorageImpl {
         })
     }
 
-    async fn hydrate_post(&self, post: PostStorage) -> Result<Option<Post>> {
+    async fn hydrate_post(&self, post: PostInternal) -> Result<Option<Post>> {
         let user = if let Some(uid) = post.uid {
             self._get_user(uid).await?
         } else {
@@ -130,7 +130,7 @@ impl StorageImpl {
     }
 
     async fn _get_user(&self, id: i64) -> Result<Option<User>> {
-        let user = sqlx::query_as::<Sqlite, UserStorage>("SELECT * FROM users WHERE id = ?")
+        let user = sqlx::query_as::<Sqlite, UserInternal>("SELECT * FROM users WHERE id = ?")
             .bind(id)
             .fetch_optional(&self.db_pool)
             .await?;
@@ -176,7 +176,7 @@ impl StorageImpl {
         } else {
             "SELECT * FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
         };
-        let posts = sqlx::query_as::<Sqlite, PostStorage>(sql_expr)
+        let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
             .bind(limit)
             .bind(offset)
             .fetch_all(&self.db_pool)
@@ -192,16 +192,16 @@ impl StorageImpl {
         Ok(posts)
     }
 
-    async fn do_get_post_sql(&self, id: i64) -> Result<Option<PostStorage>> {
+    async fn do_get_post_sql(&self, id: i64) -> Result<Option<PostInternal>> {
         Ok(
-            sqlx::query_as::<Sqlite, PostStorage>("SELECT * FROM posts WHERE id = ?")
+            sqlx::query_as::<Sqlite, PostInternal>("SELECT * FROM posts WHERE id = ?")
                 .bind(id)
                 .fetch_optional(&self.db_pool)
                 .await?,
         )
     }
 
-    async fn do_save_post_sql(&self, post: &PostStorage, overwrite: bool) -> Result<()> {
+    async fn do_save_post_sql(&self, post: &PostInternal, overwrite: bool) -> Result<()> {
         sqlx::query(
             format!(
                 "INSERT OR {} INTO posts (\

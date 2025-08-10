@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::models::User;
 
 #[derive(Debug, Clone, FromRow, PartialEq)]
-pub struct UserStorage {
+pub struct UserInternal {
     pub id: i64,
     pub screen_name: String,
     pub profile_image_url: String,
@@ -25,7 +25,7 @@ pub struct UserStorage {
     pub following: bool,
 }
 
-impl From<User> for UserStorage {
+impl From<User> for UserInternal {
     fn from(value: User) -> Self {
         Self {
             id: value.id,
@@ -42,8 +42,8 @@ impl From<User> for UserStorage {
     }
 }
 
-impl From<UserStorage> for User {
-    fn from(val: UserStorage) -> Self {
+impl From<UserInternal> for User {
+    fn from(val: UserInternal) -> Self {
         Self {
             id: val.id,
             screen_name: val.screen_name,
