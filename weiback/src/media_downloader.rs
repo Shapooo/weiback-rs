@@ -7,7 +7,7 @@ use log::{debug, error, info};
 use reqwest::Client;
 use tokio::sync::mpsc;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::message::{ErrMsg, ErrType, Message};
 
 pub trait MediaDownloader {
@@ -49,6 +49,7 @@ impl MediaDownloaderImpl {
         let (sender, mut receiver) = mpsc::channel::<DownloadTask>(500);
 
         tokio::spawn(async move {
+            // TODO: spawn in sync function
             info!("Media downloader actor started.");
             while let Some(DownloadTask {
                 task_id,
@@ -57,46 +58,19 @@ impl MediaDownloaderImpl {
             }) = receiver.recv().await
             {
                 debug!("Downloading picture from {url}");
-                let res = match client.get(&url).send().await {
-                    Ok(response) => {
-                        if !response.status().is_success() {
-                            error!(
-                                "Download failed for {}: status code {}",
-                                url,
-                                response.status()
-                            );
-                            Err(Error::Other(format!(
-                                "Download failed for {}: status code {}",
-                                url,
-                                response.status()
-                            )))
-                        } else {
-                            match response.bytes().await {
-                                Ok(bytes) => {
-                                    info!("Successfully downloaded picture from {url}");
-                                    (callback)(bytes).await
-                                }
-                                Err(e) => {
-                                    error!("Failed to read bytes from response for {url}: {e}");
-                                    Err(Error::Other(e.to_string()))
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to send request when download picture from {url}: {e}");
-                        Err(Error::Other(e.to_string()))
-                    }
-                };
+                let res = worker(&client, &url, callback).await;
                 if let Err(err) = res {
-                    message_sender
+                    if let Err(e) = message_sender
                         .send(Message::Err(ErrMsg {
                             r#type: ErrType::DownPicFail { url },
                             task_id,
                             err: err.to_string(),
                         }))
                         .await
-                        .unwrap();
+                    {
+                        error!("message send failed, channel broke down: {e}");
+                        panic!("message send failed, channel broke down: {e}");
+                    }
                 }
             }
             info!("Media downloader actor finished.");
@@ -104,6 +78,24 @@ impl MediaDownloaderImpl {
 
         Self { sender }
     }
+}
+
+async fn worker(client: &Client, url: &str, callback: AsyncDownloadCallback) -> Result<()> {
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| {
+            error!("Failed to send request when download picture from {url}: {e}");
+            e
+        })?;
+    let body = response.bytes().await.map_err(|e| {
+        error!("Failed to read bytes from response for {url}: {e}");
+        e
+    })?;
+    info!("Successfully downloaded picture from {url}");
+    (callback)(body).await
 }
 
 impl MediaDownloader for MediaDownloaderImpl {
@@ -123,9 +115,9 @@ impl MediaDownloader for MediaDownloaderImpl {
             url,
             callback,
         };
-        self.sender.send(task).await.map_err(|e| {
+        Ok(self.sender.send(task).await.map_err(|e| {
             error!("Failed to send download task to worker: {e}");
-            Error::Other("Media downloader channel has been closed".to_string())
-        })
+            e
+        })?)
     }
 }
