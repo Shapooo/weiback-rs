@@ -4,7 +4,7 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use log::{debug, error, info, warn};
-use tauri::{self, AppHandle, Emitter, Manager, State};
+use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::{Mutex, mpsc};
 use weiback::config::get_config;
 use weiback::core::{
@@ -118,14 +118,31 @@ async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> 
 }
 
 pub fn run() -> Result<()> {
-    env_logger::init();
     info!("Starting application");
 
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .setup(setup)
+        .invoke_handler(tauri::generate_handler![
+            backup_user,
+            backup_self,
+            backup_favorites,
+            unfavorite_posts,
+            export_from_local,
+            send_code,
+            login
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application"); // TODO
+    Ok(())
+}
+
+fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let weibo_api_config = get_config()
         .read()
         .map_err(|e| {
             error!("Failed to read config: {e}");
-            Error(e.to_string())
+            anyhow::anyhow!("{e}")
         })?
         .weibo_api_config
         .clone();
@@ -162,32 +179,17 @@ pub fn run() -> Result<()> {
     let core = Core::new(task_handler.clone())?;
     info!("Core initialized");
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .setup(move |app| {
-            info!("Setting up Tauri application");
-            tauri::async_runtime::spawn(msg_loop(
-                app.handle().clone(),
-                core.task_manager().clone(),
-                msg_receiver,
-            ));
-            app.manage(Mutex::new(core));
-            app.manage(task_handler);
-            app.manage(Mutex::new(api_client));
-            info!("Tauri setup complete");
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            backup_user,
-            backup_self,
-            backup_favorites,
-            unfavorite_posts,
-            export_from_local,
-            send_code,
-            login
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application"); // TODO
+    info!("Setting up Tauri application");
+
+    tauri::async_runtime::spawn(msg_loop(
+        app.handle().clone(),
+        core.task_manager().clone(),
+        msg_receiver,
+    ));
+    app.manage(core);
+    app.manage(task_handler);
+    app.manage(Mutex::new(api_client));
+    info!("Tauri setup complete");
     Ok(())
 }
 
