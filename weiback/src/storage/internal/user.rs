@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 
 use log::info;
-use sqlx::{Executor, FromRow, Sqlite};
+use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
 
 use crate::error::Result;
 use crate::models::User;
@@ -82,5 +82,45 @@ where
     .execute(&mut *db)
     .await?;
     info!("User table created successfully.");
+    Ok(())
+}
+
+pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
+    let user = sqlx::query_as::<Sqlite, UserInternal>("SELECT * FROM users WHERE id = ?")
+        .bind(id)
+        .fetch_optional(db)
+        .await?;
+    Ok(user.map(|u| u.into()))
+}
+
+pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
+    let _ = sqlx::query(
+        "INSERT OR IGNORE INTO users (\
+             id,\
+             screen_name,\
+             profile_image_url,\
+             avatar_large,\
+             avatar_hd,\
+             verified,\
+             verified_type,\
+             domain,\
+             follow_me,\
+             following)\
+             VALUES \
+             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(user.id)
+    .bind(&user.screen_name)
+    .bind(&user.profile_image_url)
+    .bind(&user.avatar_large)
+    .bind(&user.avatar_hd)
+    .bind(user.verified)
+    .bind(user.verified_type)
+    .bind(&user.domain)
+    .bind(user.follow_me)
+    .bind(user.following)
+    .bind(false)
+    .execute(db)
+    .await?;
     Ok(())
 }

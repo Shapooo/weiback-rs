@@ -1,9 +1,8 @@
 use chrono::DateTime;
-use std::ops::DerefMut;
-
-use log::info;
+use log::{debug, info};
 use serde_json::{Value, from_str, to_string};
-use sqlx::{Executor, FromRow, Sqlite};
+use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
+use std::ops::DerefMut;
 
 use crate::error::{Error, Result};
 use crate::models::Post;
@@ -72,7 +71,7 @@ impl TryFrom<Post> for PostInternal {
             unfavorited: post.unfavorited,
             created_at: post.created_at.to_rfc3339(),
             retweeted_id: post.retweeted_status.map(|r| r.id),
-            uid: post.attitudes_count,
+            uid: post.user.map(|u| u.id),
         })
     }
 }
@@ -121,38 +120,176 @@ where
     info!("Creating post table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS posts ( \
-             id INTEGER PRIMARY KEY, \
-             mblogid TEXT, \
-             source TEXT, \
-             region_name TEXT, \
-             deleted INTEGER, \
-             pic_ids TEXT, \
-             pic_num INTEGER, \
-             url_struct TEXT, \
-             topic_struct TEXT, \
-             tag_struct TEXT, \
-             number_display_strategy TEXT, \
-             mix_media_info TEXT, \
-             text TEXT, \
-             attitudes_status INTEGER, \
-             favorited INTEGER, \
-             pic_infos TEXT, \
-             reposts_count INTEGER, \
-             comments_count INTEGER, \
-             attitudes_count INTEGER, \
-             repost_type INTEGER, \
-             edit_count INTEGER, \
-             isLongText INTEGER, \
-             geo TEXT, \
-             page_info TEXT, \
-             unfavorited INTEGER, \
-             created_at TEXT, \
-             retweeted_id INTEGER, \
-             uid INTEGER \
-             )",
+         id INTEGER PRIMARY KEY, \
+         mblogid TEXT, \
+         source TEXT, \
+         region_name TEXT, \
+         deleted INTEGER, \
+         pic_ids TEXT, \
+         pic_num INTEGER, \
+         url_struct TEXT, \
+         topic_struct TEXT, \
+         tag_struct TEXT, \
+         number_display_strategy TEXT, \
+         mix_media_info TEXT, \
+         text TEXT, \
+         attitudes_status INTEGER, \
+         favorited INTEGER, \
+         pic_infos TEXT, \
+         reposts_count INTEGER, \
+         comments_count INTEGER, \
+         attitudes_count INTEGER, \
+         repost_type INTEGER, \
+         edit_count INTEGER, \
+         isLongText INTEGER, \
+         geo TEXT, \
+         page_info TEXT, \
+         unfavorited INTEGER, \
+         created_at TEXT, \
+         retweeted_id INTEGER, \
+         uid INTEGER \
+         )",
     )
     .execute(&mut *executor)
     .await?;
     info!("Post table created successfully.");
     Ok(())
+}
+
+pub async fn get_post(db: &SqlitePool, id: i64) -> Result<Option<PostInternal>> {
+    Ok(
+        sqlx::query_as::<Sqlite, PostInternal>("SELECT * FROM posts WHERE id = ?")
+            .bind(id)
+            .fetch_optional(db)
+            .await?,
+    )
+}
+
+pub async fn get_posts(
+    db: &SqlitePool,
+    limit: u32,
+    offset: u32,
+    reverse: bool,
+) -> Result<Vec<PostInternal>> {
+    debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
+    let sql_expr = if reverse {
+        "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+    } else {
+        "SELECT * FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+    };
+    let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(db)
+        .await?;
+    Ok(posts)
+}
+
+pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) -> Result<()> {
+    sqlx::query(
+        format!(
+            "INSERT OR {} INTO posts (\
+                 id,\
+                 mblogid,\
+                 source,\
+                 region_name,\
+                 deleted,\
+                 pic_ids,\
+                 pic_num,\
+                 url_struct,\
+                 topic_struct,\
+                 tag_struct,\
+                 number_display_strategy,\
+                 mix_media_info,\
+                 text,\
+                 attitudes_status,\
+                 favorited,\
+                 pic_infos,\
+                 reposts_count,\
+                 comments_count,\
+                 attitudes_count,\
+                 repost_type,\
+                 edit_count,\
+                 isLongText,\
+                 geo,\
+                 page_info,\
+                 unfavorited,\
+                 created_at,\
+                 retweeted_id,\
+                 uid)\
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+                 ?, ?, ?, ?, ?, ?, ?, ?)",
+            if overwrite { "REPLACE" } else { "IGNORE" }
+        )
+        .as_str(),
+    )
+    .bind(post.id)
+    .bind(&post.mblogid)
+    .bind(&post.source)
+    .bind(&post.region_name)
+    .bind(post.deleted)
+    .bind(post.pic_num)
+    .bind(&post.url_struct)
+    .bind(&post.topic_struct)
+    .bind(&post.tag_struct)
+    .bind(&post.number_display_strategy)
+    .bind(&post.mix_media_info)
+    .bind(&post.text)
+    .bind(post.attitudes_status)
+    .bind(post.favorited)
+    .bind(to_string(&post.pic_infos)?)
+    .bind(post.reposts_count)
+    .bind(post.comments_count)
+    .bind(post.attitudes_count)
+    .bind(post.repost_type)
+    .bind(post.edit_count)
+    .bind(post.is_long_text)
+    .bind(&post.geo)
+    .bind(&post.page_info)
+    .bind(post.unfavorited)
+    .bind(&post.created_at)
+    .bind(post.uid)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn mark_post_unfavorited(db: &SqlitePool, id: i64) -> Result<()> {
+    debug!("unfav post {id} in db");
+    sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn mark_post_favorited(db: &SqlitePool, id: i64) -> Result<()> {
+    debug!("mark favorited post {id} in db");
+    sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_favorited_sum(db: &SqlitePool) -> Result<u32> {
+    Ok(
+        sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
+            .fetch_one(db)
+            .await?
+            .0,
+    )
+}
+
+pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
+    debug!("query all posts to unfavorite");
+    Ok(sqlx::query_as::<Sqlite, (i64,)>(
+        "SELECT id FROM posts WHERE unfavorited == false and favorited;",
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|t| t.0)
+    .collect())
 }
