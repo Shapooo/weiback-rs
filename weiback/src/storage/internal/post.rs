@@ -212,8 +212,8 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
                  created_at,\
                  retweeted_id,\
                  uid)\
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
                  ?, ?, ?, ?, ?, ?, ?, ?)",
             if overwrite { "REPLACE" } else { "IGNORE" }
         )
@@ -224,6 +224,7 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(&post.source)
     .bind(&post.region_name)
     .bind(post.deleted)
+    .bind(&post.pic_ids)
     .bind(post.pic_num)
     .bind(&post.url_struct)
     .bind(&post.topic_struct)
@@ -244,6 +245,7 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(&post.page_info)
     .bind(post.unfavorited)
     .bind(&post.created_at)
+    .bind(post.retweeted_id)
     .bind(post.uid)
     .execute(db)
     .await?;
