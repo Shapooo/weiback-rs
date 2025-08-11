@@ -6349,6 +6349,7 @@ dependencies = [
  "sqlx",
  "tauri",
  "tauri-plugin-opener",
+ "tempfile",
  "tera",
  "thiserror 2.0.12",
  "tokio",
