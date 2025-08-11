@@ -288,3 +288,157 @@ pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
     .map(|t| t.0)
     .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::SqlitePool;
+    use weibosdk_rs::{
+        Post, favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        profile_statuses::ProfileStatusesAPI,
+    };
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        create_post_table(&pool).await.unwrap();
+        pool
+    }
+
+    async fn create_test_posts() -> Vec<Post> {
+        let mut posts = Vec::new();
+        let client = MockClient::new();
+        client
+            .set_favorites_response_from_file("tests/data/favorites.json")
+            .unwrap();
+        client
+            .set_profile_statuses_response_from_file("tests/data/profile_statuses.json")
+            .unwrap();
+        let api = MockAPI::from_session(client, Default::default());
+        posts.extend(api.favorites(1).await.unwrap());
+        posts.extend(api.profile_statuses(123, 1).await.unwrap());
+        posts
+    }
+
+    #[tokio::test]
+    async fn test_create_post_table() {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        let result = create_post_table(&pool).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_post_conversion() {
+        let posts = create_test_posts().await;
+        for post in posts {
+            let internal_post: PostInternal = post.clone().try_into().unwrap();
+            let converted_post: Post = internal_post.try_into().unwrap();
+
+            assert_eq!(post.id, converted_post.id);
+            assert_eq!(post.text, converted_post.text);
+            assert_eq!(post.pic_ids, converted_post.pic_ids);
+            assert_eq!(post.geo, converted_post.geo);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_post() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        for post in posts {
+            let internal_post: PostInternal = post.clone().try_into().unwrap();
+
+            save_post(&db, &internal_post, false).await.unwrap();
+
+            let fetched_post = get_post(&db, post.id).await.unwrap().unwrap();
+            assert_eq!(internal_post, fetched_post);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_save_post_overwrite() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        for post in posts {
+            let mut internal_post: PostInternal = post.try_into().unwrap();
+
+            save_post(&db, &internal_post, false).await.unwrap();
+
+            internal_post.text = "updated text".to_string();
+            save_post(&db, &internal_post, true).await.unwrap();
+
+            let fetched_post = get_post(&db, internal_post.id).await.unwrap().unwrap();
+            assert_eq!(fetched_post.text, "updated text");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_posts() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        for post in posts {
+            let internal_post: PostInternal = post.try_into().unwrap();
+            save_post(&db, &internal_post, false).await.unwrap();
+        }
+
+        let posts = get_posts(&db, 2, 1, false).await.unwrap();
+        assert_eq!(posts.len(), 2);
+
+        let posts_rev = get_posts(&db, 2, 1, true).await.unwrap();
+        assert_eq!(posts_rev.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_mark_post_favorited_and_unfavorited() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        for post in posts {
+            let internal_post: PostInternal = post.try_into().unwrap();
+            save_post(&db, &internal_post, false).await.unwrap();
+
+            mark_post_favorited(&db, internal_post.id).await.unwrap();
+            let fetched = get_post(&db, internal_post.id).await.unwrap().unwrap();
+            assert!(fetched.favorited);
+
+            mark_post_unfavorited(&db, internal_post.id).await.unwrap();
+            let fetched = get_post(&db, internal_post.id).await.unwrap().unwrap();
+            assert!(fetched.unfavorited);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_favorited_sum() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        let mut favorited_count = 0;
+        for post in posts {
+            let internal_post: PostInternal = post.try_into().unwrap();
+            if internal_post.favorited {
+                favorited_count += 1;
+            }
+            save_post(&db, &internal_post, false).await.unwrap();
+        }
+
+        let sum = get_favorited_sum(&db).await.unwrap();
+        assert_eq!(sum, favorited_count);
+    }
+
+    #[tokio::test]
+    async fn test_get_posts_id_to_unfavorite() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        let mut unfavorite_ids = Vec::new();
+        for post in posts {
+            let internal_post: PostInternal = post.try_into().unwrap();
+            if internal_post.favorited && !internal_post.unfavorited {
+                unfavorite_ids.push(internal_post.id);
+            }
+            save_post(&db, &internal_post, false).await.unwrap();
+        }
+
+        let ids = get_posts_id_to_unfavorite(&db).await.unwrap();
+        unfavorite_ids.sort();
+        let mut ids_sorted = ids;
+        ids_sorted.sort();
+        assert_eq!(ids_sorted, unfavorite_ids);
+    }
+}
