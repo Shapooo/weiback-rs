@@ -1,7 +1,5 @@
-use std::ops::DerefMut;
-
 use log::info;
-use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
+use sqlx::{FromRow, Sqlite, SqlitePool};
 
 use crate::error::Result;
 use crate::models::User;
@@ -59,11 +57,7 @@ impl From<UserInternal> for User {
     }
 }
 
-pub async fn create_user_table<E>(mut db: E) -> Result<()>
-where
-    E: DerefMut,
-    for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-{
+pub async fn create_user_table(db: &SqlitePool) -> Result<()> {
     info!("Creating user table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS users ( \
@@ -79,7 +73,7 @@ where
              following INTEGER \
              )",
     )
-    .execute(&mut *db)
+    .execute(db)
     .await?;
     info!("User table created successfully.");
     Ok(())

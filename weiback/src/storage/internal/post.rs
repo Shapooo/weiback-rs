@@ -1,8 +1,7 @@
 use chrono::DateTime;
 use log::{debug, info};
 use serde_json::{Value, from_str, to_string};
-use sqlx::{Executor, FromRow, Sqlite, SqlitePool};
-use std::ops::DerefMut;
+use sqlx::{FromRow, Sqlite, SqlitePool};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
@@ -112,11 +111,7 @@ impl TryInto<Post> for PostInternal {
     }
 }
 
-pub async fn create_post_table<E>(mut executor: E) -> Result<()>
-where
-    E: DerefMut,
-    for<'a> &'a mut E::Target: Executor<'a, Database = Sqlite>,
-{
+pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
     info!("Creating post table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS posts ( \
@@ -150,7 +145,7 @@ where
          uid INTEGER \
          )",
     )
-    .execute(&mut *executor)
+    .execute(db)
     .await?;
     info!("Post table created successfully.");
     Ok(())
