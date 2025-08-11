@@ -234,7 +234,7 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(&post.text)
     .bind(post.attitudes_status)
     .bind(post.favorited)
-    .bind(to_string(&post.pic_infos)?)
+    .bind(post.pic_infos.as_ref().map(to_string).transpose()?)
     .bind(post.reposts_count)
     .bind(post.comments_count)
     .bind(post.attitudes_count)
