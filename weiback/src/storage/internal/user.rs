@@ -118,3 +118,99 @@ pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
     .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{Post, User};
+    use sqlx::SqlitePool;
+    use weibosdk_rs::{
+        favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        profile_statuses::ProfileStatusesAPI,
+    };
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        create_user_table(&pool).await.unwrap();
+        pool
+    }
+
+    async fn create_test_users() -> Vec<User> {
+        let client = MockClient::new();
+        client
+            .set_favorites_response_from_file("tests/data/favorites.json")
+            .unwrap();
+        client
+            .set_profile_statuses_response_from_file("tests/data/profile_statuses.json")
+            .unwrap();
+        let api = MockAPI::from_session(client, Default::default());
+        let posts: Vec<Post> = api
+            .favorites(1)
+            .await
+            .unwrap()
+            .into_iter()
+            .chain(api.profile_statuses(123, 1).await.unwrap())
+            .collect();
+        posts
+            .into_iter()
+            .filter_map(|p| p.user)
+            .collect::<Vec<User>>()
+    }
+
+    #[tokio::test]
+    async fn test_user_conversion() {
+        let users = create_test_users().await;
+        for user in users {
+            let internal_user: UserInternal = user.clone().into();
+            let converted_user: User = internal_user.into();
+            assert_eq!(user, converted_user);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_user_table() {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        let result = create_user_table(&pool).await;
+        assert!(result.is_ok());
+
+        // Verify that the table was created by trying to insert a user
+        let user = create_test_users().await.remove(0);
+        let result = save_user(&pool, &user).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_user() {
+        let db = setup_db().await;
+        let users = create_test_users().await;
+        for user in users {
+            save_user(&db, &user).await.unwrap();
+            let fetched_user = get_user(&db, user.id).await.unwrap().unwrap();
+            assert_eq!(fetched_user, user);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_non_existent_user() {
+        let db = setup_db().await;
+        let fetched_user = get_user(&db, 99999).await.unwrap();
+        assert!(fetched_user.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_save_duplicate_user() {
+        let db = setup_db().await;
+        let users = create_test_users().await;
+        for user in users {
+            // Save the same user twice
+            save_user(&db, &user).await.unwrap();
+            let result = save_user(&db, &user).await;
+
+            // Should not fail because of "INSERT OR IGNORE"
+            assert!(result.is_ok());
+
+            let fetched_user = get_user(&db, user.id).await.unwrap().unwrap();
+            assert_eq!(fetched_user, user);
+        }
+    }
+}
