@@ -230,7 +230,9 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
     }
 
     pub async fn load_fav_posts_from_db(&self, options: &ExportOptions) -> Result<Vec<Post>> {
-        self.storage.get_posts(options).await
+        self.storage
+            .get_favorites(options.range.clone(), options.reverse)
+            .await
     }
 
     // get total number of favorites in local database

@@ -4,6 +4,7 @@ mod internal;
 mod picture_storage;
 
 use std::future::Future;
+use std::ops::RangeInclusive;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -15,7 +16,6 @@ use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 
 use crate::error::{Error, Result};
-use crate::exporter::ExportOptions;
 use crate::models::{Picture, Post, User};
 use internal::post::{self, PostInternal};
 use internal::user;
@@ -25,7 +25,7 @@ const VALIDE_DB_VERSION: i64 = 2;
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
-    async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>>;
+    async fn get_posts(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
@@ -116,9 +116,9 @@ impl StorageImpl {
 }
 
 impl Storage for Arc<StorageImpl> {
-    async fn get_posts(&self, options: &ExportOptions) -> Result<Vec<Post>> {
-        let (start, end) = options.range.clone().into_inner();
-        let posts = post::get_posts(&self.db_pool, end - start + 1, start, options.reverse).await?;
+    async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
+        let (start, end) = range.into_inner();
+        let posts = post::get_posts(&self.db_pool, end - start + 1, start, reverse).await?;
         let (posts, _): (Vec<_>, Vec<_>) =
             futures::future::join_all(posts.into_iter().map(|p| self.hydrate_post(p)))
                 .await
@@ -211,11 +211,7 @@ mod tests {
             storage.save_post(post).await.unwrap();
         }
 
-        let options = ExportOptions {
-            range: 0..=posts.len() as u32,
-            ..Default::default()
-        };
-        let fetched_posts = storage.get_posts(&options).await.unwrap();
+        let fetched_posts = storage.get_posts(0..=u32::MAX, false).await.unwrap();
 
         assert_eq!(fetched_posts.len(), posts.len());
 
