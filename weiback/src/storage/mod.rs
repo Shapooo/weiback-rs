@@ -26,7 +26,14 @@ const VALIDE_DB_VERSION: i64 = 2;
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
+    async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>>;
     async fn get_posts(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>>;
+    async fn get_ones_posts(
+        &self,
+        uid: i64,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+    ) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
@@ -145,6 +152,28 @@ impl Storage for Arc<StorageImpl> {
         Ok(posts)
     }
 
+    async fn get_posts(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
+        let (start, end) = range.into_inner();
+        let posts = post::get_posts(&self.db_pool, end - start + 1, start, reverse).await?;
+        let posts = self.hydrate_posts(posts).await;
+        debug!("geted {} post from local", posts.len());
+        Ok(posts)
+    }
+
+    async fn get_ones_posts(
+        &self,
+        uid: i64,
+        range: RangeInclusive<u32>,
+        reverse: bool,
+    ) -> Result<Vec<Post>> {
+        let (start, end) = range.into_inner();
+        let posts =
+            post::get_ones_posts(&self.db_pool, uid, end - start + 1, start, reverse).await?;
+        let posts = self.hydrate_posts(posts).await;
+        debug!("geted {} post of user {} from local", posts.len(), uid);
+        Ok(posts)
+    }
+
     async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         user::get_user(&self.db_pool, uid).await
     }
@@ -256,5 +285,55 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_posts() {
+        let storage = setup_storage().await;
+        let posts = create_test_posts().await;
+        let mut sum = 0;
+        for post in posts.iter() {
+            if post.retweeted_status.is_some() {
+                sum += 1;
+            }
+            sum += 1;
+            storage.save_post(post).await.unwrap();
+        }
+
+        let fetched_posts = storage.get_posts(0..=1000000, false).await.unwrap();
+        assert_eq!(fetched_posts.len(), sum);
+
+        let fetched_posts_rev = storage.get_posts(0..=1000000, true).await.unwrap();
+        assert_eq!(fetched_posts_rev.len(), sum);
+    }
+
+    #[tokio::test]
+    async fn test_get_ones_posts() {
+        let storage = setup_storage().await;
+        let posts = create_test_posts().await;
+        let uid = posts
+            .iter()
+            .find_map(|p| p.user.as_ref().map(|u| u.id))
+            .unwrap();
+        let ones_posts_num = posts
+            .iter()
+            .filter(|p| p.user.is_some() && p.user.as_ref().unwrap().id == uid)
+            .count();
+
+        for post in posts.iter() {
+            storage.save_post(post).await.unwrap();
+        }
+
+        let fetched_posts = storage
+            .get_ones_posts(uid, 0..=ones_posts_num as u32, false)
+            .await
+            .unwrap();
+        assert_eq!(fetched_posts.len(), ones_posts_num);
+
+        let fetched_posts_rev = storage
+            .get_ones_posts(uid, 0..=ones_posts_num as u32, true)
+            .await
+            .unwrap();
+        assert_eq!(fetched_posts_rev.len(), ones_posts_num);
     }
 }
