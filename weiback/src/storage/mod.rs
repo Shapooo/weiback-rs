@@ -9,8 +9,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use futures::TryFutureExt;
 use itertools::Itertools;
-use log::{debug, error, info};
+use log::{debug, error, info, trace, warn};
 use picture_storage::FileSystemPictureStorage;
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
@@ -113,20 +114,34 @@ impl StorageImpl {
         post.user = user;
         Ok(Some(post))
     }
+
+    async fn hydrate_posts(&self, posts: Vec<PostInternal>) -> Vec<Post> {
+        let (posts, errs): (Vec<_>, Vec<_>) =
+            futures::future::join_all(posts.into_iter().map(|p| {
+                let id = p.id;
+                self.hydrate_post(p).map_err(move |e| (id, e))
+            }))
+            .await
+            .into_iter()
+            .partition_result();
+        let posts: Vec<_> = posts.into_iter().flatten().collect();
+        warn!("{} posts constructed failed", errs.len());
+        if log::log_enabled!(log::Level::Trace) {
+            for (id, err) in errs {
+                trace!("{id} cons failed: {err}");
+            }
+        }
+
+        posts
+    }
 }
 
 impl Storage for Arc<StorageImpl> {
     async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
         let (start, end) = range.into_inner();
-        let posts = post::get_posts(&self.db_pool, end - start + 1, start, reverse).await?;
-        let (posts, _): (Vec<_>, Vec<_>) =
-            futures::future::join_all(posts.into_iter().map(|p| self.hydrate_post(p)))
-                .await
-                .into_iter()
-                .partition_result();
-        let posts: Vec<_> = posts.into_iter().flatten().collect();
-        // TODO: deal with err and none(s)
-        debug!("geted {} post from local", posts.len());
+        let posts = post::get_favorites(&self.db_pool, end - start + 1, start, reverse).await?;
+        let posts = self.hydrate_posts(posts).await;
+        debug!("geted {} favorites from local", posts.len());
         Ok(posts)
     }
 

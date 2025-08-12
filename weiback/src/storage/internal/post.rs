@@ -160,13 +160,13 @@ pub async fn get_post(db: &SqlitePool, id: i64) -> Result<Option<PostInternal>> 
     )
 }
 
-pub async fn get_posts(
+pub async fn get_favorites(
     db: &SqlitePool,
     limit: u32,
     offset: u32,
     reverse: bool,
 ) -> Result<Vec<PostInternal>> {
-    debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
+    debug!("query favorites offset {offset}, limit {limit}, rev {reverse}");
     let sql_expr = if reverse {
         "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
     } else {
@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_posts() {
+    async fn test_get_favorites() {
         let db = setup_db().await;
         let posts = create_test_posts().await;
         for post in posts {
@@ -383,10 +383,10 @@ mod tests {
             save_post(&db, &internal_post, false).await.unwrap();
         }
 
-        let posts = get_posts(&db, 2, 1, false).await.unwrap();
+        let posts = get_favorites(&db, 2, 1, false).await.unwrap();
         assert_eq!(posts.len(), 2);
 
-        let posts_rev = get_posts(&db, 2, 1, true).await.unwrap();
+        let posts_rev = get_favorites(&db, 2, 1, true).await.unwrap();
         assert_eq!(posts_rev.len(), 2);
     }
 
