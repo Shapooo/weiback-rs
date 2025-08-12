@@ -146,3 +146,146 @@ impl DownloaderWorker {
         (callback)(body).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::Error;
+    use mockito::Server;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use tokio::sync::Notify;
+
+    #[tokio::test]
+    async fn test_download_picture_success() {
+        let mut server = Server::new_async().await;
+        let url = server.url();
+        let mock_body = "picture data";
+        let mock = server
+            .mock("GET", "/")
+            .with_status(200)
+            .with_body(mock_body)
+            .create_async()
+            .await;
+
+        let (msg_tx, _) = mpsc::channel(1);
+        let client = Client::new();
+        let (handle, worker) = create_downloader(1, client, msg_tx);
+
+        let notify = Arc::new(Notify::new());
+        let notify_clone = notify.clone();
+        let callback_executed = Arc::new(AtomicBool::new(false));
+        let callback_executed_clone = callback_executed.clone();
+
+        let callback = Box::new(
+            move |data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                let expected_data = Bytes::from(mock_body);
+                assert_eq!(data, expected_data);
+                callback_executed_clone.store(true, Ordering::SeqCst);
+                notify_clone.notify_one();
+                Box::pin(async { Ok(()) })
+            },
+        );
+
+        tokio::spawn(worker.run());
+
+        handle.download_picture(1, url, callback).await.unwrap();
+
+        notify.notified().await;
+        assert!(callback_executed.load(Ordering::SeqCst));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_download_picture_network_error() {
+        let mut server = Server::new_async().await;
+        let url = server.url();
+        let mock = server
+            .mock("GET", "/")
+            .with_status(404)
+            .create_async()
+            .await;
+
+        let (msg_tx, mut msg_rx) = mpsc::channel(1);
+        let client = Client::new();
+        let (handle, worker) = create_downloader(1, client, msg_tx);
+
+        let callback = Box::new(
+            |_: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                panic!("Callback should not be called on network error");
+            },
+        );
+
+        tokio::spawn(worker.run());
+
+        handle
+            .download_picture(1, url.clone(), callback)
+            .await
+            .unwrap();
+
+        let received_msg = msg_rx.recv().await.unwrap();
+        match received_msg {
+            Message::Err(ErrMsg {
+                r#type: ErrType::DownPicFail { url: err_url },
+                task_id,
+                ..
+            }) => {
+                assert_eq!(err_url, url);
+                assert_eq!(task_id, 1);
+            }
+            _ => panic!("Expected an error message"),
+        }
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn test_download_picture_callback_error() {
+        let mut server = Server::new_async().await;
+        let url = server.url();
+        let mock_body = "picture data";
+        let mock = server
+            .mock("GET", "/")
+            .with_status(200)
+            .with_body(mock_body)
+            .create_async()
+            .await;
+
+        let (msg_tx, mut msg_rx) = mpsc::channel(1);
+        let client = Client::new();
+        let (handle, worker) = create_downloader(1, client, msg_tx);
+
+        let callback = Box::new(
+            move |_: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                Box::pin(async {
+                    Err(Error::Io(std::io::Error::from(
+                        std::io::ErrorKind::PermissionDenied,
+                    )))
+                })
+            },
+        );
+
+        tokio::spawn(worker.run());
+
+        handle
+            .download_picture(1, url.clone(), callback)
+            .await
+            .unwrap();
+
+        let received_msg = msg_rx.recv().await.unwrap();
+        match received_msg {
+            Message::Err(ErrMsg {
+                r#type: ErrType::DownPicFail { url: err_url },
+                task_id,
+                err,
+            }) => {
+                assert_eq!(err_url, url);
+                assert_eq!(task_id, 1);
+                assert_eq!(err, "I/O error: permission denied");
+            }
+            _ => panic!("Expected an error message"),
+        }
+        mock.assert_async().await;
+    }
+}

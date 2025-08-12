@@ -32,5 +32,6 @@ weibosdk-rs = { workspace = true }
 
 [dev-dependencies]
 flate2 = "1.0.34"
+mockito = "1.5.0"
 tempfile = "3.20.0"
 weibosdk-rs = { workspace = true, features = ["test-mocks"] }
