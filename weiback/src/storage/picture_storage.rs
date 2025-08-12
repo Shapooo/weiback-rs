@@ -24,6 +24,11 @@ impl FileSystemPictureStorage {
         let picture_path = current_exe()?.parent().unwrap().join(picture_path); // TODO
         Ok(FileSystemPictureStorage { picture_path })
     }
+
+    #[cfg(test)]
+    pub fn from_picture_path(picture_path: PathBuf) -> Self {
+        Self { picture_path }
+    }
 }
 
 impl FileSystemPictureStorage {
