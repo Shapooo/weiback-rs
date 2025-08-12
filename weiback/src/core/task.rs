@@ -1,4 +1,5 @@
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 
 pub struct Task {
     pub id: u64,
@@ -51,4 +52,23 @@ pub enum UserPostFilter {
     Original,
     Video,
     Picture,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportOptions {
+    pub export_path: PathBuf,
+    pub task_name: String,
+    pub reverse: bool,
+    pub range: RangeInclusive<u32>,
+}
+
+impl Default for ExportOptions {
+    fn default() -> Self {
+        Self {
+            export_path: PathBuf::from("."),
+            task_name: "weiback_export".to_string(),
+            reverse: false,
+            range: 0..=1_000_000_000,
+        }
+    }
 }

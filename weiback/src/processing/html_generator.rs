@@ -11,7 +11,6 @@ use weibosdk_rs::emoji::EmojiUpdateAPI;
 use super::{pic_id_to_url, process_in_post_pics};
 use crate::config::get_config;
 use crate::error::{Error, Result};
-use crate::exporter::ExportOptions;
 use crate::models::{PictureDefinition, PictureMeta, Post};
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, url_to_filename,
@@ -47,8 +46,8 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         }
     }
 
-    fn generate_post(&self, mut post: Post, options: &ExportOptions) -> Result<String> {
-        let pic_folder = options.export_task_name.to_owned() + "_files";
+    fn generate_post(&self, mut post: Post, task_name: &str) -> Result<String> {
+        let pic_folder = task_name.to_owned() + "_files";
         let pic_quality = get_config().read()?.picture_definition;
         let in_post_pic_paths = extract_in_post_pic_paths(&post, &pic_folder, pic_quality);
 
@@ -60,11 +59,11 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         Ok(html)
     }
 
-    pub fn generate_page(&self, posts: Vec<Post>, options: &ExportOptions) -> Result<String> {
+    pub fn generate_page(&self, posts: Vec<Post>, task_name: &str) -> Result<String> {
         info!("Generating page for {} posts", posts.len());
         let posts_html = posts
             .into_iter()
-            .map(|p| self.generate_post(p, options))
+            .map(|p| self.generate_post(p, task_name))
             .collect::<Result<Vec<_>>>()?;
         let posts_html = posts_html.join("");
         let mut context = Context::new();

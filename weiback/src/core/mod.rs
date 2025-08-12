@@ -16,7 +16,7 @@ use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderHandle;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::storage::StorageImpl;
-pub use task::{BFOptions, BUOptions, Task, TaskRequest, UserPostFilter};
+pub use task::{BFOptions, BUOptions, ExportOptions, Task, TaskRequest, UserPostFilter};
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
 

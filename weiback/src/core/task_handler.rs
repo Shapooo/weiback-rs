@@ -4,9 +4,9 @@ use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
 use crate::config::get_config;
-use crate::core::task::{BFOptions, BUOptions};
+use crate::core::task::{BFOptions, BUOptions, ExportOptions};
 use crate::error::Result;
-use crate::exporter::{ExportOptions, Exporter};
+use crate::exporter::Exporter;
 use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress, TaskType};
 use crate::models::Post;
@@ -205,20 +205,25 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let posts_sum = self.get_favorited_sum().await?;
         info!("Found {posts_sum} favorited posts in local database");
         let (mut start, end) = options.range.into_inner();
-        let task_name = options.export_task_name.to_owned();
+        let task_name = options.task_name.to_owned();
         for index in 1.. {
             options.range = start..=end.min(start + limit);
             debug!("Exporting range: {:?}", options.range);
-            let local_posts = self.load_fav_posts_from_db(&options).await?;
+            let local_posts = self.load_favorites(&options).await?;
             if local_posts.is_empty() {
                 info!("No more posts to export. Exiting loop.");
                 break;
             }
 
             let subtask_name = format!("{task_name}_{index}");
-            options.export_task_name = subtask_name;
-            let html = self.processer.generate_html(local_posts, &options).await?;
-            self.exporter.export_page(html, &options).await?;
+            options.task_name = subtask_name;
+            let html = self
+                .processer
+                .generate_html(local_posts, &options.task_name)
+                .await?;
+            self.exporter
+                .export_page(html, &options.task_name, &options.export_path)
+                .await?;
 
             if start >= end {
                 break;
@@ -229,7 +234,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         Ok(())
     }
 
-    pub async fn load_fav_posts_from_db(&self, options: &ExportOptions) -> Result<Vec<Post>> {
+    pub async fn load_favorites(&self, options: &ExportOptions) -> Result<Vec<Post>> {
         self.storage
             .get_favorites(options.range.clone(), options.reverse)
             .await

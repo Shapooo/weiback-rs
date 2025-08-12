@@ -13,7 +13,7 @@ use weibosdk_rs::WeiboAPI;
 
 use crate::config::get_config;
 use crate::error::{Error, Result};
-use crate::exporter::{ExportOptions, HTMLPage, HTMLPicture};
+use crate::exporter::{HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
@@ -98,11 +98,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         Ok(())
     }
 
-    pub async fn generate_html(
-        &self,
-        posts: Vec<Post>,
-        options: &ExportOptions,
-    ) -> Result<HTMLPage> {
+    pub async fn generate_html(&self, posts: Vec<Post>, task_name: &str) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
         let pic_quality = get_config().read()?.picture_definition;
         debug!("Using picture quality: {pic_quality:?}");
@@ -120,7 +116,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
             .collect::<Result<Vec<_>>>()?;
         debug!("Loaded {} pictures from local storage.", pics.len());
-        let content = self.html_generator.generate_page(posts, options)?;
+        let content = self.html_generator.generate_page(posts, task_name)?;
         info!("HTML content generated successfully.");
         Ok(HTMLPage {
             html: content,

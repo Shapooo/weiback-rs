@@ -1,7 +1,6 @@
 #![allow(async_fn_in_trait)]
 use std::io::ErrorKind;
-use std::ops::RangeInclusive;
-use std::path::PathBuf;
+use std::path::Path;
 
 use bytes::Bytes;
 use futures::future::join_all;
@@ -17,7 +16,7 @@ use crate::utils::url_to_filename;
 use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
-    async fn export_page(&self, page: HTMLPage, options: &ExportOptions) -> Result<()>;
+    async fn export_page(&self, page: HTMLPage, task_name: &str, export_path: &Path) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -36,34 +35,25 @@ impl ExporterImpl {
 }
 
 impl Exporter for ExporterImpl {
-    async fn export_page(&self, page: HTMLPage, options: &ExportOptions) -> Result<()>
+    async fn export_page(&self, page: HTMLPage, task_name: &str, export_path: &Path) -> Result<()>
 where {
-        info!(
-            "Exporting page for task '{}' to {:?}",
-            options.export_task_name, options.export_path
-        );
+        info!("Exporting page for task '{task_name}' to {export_path:?}",);
         let mut dir_builder = DirBuilder::new();
         dir_builder.recursive(true);
-        if !options.export_path.exists() {
-            debug!(
-                "Creating export directory at {}",
-                options.export_path.display()
-            );
-            dir_builder.create(options.export_path.as_path()).await?
-        } else if !options.export_path.is_dir() {
-            error!(
-                "Export path {} is not a directory",
-                options.export_path.display()
-            );
+        if !export_path.exists() {
+            debug!("Creating export directory at {export_path:?}",);
+            dir_builder.create(export_path).await?
+        } else if !export_path.is_dir() {
+            error!("Export path {} is not a directory", export_path.display());
             return Err(std::io::Error::new(
                 ErrorKind::AlreadyExists,
                 "export folder is a already exist file",
             )
             .into());
         }
-        let html_file_name = options.export_task_name.to_owned() + ".html";
+        let html_file_name = task_name.to_string() + ".html";
 
-        let mut operating_path = options.export_path.to_owned();
+        let mut operating_path = export_path.to_owned();
         debug!("Writing HTML to file: {operating_path:?}");
         operating_path.push(html_file_name);
         let mut html_file = File::create(operating_path.as_path()).await?;
@@ -71,9 +61,9 @@ where {
         debug!("Successfully wrote HTML to {operating_path:?}");
 
         operating_path.pop();
-        let resources_dir_name = options.export_task_name.to_owned() + "_files";
+        let resources_dir_name = task_name.to_owned() + "_files";
         operating_path.push(resources_dir_name.clone());
-        if !operating_path.exists() && page.pics.len() > 0 {
+        if !operating_path.exists() && !page.pics.is_empty() {
             dir_builder.create(operating_path.as_path()).await?;
         }
         let operating_path = operating_path.as_path();
@@ -101,10 +91,7 @@ where {
             .filter(|r| r.is_err())
             .count();
         warn! {"{fail_sum} pictures exports failed"}
-        info!(
-            "Finished exporting page for task '{}'",
-            options.export_task_name
-        );
+        info!("Finished exporting page for task '{task_name}'");
         Ok(())
     }
 }
@@ -126,51 +113,6 @@ impl TryFrom<Picture> for HTMLPicture {
             file_name,
             blob: value.blob,
         })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ExportOptions {
-    pub export_path: PathBuf,
-    pub export_task_name: String,
-    pub reverse: bool,
-    pub range: RangeInclusive<u32>,
-}
-
-impl Default for ExportOptions {
-    fn default() -> Self {
-        Self {
-            export_path: PathBuf::from("."),
-            export_task_name: "weiback_export.html".to_string(),
-            reverse: false,
-            range: 0..=u32::MAX,
-        }
-    }
-}
-
-impl ExportOptions {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn export_path(mut self, path: PathBuf) -> Self {
-        self.export_path = path;
-        self
-    }
-
-    pub fn export_task_name(mut self, name: String) -> Self {
-        self.export_task_name = name;
-        self
-    }
-
-    pub fn range(mut self, range: RangeInclusive<u32>) -> Self {
-        self.range = range;
-        self
-    }
-
-    pub fn reverse(mut self, reverse: bool) -> Self {
-        self.reverse = reverse;
-        self
     }
 }
 
@@ -201,12 +143,12 @@ mod tests {
         let task_name = "test_with_pics".to_string();
 
         let exporter = ExporterImpl::new();
-        let options = ExportOptions::new()
-            .export_path(export_path.clone())
-            .export_task_name(task_name.clone());
 
         let page = create_test_page("<html><body><h1>Hello</h1></body></html>", 2);
-        exporter.export_page(page.clone(), &options).await.unwrap();
+        exporter
+            .export_page(page.clone(), &task_name, &export_path)
+            .await
+            .unwrap();
 
         // Verify HTML file
         let html_path = export_path.join(format!("{}.html", task_name));
@@ -234,12 +176,12 @@ mod tests {
         let task_name = "test_no_pics".to_string();
 
         let exporter = ExporterImpl::new();
-        let options = ExportOptions::new()
-            .export_path(export_path.clone())
-            .export_task_name(task_name.clone());
 
         let page = create_test_page("<html><body><h1>No Pics</h1></body></html>", 0);
-        exporter.export_page(page.clone(), &options).await.unwrap();
+        exporter
+            .export_page(page.clone(), &task_name, &export_path)
+            .await
+            .unwrap();
 
         // Verify HTML file
         let html_path = export_path.join(format!("{}.html", task_name));
@@ -256,16 +198,14 @@ mod tests {
     async fn test_export_to_existing_file_path_fails() {
         let temp_dir = tempdir().unwrap();
         let export_path = temp_dir.path().to_path_buf();
+        let task_name = "wont_work".to_string();
         let file_path = export_path.join("i_am_a_file");
         fs::write(&file_path, "hello").unwrap();
 
         let exporter = ExporterImpl::new();
-        let options = ExportOptions::new()
-            .export_path(file_path)
-            .export_task_name("wont_work".to_string());
 
         let page = create_test_page("test", 0);
-        let result = exporter.export_page(page, &options).await;
+        let result = exporter.export_page(page, &task_name, &export_path).await;
         assert!(result.is_err());
         if let Err(Error::Io(e)) = result {
             assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);

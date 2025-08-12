@@ -8,9 +8,10 @@ use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::{Mutex, mpsc};
 use weiback::config::get_config;
 use weiback::core::{
-    BFOptions, BUOptions, Core, TaskRequest, task_handler::TaskHandler, task_manager::TaskManger,
+    BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
+    task_manager::TaskManger,
 };
-use weiback::exporter::{ExportOptions, ExporterImpl};
+use weiback::exporter::ExporterImpl;
 use weiback::media_downloader::{MediaDownloaderHandle, create_downloader};
 use weiback::message::{ErrMsg, Message, TaskProgress};
 use weiback::storage::StorageImpl;
@@ -71,7 +72,10 @@ async fn unfavorite_posts(core: State<'_, Mutex<Core>>) -> Result<()> {
 #[tauri::command]
 async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u32>) -> Result<()> {
     info!("export_from_local called with range: {range:?}");
-    let options = ExportOptions::new().range(range);
+    let options = ExportOptions {
+        range,
+        ..Default::default()
+    };
     Ok(task_handler.export_from_local(options).await?)
 }
 
