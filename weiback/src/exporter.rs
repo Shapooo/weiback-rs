@@ -62,7 +62,6 @@ where {
             .into());
         }
         let html_file_name = options.export_task_name.to_owned() + ".html";
-        let resources_dir_name = options.export_task_name.to_owned() + "_files";
 
         let mut operating_path = options.export_path.to_owned();
         debug!("Writing HTML to file: {operating_path:?}");
@@ -72,8 +71,9 @@ where {
         debug!("Successfully wrote HTML to {operating_path:?}");
 
         operating_path.pop();
+        let resources_dir_name = options.export_task_name.to_owned() + "_files";
         operating_path.push(resources_dir_name.clone());
-        if !operating_path.exists() {
+        if !operating_path.exists() && page.pics.len() > 0 {
             dir_builder.create(operating_path.as_path()).await?;
         }
         let operating_path = operating_path.as_path();
