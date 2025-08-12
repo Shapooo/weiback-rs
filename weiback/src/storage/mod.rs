@@ -166,3 +166,75 @@ impl Storage for Arc<StorageImpl> {
         self.pic_storage.save_picture(picture).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use weibosdk_rs::{
+        favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        profile_statuses::ProfileStatusesAPI,
+    };
+
+    async fn setup_storage() -> Arc<StorageImpl> {
+        let db_pool = SqlitePool::connect(":memory:").await.unwrap();
+        database::create_tables(&db_pool).await.unwrap();
+        let temp_dir = tempdir().unwrap();
+        let pic_storage = FileSystemPictureStorage::from_picture_path(temp_dir.path().into());
+
+        Arc::new(StorageImpl {
+            db_pool,
+            pic_storage,
+        })
+    }
+
+    async fn create_test_posts() -> Vec<Post> {
+        let client = MockClient::new();
+        client
+            .set_favorites_response_from_file("tests/data/favorites.json")
+            .unwrap();
+        client
+            .set_profile_statuses_response_from_file("tests/data/profile_statuses.json")
+            .unwrap();
+        let api = MockAPI::from_session(client, Default::default());
+        let mut posts = api.favorites(1).await.unwrap();
+        posts.extend(api.profile_statuses(42, 1).await.unwrap());
+        posts
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_posts() {
+        let storage = setup_storage().await;
+        let posts = create_test_posts().await;
+
+        for post in &posts {
+            storage.save_post(post).await.unwrap();
+        }
+
+        let options = ExportOptions {
+            range: 0..=posts.len() as u32,
+            ..Default::default()
+        };
+        let fetched_posts = storage.get_posts(&options).await.unwrap();
+
+        assert_eq!(fetched_posts.len(), posts.len());
+
+        for (original, fetched) in posts.iter().zip(fetched_posts.iter()) {
+            assert_eq!(original.id, fetched.id);
+            assert_eq!(original.text, fetched.text);
+            if let (Some(original_user), Some(fetched_user)) = (&original.user, &fetched.user) {
+                assert_eq!(original_user.id, fetched_user.id);
+            }
+            if let (Some(original_retweet), Some(fetched_retweet)) =
+                (&original.retweeted_status, &fetched.retweeted_status)
+            {
+                assert_eq!(original_retweet.id, fetched_retweet.id);
+                if let (Some(original_retweet_user), Some(fetched_retweet_user)) =
+                    (&original_retweet.user, &fetched_retweet.user)
+                {
+                    assert_eq!(original_retweet_user.id, fetched_retweet_user.id);
+                }
+            }
+        }
+    }
+}
