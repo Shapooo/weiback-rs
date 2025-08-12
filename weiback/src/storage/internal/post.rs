@@ -1,19 +1,19 @@
 use chrono::DateTime;
 use log::{debug, info};
-use serde_json::{Value, from_str, to_string};
+use serde_json::{Value, from_value, to_value};
 use sqlx::{FromRow, Sqlite, SqlitePool};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
 
-#[derive(Debug, Clone, PartialEq, FromRow)]
+#[derive(Debug, Clone, PartialEq, FromRow, serde::Serialize, serde::Deserialize)]
 pub struct PostInternal {
     pub id: i64,
     pub mblogid: String,
     pub source: Option<String>,
     pub region_name: Option<String>,
     pub deleted: bool,
-    pub pic_ids: Option<String>,
+    pub pic_ids: Option<Value>,
     pub pic_num: Option<i64>,
     pub url_struct: Option<Value>,
     pub topic_struct: Option<Value>,
@@ -23,7 +23,7 @@ pub struct PostInternal {
     pub text: String,
     pub attitudes_status: i64,
     pub favorited: bool,
-    pub pic_infos: Option<String>,
+    pub pic_infos: Option<Value>,
     pub reposts_count: Option<i64>,
     pub comments_count: Option<i64>,
     pub attitudes_count: Option<i64>,
@@ -48,7 +48,7 @@ impl TryFrom<Post> for PostInternal {
             source: post.source,
             region_name: post.region_name,
             deleted: post.deleted,
-            pic_ids: post.pic_ids.map(|v| to_string(&v)).transpose()?,
+            pic_ids: post.pic_ids.map(|v| to_value(&v)).transpose()?,
             pic_num: post.pic_num,
             url_struct: post.url_struct,
             topic_struct: post.topic_struct,
@@ -58,7 +58,7 @@ impl TryFrom<Post> for PostInternal {
             text: post.text,
             attitudes_status: post.attitudes_status,
             favorited: post.favorited,
-            pic_infos: post.pic_infos.map(|h| to_string(&h)).transpose()?,
+            pic_infos: post.pic_infos.map(|h| to_value(&h)).transpose()?,
             reposts_count: post.reposts_count,
             comments_count: post.comments_count,
             attitudes_count: post.attitudes_count,
@@ -84,7 +84,7 @@ impl TryInto<Post> for PostInternal {
             source: self.source,
             region_name: self.region_name,
             deleted: self.deleted,
-            pic_ids: self.pic_ids.map(|s| from_str(&s)).transpose()?,
+            pic_ids: self.pic_ids.map(from_value).transpose()?,
             pic_num: self.pic_num,
             url_struct: self.url_struct,
             topic_struct: self.topic_struct,
@@ -94,7 +94,7 @@ impl TryInto<Post> for PostInternal {
             text: self.text,
             attitudes_status: self.attitudes_status,
             favorited: self.favorited,
-            pic_infos: self.pic_infos.map(|s| from_str(&s)).transpose()?,
+            pic_infos: self.pic_infos.map(from_value).transpose()?,
             reposts_count: self.reposts_count,
             comments_count: self.comments_count,
             attitudes_count: self.attitudes_count,
@@ -234,7 +234,7 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(&post.text)
     .bind(post.attitudes_status)
     .bind(post.favorited)
-    .bind(post.pic_infos.as_ref().map(to_string).transpose()?)
+    .bind(&post.pic_infos)
     .bind(post.reposts_count)
     .bind(post.comments_count)
     .bind(post.attitudes_count)
@@ -339,6 +339,7 @@ mod tests {
             assert_eq!(post.text, converted_post.text);
             assert_eq!(post.pic_ids, converted_post.pic_ids);
             assert_eq!(post.geo, converted_post.geo);
+            assert_eq!(post.pic_infos, converted_post.pic_infos);
         }
     }
 
