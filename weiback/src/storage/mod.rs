@@ -92,14 +92,15 @@ impl StorageImpl {
 
     fn get_post(&self, id: i64) -> Pin<Box<dyn Future<Output = Result<Option<Post>>> + Send + '_>> {
         Box::pin(async move {
-            let Some(post) = post::get_post(&self.db_pool, id).await? else {
-                return Ok(None);
-            };
-            self.hydrate_post(post).await
+            if let Some(post) = post::get_post(&self.db_pool, id).await? {
+                self.hydrate_post(post).await.map(Some)
+            } else {
+                Ok(None)
+            }
         })
     }
 
-    async fn hydrate_post(&self, post: PostInternal) -> Result<Option<Post>> {
+    async fn hydrate_post(&self, post: PostInternal) -> Result<Post> {
         let user = if let Some(uid) = post.uid {
             user::get_user(&self.db_pool, uid).await?
         } else {
@@ -119,7 +120,7 @@ impl StorageImpl {
         let mut post: Post = post.try_into()?;
         post.retweeted_status = retweeted_status;
         post.user = user;
-        Ok(Some(post))
+        Ok(post)
     }
 
     async fn hydrate_posts(&self, posts: Vec<PostInternal>) -> Vec<Post> {
@@ -131,14 +132,12 @@ impl StorageImpl {
             .await
             .into_iter()
             .partition_result();
-        let posts: Vec<_> = posts.into_iter().flatten().collect();
         warn!("{} posts constructed failed", errs.len());
         if log::log_enabled!(log::Level::Trace) {
             for (id, err) in errs {
                 trace!("{id} cons failed: {err}");
             }
         }
-
         posts
     }
 }
