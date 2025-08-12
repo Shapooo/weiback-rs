@@ -175,30 +175,102 @@ impl ExportOptions {
 }
 
 #[cfg(test)]
-mod exporter_test {
-    use std::path::PathBuf;
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
 
-    use super::{ExportOptions, Exporter, ExporterImpl, HTMLPage, HTMLPicture};
+    fn create_test_page(html_content: &str, num_pics: usize) -> HTMLPage {
+        let pics = (0..num_pics)
+            .map(|i| {
+                let file_name = format!("pic_{}.jpg", i);
+                let blob = Bytes::from(format!("blob_{}", i));
+                HTMLPicture { file_name, blob }
+            })
+            .collect();
+        HTMLPage {
+            html: html_content.to_string(),
+            pics,
+        }
+    }
+
     #[tokio::test]
-    async fn export_page() {
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let example_jpg_path = PathBuf::from(manifest_dir).join("resources/example.jpg");
-        let pic_blob = std::fs::read(example_jpg_path).unwrap();
-        let page = HTMLPage {
-            html: "testtesttest".into(),
-            pics: vec![HTMLPicture {
-                file_name: "example.jpg".into(),
-                blob: pic_blob.into(),
-            }]
-            .into_iter()
-            .collect(),
-        };
+    async fn test_export_page_with_pictures() {
+        let temp_dir = tempdir().unwrap();
+        let export_path = temp_dir.path().to_path_buf();
+        let task_name = "test_with_pics".to_string();
 
         let exporter = ExporterImpl::new();
-        let options = ExportOptions::default()
-            .export_task_name("test_task".into())
-            .export_path("./export_page".into());
-        exporter.export_page(page, &options).await.unwrap();
-        std::fs::remove_dir_all("export_page").unwrap();
+        let options = ExportOptions::new()
+            .export_path(export_path.clone())
+            .export_task_name(task_name.clone());
+
+        let page = create_test_page("<html><body><h1>Hello</h1></body></html>", 2);
+        exporter.export_page(page.clone(), &options).await.unwrap();
+
+        // Verify HTML file
+        let html_path = export_path.join(format!("{}.html", task_name));
+        assert!(html_path.exists());
+        let html_content = fs::read_to_string(html_path).unwrap();
+        assert_eq!(html_content, page.html);
+
+        // Verify resources directory and picture files
+        let resources_path = export_path.join(format!("{}_files", task_name));
+        assert!(resources_path.exists());
+        assert!(resources_path.is_dir());
+
+        for pic in page.pics {
+            let pic_path = resources_path.join(&pic.file_name);
+            assert!(pic_path.exists());
+            let pic_content = fs::read(pic_path).unwrap();
+            assert_eq!(pic_content, pic.blob);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_export_page_no_pictures() {
+        let temp_dir = tempdir().unwrap();
+        let export_path = temp_dir.path().to_path_buf();
+        let task_name = "test_no_pics".to_string();
+
+        let exporter = ExporterImpl::new();
+        let options = ExportOptions::new()
+            .export_path(export_path.clone())
+            .export_task_name(task_name.clone());
+
+        let page = create_test_page("<html><body><h1>No Pics</h1></body></html>", 0);
+        exporter.export_page(page.clone(), &options).await.unwrap();
+
+        // Verify HTML file
+        let html_path = export_path.join(format!("{}.html", task_name));
+        assert!(html_path.exists());
+        let html_content = fs::read_to_string(html_path).unwrap();
+        assert_eq!(html_content, page.html);
+
+        // Verify resources directory is NOT created
+        let resources_path = export_path.join(format!("{}_files", task_name));
+        assert!(!resources_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_export_to_existing_file_path_fails() {
+        let temp_dir = tempdir().unwrap();
+        let export_path = temp_dir.path().to_path_buf();
+        let file_path = export_path.join("i_am_a_file");
+        fs::write(&file_path, "hello").unwrap();
+
+        let exporter = ExporterImpl::new();
+        let options = ExportOptions::new()
+            .export_path(file_path)
+            .export_task_name("wont_work".to_string());
+
+        let page = create_test_page("test", 0);
+        let result = exporter.export_page(page, &options).await;
+        assert!(result.is_err());
+        if let Err(Error::Io(e)) = result {
+            assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+        } else {
+            panic!("Expected an IO error");
+        }
     }
 }
