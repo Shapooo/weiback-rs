@@ -180,6 +180,48 @@ pub async fn get_favorites(
     Ok(posts)
 }
 
+pub async fn get_posts(
+    db: &SqlitePool,
+    limit: u32,
+    offset: u32,
+    reverse: bool,
+) -> Result<Vec<PostInternal>> {
+    debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
+    let sql_expr = if reverse {
+        "SELECT * FROM posts ORDER BY id LIMIT ? OFFSET ?"
+    } else {
+        "SELECT * FROM posts ORDER BY id DESC LIMIT ? OFFSET ?"
+    };
+    let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(db)
+        .await?;
+    Ok(posts)
+}
+
+pub async fn get_ones_posts(
+    db: &SqlitePool,
+    uid: i64,
+    limit: u32,
+    offset: u32,
+    reverse: bool,
+) -> Result<Vec<PostInternal>> {
+    debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
+    let sql_expr = if reverse {
+        "SELECT * FROM posts WHERE uid = ? ORDER BY id LIMIT ? OFFSET ?"
+    } else {
+        "SELECT * FROM posts WHERE uid = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+    };
+    let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
+        .bind(uid)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(db)
+        .await?;
+    Ok(posts)
+}
+
 pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) -> Result<()> {
     sqlx::query(
         format!(
@@ -443,5 +485,57 @@ mod tests {
         let mut ids_sorted = ids;
         ids_sorted.sort();
         assert_eq!(ids_sorted, unfavorite_ids);
+    }
+
+    #[tokio::test]
+    async fn test_get_posts() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        for post in posts.clone() {
+            let internal_post: PostInternal = post.try_into().unwrap();
+            save_post(&db, &internal_post, false).await.unwrap();
+        }
+
+        let fetched_posts = get_posts(&db, 5, 0, false).await.unwrap();
+        assert_eq!(fetched_posts.len(), 5);
+        assert_eq!(
+            fetched_posts[0].id,
+            posts.iter().map(|p| p.id).max().unwrap()
+        );
+
+        let fetched_posts_rev = get_posts(&db, 5, 0, true).await.unwrap();
+        assert_eq!(fetched_posts_rev.len(), 5);
+        assert_eq!(
+            fetched_posts_rev[0].id,
+            posts.iter().map(|p| p.id).min().unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_ones_posts() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        let uid = posts
+            .iter()
+            .find_map(|p| p.user.as_ref().map(|u| u.id))
+            .unwrap();
+        let ones_posts_num = posts
+            .iter()
+            .filter(|p| p.user.is_some() && p.user.as_ref().unwrap().id == uid)
+            .count();
+        for post in posts.clone() {
+            let internal_post: PostInternal = post.try_into().unwrap();
+            save_post(&db, &internal_post, false).await.unwrap();
+        }
+
+        let fetched_posts = get_ones_posts(&db, uid, ones_posts_num as u32, 0, false)
+            .await
+            .unwrap();
+        assert_eq!(fetched_posts.len(), ones_posts_num);
+
+        let fetched_posts_rev = get_ones_posts(&db, uid, ones_posts_num as u32, 0, true)
+            .await
+            .unwrap();
+        assert_eq!(fetched_posts_rev.len(), ones_posts_num);
     }
 }
