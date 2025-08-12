@@ -184,6 +184,8 @@ impl Storage for Arc<StorageImpl> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use tempfile::tempdir;
     use weibosdk_rs::{
@@ -218,21 +220,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_save_and_get_posts() {
+    async fn test_save_and_get_favorites() {
         let storage = setup_storage().await;
         let posts = create_test_posts().await;
 
-        for post in &posts {
+        let mut favorited_sum = 0;
+        let posts = posts
+            .into_iter()
+            .map(|p| (p.id, p))
+            .collect::<HashMap<i64, Post>>();
+        for post in posts.values() {
+            if post.favorited {
+                favorited_sum += 1;
+            }
             storage.save_post(post).await.unwrap();
         }
 
-        let fetched_posts = storage.get_posts(0..=u32::MAX, false).await.unwrap();
+        let fetched_posts = storage.get_favorites(0..=10000, false).await.unwrap();
 
-        assert_eq!(fetched_posts.len(), posts.len());
+        assert_eq!(fetched_posts.len(), favorited_sum);
 
-        for (original, fetched) in posts.iter().zip(fetched_posts.iter()) {
-            assert_eq!(original.id, fetched.id);
-            assert_eq!(original.text, fetched.text);
+        for fetched in fetched_posts.iter() {
+            let original = posts.get(&fetched.id).unwrap();
             if let (Some(original_user), Some(fetched_user)) = (&original.user, &fetched.user) {
                 assert_eq!(original_user.id, fetched_user.id);
             }
