@@ -1,10 +1,10 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use log::{debug, info};
 use once_cell::sync::OnceCell;
-use serde_json::Value;
+use serde_json::{Value, to_value};
 use tera::{Context, Tera};
 use weibosdk_rs::emoji::EmojiUpdateAPI;
 
@@ -46,15 +46,12 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         }
     }
 
-    fn generate_post(&self, mut post: Post, task_name: &str) -> Result<String> {
+    fn generate_post(&self, post: Post, task_name: &str) -> Result<String> {
         let pic_folder = task_name.to_owned() + "_files";
         let pic_quality = get_config().read()?.picture_definition;
-        let in_post_pic_paths = extract_in_post_pic_paths(&post, &pic_folder, pic_quality);
+        let post = self.post_to_tera_value(post, &pic_folder, pic_quality)?;
 
-        let mut context = Context::new();
-        post.text = self.trans_text(&post, PathBuf::from(pic_folder).as_ref())?;
-        context.insert("post", &post);
-        context.insert("pics", &in_post_pic_paths);
+        let context = Context::from_value(post)?;
         let html = self.templates.render("post.html", &context)?;
         Ok(html)
     }
@@ -71,6 +68,36 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         let html = self.templates.render("page.html", &context)?;
         info!("Successfully generated page");
         Ok(html)
+    }
+
+    fn post_to_tera_value(
+        &self,
+        mut post: Post,
+        pic_folder: &str,
+        pic_quality: PictureDefinition,
+    ) -> Result<Value> {
+        let pic_folder = Path::new(pic_folder);
+        post.text = self.trans_text(&post, Path::new(pic_folder))?;
+        let ret_resource = if let Some(retweet) = post.retweeted_status.as_mut() {
+            retweet.text = self.trans_text(retweet, pic_folder)?;
+            Some((
+                extract_in_post_pic_paths(retweet, pic_folder, pic_quality),
+                extract_avatar_path(retweet, pic_folder),
+            ))
+        } else {
+            None
+        };
+
+        let in_post_pic_paths = extract_in_post_pic_paths(&post, pic_folder, pic_quality);
+        let avatar_path = extract_avatar_path(&post, pic_folder);
+        let mut post = to_value(post)?;
+        post["avatar_path"] = to_value(avatar_path)?;
+        post["pic_paths"] = to_value(in_post_pic_paths)?;
+        if let Some((pic_paths, avatar_path)) = ret_resource {
+            post["retweeted_status"]["avatar_path"] = to_value(avatar_path)?;
+            post["retweeted_status"]["pic_paths"] = to_value(pic_paths)?;
+        }
+        Ok(post)
     }
 
     fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
@@ -91,7 +118,7 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
                 .find_iter(&text)
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
-                        acc + &text[i..m.start()] + self.trans_url(post, &text[m.start()..m.end()]),
+                        acc + &text[i..m.start()] + trans_url(post, &text[m.start()..m.end()]),
                         m.end(),
                     )
                 });
@@ -103,8 +130,7 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
                 .filter(|m| !emails_suffixes.contains(m.as_str()))
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
-                        acc + Borrowed(&text[i..m.start()])
-                            + Self::trans_user(&text[m.start()..m.end()]),
+                        acc + Borrowed(&text[i..m.start()]) + trans_user(&text[m.start()..m.end()]),
                         m.end(),
                     )
                 });
@@ -115,7 +141,7 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
                 .find_iter(&text)
                 .fold((Borrowed(""), 0), |(acc, i), m| {
                     (
-                        acc + &text[i..m.start()] + Self::trans_topic(&text[m.start()..m.end()]),
+                        acc + &text[i..m.start()] + trans_topic(&text[m.start()..m.end()]),
                         m.end(),
                     )
                 });
@@ -161,56 +187,73 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
             Ok(Borrowed(s))
         }
     }
+}
 
-    fn trans_user(s: &str) -> Cow<str> {
-        Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#) + &s[1..] + "\">" + s + "</a>"
-    }
+fn trans_user(s: &str) -> Cow<str> {
+    Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#) + &s[1..] + "\">" + s + "</a>"
+}
 
-    fn trans_topic(s: &str) -> Cow<str> {
-        Borrowed(r#"<a class ="bk-link" href="https://s.weibo.com/weibo?q="#)
-            + s
-            + r#"" target="_blank">"#
-            + s
-            + "</a>"
-    }
+fn trans_topic(s: &str) -> Cow<str> {
+    Borrowed(r#"<a class ="bk-link" href="https://s.weibo.com/weibo?q="#)
+        + s
+        + r#"" target="_blank">"#
+        + s
+        + "</a>"
+}
 
-    fn trans_url<'a>(&self, post: &Post, s: &'a str) -> Cow<'a, str> {
-        let mut url_title = Borrowed("网页链接");
-        let mut url = Borrowed(s);
-        if let Some(Value::Array(url_objs)) = post.url_struct.as_ref() {
-            if let Some(obj) = url_objs
-                .iter()
-                .find(|obj| obj["short_url"].is_string() && obj["short_url"].as_str().unwrap() == s)
-            {
-                assert!(obj["url_title"].is_string() && obj["long_url"].is_string());
-                url_title = Owned(obj["url_title"].as_str().unwrap().into());
-                url = Owned(obj["long_url"].as_str().unwrap().into());
-            }
+fn trans_url<'a>(post: &Post, s: &'a str) -> Cow<'a, str> {
+    let mut url_title = Borrowed("网页链接");
+    let mut url = Borrowed(s);
+    if let Some(Value::Array(url_objs)) = post.url_struct.as_ref() {
+        if let Some(obj) = url_objs
+            .iter()
+            .find(|obj| obj["short_url"].is_string() && obj["short_url"].as_str().unwrap() == s)
+        {
+            assert!(obj["url_title"].is_string() && obj["long_url"].is_string());
+            url_title = Owned(obj["url_title"].as_str().unwrap().into());
+            url = Owned(obj["long_url"].as_str().unwrap().into());
         }
-        Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
-            + url
-            + "\"><img class=\"bk-icon-link\" src=\"https://h5.sinaimg.cn/upload/2015/09/25/3/\
-               timeline_card_small_web_default.png\"/>"
-            + url_title
-            + "</a>"
     }
+    Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
+        + url
+        + "\"><img class=\"bk-icon-link\" src=\"https://h5.sinaimg.cn/upload/2015/09/25/3/\
+               timeline_card_small_web_default.png\"/>"
+        + url_title
+        + "</a>"
 }
 
 fn extract_in_post_pic_paths(
     post: &Post,
-    pic_folder: &str,
+    pic_folder: &Path,
     pic_quality: PictureDefinition,
 ) -> Vec<String> {
     process_in_post_pics(post, |id, pic_infos, _| {
         pic_id_to_url(id, pic_infos, &pic_quality)
             .and_then(|url| url_to_filename(url).ok())
-            .and_then(|name| {
-                Path::new(pic_folder)
-                    .join(name)
-                    .to_str()
-                    .map(|s| s.to_string())
-            })
+            .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
     })
+}
+
+fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
+    post.user
+        .as_ref()
+        .map(|u| {
+            url_to_filename(&u.avatar_hd).and_then(|name| {
+                pic_folder
+                    .join(&name)
+                    .to_str()
+                    .ok_or(Error::FormatError(format!(
+                        "invalid path {pic_folder:?}/{name}"
+                    )))
+                    .map(ToString::to_string)
+                    .map_err(|e| {
+                        log::info!("{e}");
+                        e
+                    })
+            })
+        })
+        .transpose()
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
