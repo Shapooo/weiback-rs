@@ -26,7 +26,6 @@ pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
     api_client: W,
     storage: S,
     downloader: D,
-    emoji_map: Option<HashMap<String, String>>,
     html_generator: HTMLGenerator<W>,
     msg_sender: mpsc::Sender<Message>,
 }
@@ -52,7 +51,6 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             api_client,
             storage,
             downloader,
-            emoji_map: None,
             html_generator,
             msg_sender,
         })
@@ -128,7 +126,11 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         EMOJI_EXPR
             .find_iter(text)
             .map(|e| e.as_str())
-            .flat_map(|e| self.emoji_map.as_ref().map(|m| m.get(e)))
+            .flat_map(|e| {
+                self.html_generator
+                    .get_or_try_init_emoji()
+                    .map(|m| m.get(e))
+            })
             .filter_map(|i| i.map(|s| s.as_str()))
             .collect()
     }
