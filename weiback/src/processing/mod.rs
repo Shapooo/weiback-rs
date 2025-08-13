@@ -59,8 +59,9 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
     pub async fn process(&self, task_id: u64, posts: Vec<Post>) -> Result<()> {
         info!("Processing {} posts for task {}.", posts.len(), task_id);
         let pic_definition = get_config().read()?.picture_definition;
+        let emoji_map = self.html_generator.get_or_try_init_emoji().await.ok();
         debug!("Picture definition set to: {pic_definition:?}");
-        let pic_metas = self.extract_all_pic_metas(&posts, pic_definition);
+        let pic_metas = extract_all_pic_metas(&posts, pic_definition, emoji_map);
         info!("Found {} unique pictures to download.", pic_metas.len());
 
         stream::iter(pic_metas)
@@ -99,8 +100,9 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
     pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
         let pic_quality = get_config().read()?.picture_definition;
+        let emoji_map = self.html_generator.get_or_try_init_emoji().await.ok();
         debug!("Using picture quality: {pic_quality:?}");
-        let pic_metas = self.extract_all_pic_metas(&posts, pic_quality);
+        let pic_metas = extract_all_pic_metas(&posts, pic_quality, emoji_map);
         info!(
             "Found {} unique pictures for HTML generation.",
             pic_metas.len()
@@ -114,48 +116,12 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
             .collect::<Result<Vec<_>>>()?;
         debug!("Loaded {} pictures from local storage.", pics.len());
-        let content = self.html_generator.generate_page(posts, page_name)?;
+        let content = self.html_generator.generate_page(posts, page_name).await?;
         info!("HTML content generated successfully.");
         Ok(HTMLPage {
             html: content,
             pics,
         })
-    }
-
-    fn extract_emoji_urls(&self, text: &str) -> Vec<&str> {
-        EMOJI_EXPR
-            .find_iter(text)
-            .map(|e| e.as_str())
-            .flat_map(|e| {
-                self.html_generator
-                    .get_or_try_init_emoji()
-                    .map(|m| m.get(e))
-            })
-            .filter_map(|i| i.map(|s| s.as_str()))
-            .collect()
-    }
-
-    fn extract_all_pic_metas(
-        &self,
-        posts: &[Post],
-        definition: PictureDefinition,
-    ) -> HashSet<PictureMeta> {
-        let mut pic_metas: HashSet<PictureMeta> = posts
-            .iter()
-            .flat_map(|post| extract_in_post_pic_metas(post, definition))
-            .collect();
-        let emoji_metas = posts.iter().flat_map(|post| {
-            self.extract_emoji_urls(&post.text)
-                .into_iter()
-                .map(|url| PictureMeta::other(url.to_string()))
-        });
-        let avatar_metas = posts
-            .iter()
-            .flat_map(extract_avatar_metas)
-            .collect::<Vec<_>>();
-        pic_metas.extend(emoji_metas);
-        pic_metas.extend(avatar_metas);
-        pic_metas
     }
 
     async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
@@ -240,8 +206,9 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         task_id: u64,
         posts: &[Post],
         definition: PictureDefinition,
+        emoji_map: Option<&HashMap<String, String>>,
     ) -> Result<Vec<Picture>> {
-        let pic_metas = self.extract_all_pic_metas(posts, definition);
+        let pic_metas = extract_all_pic_metas(posts, definition, emoji_map);
         let mut pics = Vec::new();
         for metas in pic_metas {
             pics.push(
@@ -251,6 +218,41 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         }
         Ok(pics)
     }
+}
+
+fn extract_emoji_urls<'a>(
+    text: &'a str,
+    emoji_map: Option<&'a HashMap<String, String>>,
+) -> Vec<&'a str> {
+    EMOJI_EXPR
+        .find_iter(text)
+        .map(|e| e.as_str())
+        .flat_map(|e| emoji_map.map(|m| m.get(e)))
+        .filter_map(|i| i.map(|s| s.as_str()))
+        .collect()
+}
+
+fn extract_all_pic_metas(
+    posts: &[Post],
+    definition: PictureDefinition,
+    emoji_map: Option<&HashMap<String, String>>,
+) -> HashSet<PictureMeta> {
+    let mut pic_metas: HashSet<PictureMeta> = posts
+        .iter()
+        .flat_map(|post| extract_in_post_pic_metas(post, definition))
+        .collect();
+    let emoji_metas = posts.iter().flat_map(|post| {
+        extract_emoji_urls(&post.text, emoji_map)
+            .into_iter()
+            .map(|url| PictureMeta::other(url.to_string()))
+    });
+    let avatar_metas = posts
+        .iter()
+        .flat_map(extract_avatar_metas)
+        .collect::<Vec<_>>();
+    pic_metas.extend(emoji_metas);
+    pic_metas.extend(avatar_metas);
+    pic_metas
 }
 
 fn pic_id_to_url<'a>(

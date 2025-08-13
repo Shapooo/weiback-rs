@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use log::{debug, info, warn};
-use once_cell::sync::OnceCell;
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
+use tokio::sync::OnceCell;
 use weibosdk_rs::emoji::EmojiUpdateAPI;
 
 use super::{pic_id_to_url, process_in_post_pics};
@@ -47,21 +47,27 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         }
     }
 
-    fn generate_post(&self, post: Post, page_name: &str) -> Result<String> {
+    fn generate_post(
+        &self,
+        post: Post,
+        page_name: &str,
+        emoji_map: Option<&HashMap<String, String>>,
+    ) -> Result<String> {
         let pic_folder = page_name_to_resource_dir_name(page_name);
         let pic_quality = get_config().read()?.picture_definition;
-        let post = self.post_to_tera_value(post, &pic_folder, pic_quality)?;
+        let post = post_to_tera_value(post, &pic_folder, pic_quality, emoji_map)?;
 
         let context = Context::from_value(post)?;
         let html = self.templates.render("post.html", &context)?;
         Ok(html)
     }
 
-    pub fn generate_page(&self, posts: Vec<Post>, page_name: &str) -> Result<String> {
+    pub async fn generate_page(&self, posts: Vec<Post>, page_name: &str) -> Result<String> {
+        let emoji_map = self.get_or_try_init_emoji().await.ok();
         info!("Generating page for {} posts", posts.len());
         let posts_html = posts
             .into_iter()
-            .map(|p| self.generate_post(p, page_name))
+            .map(|p| self.generate_post(p, page_name, emoji_map))
             .collect::<Result<Vec<_>>>()?;
         let posts_html = posts_html.join("");
         let mut context = Context::new();
@@ -71,128 +77,130 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         Ok(html)
     }
 
-    fn post_to_tera_value(
-        &self,
-        mut post: Post,
-        pic_folder: &str,
-        pic_quality: PictureDefinition,
-    ) -> Result<Value> {
-        let pic_folder = Path::new(pic_folder);
-        post.text = self.trans_text(&post, Path::new(pic_folder))?;
-        let ret_resource = if let Some(retweet) = post.retweeted_status.as_mut() {
-            retweet.text = self.trans_text(retweet, pic_folder)?;
-            Some((
-                extract_in_post_pic_paths(retweet, pic_folder, pic_quality),
-                extract_avatar_path(retweet, pic_folder),
-            ))
-        } else {
-            None
-        };
-
-        let in_post_pic_paths = extract_in_post_pic_paths(&post, pic_folder, pic_quality);
-        let avatar_path = extract_avatar_path(&post, pic_folder);
-        let mut post = to_value(post)?;
-        post["avatar_path"] = to_value(avatar_path)?;
-        post["pic_paths"] = to_value(in_post_pic_paths)?;
-        if let Some((pic_paths, avatar_path)) = ret_resource {
-            post["retweeted_status"]["avatar_path"] = to_value(avatar_path)?;
-            post["retweeted_status"]["pic_paths"] = to_value(pic_paths)?;
-        }
-        Ok(post)
-    }
-
-    pub fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
+    pub async fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
         Ok(self
             .emoji_map
-            .get_or_try_init(|| {
-                let runtime = tokio::runtime::Handle::current();
-                runtime.block_on(async move { self.api_client.emoji_update().await })
-            })
+            .get_or_try_init(async || self.api_client.emoji_update().await)
+            .await
             .map_err(|e| {
                 warn!("{e}");
                 e
             })?)
     }
+}
 
-    fn trans_text(&self, post: &Post, pic_folder: &Path) -> Result<String> {
-        let emails_suffixes = EMAIL_EXPR
-            .find_iter(&post.text)
-            .filter_map(|m| AT_EXPR.find(m.as_str()).map(|m| m.as_str()))
-            .collect::<HashSet<_>>();
-        let text = NEWLINE_EXPR.replace_all(&post.text, "<br />");
-        let text = {
-            let res = URL_EXPR
-                .find_iter(&text)
-                .fold((Borrowed(""), 0), |(acc, i), m| {
-                    (
-                        acc + &text[i..m.start()] + trans_url(post, &text[m.start()..m.end()]),
-                        m.end(),
-                    )
-                });
-            res.0 + Borrowed(&text[res.1..])
-        };
-        let text = {
-            let res = AT_EXPR
-                .find_iter(&text)
-                .filter(|m| !emails_suffixes.contains(m.as_str()))
-                .fold((Borrowed(""), 0), |(acc, i), m| {
-                    (
-                        acc + Borrowed(&text[i..m.start()]) + trans_user(&text[m.start()..m.end()]),
-                        m.end(),
-                    )
-                });
-            res.0 + Borrowed(&text[res.1..])
-        };
-        let text = {
-            let res = TOPIC_EXPR
-                .find_iter(&text)
-                .fold((Borrowed(""), 0), |(acc, i), m| {
-                    (
-                        acc + &text[i..m.start()] + trans_topic(&text[m.start()..m.end()]),
-                        m.end(),
-                    )
-                });
-            res.0 + Borrowed(&text[res.1..])
-        };
-        let text = {
-            let res = EMOJI_EXPR
-                .find_iter(&text)
-                .fold((Borrowed(""), 0), |(acc, i), m| {
-                    (
-                        acc + &text[i..m.start()]
-                            + self
-                                .trans_emoji(&text[m.start()..m.end()], pic_folder)
-                                .unwrap(),
-                        m.end(),
-                    )
-                });
-            res.0 + Borrowed(&text[res.1..])
-        };
-        Ok(text.to_string())
+fn post_to_tera_value(
+    mut post: Post,
+    pic_folder: &str,
+    pic_quality: PictureDefinition,
+    emoji_map: Option<&HashMap<String, String>>,
+) -> Result<Value> {
+    let pic_folder = Path::new(pic_folder);
+    post.text = trans_text(&post, Path::new(pic_folder), emoji_map)?;
+    let ret_resource = if let Some(retweet) = post.retweeted_status.as_mut() {
+        retweet.text = trans_text(retweet, pic_folder, emoji_map)?;
+        Some((
+            extract_in_post_pic_paths(retweet, pic_folder, pic_quality),
+            extract_avatar_path(retweet, pic_folder),
+        ))
+    } else {
+        None
+    };
+
+    let in_post_pic_paths = extract_in_post_pic_paths(&post, pic_folder, pic_quality);
+    let avatar_path = extract_avatar_path(&post, pic_folder);
+    let mut post = to_value(post)?;
+    post["avatar_path"] = to_value(avatar_path)?;
+    post["pic_paths"] = to_value(in_post_pic_paths)?;
+    if let Some((pic_paths, avatar_path)) = ret_resource {
+        post["retweeted_status"]["avatar_path"] = to_value(avatar_path)?;
+        post["retweeted_status"]["pic_paths"] = to_value(pic_paths)?;
     }
+    Ok(post)
+}
 
-    fn trans_emoji<'a>(&self, s: &'a str, pic_folder: &'a Path) -> Result<Cow<'a, str>> {
-        if let Some(url) = self.get_or_try_init_emoji().unwrap().get(s) {
-            let pic = PictureMeta::other(url.to_string());
-            let pic_name = url_to_filename(pic.url())?;
-            Ok(Borrowed(r#"<img class="bk-emoji" alt=""#)
-                + s
-                + r#"" title=""#
-                + s
-                + r#"" src=""#
-                + Owned(
-                    pic_folder
-                        .join(pic_name)
-                        .into_os_string()
-                        .into_string()
-                        .map_err(|e| {
-                            Error::FormatError(format!("contain invalid unicode in {e:?}"))
-                        })?,
+fn trans_text(
+    post: &Post,
+    pic_folder: &Path,
+    emoji_map: Option<&HashMap<String, String>>,
+) -> Result<String> {
+    let emails_suffixes = EMAIL_EXPR
+        .find_iter(&post.text)
+        .filter_map(|m| AT_EXPR.find(m.as_str()).map(|m| m.as_str()))
+        .collect::<HashSet<_>>();
+    let text = NEWLINE_EXPR.replace_all(&post.text, "<br />");
+    let text = {
+        let res = URL_EXPR
+            .find_iter(&text)
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + &text[i..m.start()] + trans_url(post, &text[m.start()..m.end()]),
+                    m.end(),
                 )
-                + r#"" />"#)
-        } else {
-            Ok(Borrowed(s))
-        }
+            });
+        res.0 + Borrowed(&text[res.1..])
+    };
+    let text = {
+        let res = AT_EXPR
+            .find_iter(&text)
+            .filter(|m| !emails_suffixes.contains(m.as_str()))
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + Borrowed(&text[i..m.start()]) + trans_user(&text[m.start()..m.end()]),
+                    m.end(),
+                )
+            });
+        res.0 + Borrowed(&text[res.1..])
+    };
+    let text = {
+        let res = TOPIC_EXPR
+            .find_iter(&text)
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + &text[i..m.start()] + trans_topic(&text[m.start()..m.end()]),
+                    m.end(),
+                )
+            });
+        res.0 + Borrowed(&text[res.1..])
+    };
+    let text = {
+        let res = EMOJI_EXPR
+            .find_iter(&text)
+            .fold((Borrowed(""), 0), |(acc, i), m| {
+                (
+                    acc + &text[i..m.start()]
+                        + trans_emoji(&text[m.start()..m.end()], pic_folder, emoji_map).unwrap(),
+                    m.end(),
+                )
+            });
+        res.0 + Borrowed(&text[res.1..])
+    };
+    Ok(text.to_string())
+}
+
+fn trans_emoji<'a>(
+    s: &'a str,
+    pic_folder: &'a Path,
+    emoji_map: Option<&HashMap<String, String>>,
+) -> Result<Cow<'a, str>> {
+    if let Some(url) = emoji_map.and_then(|m| m.get(s)) {
+        let pic = PictureMeta::other(url.to_string());
+        let pic_name = url_to_filename(pic.url())?;
+        Ok(Borrowed(r#"<img class="bk-emoji" alt=""#)
+            + s
+            + r#"" title=""#
+            + s
+            + r#"" src=""#
+            + Owned(
+                pic_folder
+                    .join(pic_name)
+                    .into_os_string()
+                    .into_string()
+                    .map_err(|e| Error::FormatError(format!("contain invalid unicode in {e:?}")))?,
+            )
+            + r#"" />"#)
+    } else {
+        Ok(Borrowed(s))
     }
 }
 
@@ -317,8 +325,9 @@ mod tests {
         let posts = create_posts(&api).await;
         let tera = create_test_tera();
         let generator = HTMLGenerator::new(api, tera);
+        let emoji_map = Some(generator.get_or_try_init_emoji().await.unwrap());
         for post in posts {
-            generator.generate_post(post, "test").unwrap();
+            generator.generate_post(post, "test", emoji_map).unwrap();
         }
     }
 
@@ -331,7 +340,7 @@ mod tests {
         let tera = create_test_tera();
         let generator = HTMLGenerator::new(api, tera);
         for post in posts {
-            generator.generate_post(post, "test").unwrap();
+            generator.generate_post(post, "test", None).unwrap();
         }
     }
 
@@ -342,6 +351,6 @@ mod tests {
         let posts = create_posts(&api).await;
         let tera = create_test_tera();
         let generator = HTMLGenerator::new(api, tera);
-        generator.generate_page(posts, "test_page").unwrap();
+        generator.generate_page(posts, "test_page").await.unwrap();
     }
 }
