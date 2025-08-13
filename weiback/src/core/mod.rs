@@ -3,10 +3,7 @@ pub mod task_handler;
 pub mod task_manager;
 
 use log::{debug, error, info};
-use std::sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::task::spawn;
 use weibosdk_rs::WeiboAPIImpl;
@@ -20,12 +17,8 @@ pub use task::{BFOptions, BUOptions, ExportOptions, Task, TaskRequest, UserPostF
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
 
-type TH = TaskHandler<
-    WeiboAPIImpl<reqwest::Client>,
-    Arc<StorageImpl>,
-    ExporterImpl,
-    MediaDownloaderHandle,
->;
+type TH =
+    TaskHandler<WeiboAPIImpl<reqwest::Client>, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 pub struct Core {
     next_task_id: AtomicU64,
     task_handler: &'static TH,

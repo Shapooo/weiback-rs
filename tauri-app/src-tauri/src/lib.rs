@@ -1,7 +1,6 @@
 mod error;
 
 use std::ops::RangeInclusive;
-use std::sync::Arc;
 
 use log::{debug, error, info, warn};
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
@@ -19,7 +18,7 @@ use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_ap
 
 use error::{Error, Result};
 
-type TH = TaskHandler<WeiboAPIImpl, Arc<StorageImpl>, ExporterImpl, MediaDownloaderHandle>;
+type TH = TaskHandler<WeiboAPIImpl, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 type WeiboAPIImpl = WAI<reqwest::Client>;
 
 #[tauri::command]
@@ -156,7 +155,6 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     info!("MPSC channel created");
 
     let storage = StorageImpl::new()?;
-    let storage = Arc::new(storage);
     info!("Storage initialized");
 
     let exporter = ExporterImpl::new();

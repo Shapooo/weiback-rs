@@ -6,7 +6,6 @@ mod picture_storage;
 use std::future::Future;
 use std::ops::RangeInclusive;
 use std::pin::Pin;
-use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::TryFutureExt;
@@ -142,7 +141,7 @@ impl StorageImpl {
     }
 }
 
-impl Storage for Arc<StorageImpl> {
+impl Storage for StorageImpl {
     async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
         let (start, end) = range.into_inner();
         let posts = post::get_favorites(&self.db_pool, end - start + 1, start, reverse).await?;
@@ -221,16 +220,16 @@ mod tests {
         profile_statuses::ProfileStatusesAPI,
     };
 
-    async fn setup_storage() -> Arc<StorageImpl> {
+    async fn setup_storage() -> StorageImpl {
         let db_pool = SqlitePool::connect(":memory:").await.unwrap();
         database::create_tables(&db_pool).await.unwrap();
         let temp_dir = tempdir().unwrap();
         let pic_storage = FileSystemPictureStorage::from_picture_path(temp_dir.path().into());
 
-        Arc::new(StorageImpl {
+        StorageImpl {
             db_pool,
             pic_storage,
-        })
+        }
     }
 
     async fn create_test_posts() -> Vec<Post> {
