@@ -212,7 +212,7 @@ impl Storage for Arc<StorageImpl> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, path::Path};
 
     use super::*;
     use tempfile::tempdir;
@@ -235,11 +235,18 @@ mod tests {
 
     async fn create_test_posts() -> Vec<Post> {
         let client = MockClient::new();
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         client
-            .set_favorites_response_from_file("tests/data/favorites.json")
+            .set_favorites_response_from_file(
+                manifest_dir.join("tests/data/favorites.json").as_path(),
+            )
             .unwrap();
         client
-            .set_profile_statuses_response_from_file("tests/data/profile_statuses.json")
+            .set_profile_statuses_response_from_file(
+                manifest_dir
+                    .join("tests/data/profile_statuses.json")
+                    .as_path(),
+            )
             .unwrap();
         let api = MockAPI::from_session(client, Default::default());
         let mut posts = api.favorites(1).await.unwrap();

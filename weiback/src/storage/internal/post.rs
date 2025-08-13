@@ -335,6 +335,8 @@ pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use sqlx::SqlitePool;
     use weibosdk_rs::{
@@ -351,11 +353,18 @@ mod tests {
     async fn create_test_posts() -> Vec<Post> {
         let mut posts = Vec::new();
         let client = MockClient::new();
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         client
-            .set_favorites_response_from_file("tests/data/favorites.json")
+            .set_favorites_response_from_file(
+                manifest_dir.join("tests/data/favorites.json").as_path(),
+            )
             .unwrap();
         client
-            .set_profile_statuses_response_from_file("tests/data/profile_statuses.json")
+            .set_profile_statuses_response_from_file(
+                manifest_dir
+                    .join("tests/data/profile_statuses.json")
+                    .as_path(),
+            )
             .unwrap();
         let api = MockAPI::from_session(client, Default::default());
         posts.extend(api.favorites(1).await.unwrap());

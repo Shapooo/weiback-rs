@@ -121,6 +121,8 @@ pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::models::{Post, User};
     use sqlx::SqlitePool;
@@ -136,12 +138,19 @@ mod tests {
     }
 
     async fn create_test_users() -> Vec<User> {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let client = MockClient::new();
         client
-            .set_favorites_response_from_file("tests/data/favorites.json")
+            .set_favorites_response_from_file(
+                manifest_dir.join("tests/data/favorites.json").as_path(),
+            )
             .unwrap();
         client
-            .set_profile_statuses_response_from_file("tests/data/profile_statuses.json")
+            .set_profile_statuses_response_from_file(
+                manifest_dir
+                    .join("tests/data/profile_statuses.json")
+                    .as_path(),
+            )
             .unwrap();
         let api = MockAPI::from_session(client, Default::default());
         let posts: Vec<Post> = api
