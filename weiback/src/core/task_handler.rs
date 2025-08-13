@@ -205,7 +205,6 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         let posts_sum = self.get_favorited_sum().await?;
         info!("Found {posts_sum} favorited posts in local database");
         let (mut start, end) = options.range.into_inner();
-        let task_name = options.task_name.to_owned();
         for index in 1.. {
             options.range = start..=end.min(start + limit);
             debug!("Exporting range: {:?}", options.range);
@@ -215,14 +214,13 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                 break;
             }
 
-            let subtask_name = format!("{task_name}_{index}");
-            options.task_name = subtask_name;
+            let page_name = format!("{}_{}", options.task_name, index);
             let html = self
                 .processer
-                .generate_html(local_posts, &options.task_name)
+                .generate_html(local_posts, &page_name)
                 .await?;
             self.exporter
-                .export_page(html, &options.task_name, &options.export_path)
+                .export_page(html, &page_name, &options.export_path)
                 .await?;
 
             if start >= end {

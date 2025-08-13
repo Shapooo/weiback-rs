@@ -85,6 +85,10 @@ pub fn strip_url_queries(url: &str) -> &str {
     url.split_once('?').map_or(url, |(base, _query)| base)
 }
 
+pub fn page_name_to_resource_dir_name(page_name: &str) -> String {
+    page_name.to_string() + "_files"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

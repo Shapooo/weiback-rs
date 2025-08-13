@@ -13,7 +13,8 @@ use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::models::{PictureDefinition, PictureMeta, Post};
 use crate::utils::{
-    AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, url_to_filename,
+    AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR,
+    page_name_to_resource_dir_name, url_to_filename,
 };
 
 pub fn create_tera(template_path: &Path) -> Result<Tera> {
@@ -46,8 +47,8 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         }
     }
 
-    fn generate_post(&self, post: Post, task_name: &str) -> Result<String> {
-        let pic_folder = task_name.to_owned() + "_files";
+    fn generate_post(&self, post: Post, page_name: &str) -> Result<String> {
+        let pic_folder = page_name_to_resource_dir_name(page_name);
         let pic_quality = get_config().read()?.picture_definition;
         let post = self.post_to_tera_value(post, &pic_folder, pic_quality)?;
 
@@ -56,11 +57,11 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         Ok(html)
     }
 
-    pub fn generate_page(&self, posts: Vec<Post>, task_name: &str) -> Result<String> {
+    pub fn generate_page(&self, posts: Vec<Post>, page_name: &str) -> Result<String> {
         info!("Generating page for {} posts", posts.len());
         let posts_html = posts
             .into_iter()
-            .map(|p| self.generate_post(p, task_name))
+            .map(|p| self.generate_post(p, page_name))
             .collect::<Result<Vec<_>>>()?;
         let posts_html = posts_html.join("");
         let mut context = Context::new();

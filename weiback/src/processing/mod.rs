@@ -98,7 +98,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         Ok(())
     }
 
-    pub async fn generate_html(&self, posts: Vec<Post>, task_name: &str) -> Result<HTMLPage> {
+    pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
         let pic_quality = get_config().read()?.picture_definition;
         debug!("Using picture quality: {pic_quality:?}");
@@ -116,7 +116,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
             .collect::<Result<Vec<_>>>()?;
         debug!("Loaded {} pictures from local storage.", pics.len());
-        let content = self.html_generator.generate_page(posts, task_name)?;
+        let content = self.html_generator.generate_page(posts, page_name)?;
         info!("HTML content generated successfully.");
         Ok(HTMLPage {
             html: content,

@@ -12,11 +12,11 @@ use tokio::{
 
 use crate::error::{Error, Result};
 use crate::models::Picture;
-use crate::utils::url_to_filename;
+use crate::utils::{page_name_to_resource_dir_name, url_to_filename};
 use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
-    async fn export_page(&self, page: HTMLPage, task_name: &str, export_path: &Path) -> Result<()>;
+    async fn export_page(&self, page: HTMLPage, page_name: &str, export_path: &Path) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -35,9 +35,9 @@ impl ExporterImpl {
 }
 
 impl Exporter for ExporterImpl {
-    async fn export_page(&self, page: HTMLPage, task_name: &str, export_path: &Path) -> Result<()>
+    async fn export_page(&self, page: HTMLPage, page_name: &str, export_path: &Path) -> Result<()>
 where {
-        info!("Exporting page for task '{task_name}' to {export_path:?}",);
+        info!("Exporting page for task '{page_name}' to {export_path:?}",);
         let mut dir_builder = DirBuilder::new();
         dir_builder.recursive(true);
         if !export_path.exists() {
@@ -51,7 +51,7 @@ where {
             )
             .into());
         }
-        let html_file_name = task_name.to_string() + ".html";
+        let html_file_name = page_name.to_string() + ".html";
 
         let mut operating_path = export_path.to_owned();
         debug!("Writing HTML to file: {operating_path:?}");
@@ -61,7 +61,7 @@ where {
         debug!("Successfully wrote HTML to {operating_path:?}");
 
         operating_path.pop();
-        let resources_dir_name = task_name.to_owned() + "_files";
+        let resources_dir_name = page_name_to_resource_dir_name(page_name);
         operating_path.push(resources_dir_name.clone());
         if !operating_path.exists() && !page.pics.is_empty() {
             dir_builder.create(operating_path.as_path()).await?;
@@ -91,7 +91,7 @@ where {
             .filter(|r| r.is_err())
             .count();
         warn! {"{fail_sum} pictures exports failed"}
-        info!("Finished exporting page for task '{task_name}'");
+        info!("Finished exporting page for task '{page_name}'");
         Ok(())
     }
 }
@@ -140,24 +140,24 @@ mod tests {
     async fn test_export_page_with_pictures() {
         let temp_dir = tempdir().unwrap();
         let export_path = temp_dir.path().to_path_buf();
-        let task_name = "test_with_pics".to_string();
+        let page_name = "test_with_pics".to_string();
 
         let exporter = ExporterImpl::new();
 
         let page = create_test_page("<html><body><h1>Hello</h1></body></html>", 2);
         exporter
-            .export_page(page.clone(), &task_name, &export_path)
+            .export_page(page.clone(), &page_name, &export_path)
             .await
             .unwrap();
 
         // Verify HTML file
-        let html_path = export_path.join(format!("{}.html", task_name));
+        let html_path = export_path.join(page_name_to_resource_dir_name(&page_name));
         assert!(html_path.exists());
         let html_content = fs::read_to_string(html_path).unwrap();
         assert_eq!(html_content, page.html);
 
         // Verify resources directory and picture files
-        let resources_path = export_path.join(format!("{}_files", task_name));
+        let resources_path = export_path.join(page_name_to_resource_dir_name(&page_name));
         assert!(resources_path.exists());
         assert!(resources_path.is_dir());
 
@@ -173,24 +173,24 @@ mod tests {
     async fn test_export_page_no_pictures() {
         let temp_dir = tempdir().unwrap();
         let export_path = temp_dir.path().to_path_buf();
-        let task_name = "test_no_pics".to_string();
+        let page_name = "test_no_pics".to_string();
 
         let exporter = ExporterImpl::new();
 
         let page = create_test_page("<html><body><h1>No Pics</h1></body></html>", 0);
         exporter
-            .export_page(page.clone(), &task_name, &export_path)
+            .export_page(page.clone(), &page_name, &export_path)
             .await
             .unwrap();
 
         // Verify HTML file
-        let html_path = export_path.join(format!("{}.html", task_name));
+        let html_path = export_path.join(format!("{}.html", page_name));
         assert!(html_path.exists());
         let html_content = fs::read_to_string(html_path).unwrap();
         assert_eq!(html_content, page.html);
 
         // Verify resources directory is NOT created
-        let resources_path = export_path.join(format!("{}_files", task_name));
+        let resources_path = export_path.join(page_name_to_resource_dir_name(&page_name));
         assert!(!resources_path.exists());
     }
 
@@ -198,14 +198,14 @@ mod tests {
     async fn test_export_to_existing_file_path_fails() {
         let temp_dir = tempdir().unwrap();
         let export_path = temp_dir.path().to_path_buf();
-        let task_name = "wont_work".to_string();
+        let page_name = "wont_work".to_string();
         let file_path = export_path.join("i_am_a_file");
         fs::write(&file_path, "hello").unwrap();
 
         let exporter = ExporterImpl::new();
 
         let page = create_test_page("test", 0);
-        let result = exporter.export_page(page, &task_name, &export_path).await;
+        let result = exporter.export_page(page, &page_name, &export_path).await;
         assert!(result.is_err());
         if let Err(Error::Io(e)) = result {
             assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
