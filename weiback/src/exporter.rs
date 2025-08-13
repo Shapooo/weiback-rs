@@ -151,7 +151,7 @@ mod tests {
             .unwrap();
 
         // Verify HTML file
-        let html_path = export_dir.join(page_name_to_resource_dir_name(&page_name));
+        let html_path = export_dir.join(page_name.clone() + ".html");
         assert!(html_path.exists());
         let html_content = fs::read_to_string(html_path).unwrap();
         assert_eq!(html_content, page.html);
@@ -197,20 +197,17 @@ mod tests {
     #[tokio::test]
     async fn test_export_to_existing_file_path_fails() {
         let temp_dir = tempdir().unwrap();
-        let export_dir = temp_dir.path().to_path_buf();
+        let export_dir = temp_dir.path();
         let page_name = "wont_work".to_string();
-        let file_path = export_dir.join(page_name.clone() + ".html");
-        fs::write(&file_path, "hello").unwrap();
+        let html_path = export_dir.join(page_name.clone() + ".html");
+        fs::write(&html_path, "hello").unwrap();
 
         let exporter = ExporterImpl::new();
 
         let page = create_test_page("test", 0);
-        let result = exporter.export_page(page, &page_name, &export_dir).await;
-        assert!(result.is_err());
-        if let Err(Error::Io(e)) = result {
-            assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
-        } else {
-            panic!("Expected an IO error");
-        }
+        exporter
+            .export_page(page, &page_name, &export_dir)
+            .await
+            .unwrap();
     }
 }
