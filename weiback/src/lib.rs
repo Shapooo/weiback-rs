@@ -13,3 +13,6 @@ pub mod models {
     pub use super::picture::{Picture, PictureDefinition, PictureMeta};
     pub use weibosdk_rs::{Post, User};
 }
+
+#[cfg(test)]
+pub mod mock;

@@ -20,7 +20,7 @@ pub trait MediaDownloader {
 }
 
 /// The callback is for success cases and is async.
-type AsyncDownloadCallback = Box<
+pub type AsyncDownloadCallback = Box<
     dyn FnOnce(Bytes) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
         + Send
         + 'static,
