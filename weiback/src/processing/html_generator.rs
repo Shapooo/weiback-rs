@@ -2,7 +2,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use log::{debug, info};
+use log::{debug, info, warn};
 use once_cell::sync::OnceCell;
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
@@ -101,11 +101,17 @@ impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
         Ok(post)
     }
 
-    fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
-        Ok(self.emoji_map.get_or_try_init(|| {
-            let runtime = tokio::runtime::Handle::current();
-            runtime.block_on(async move { self.api_client.emoji_update().await })
-        })?)
+    pub fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
+        Ok(self
+            .emoji_map
+            .get_or_try_init(|| {
+                let runtime = tokio::runtime::Handle::current();
+                runtime.block_on(async move { self.api_client.emoji_update().await })
+            })
+            .map_err(|e| {
+                warn!("{e}");
+                e
+            })?)
     }
 
     fn trans_text(&self, post: &Post, pic_folder: &Path) -> Result<String> {
