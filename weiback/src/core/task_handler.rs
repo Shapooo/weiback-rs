@@ -220,7 +220,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                 .generate_html(local_posts, &page_name)
                 .await?;
             self.exporter
-                .export_page(html, &page_name, &options.export_path)
+                .export_page(html, &page_name, &options.export_dir)
                 .await?;
 
             if start >= end {

@@ -39,7 +39,7 @@ impl Exporter for ExporterMock {
         &self,
         page: HTMLPage,
         _page_name: &str,
-        _export_path: &Path,
+        _export_dir: &Path,
     ) -> Result<()> {
         let mut inner = self.inner.lock().unwrap();
         if inner.should_fail {

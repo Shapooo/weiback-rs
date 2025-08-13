@@ -56,7 +56,7 @@ pub enum UserPostFilter {
 
 #[derive(Debug, Clone)]
 pub struct ExportOptions {
-    pub export_path: PathBuf,
+    pub export_dir: PathBuf,
     pub task_name: String,
     pub reverse: bool,
     pub range: RangeInclusive<u32>,
@@ -65,7 +65,7 @@ pub struct ExportOptions {
 impl Default for ExportOptions {
     fn default() -> Self {
         Self {
-            export_path: PathBuf::from("."),
+            export_dir: PathBuf::from("."),
             task_name: "weiback_export".to_string(),
             reverse: false,
             range: 0..=1_000_000_000,
