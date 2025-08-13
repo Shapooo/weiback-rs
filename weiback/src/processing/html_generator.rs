@@ -212,3 +212,86 @@ fn extract_in_post_pic_paths(
             })
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use weibosdk_rs::{
+        favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        profile_statuses::ProfileStatusesAPI,
+    };
+
+    fn create_test_tera() -> Tera {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("templates");
+        create_tera(&path).unwrap()
+    }
+
+    fn create_mock_client() -> MockClient {
+        MockClient::new()
+    }
+
+    fn create_mock_api(client: &MockClient) -> MockAPI {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        client
+            .set_favorites_response_from_file(
+                manifest_dir.join("tests/data/favorites.json").as_path(),
+            )
+            .unwrap();
+        client
+            .set_profile_statuses_response_from_file(
+                manifest_dir
+                    .join("tests/data/profile_statuses.json")
+                    .as_path(),
+            )
+            .unwrap();
+        client
+            .set_emoji_update_response_from_file(
+                manifest_dir.join("tests/data/emoji.json").as_path(),
+            )
+            .unwrap();
+        MockAPI::from_session(client.clone(), Default::default())
+    }
+
+    async fn create_posts(api: &MockAPI) -> Vec<Post> {
+        let mut posts = api.favorites(0).await.unwrap();
+        posts.extend(api.profile_statuses(123, 0).await.unwrap());
+        posts
+    }
+
+    #[tokio::test]
+    async fn test_generate_post_with_valid_emoji() {
+        let client = create_mock_client();
+        let api = create_mock_api(&client);
+        let posts = create_posts(&api).await;
+        let tera = create_test_tera();
+        let generator = HTMLGenerator::new(api, tera);
+        for post in posts {
+            generator.generate_post(post, "test").unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_post_with_invalid_emoji() {
+        let client = create_mock_client();
+        client.set_emoji_update_response_from_str("{}".into());
+        let api = create_mock_api(&client);
+        let posts = create_posts(&api).await;
+        let tera = create_test_tera();
+        let generator = HTMLGenerator::new(api, tera);
+        for post in posts {
+            generator.generate_post(post, "test").unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_page() {
+        let client = create_mock_client();
+        let api = create_mock_api(&client);
+        let posts = create_posts(&api).await;
+        let tera = create_test_tera();
+        let generator = HTMLGenerator::new(api, tera);
+        generator.generate_page(posts, "test_page").unwrap();
+    }
+}
