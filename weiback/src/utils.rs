@@ -1,11 +1,15 @@
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use log::error;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde_json::Value;
 use url::Url;
 
 use crate::error::{Error, Result};
+use crate::models::Post;
+use crate::picture::{PictureDefinition, PictureMeta};
 
 #[allow(unused_macros)]
 macro_rules! here {
@@ -87,6 +91,100 @@ pub fn strip_url_queries(url: &str) -> &str {
 
 pub fn page_name_to_resource_dir_name(page_name: &str) -> String {
     page_name.to_string() + "_files"
+}
+
+pub fn extract_all_pic_metas(
+    posts: &[Post],
+    definition: PictureDefinition,
+    emoji_map: Option<&HashMap<String, String>>,
+) -> HashSet<PictureMeta> {
+    let mut pic_metas: HashSet<PictureMeta> = posts
+        .iter()
+        .flat_map(|post| extract_in_post_pic_metas(post, definition))
+        .collect();
+    let emoji_metas = posts.iter().flat_map(|post| {
+        extract_emoji_urls(&post.text, emoji_map)
+            .into_iter()
+            .map(|url| PictureMeta::other(url.to_string()))
+    });
+    let avatar_metas = posts
+        .iter()
+        .flat_map(extract_avatar_metas)
+        .collect::<Vec<_>>();
+    pic_metas.extend(emoji_metas);
+    pic_metas.extend(avatar_metas);
+    pic_metas
+}
+
+pub fn pic_id_to_url<'a>(
+    pic_id: &'a str,
+    pic_infos: &'a HashMap<String, Value>,
+    quality: &'a PictureDefinition,
+) -> Option<&'a str> {
+    pic_infos
+        .get(pic_id)
+        .and_then(|v| v[Into::<&str>::into(quality)]["url"].as_str())
+}
+
+fn extract_emoji_urls<'a>(
+    text: &'a str,
+    emoji_map: Option<&'a HashMap<String, String>>,
+) -> Vec<&'a str> {
+    EMOJI_EXPR
+        .find_iter(text)
+        .map(|e| e.as_str())
+        .flat_map(|e| emoji_map.map(|m| m.get(e)))
+        .filter_map(|i| i.map(|s| s.as_str()))
+        .collect()
+}
+
+fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
+    let mut res = Vec::new();
+    if let Some(user) = post.user.as_ref() {
+        let meta = PictureMeta::avatar(user.avatar_hd.to_owned(), user.id);
+        res.push(meta)
+    }
+    if let Some(u) = post
+        .retweeted_status
+        .as_ref()
+        .and_then(|re| re.user.as_ref())
+    {
+        let meta = PictureMeta::avatar(u.avatar_hd.to_owned(), u.id);
+        res.push(meta);
+    }
+    res
+}
+
+fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
+    process_in_post_pics(post, |id, pic_infos, post| {
+        pic_id_to_url(id, pic_infos, &definition)
+            .map(|url| PictureMeta::in_post(url.to_string(), post.id))
+    })
+}
+
+pub fn process_in_post_pics<T, F>(post: &Post, mut f: F) -> Vec<T>
+where
+    F: FnMut(&str, &HashMap<String, Value>, &Post) -> Option<T>,
+{
+    if let Some(retweeted_post) = &post.retweeted_status {
+        process_in_post_pics(retweeted_post, f)
+    } else if let Some(pic_ids) = post.pic_ids.as_ref()
+        && !pic_ids.is_empty()
+    {
+        let Some(pic_infos) = post.pic_infos.as_ref() else {
+            error!(
+                "Missing pic_infos while pic_ids exists for post {}",
+                post.id
+            );
+            return Default::default();
+        };
+        pic_ids
+            .iter()
+            .filter_map(|id| f(id, pic_infos, post))
+            .collect()
+    } else {
+        Default::default()
+    }
 }
 
 #[cfg(test)]

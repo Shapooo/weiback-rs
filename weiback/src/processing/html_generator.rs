@@ -8,13 +8,12 @@ use tera::{Context, Tera};
 use tokio::sync::OnceCell;
 use weibosdk_rs::emoji::EmojiUpdateAPI;
 
-use super::{pic_id_to_url, process_in_post_pics};
 use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::models::{PictureDefinition, PictureMeta, Post};
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR,
-    page_name_to_resource_dir_name, url_to_filename,
+    page_name_to_resource_dir_name, pic_id_to_url, process_in_post_pics, url_to_filename,
 };
 
 pub fn create_tera(template_path: &Path) -> Result<Tera> {
