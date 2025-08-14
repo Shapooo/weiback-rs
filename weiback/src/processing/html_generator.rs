@@ -39,10 +39,10 @@ pub struct HTMLGenerator<E: EmojiUpdateAPI> {
 }
 
 impl<E: EmojiUpdateAPI> HTMLGenerator<E> {
-    pub fn new(api_client: E, templates: Tera) -> Self {
+    pub fn new(api_client: E, engine: Tera) -> Self {
         Self {
             api_client,
-            templates,
+            templates: engine,
             emoji_map: OnceCell::new(),
         }
     }
@@ -352,5 +352,36 @@ mod tests {
         let tera = create_test_tera();
         let generator = HTMLGenerator::new(api, tera);
         generator.generate_page(posts, "test_page").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_emoji() {
+        let client = create_mock_client();
+        let api = create_mock_api(&client);
+        let tera = create_test_tera();
+        let reference_emoji = api.emoji_update().await.unwrap();
+        let generator = HTMLGenerator::new(api, tera);
+        let emoji = generator.get_or_try_init_emoji().await.unwrap();
+        assert_eq!(&reference_emoji, emoji);
+    }
+
+    #[tokio::test]
+    async fn test_get_emoji_fail() {
+        let client = create_mock_client();
+        let api = create_mock_api(&client);
+        let tera = create_test_tera();
+        let reference_emoji = api.emoji_update().await.unwrap();
+        client.set_emoji_update_response_from_str("");
+        let generator = HTMLGenerator::new(api.clone(), tera);
+        let res = generator.get_or_try_init_emoji().await;
+        assert!(matches!(res, Err(Error::FormatError(..))));
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        client
+            .set_emoji_update_response_from_file(
+                manifest_dir.join("tests/data/emoji.json").as_path(),
+            )
+            .unwrap();
+        let emoji = generator.get_or_try_init_emoji().await.unwrap();
+        assert_eq!(&reference_emoji, emoji);
     }
 }
