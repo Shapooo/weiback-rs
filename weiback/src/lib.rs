@@ -2,10 +2,10 @@ pub mod config;
 pub mod core;
 pub mod error;
 pub mod exporter;
+pub mod html_generator;
 pub mod media_downloader;
 pub mod message;
 pub mod picture;
-pub mod processing;
 pub mod storage;
 pub mod utils;
 
