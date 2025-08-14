@@ -1,5 +1,6 @@
 pub mod config;
 pub mod core;
+pub mod emoji_map;
 pub mod error;
 pub mod exporter;
 pub mod html_generator;
