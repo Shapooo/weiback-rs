@@ -313,3 +313,96 @@ where
         Default::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use weibosdk_rs::{
+        favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        profile_statuses::ProfileStatusesAPI,
+    };
+
+    use super::*;
+    use crate::mock::{media_downloader::MediaDownloaderMock, storage::StorageMock};
+
+    fn create_mock_client() -> MockClient {
+        MockClient::new()
+    }
+
+    fn create_mock_api(client: &MockClient) -> MockAPI {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        client
+            .set_favorites_response_from_file(
+                manifest_dir.join("tests/data/favorites.json").as_path(),
+            )
+            .unwrap();
+        client
+            .set_profile_statuses_response_from_file(
+                manifest_dir
+                    .join("tests/data/profile_statuses.json")
+                    .as_path(),
+            )
+            .unwrap();
+        client
+            .set_emoji_update_response_from_file(
+                manifest_dir.join("tests/data/emoji.json").as_path(),
+            )
+            .unwrap();
+        client
+            .set_long_text_response_from_file(
+                manifest_dir.join("tests/data/long_text.json").as_path(),
+            )
+            .unwrap();
+        MockAPI::from_session(client.clone(), Default::default())
+    }
+
+    async fn create_posts(api: &MockAPI) -> Vec<Post> {
+        let mut posts = api.favorites(0).await.unwrap();
+        posts.extend(api.profile_statuses(123, 0).await.unwrap());
+        posts
+    }
+
+    async fn create_processor(
+        api: MockAPI,
+        msg_sender: mpsc::Sender<Message>,
+    ) -> PostProcesser<MockAPI, StorageMock, MediaDownloaderMock> {
+        let storage = StorageMock::new();
+        let downloader = MediaDownloaderMock::new();
+        PostProcesser::new(api, storage, downloader, msg_sender).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_extract_all_pic_metas() {
+        let client = create_mock_client();
+        let api = create_mock_api(&client);
+        let posts = create_posts(&api).await;
+        let (msg_sender, _) = mpsc::channel(100);
+        let processor = create_processor(api.clone(), msg_sender).await;
+
+        let emoji_map = processor
+            .html_generator
+            .get_or_try_init_emoji()
+            .await
+            .unwrap();
+
+        let metas = extract_all_pic_metas(&posts, PictureDefinition::Large, Some(emoji_map));
+
+        assert!(
+            !metas.is_empty(),
+            "No picture metadata was extracted, check test data files."
+        );
+
+        let has_in_post = metas
+            .iter()
+            .any(|m| matches!(m, PictureMeta::InPost { .. }));
+        let has_avatar = metas
+            .iter()
+            .any(|m| matches!(m, PictureMeta::Avatar { .. }));
+        let has_emoji = metas.iter().any(|m| m.url().contains("face.t.sinajs.cn"));
+
+        assert!(has_in_post, "Should extract in-post pictures");
+        assert!(has_avatar, "Should extract user avatars");
+        assert!(has_emoji, "Should extract emoji pictures");
+    }
+}
