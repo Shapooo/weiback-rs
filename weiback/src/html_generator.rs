@@ -4,13 +4,13 @@ use std::path::Path;
 use std::pin::Pin;
 
 use futures::future::try_join_all;
-use log::{debug, info, warn};
+use log::{debug, info};
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
-use tokio::sync::OnceCell;
 use weibosdk_rs::emoji::EmojiUpdateAPI;
 
 use crate::config::get_config;
+use crate::emoji_map::EmojiMap;
 use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
@@ -38,21 +38,19 @@ pub fn create_tera(template_path: &Path) -> Result<Tera> {
 
 #[derive(Debug, Clone)]
 pub struct HTMLGenerator<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> {
-    api_client: E,
     storage: S,
     downloader: D,
     templates: Tera,
-    emoji_map: OnceCell<HashMap<String, String>>,
+    emoji_map: EmojiMap<E>,
 }
 
 impl<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
-    pub fn new(api_client: E, storage: S, downloader: D, engine: Tera) -> Self {
+    pub fn new(emoji_map: EmojiMap<E>, storage: S, downloader: D, engine: Tera) -> Self {
         Self {
-            api_client,
             storage,
             downloader,
             templates: engine,
-            emoji_map: OnceCell::new(),
+            emoji_map,
         }
     }
 
@@ -72,7 +70,7 @@ impl<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
     }
 
     async fn generate_page(&self, posts: Vec<Post>, page_name: &str) -> Result<String> {
-        let emoji_map = self.get_or_try_init_emoji().await.ok();
+        let emoji_map = self.emoji_map.get_or_try_init().await.ok();
         info!("Generating page for {} posts", posts.len());
         let posts_html = posts
             .into_iter()
@@ -89,7 +87,7 @@ impl<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
     pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
         let pic_quality = get_config().read()?.picture_definition;
-        let emoji_map = self.get_or_try_init_emoji().await.ok();
+        let emoji_map = self.emoji_map.get_or_try_init().await.ok();
         debug!("Using picture quality: {pic_quality:?}");
         let pic_metas = extract_all_pic_metas(&posts, pic_quality, emoji_map);
         info!(
@@ -178,17 +176,6 @@ impl<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
             );
         }
         Ok(pics)
-    }
-
-    pub async fn get_or_try_init_emoji(&self) -> Result<&HashMap<String, String>> {
-        Ok(self
-            .emoji_map
-            .get_or_try_init(async || self.api_client.emoji_update().await)
-            .await
-            .map_err(|e| {
-                warn!("{e}");
-                e
-            })?)
     }
 }
 
@@ -420,7 +407,8 @@ mod tests {
         let tera = create_test_tera();
         let storage = StorageMock::new();
         let downloader = MediaDownloaderMock::new();
-        HTMLGenerator::new(api.clone(), storage, downloader, tera)
+        let emoji_map = EmojiMap::new(api.clone());
+        HTMLGenerator::new(emoji_map, storage, downloader, tera)
     }
 
     async fn create_posts(api: &MockAPI) -> Vec<Post> {
@@ -435,9 +423,12 @@ mod tests {
         let api = create_mock_api(&client);
         let posts = create_posts(&api).await;
         let generator = create_generator(&api);
-        let emoji_map = Some(generator.get_or_try_init_emoji().await.unwrap());
+        let emoji_map = api.emoji_update().await.unwrap();
+
         for post in posts {
-            generator.generate_post(post, "test", emoji_map).unwrap();
+            generator
+                .generate_post(post, "test", Some(&emoji_map))
+                .unwrap();
         }
     }
 
@@ -459,34 +450,5 @@ mod tests {
         let posts = create_posts(&api).await;
         let generator = create_generator(&api);
         generator.generate_page(posts, "test_page").await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_get_emoji() {
-        let client = create_mock_client();
-        let api = create_mock_api(&client);
-        let reference_emoji = api.emoji_update().await.unwrap();
-        let generator = create_generator(&api);
-        let emoji = generator.get_or_try_init_emoji().await.unwrap();
-        assert_eq!(&reference_emoji, emoji);
-    }
-
-    #[tokio::test]
-    async fn test_get_emoji_fail() {
-        let client = create_mock_client();
-        let api = create_mock_api(&client);
-        let reference_emoji = api.emoji_update().await.unwrap();
-        client.set_emoji_update_response_from_str("");
-        let generator = create_generator(&api);
-        let res = generator.get_or_try_init_emoji().await;
-        assert!(matches!(res, Err(Error::FormatError(..))));
-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        client
-            .set_emoji_update_response_from_file(
-                manifest_dir.join("tests/data/emoji.json").as_path(),
-            )
-            .unwrap();
-        let emoji = generator.get_or_try_init_emoji().await.unwrap();
-        assert_eq!(&reference_emoji, emoji);
     }
 }
