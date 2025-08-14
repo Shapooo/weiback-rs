@@ -58,10 +58,54 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
 
     pub async fn process(&self, task_id: u64, posts: Vec<Post>) -> Result<()> {
         info!("Processing {} posts for task {}.", posts.len(), task_id);
-        let pic_definition = get_config().read()?.picture_definition;
+        let pic_quality = get_config().read()?.picture_definition;
+        debug!("Picture definition set to: {pic_quality:?}");
+
         let emoji_map = self.html_generator.get_or_try_init_emoji().await.ok();
-        debug!("Picture definition set to: {pic_definition:?}");
-        let pic_metas = extract_all_pic_metas(&posts, pic_definition, emoji_map);
+
+        self.handle_picture(&posts, pic_quality, emoji_map, task_id)
+            .await?;
+
+        info!("Finished downloading pictures. Processing posts...");
+        for mut post in posts {
+            self.handle_long_text(&mut post, task_id).await?;
+            self.storage.save_post(&post).await?;
+        }
+
+        info!("Finished processing posts for task {task_id}.");
+        Ok(())
+    }
+
+    async fn handle_long_text(&self, post: &mut Post, task_id: u64) -> Result<()> {
+        if post.is_long_text {
+            debug!("Fetching long text for post {}.", post.id);
+            match self.api_client.get_long_text(post.id).await {
+                Ok(long_text) => {
+                    post.text = long_text;
+                }
+                Err(e) => {
+                    error!("Failed to fetch long text for post {}: {}", post.id, e);
+                    self.msg_sender
+                        .send(Message::Err(ErrMsg {
+                            r#type: ErrType::LongTextFail { post_id: post.id },
+                            task_id,
+                            err: e.to_string(),
+                        }))
+                        .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn handle_picture(
+        &self,
+        posts: &[Post],
+        pic_quality: PictureDefinition,
+        emoji_map: Option<&HashMap<String, String>>,
+        task_id: u64,
+    ) -> Result<()> {
+        let pic_metas = extract_all_pic_metas(&posts, pic_quality, emoji_map);
         info!("Found {} unique pictures to download.", pic_metas.len());
 
         stream::iter(pic_metas)
@@ -70,30 +114,6 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
                 self.download_pic_to_local(task_id, meta).await
             })
             .await?;
-
-        info!("Finished downloading pictures. Processing posts...");
-        for mut post in posts {
-            if post.is_long_text {
-                debug!("Fetching long text for post {}.", post.id);
-                match self.api_client.get_long_text(post.id).await {
-                    Ok(long_text) => {
-                        post.text = long_text;
-                    }
-                    Err(e) => {
-                        error!("Failed to fetch long text for post {}: {}", post.id, e);
-                        self.msg_sender
-                            .send(Message::Err(ErrMsg {
-                                r#type: ErrType::LongTextFail { post_id: post.id },
-                                task_id,
-                                err: e.to_string(),
-                            }))
-                            .await?;
-                    }
-                }
-            }
-            self.storage.save_post(&post).await?;
-        }
-        info!("Finished processing posts for task {task_id}.");
         Ok(())
     }
 
