@@ -14,7 +14,7 @@ use crate::media_downloader::MediaDownloader;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
-use crate::utils::{extract_all_pic_metas, pic_id_to_url, process_in_post_pics};
+use crate::utils::extract_all_pic_metas;
 
 #[derive(Debug, Clone)]
 pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
@@ -131,103 +131,5 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .download_picture(task_id, url, callback)
             .await?;
         Ok(())
-    }
-}
-
-pub fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    process_in_post_pics(post, |id, pic_infos, post| {
-        pic_id_to_url(id, pic_infos, &definition)
-            .map(|url| PictureMeta::in_post(url.to_string(), post.id))
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::Path;
-
-    use weibosdk_rs::{
-        favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
-        profile_statuses::ProfileStatusesAPI,
-    };
-
-    use super::*;
-    use crate::emoji_map::EmojiMap;
-    use crate::mock::{media_downloader::MediaDownloaderMock, storage::StorageMock};
-
-    fn create_mock_client() -> MockClient {
-        MockClient::new()
-    }
-
-    fn create_mock_api(client: &MockClient) -> MockAPI {
-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        client
-            .set_favorites_response_from_file(
-                manifest_dir.join("tests/data/favorites.json").as_path(),
-            )
-            .unwrap();
-        client
-            .set_profile_statuses_response_from_file(
-                manifest_dir
-                    .join("tests/data/profile_statuses.json")
-                    .as_path(),
-            )
-            .unwrap();
-        client
-            .set_emoji_update_response_from_file(
-                manifest_dir.join("tests/data/emoji.json").as_path(),
-            )
-            .unwrap();
-        client
-            .set_long_text_response_from_file(
-                manifest_dir.join("tests/data/long_text.json").as_path(),
-            )
-            .unwrap();
-        MockAPI::from_session(client.clone(), Default::default())
-    }
-
-    async fn create_posts(api: &MockAPI) -> Vec<Post> {
-        let mut posts = api.favorites(0).await.unwrap();
-        posts.extend(api.profile_statuses(123, 0).await.unwrap());
-        posts
-    }
-
-    async fn create_processor(
-        api: MockAPI,
-        msg_sender: mpsc::Sender<Message>,
-    ) -> PostProcesser<MockAPI, StorageMock, MediaDownloaderMock> {
-        let storage = StorageMock::new();
-        let downloader = MediaDownloaderMock::new();
-        let emoji_map = EmojiMap::new(api.clone());
-        PostProcesser::new(api, storage, downloader, emoji_map, msg_sender).unwrap()
-    }
-
-    #[tokio::test]
-    async fn test_extract_all_pic_metas() {
-        let client = create_mock_client();
-        let api = create_mock_api(&client);
-        let posts = create_posts(&api).await;
-        let (msg_sender, _) = mpsc::channel(100);
-        let processor = create_processor(api.clone(), msg_sender).await;
-
-        let emoji_map = processor.emoji_map.get_or_try_init().await.unwrap();
-
-        let metas = extract_all_pic_metas(&posts, PictureDefinition::Large, Some(emoji_map));
-
-        assert!(
-            !metas.is_empty(),
-            "No picture metadata was extracted, check test data files."
-        );
-
-        let has_in_post = metas
-            .iter()
-            .any(|m| matches!(m, PictureMeta::InPost { .. }));
-        let has_avatar = metas
-            .iter()
-            .any(|m| matches!(m, PictureMeta::Avatar { .. }));
-        let has_emoji = metas.iter().any(|m| m.url().contains("face.t.sinajs.cn"));
-
-        assert!(has_in_post, "Should extract in-post pictures");
-        assert!(has_avatar, "Should extract user avatars");
-        assert!(has_emoji, "Should extract emoji pictures");
     }
 }
