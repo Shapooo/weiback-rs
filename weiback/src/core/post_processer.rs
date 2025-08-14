@@ -1,5 +1,3 @@
-pub mod html_generator;
-
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -10,21 +8,20 @@ use tokio::sync::mpsc;
 use weibosdk_rs::WeiboAPI;
 
 use crate::config::get_config;
+use crate::emoji_map::EmojiMap;
 use crate::error::Result;
-use crate::exporter::HTMLPage;
 use crate::media_downloader::MediaDownloader;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
 use crate::utils::{extract_all_pic_metas, pic_id_to_url, process_in_post_pics};
-use html_generator::{HTMLGenerator, create_tera};
 
 #[derive(Debug, Clone)]
 pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
     api_client: W,
     storage: S,
     downloader: D,
-    html_generator: HTMLGenerator<W, S, D>,
+    emoji_map: EmojiMap<W>,
     msg_sender: mpsc::Sender<Message>,
 }
 
@@ -33,28 +30,16 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         api_client: W,
         storage: S,
         downloader: D,
+        emoji_map: EmojiMap<W>,
         msg_sender: mpsc::Sender<Message>,
     ) -> Result<Self> {
         info!("Initializing PostProcesser...");
-        let path = std::env::current_exe()?;
-        let tera_path = path
-            .parent()
-            .expect("the executable should have parent, maybe bugs in there")
-            .join("templates");
-        debug!("Loading templates from: {tera_path:?}");
-        let tera = create_tera(&tera_path)?;
-        let html_generator = HTMLGenerator::new(
-            api_client.clone(),
-            storage.clone(),
-            downloader.clone(),
-            tera,
-        );
         info!("PostProcesser initialized successfully.");
         Ok(Self {
             api_client,
             storage,
             downloader,
-            html_generator,
+            emoji_map,
             msg_sender,
         })
     }
@@ -64,7 +49,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         let pic_quality = get_config().read()?.picture_definition;
         debug!("Picture definition set to: {pic_quality:?}");
 
-        let emoji_map = self.html_generator.get_or_try_init_emoji().await.ok();
+        let emoji_map = self.emoji_map.get_or_try_init().await.ok();
 
         self.handle_picture(&posts, pic_quality, emoji_map, task_id)
             .await?;
@@ -77,10 +62,6 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
 
         info!("Finished processing posts for task {task_id}.");
         Ok(())
-    }
-
-    pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
-        self.html_generator.generate_html(posts, page_name).await
     }
 
     async fn handle_long_text(&self, post: &mut Post, task_id: u64) -> Result<()> {
@@ -170,6 +151,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::emoji_map::EmojiMap;
     use crate::mock::{media_downloader::MediaDownloaderMock, storage::StorageMock};
 
     fn create_mock_client() -> MockClient {
@@ -215,7 +197,8 @@ mod tests {
     ) -> PostProcesser<MockAPI, StorageMock, MediaDownloaderMock> {
         let storage = StorageMock::new();
         let downloader = MediaDownloaderMock::new();
-        PostProcesser::new(api, storage, downloader, msg_sender).unwrap()
+        let emoji_map = EmojiMap::new(api.clone());
+        PostProcesser::new(api, storage, downloader, emoji_map, msg_sender).unwrap()
     }
 
     #[tokio::test]
@@ -226,11 +209,7 @@ mod tests {
         let (msg_sender, _) = mpsc::channel(100);
         let processor = create_processor(api.clone(), msg_sender).await;
 
-        let emoji_map = processor
-            .html_generator
-            .get_or_try_init_emoji()
-            .await
-            .unwrap();
+        let emoji_map = processor.emoji_map.get_or_try_init().await.unwrap();
 
         let metas = extract_all_pic_metas(&posts, PictureDefinition::Large, Some(emoji_map));
 
