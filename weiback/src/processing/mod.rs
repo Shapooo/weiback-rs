@@ -4,15 +4,14 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
-use futures::future::try_join_all;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use log::{debug, error, info};
 use tokio::sync::mpsc;
 use weibosdk_rs::WeiboAPI;
 
 use crate::config::get_config;
-use crate::error::{Error, Result};
-use crate::exporter::{HTMLPage, HTMLPicture};
+use crate::error::Result;
+use crate::exporter::HTMLPage;
 use crate::media_downloader::MediaDownloader;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
@@ -25,7 +24,7 @@ pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
     api_client: W,
     storage: S,
     downloader: D,
-    html_generator: HTMLGenerator<W>,
+    html_generator: HTMLGenerator<W, S, D>,
     msg_sender: mpsc::Sender<Message>,
 }
 
@@ -44,7 +43,12 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .join("templates");
         debug!("Loading templates from: {tera_path:?}");
         let tera = create_tera(&tera_path)?;
-        let html_generator = HTMLGenerator::new(api_client.clone(), tera);
+        let html_generator = HTMLGenerator::new(
+            api_client.clone(),
+            storage.clone(),
+            downloader.clone(),
+            tera,
+        );
         info!("PostProcesser initialized successfully.");
         Ok(Self {
             api_client,
@@ -73,6 +77,10 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
 
         info!("Finished processing posts for task {task_id}.");
         Ok(())
+    }
+
+    pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
+        self.html_generator.generate_html(posts, page_name).await
     }
 
     async fn handle_long_text(&self, post: &mut Post, task_id: u64) -> Result<()> {
@@ -104,7 +112,7 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
         emoji_map: Option<&HashMap<String, String>>,
         task_id: u64,
     ) -> Result<()> {
-        let pic_metas = extract_all_pic_metas(&posts, pic_quality, emoji_map);
+        let pic_metas = extract_all_pic_metas(posts, pic_quality, emoji_map);
         info!("Found {} unique pictures to download.", pic_metas.len());
 
         stream::iter(pic_metas)
@@ -114,33 +122,6 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             })
             .await?;
         Ok(())
-    }
-
-    pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
-        info!("Generating HTML for {} posts.", posts.len());
-        let pic_quality = get_config().read()?.picture_definition;
-        let emoji_map = self.html_generator.get_or_try_init_emoji().await.ok();
-        debug!("Using picture quality: {pic_quality:?}");
-        let pic_metas = extract_all_pic_metas(&posts, pic_quality, emoji_map);
-        info!(
-            "Found {} unique pictures for HTML generation.",
-            pic_metas.len()
-        );
-        let pic_futures = pic_metas
-            .into_iter()
-            .map(|m| self.load_picture_from_local(m));
-        let pics = try_join_all(pic_futures).await?;
-        let pics = pics
-            .into_iter()
-            .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
-            .collect::<Result<Vec<_>>>()?;
-        debug!("Loaded {} pictures from local storage.", pics.len());
-        let content = self.html_generator.generate_page(posts, page_name).await?;
-        info!("HTML content generated successfully.");
-        Ok(HTMLPage {
-            html: content,
-            pics,
-        })
     }
 
     async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
@@ -169,73 +150,6 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
             .download_picture(task_id, url, callback)
             .await?;
         Ok(())
-    }
-
-    async fn load_picture_from_local(&self, pic_meta: PictureMeta) -> Result<Option<Picture>> {
-        Ok(self
-            .storage
-            .get_picture_blob(pic_meta.url())
-            .await?
-            .map(|blob| Picture {
-                meta: pic_meta,
-                blob,
-            }))
-    }
-
-    #[allow(unused)]
-    async fn load_picture_from_local_or_server(
-        &self,
-        task_id: u64,
-        pic_meta: PictureMeta,
-    ) -> Result<Picture> {
-        if let Some(blob) = self.storage.get_picture_blob(pic_meta.url()).await? {
-            Ok(Picture {
-                meta: pic_meta,
-                blob,
-            })
-        } else {
-            let storage = self.storage.clone();
-            let url = pic_meta.url().to_string();
-            let (sender, result) = tokio::sync::oneshot::channel();
-            let callback = Box::new(
-                move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
-                    Box::pin(async move {
-                        let pic = Picture {
-                            meta: pic_meta,
-                            blob,
-                        };
-                        storage.save_picture(&pic).await?;
-                        sender.send(pic).map_err(|pic| {
-                            Error::Tokio(format!("pic {} send failed", pic.meta.url()))
-                        })?;
-                        Ok(())
-                    })
-                },
-            );
-            self.downloader
-                .download_picture(task_id, url, callback)
-                .await?;
-            Ok(result.await?)
-        }
-    }
-
-    #[allow(unused)]
-    async fn get_pictures(
-        &self,
-        task_id: u64,
-        posts: &[Post],
-        definition: PictureDefinition,
-        emoji_map: Option<&HashMap<String, String>>,
-    ) -> Result<Vec<Picture>> {
-        let pic_metas = extract_all_pic_metas(posts, definition, emoji_map);
-        let mut pics = Vec::new();
-        for metas in pic_metas {
-            pics.push(
-                self.load_picture_from_local_or_server(task_id, metas)
-                    .await?,
-            );
-        }
-        Ok(pics)
     }
 }
 
