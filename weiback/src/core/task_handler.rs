@@ -3,14 +3,16 @@ use std::future::Future;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 use weibosdk_rs::WeiboAPI;
 
+use super::post_processer::PostProcesser;
 use crate::config::get_config;
 use crate::core::task::{BFOptions, BUOptions, ExportOptions};
+use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
+use crate::html_generator::{HTMLGenerator, create_tera};
 use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress, TaskType};
 use crate::models::Post;
-use crate::processing::PostProcesser;
 use crate::storage::Storage;
 
 #[derive(Debug, Clone)]
@@ -19,6 +21,7 @@ pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader>
     storage: S,
     exporter: E,
     processer: PostProcesser<W, S, D>,
+    html_generator: HTMLGenerator<W, S, D>,
     msg_sender: Sender<Message>,
 }
 
@@ -30,17 +33,31 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         downloader: D,
         msg_sender: Sender<Message>,
     ) -> Result<Self> {
+        let emoji_map = EmojiMap::new(api_client.clone());
+
         let processer = PostProcesser::new(
             api_client.clone(),
             storage.clone(),
-            downloader,
+            downloader.clone(),
+            emoji_map.clone(),
             msg_sender.clone(),
         )?;
+
+        let path = std::env::current_exe()?;
+        let tera_path = path
+            .parent()
+            .expect("the executable should have parent, maybe bugs in there")
+            .join("templates");
+        debug!("Loading templates from: {tera_path:?}");
+        let tera = create_tera(&tera_path)?;
+        let html_generator = HTMLGenerator::new(emoji_map, storage.clone(), downloader, tera);
+
         Ok(TaskHandler {
             api_client,
             storage,
             exporter,
             processer,
+            html_generator,
             msg_sender,
         })
     }
@@ -216,7 +233,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
             let page_name = format!("{}_{}", options.task_name, index);
             let html = self
-                .processer
+                .html_generator
                 .generate_html(local_posts, &page_name)
                 .await?;
             self.exporter
