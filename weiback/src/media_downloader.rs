@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use crate::error::Result;
 use crate::message::{ErrMsg, ErrType, Message};
 
-pub trait MediaDownloader {
+pub trait MediaDownloader: Clone + Send + Sync + 'static {
     async fn download_picture(
         &self,
         task_id: u64,
