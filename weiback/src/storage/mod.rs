@@ -250,7 +250,7 @@ mod tests {
             .unwrap();
         let api = MockAPI::from_session(client, Default::default());
         let mut posts = api.favorites(1).await.unwrap();
-        posts.extend(api.profile_statuses(42, 1).await.unwrap());
+        posts.extend(api.profile_statuses(1786055427, 1).await.unwrap());
         posts
     }
 

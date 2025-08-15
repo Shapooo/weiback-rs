@@ -159,7 +159,7 @@ mod tests {
             .await
             .unwrap()
             .into_iter()
-            .chain(api.profile_statuses(123, 1).await.unwrap())
+            .chain(api.profile_statuses(1786055427, 1).await.unwrap())
             .collect();
         posts
             .into_iter()
