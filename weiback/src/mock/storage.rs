@@ -15,7 +15,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Default)]
-pub struct StorageMock {
+pub struct MockStorage {
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -26,13 +26,13 @@ struct Inner {
     pictures: HashMap<String, Bytes>,
 }
 
-impl StorageMock {
+impl MockStorage {
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl Storage for StorageMock {
+impl Storage for MockStorage {
     async fn save_user(&self, user: &User) -> Result<()> {
         let mut inner = self.inner.lock().unwrap();
         inner.users.insert(user.id, user.clone());
@@ -211,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_and_get_posts() {
-        let storage = StorageMock::new();
+        let storage = MockStorage::new();
         let posts = create_posts().await;
         for post in posts.iter() {
             storage.save_post(post).await.unwrap();
@@ -222,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_and_get_user() {
-        let storage = StorageMock::new();
+        let storage = MockStorage::new();
         let posts = create_posts().await;
         let users = posts.into_iter().filter_map(|p| p.user);
         for user in users {
@@ -235,7 +235,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_favorites_logic() {
-        let storage = StorageMock::new();
+        let storage = MockStorage::new();
         let posts = create_posts().await;
 
         let mut favorated = 0;
@@ -275,7 +275,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_and_get_picture() {
-        let storage = StorageMock::new();
+        let storage = MockStorage::new();
         let picture = Picture {
             meta: crate::picture::PictureMeta::in_post("test_url".to_string(), 123),
             blob: Bytes::from_static(b"picture data"),

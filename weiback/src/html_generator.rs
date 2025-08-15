@@ -364,7 +364,7 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mock::{media_downloader::MediaDownloaderMock, storage::StorageMock};
+    use crate::mock::{media_downloader::MockMediaDownloader, storage::MockStorage};
     use std::path::PathBuf;
     use weibosdk_rs::{
         favorites::FavoritesAPI,
@@ -404,10 +404,10 @@ mod tests {
         MockAPI::from_session(client.clone(), Default::default())
     }
 
-    fn create_generator(api: &MockAPI) -> HTMLGenerator<MockAPI, StorageMock, MediaDownloaderMock> {
+    fn create_generator(api: &MockAPI) -> HTMLGenerator<MockAPI, MockStorage, MockMediaDownloader> {
         let tera = create_test_tera();
-        let storage = StorageMock::new();
-        let downloader = MediaDownloaderMock::new();
+        let storage = MockStorage::new();
+        let downloader = MockMediaDownloader::new();
         let emoji_map = EmojiMap::new(api.clone());
         HTMLGenerator::new(emoji_map, storage, downloader, tera)
     }

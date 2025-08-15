@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Default)]
-pub struct ExporterMock {
+pub struct MockExporter {
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -20,7 +20,7 @@ struct Inner {
     should_fail: bool,
 }
 
-impl ExporterMock {
+impl MockExporter {
     pub fn new() -> Self {
         Default::default()
     }
@@ -34,7 +34,7 @@ impl ExporterMock {
     }
 }
 
-impl Exporter for ExporterMock {
+impl Exporter for MockExporter {
     async fn export_page(
         &self,
         page: HTMLPage,

@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Default)]
-pub struct MediaDownloaderMock {
+pub struct MockMediaDownloader {
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -23,7 +23,7 @@ struct Inner {
     responses: HashMap<String, Result<Bytes>>,
 }
 
-impl MediaDownloaderMock {
+impl MockMediaDownloader {
     pub fn new() -> Self {
         Default::default()
     }
@@ -33,7 +33,7 @@ impl MediaDownloaderMock {
     }
 }
 
-impl MediaDownloader for MediaDownloaderMock {
+impl MediaDownloader for MockMediaDownloader {
     async fn download_picture(
         &self,
         _task_id: u64,
@@ -59,7 +59,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_picture_success() {
-        let mock_downloader = MediaDownloaderMock::new();
+        let mock_downloader = MockMediaDownloader::new();
         let url = "http://example.com/pic.jpg".to_string();
         let expected_data = Bytes::from_static(b"picture data");
         mock_downloader.add_response(url.clone(), Ok(expected_data.clone()));
@@ -82,7 +82,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_picture_error() {
-        let mock_downloader = MediaDownloaderMock::new();
+        let mock_downloader = MockMediaDownloader::new();
         let url = "http://example.com/pic.jpg".to_string();
         let error = Error::Io(io::Error::new(io::ErrorKind::NotFound, "not found"));
         mock_downloader.add_response(url.clone(), Err(error));
@@ -103,7 +103,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_picture_not_mocked() {
-        let mock_downloader = MediaDownloaderMock::new();
+        let mock_downloader = MockMediaDownloader::new();
         let url = "http://example.com/pic.jpg".to_string();
 
         let callback = Box::new(
