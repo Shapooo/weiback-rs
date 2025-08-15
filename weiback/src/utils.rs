@@ -190,6 +190,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
+    use weibosdk_rs::{
+        emoji::EmojiUpdateAPI,
+        favorites::FavoritesAPI,
+        mock::{MockAPI, MockClient},
+        profile_statuses::ProfileStatusesAPI,
+    };
 
     #[test]
     fn test_strip_url_queries() {
@@ -250,5 +258,100 @@ mod tests {
             "/path/to/file.txt".to_string()
         );
         assert_eq!(url_to_path("http://example.com").unwrap(), "/".to_string());
+    }
+
+    fn create_mock_api(client: &MockClient) -> MockAPI {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        client
+            .set_favorites_response_from_file(
+                manifest_dir.join("tests/data/favorites.json").as_path(),
+            )
+            .unwrap();
+        client
+            .set_profile_statuses_response_from_file(
+                manifest_dir
+                    .join("tests/data/profile_statuses.json")
+                    .as_path(),
+            )
+            .unwrap();
+        client
+            .set_emoji_update_response_from_file(
+                manifest_dir.join("tests/data/emoji.json").as_path(),
+            )
+            .unwrap();
+        MockAPI::from_session(client.clone(), Default::default())
+    }
+
+    async fn create_posts(api: &MockAPI) -> Vec<Post> {
+        let mut posts = api.favorites(0).await.unwrap();
+        posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
+        posts
+    }
+
+    #[tokio::test]
+    async fn test_extract_all_pic_metas1() {
+        let client = MockClient::new();
+        let api = create_mock_api(&client);
+        let emoji_map = api.emoji_update().await.unwrap();
+        let posts = create_posts(&api).await;
+        let set = extract_all_pic_metas(&posts, PictureDefinition::Original, Some(&emoji_map))
+            .into_iter()
+            .map(|p| pic_url_to_id(p.url()).unwrap().to_owned())
+            .collect::<HashSet<String>>();
+        let ids = posts
+            .into_iter()
+            .filter_map(|p| p.pic_ids)
+            .flat_map(|v| v)
+            .collect::<Vec<_>>();
+        for id in ids {
+            set.get(&id).unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_extract_all_pic_metas2() {
+        let client = MockClient::new();
+        let api = create_mock_api(&client);
+        let posts = create_posts(&api).await;
+        let emoji_map = api.emoji_update().await.unwrap();
+
+        let metas = extract_all_pic_metas(&posts, PictureDefinition::Large, Some(&emoji_map));
+
+        assert!(
+            !metas.is_empty(),
+            "No picture metadata was extracted, check test data files."
+        );
+
+        let has_in_post = metas
+            .iter()
+            .any(|m| matches!(m, PictureMeta::InPost { .. }));
+        let has_avatar = metas
+            .iter()
+            .any(|m| matches!(m, PictureMeta::Avatar { .. }));
+        let has_emoji = metas.iter().any(|m| m.url().contains("face.t.sinajs.cn"));
+
+        assert!(has_in_post, "Should extract in-post pictures");
+        assert!(has_avatar, "Should extract user avatars");
+        assert!(has_emoji, "Should extract emoji pictures");
+    }
+
+    #[tokio::test]
+    async fn test_pic_id_to_url() {
+        let client = MockClient::new();
+        let api = create_mock_api(&client);
+        let posts = create_posts(&api).await;
+        for post in posts {
+            if post.pic_ids.is_some() && !post.pic_ids.as_ref().unwrap().is_empty() {
+                for url in extract_in_post_pic_metas(&post, PictureDefinition::Original)
+                    .iter()
+                    .map(|p| p.url())
+                    .collect::<Vec<_>>()
+                {
+                    let pic_id = pic_url_to_id(&url).unwrap();
+                    let quality = PictureDefinition::Original;
+                    pic_id_to_url(&pic_id, post.pic_infos.as_ref().unwrap(), &quality);
+                }
+            }
+        }
     }
 }
