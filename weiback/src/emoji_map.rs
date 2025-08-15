@@ -37,7 +37,7 @@ mod tests {
     use super::*;
     use crate::error::Error;
     use std::path::Path;
-    use weibosdk_rs::{mock_api::MockAPI, mock_client::MockClient};
+    use weibosdk_rs::mock::{MockAPI, MockClient};
 
     #[tokio::test]
     async fn test_get_emoji_fail() {

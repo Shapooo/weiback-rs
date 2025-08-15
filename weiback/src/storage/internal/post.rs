@@ -340,7 +340,9 @@ mod tests {
     use super::*;
     use sqlx::SqlitePool;
     use weibosdk_rs::{
-        Post, favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        Post,
+        favorites::FavoritesAPI,
+        mock::{MockAPI, MockClient},
         profile_statuses::ProfileStatusesAPI,
     };
 

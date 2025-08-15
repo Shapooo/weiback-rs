@@ -216,7 +216,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use weibosdk_rs::{
-        favorites::FavoritesAPI, mock_api::MockAPI, mock_client::MockClient,
+        favorites::FavoritesAPI,
+        mock::{MockAPI, MockClient},
         profile_statuses::ProfileStatusesAPI,
     };
 
