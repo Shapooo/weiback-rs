@@ -211,7 +211,10 @@ impl Storage for StorageImpl {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::Path};
+    use std::{
+        collections::{HashMap, HashSet},
+        path::Path,
+    };
 
     use super::*;
     use tempfile::tempdir;
@@ -297,33 +300,34 @@ mod tests {
     async fn test_get_posts() {
         let storage = setup_storage().await;
         let posts = create_test_posts().await;
-        let mut sum = 0;
+        let mut ids = HashSet::new();
         for post in posts.iter() {
             if post.retweeted_status.is_some() {
-                sum += 1;
+                ids.insert(post.retweeted_status.as_ref().unwrap().id);
             }
-            sum += 1;
+            ids.insert(post.id);
             storage.save_post(post).await.unwrap();
         }
 
         let fetched_posts = storage.get_posts(0..=1000000, false).await.unwrap();
-        assert_eq!(fetched_posts.len(), sum);
+        assert_eq!(fetched_posts.len(), ids.len());
 
         let fetched_posts_rev = storage.get_posts(0..=1000000, true).await.unwrap();
-        assert_eq!(fetched_posts_rev.len(), sum);
+        assert_eq!(fetched_posts_rev.len(), ids.len());
     }
 
     #[tokio::test]
     async fn test_get_ones_posts() {
         let storage = setup_storage().await;
         let posts = create_test_posts().await;
-        let uid = posts
-            .iter()
-            .find_map(|p| p.user.as_ref().map(|u| u.id))
-            .unwrap();
+        let uid = 1786055427;
         let ones_posts_num = posts
             .iter()
-            .filter(|p| p.user.is_some() && p.user.as_ref().unwrap().id == uid)
+            .filter(|p| {
+                p.user.is_some() && p.user.as_ref().unwrap().id == uid
+                    || p.retweeted_status.is_some()
+                        && p.retweeted_status.as_ref().unwrap().id == uid
+            })
             .count();
 
         for post in posts.iter() {
