@@ -16,6 +16,7 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct MockMediaDownloader {
     inner: Arc<Mutex<Inner>>,
+    default_succ: bool,
 }
 
 #[derive(Debug, Default)]
@@ -24,8 +25,11 @@ struct Inner {
 }
 
 impl MockMediaDownloader {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(default_succ: bool) -> Self {
+        Self {
+            inner: Default::default(),
+            default_succ,
+        }
     }
 
     pub fn add_response(&self, url: String, response: Result<Bytes>) {
@@ -47,7 +51,14 @@ impl MediaDownloader for MockMediaDownloader {
                 Ok(())
             }
             Some(Err(e)) => Err(e),
-            None => Err(Error::InconsistentTask(format!("URL not mocked: {}", url))),
+            None => {
+                if self.default_succ {
+                    (callback)(Bytes::from("default media")).await?;
+                    Ok(())
+                } else {
+                    Err(Error::InconsistentTask(format!("URL not mocked: {}", url)))
+                }
+            }
         }
     }
 }
@@ -59,7 +70,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_picture_success() {
-        let mock_downloader = MockMediaDownloader::new();
+        let mock_downloader = MockMediaDownloader::new(true);
         let url = "http://example.com/pic.jpg".to_string();
         let expected_data = Bytes::from_static(b"picture data");
         mock_downloader.add_response(url.clone(), Ok(expected_data.clone()));
@@ -82,7 +93,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_picture_error() {
-        let mock_downloader = MockMediaDownloader::new();
+        let mock_downloader = MockMediaDownloader::new(true);
         let url = "http://example.com/pic.jpg".to_string();
         let error = Error::Io(io::Error::new(io::ErrorKind::NotFound, "not found"));
         mock_downloader.add_response(url.clone(), Err(error));
@@ -103,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_picture_not_mocked() {
-        let mock_downloader = MockMediaDownloader::new();
+        let mock_downloader = MockMediaDownloader::new(false);
         let url = "http://example.com/pic.jpg".to_string();
 
         let callback = Box::new(

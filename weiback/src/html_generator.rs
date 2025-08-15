@@ -407,7 +407,7 @@ mod tests {
     fn create_generator(api: &MockAPI) -> HTMLGenerator<MockAPI, MockStorage, MockMediaDownloader> {
         let tera = create_test_tera();
         let storage = MockStorage::new();
-        let downloader = MockMediaDownloader::new();
+        let downloader = MockMediaDownloader::new(true);
         let emoji_map = EmojiMap::new(api.clone());
         HTMLGenerator::new(emoji_map, storage, downloader, tera)
     }
