@@ -261,3 +261,137 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
         self.storage.get_favorited_sum().await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        core::task::BUOptions,
+        mock::{
+            exporter::MockExporter, media_downloader::MockMediaDownloader, storage::MockStorage,
+        },
+    };
+    use std::path::Path;
+    use tokio::sync::mpsc;
+    use weibosdk_rs::{
+        favorites::FavoritesAPI,
+        mock::{MockAPI, MockClient},
+        profile_statuses::ProfileStatusesAPI,
+    };
+
+    async fn create_posts(client: &MockClient, api: &MockAPI) -> Vec<Post> {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fav_path = manifest_dir.join("tests/data/favorites.json");
+        client.set_favorites_response_from_file(&fav_path).unwrap();
+        let prof_path = manifest_dir.join("tests/data/profile_statuses.json");
+        client
+            .set_profile_statuses_response_from_file(&prof_path)
+            .unwrap();
+        let mut posts = api.favorites(0).await.unwrap();
+        posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
+        posts
+    }
+
+    #[tokio::test]
+    async fn test_backup_user() {
+        let client = MockClient::new();
+        let api_client = MockAPI::from_session(client.clone(), Default::default());
+        let storage = MockStorage::new();
+        let exporter = MockExporter::new();
+        let downloader = MockMediaDownloader::new(true);
+        let (msg_sender, _recv) = mpsc::channel(100);
+        let task_handler = TaskHandler::new(
+            api_client.clone(),
+            storage.clone(),
+            exporter,
+            downloader,
+            msg_sender,
+        )
+        .unwrap();
+        let uid = 1786055427;
+        let posts = create_posts(&client, &api_client).await;
+        let mut ids = posts
+            .into_iter()
+            .filter_map(|p| {
+                if p.user.is_some() && p.user.as_ref().unwrap().id == uid {
+                    Some(p.id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        ids.sort();
+
+        let options = BUOptions {
+            uid: 1786055427,
+            range: 1..=1,
+        };
+        task_handler.backup_user(1, options).await.unwrap();
+        let ids_in_db = storage
+            .get_ones_posts(uid, 0..=100000, false)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|p| p.id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(ids_in_db, ids);
+    }
+
+    #[tokio::test]
+    async fn test_backup_favorites() {
+        let client = MockClient::new();
+        let api_client = MockAPI::from_session(client.clone(), Default::default());
+        let storage = MockStorage::new();
+        let exporter = MockExporter::new();
+        let downloader = MockMediaDownloader::new(true);
+        let (msg_sender, _recv) = mpsc::channel(100);
+        let task_handler = TaskHandler::new(
+            api_client.clone(),
+            storage.clone(),
+            exporter,
+            downloader,
+            msg_sender,
+        )
+        .unwrap();
+        let posts = create_posts(&client, &api_client).await;
+        let mut ids = posts
+            .iter()
+            .filter_map(|p| p.favorited.then_some(p.id))
+            .collect::<Vec<_>>();
+        ids.sort();
+
+        let options = BFOptions { range: 1..=1 };
+        task_handler.backup_favorites(1, options).await.unwrap();
+        let ids_in_db = storage
+            .get_favorites(0..=100000, false)
+            .await
+            .unwrap()
+            .iter()
+            .map(|p| p.id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids_in_db, ids);
+    }
+
+    #[tokio::test]
+    async fn test_export_from_local() {
+        let client = MockClient::new();
+        let api_client = MockAPI::from_session(client.clone(), Default::default());
+        let storage = MockStorage::new();
+        let exporter = MockExporter::new();
+        let downloader = MockMediaDownloader::new(true);
+        let (msg_sender, _recv) = mpsc::channel(100);
+        let task_handler =
+            TaskHandler::new(api_client, storage, exporter, downloader, msg_sender).unwrap();
+        let export_dir = Path::new("export_dir").into();
+        let task_name = "test".to_string();
+
+        let options = ExportOptions {
+            task_name,
+            range: 1..=20,
+            reverse: false,
+            export_dir,
+        };
+        task_handler.export_from_local(options).await.unwrap();
+    }
+}
