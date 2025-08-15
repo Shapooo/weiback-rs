@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::error::{Error, Result};
 use crate::models::Picture;
-use crate::utils::{page_name_to_resource_dir_name, url_to_filename};
+use crate::utils::{make_resource_dir_name, url_to_filename};
 use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
@@ -61,7 +61,7 @@ where {
         debug!("Successfully wrote HTML to {operating_path:?}");
 
         operating_path.pop();
-        let resources_dir_name = page_name_to_resource_dir_name(page_name);
+        let resources_dir_name = make_resource_dir_name(page_name);
         operating_path.push(resources_dir_name.clone());
         if !operating_path.exists() && !page.pics.is_empty() {
             dir_builder.create(operating_path.as_path()).await?;
@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(html_content, page.html);
 
         // Verify resources directory and picture files
-        let resources_path = export_dir.join(page_name_to_resource_dir_name(&page_name));
+        let resources_path = export_dir.join(make_resource_dir_name(&page_name));
         assert!(resources_path.exists());
         assert!(resources_path.is_dir());
 
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(html_content, page.html);
 
         // Verify resources directory is NOT created
-        let resources_path = export_dir.join(page_name_to_resource_dir_name(&page_name));
+        let resources_path = export_dir.join(make_resource_dir_name(&page_name));
         assert!(!resources_path.exists());
     }
 

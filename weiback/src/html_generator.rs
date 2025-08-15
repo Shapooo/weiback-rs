@@ -19,7 +19,7 @@ use crate::picture::Picture;
 use crate::storage::Storage;
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, extract_all_pic_metas,
-    page_name_to_resource_dir_name, pic_id_to_url, process_in_post_pics, url_to_filename,
+    make_resource_dir_name, pic_id_to_url, process_in_post_pics, url_to_filename,
 };
 
 pub fn create_tera(template_path: &Path) -> Result<Tera> {
@@ -60,7 +60,7 @@ impl<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         page_name: &str,
         emoji_map: Option<&HashMap<String, String>>,
     ) -> Result<String> {
-        let pic_folder = page_name_to_resource_dir_name(page_name);
+        let pic_folder = make_resource_dir_name(page_name);
         let pic_quality = get_config().read()?.picture_definition;
         let post = post_to_tera_value(post, &pic_folder, pic_quality, emoji_map)?;
 

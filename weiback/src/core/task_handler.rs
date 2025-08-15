@@ -14,6 +14,7 @@ use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress, TaskType};
 use crate::models::Post;
 use crate::storage::Storage;
+use crate::utils::make_page_name;
 
 #[derive(Debug, Clone)]
 pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
@@ -231,7 +232,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
                 break;
             }
 
-            let page_name = format!("{}_{}", options.task_name, index);
+            let page_name = make_page_name(&options.task_name, index);
             let html = self
                 .html_generator
                 .generate_html(local_posts, &page_name)
