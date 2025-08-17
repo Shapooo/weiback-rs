@@ -401,6 +401,11 @@ mod tests {
                 manifest_dir.join("tests/data/emoji.json").as_path(),
             )
             .unwrap();
+        client
+            .set_web_emoticon_response_from_file(
+                manifest_dir.join("tests/data/web_emoji.json").as_path(),
+            )
+            .unwrap();
         MockAPI::from_session(client.clone(), Default::default())
     }
 

@@ -14,12 +14,12 @@ use weiback::exporter::ExporterImpl;
 use weiback::media_downloader::{MediaDownloaderHandle, create_downloader};
 use weiback::message::{ErrMsg, Message, TaskProgress};
 use weiback::storage::StorageImpl;
-use weibosdk_rs::{WeiboAPIImpl as WAI, client::new_client_with_headers, weibo_api::LoginState};
+use weibosdk_rs::{Client, WeiboAPIImpl as WAI, weibo_api::LoginState};
 
 use error::{Error, Result};
 
 type TH = TaskHandler<WeiboAPIImpl, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
-type WeiboAPIImpl = WAI<reqwest::Client>;
+type WeiboAPIImpl = WAI<Client>;
 
 #[tauri::command]
 async fn backup_self(
@@ -160,10 +160,11 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let exporter = ExporterImpl::new();
     info!("Exporter initialized");
 
-    let http_client = new_client_with_headers()?;
+    let http_client = Client::new()?;
     info!("HTTP client created");
 
-    let (handle, worker) = create_downloader(100, http_client.clone(), msg_sender.clone());
+    let (handle, worker) =
+        create_downloader(100, http_client.main_client().clone(), msg_sender.clone());
     tauri::async_runtime::spawn(worker.run());
     info!("MediaDownloader initialized");
 

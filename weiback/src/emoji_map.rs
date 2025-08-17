@@ -53,6 +53,11 @@ mod tests {
                 manifest_dir.join("tests/data/emoji.json").as_path(),
             )
             .unwrap();
+        client
+            .set_web_emoticon_response_from_file(
+                manifest_dir.join("tests/data/web_emoji.json").as_path(),
+            )
+            .unwrap();
         let reference_emoji = api.emoji_update().await.unwrap();
         let emoji = emoji_map.get_or_try_init().await.unwrap();
         assert_eq!(&reference_emoji, emoji);
