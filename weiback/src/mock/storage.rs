@@ -178,9 +178,8 @@ mod tests {
     use super::*;
     use std::path::Path;
     use weibosdk_rs::{
-        favorites::FavoritesAPI,
+        FavoritesAPI, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     async fn create_posts() -> Vec<Post> {

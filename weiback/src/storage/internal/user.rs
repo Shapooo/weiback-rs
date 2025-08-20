@@ -127,9 +127,8 @@ mod tests {
     use crate::models::{Post, User};
     use sqlx::SqlitePool;
     use weibosdk_rs::{
-        favorites::FavoritesAPI,
+        FavoritesAPI, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     async fn setup_db() -> SqlitePool {

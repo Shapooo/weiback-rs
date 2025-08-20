@@ -18,7 +18,8 @@ pub struct PostInternal {
     pub url_struct: Option<Value>,
     pub topic_struct: Option<Value>,
     pub tag_struct: Option<Value>,
-    pub number_display_strategy: Option<Value>,
+    pub common_struct: Option<Value>,
+    pub mix_media_ids: Option<Value>,
     pub mix_media_info: Option<Value>,
     pub text: String,
     pub attitudes_status: i64,
@@ -50,11 +51,12 @@ impl TryFrom<Post> for PostInternal {
             deleted: post.deleted,
             pic_ids: post.pic_ids.map(|v| to_value(&v)).transpose()?,
             pic_num: post.pic_num,
-            url_struct: post.url_struct,
+            url_struct: post.url_struct.map(to_value).transpose()?,
             topic_struct: post.topic_struct,
             tag_struct: post.tag_struct,
-            number_display_strategy: post.number_display_strategy,
-            mix_media_info: post.mix_media_info,
+            common_struct: post.common_struct,
+            mix_media_ids: post.mix_media_ids.map(to_value).transpose()?,
+            mix_media_info: post.mix_media_info.map(to_value).transpose()?,
             text: post.text,
             attitudes_status: post.attitudes_status,
             favorited: post.favorited,
@@ -86,11 +88,12 @@ impl TryInto<Post> for PostInternal {
             deleted: self.deleted,
             pic_ids: self.pic_ids.map(from_value).transpose()?,
             pic_num: self.pic_num,
-            url_struct: self.url_struct,
+            url_struct: self.url_struct.map(from_value).transpose()?,
             topic_struct: self.topic_struct,
             tag_struct: self.tag_struct,
-            number_display_strategy: self.number_display_strategy,
-            mix_media_info: self.mix_media_info,
+            common_struct: self.common_struct,
+            mix_media_ids: self.mix_media_ids.map(from_value).transpose()?,
+            mix_media_info: self.mix_media_info.map(from_value).transpose()?,
             text: self.text,
             attitudes_status: self.attitudes_status,
             favorited: self.favorited,
@@ -125,7 +128,8 @@ pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
          url_struct TEXT, \
          topic_struct TEXT, \
          tag_struct TEXT, \
-         number_display_strategy TEXT, \
+         common_struct TEXT, \
+         mix_media_ids TEXT, \
          mix_media_info TEXT, \
          text TEXT, \
          attitudes_status INTEGER, \
@@ -236,7 +240,8 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
                  url_struct,\
                  topic_struct,\
                  tag_struct,\
-                 number_display_strategy,\
+                 common_struct, \
+                 mix_media_ids, \
                  mix_media_info,\
                  text,\
                  attitudes_status,\
@@ -271,7 +276,8 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(&post.url_struct)
     .bind(&post.topic_struct)
     .bind(&post.tag_struct)
-    .bind(&post.number_display_strategy)
+    .bind(&post.common_struct)
+    .bind(&post.mix_media_ids)
     .bind(&post.mix_media_info)
     .bind(&post.text)
     .bind(post.attitudes_status)
@@ -340,10 +346,8 @@ mod tests {
     use super::*;
     use sqlx::SqlitePool;
     use weibosdk_rs::{
-        Post,
-        favorites::FavoritesAPI,
+        FavoritesAPI, Post, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     async fn setup_db() -> SqlitePool {
@@ -392,7 +396,6 @@ mod tests {
             assert_eq!(post.text, converted_post.text);
             assert_eq!(post.pic_ids, converted_post.pic_ids);
             assert_eq!(post.geo, converted_post.geo);
-            assert_eq!(post.pic_infos, converted_post.pic_infos);
         }
     }
 

@@ -7,7 +7,7 @@ use futures::future::try_join_all;
 use log::{debug, info};
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
-use weibosdk_rs::emoji::EmojiUpdateAPI;
+use weibosdk_rs::EmojiUpdateAPI;
 
 use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
@@ -306,19 +306,16 @@ fn trans_topic(s: &str) -> Cow<str> {
         + "</a>"
 }
 
-fn trans_url<'a>(post: &Post, s: &'a str) -> Cow<'a, str> {
-    let mut url_title = Borrowed("网页链接");
-    let mut url = Borrowed(s);
-    if let Some(Value::Array(url_objs)) = post.url_struct.as_ref() {
-        if let Some(obj) = url_objs
-            .iter()
-            .find(|obj| obj["short_url"].is_string() && obj["short_url"].as_str().unwrap() == s)
-        {
-            assert!(obj["url_title"].is_string() && obj["long_url"].is_string());
-            url_title = Owned(obj["url_title"].as_str().unwrap().into());
-            url = Owned(obj["long_url"].as_str().unwrap().into());
-        }
-    }
+fn trans_url<'a>(post: &'a Post, s: &'a str) -> Cow<'a, str> {
+    let this_struct = post
+        .url_struct
+        .as_ref()
+        .and_then(|p| p.0.iter().find(|u| u.ori_url == s));
+    let url_title = this_struct
+        .map(|u| u.url_title.as_str())
+        .unwrap_or("网页链接");
+    let url = this_struct.and_then(|u| u.long_url.as_deref()).unwrap_or(s);
+
     Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
         + url
         + "\"><img class=\"bk-icon-link\" src=\"https://h5.sinaimg.cn/upload/2015/09/25/3/\
@@ -367,9 +364,8 @@ mod tests {
     use crate::mock::{media_downloader::MockMediaDownloader, storage::MockStorage};
     use std::path::PathBuf;
     use weibosdk_rs::{
-        favorites::FavoritesAPI,
+        FavoritesAPI, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     fn create_test_tera() -> Tera {

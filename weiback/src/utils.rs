@@ -4,8 +4,8 @@ use std::path::Path;
 use log::error;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde_json::Value;
 use url::Url;
+use weibosdk_rs::models::{PicInfoDetail, PicInfoItem};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
@@ -120,14 +120,28 @@ pub fn extract_all_pic_metas(
     pic_metas
 }
 
+fn def_to_picinfodetail<'a>(
+    quality: &'a PictureDefinition,
+    pic_info_item: &'a PicInfoItem,
+) -> &'a PicInfoDetail {
+    match quality {
+        PictureDefinition::Thumbnail => &pic_info_item.thumbnail,
+        PictureDefinition::Bmiddle => &pic_info_item.bmiddle,
+        PictureDefinition::Large => &pic_info_item.large,
+        PictureDefinition::Original => &pic_info_item.original,
+        PictureDefinition::Largest => &pic_info_item.largest,
+        PictureDefinition::Mw2000 => &pic_info_item.mw2000,
+    }
+}
+
 pub fn pic_id_to_url<'a>(
     pic_id: &'a str,
-    pic_infos: &'a HashMap<String, Value>,
+    pic_infos: &'a HashMap<String, PicInfoItem>,
     quality: &'a PictureDefinition,
 ) -> Option<&'a str> {
     pic_infos
         .get(pic_id)
-        .and_then(|v| v[Into::<&str>::into(quality)]["url"].as_str())
+        .map(|v| def_to_picinfodetail(quality, v).url.as_str())
 }
 
 fn extract_emoji_urls<'a>(
@@ -168,7 +182,7 @@ fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<
 
 pub fn process_in_post_pics<T, F>(post: &Post, mut f: F) -> Vec<T>
 where
-    F: FnMut(&str, &HashMap<String, Value>, &Post) -> Option<T>,
+    F: FnMut(&str, &HashMap<String, PicInfoItem>, &Post) -> Option<T>,
 {
     if let Some(retweeted_post) = &post.retweeted_status {
         process_in_post_pics(retweeted_post, f)
@@ -197,10 +211,8 @@ mod tests {
     use std::path::Path;
 
     use weibosdk_rs::{
-        emoji::EmojiUpdateAPI,
-        favorites::FavoritesAPI,
+        EmojiUpdateAPI, FavoritesAPI, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     #[test]

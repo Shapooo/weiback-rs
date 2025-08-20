@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::warn;
 use tokio::sync::OnceCell;
-use weibosdk_rs::emoji::EmojiUpdateAPI;
+use weibosdk_rs::EmojiUpdateAPI;
 
 use crate::error::Result;
 

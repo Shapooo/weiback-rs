@@ -219,9 +219,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use weibosdk_rs::{
-        favorites::FavoritesAPI,
+        FavoritesAPI, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     async fn setup_storage() -> StorageImpl {

@@ -274,9 +274,8 @@ mod tests {
     use std::path::Path;
     use tokio::sync::mpsc;
     use weibosdk_rs::{
-        favorites::FavoritesAPI,
+        FavoritesAPI, ProfileStatusesAPI,
         mock::{MockAPI, MockClient},
-        profile_statuses::ProfileStatusesAPI,
     };
 
     async fn create_posts(client: &MockClient, api: &MockAPI) -> Vec<Post> {

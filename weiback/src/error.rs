@@ -26,7 +26,7 @@ pub enum Error {
     Network(#[from] reqwest::Error),
 
     #[error("Api error: {0:?}")]
-    ApiError(weibosdk_rs::err_response::ErrResponse),
+    ApiError(weibosdk_rs::models::ErrResponse),
 
     #[error("Lock error: {0}")]
     Lock(String),
