@@ -20,22 +20,22 @@ macro_rules! here {
 
 pub static NEWLINE_EXPR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n").unwrap());
 pub static URL_EXPR: Lazy<Regex> = Lazy::new(|| {
-    Regex::new("(http|https)://[a-zA-Z0-9$%&~_#/.\\-:=,?]{5,280}")
+    Regex::new(r"(http|https)://[a-zA-Z0-9$%&~_#/.\-:=,?]{5,280}")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 pub static AT_EXPR: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"@[\\u4e00-\\u9fa5|\\uE7C7-\\uE7F3|\\w_\\-·]+")
+    Regex::new(r"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 pub static EMOJI_EXPR: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(\\[.*?\\])")
+    Regex::new(r"(\[.*?\])")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 pub static EMAIL_EXPR: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\\.)+[A-Za-z]{2,6}")
+    Regex::new(r"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
