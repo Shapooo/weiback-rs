@@ -198,8 +198,8 @@ mod tests {
             )
             .unwrap();
         client
-            .set_long_text_response_from_file(
-                manifest_dir.join("tests/data/long_text.json").as_path(),
+            .set_statuses_show_response_from_file(
+                manifest_dir.join("tests/data/statuses_show.json").as_path(),
             )
             .unwrap();
         let api = MockAPI::from_session(client.clone(), Default::default());

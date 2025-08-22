@@ -8,71 +8,68 @@ use crate::models::Post;
 
 #[derive(Debug, Clone, PartialEq, FromRow, serde::Serialize, serde::Deserialize)]
 pub struct PostInternal {
-    pub id: i64,
-    pub mblogid: String,
-    pub source: Option<String>,
-    pub region_name: Option<String>,
-    pub deleted: bool,
-    pub pic_ids: Option<Value>,
-    pub pic_num: Option<i64>,
-    pub url_struct: Option<Value>,
-    pub topic_struct: Option<Value>,
-    pub tag_struct: Option<Value>,
-    pub common_struct: Option<Value>,
-    pub mix_media_ids: Option<Value>,
-    pub mix_media_info: Option<Value>,
-    pub text: String,
-    pub attitudes_status: i64,
-    pub favorited: bool,
-    pub pic_infos: Option<Value>,
-    pub reposts_count: Option<i64>,
-    pub comments_count: Option<i64>,
     pub attitudes_count: Option<i64>,
-    pub repost_type: Option<i64>,
+    pub attitudes_status: i64,
+    pub comments_count: Option<i64>,
+    pub created_at: String,
+    pub deleted: bool,
     pub edit_count: Option<i64>,
+    pub favorited: bool,
+    pub geo: Option<Value>,
+    pub id: i64,
     #[sqlx(rename = "isLongText")]
     pub is_long_text: bool,
-    pub geo: Option<Value>,
+    #[sqlx(rename = "longText")]
+    pub long_text: Option<String>,
+    pub mblogid: String,
+    pub mix_media_ids: Option<Value>,
+    pub mix_media_info: Option<Value>,
     pub page_info: Option<Value>,
-    pub unfavorited: bool,
-    pub created_at: String,
+    pub pic_ids: Option<Value>,
+    pub pic_infos: Option<Value>,
+    pub pic_num: Option<i64>,
+    pub region_name: Option<String>,
+    pub reposts_count: Option<i64>,
+    pub repost_type: Option<i64>,
     pub retweeted_id: Option<i64>,
+    pub source: Option<String>,
+    pub text: String,
     pub uid: Option<i64>,
+    pub unfavorited: bool,
+    pub url_struct: Option<Value>,
 }
 
 impl TryFrom<Post> for PostInternal {
     type Error = Error;
     fn try_from(post: Post) -> Result<Self> {
         Ok(Self {
-            id: post.id,
-            mblogid: post.mblogid,
-            source: post.source,
-            region_name: post.region_name,
+            attitudes_count: post.attitudes_count,
+            attitudes_status: post.attitudes_status,
+            comments_count: post.comments_count,
+            created_at: post.created_at.to_rfc3339(),
             deleted: post.deleted,
-            pic_ids: post.pic_ids.map(|v| to_value(&v)).transpose()?,
-            pic_num: post.pic_num,
-            url_struct: post.url_struct.map(to_value).transpose()?,
-            topic_struct: post.topic_struct,
-            tag_struct: post.tag_struct,
-            common_struct: post.common_struct,
+            edit_count: post.edit_count,
+            favorited: post.favorited,
+            geo: post.geo,
+            id: post.id,
+            is_long_text: post.is_long_text,
+            long_text: post.long_text,
+            mblogid: post.mblogid,
             mix_media_ids: post.mix_media_ids.map(to_value).transpose()?,
             mix_media_info: post.mix_media_info.map(to_value).transpose()?,
-            text: post.text,
-            attitudes_status: post.attitudes_status,
-            favorited: post.favorited,
+            page_info: post.page_info.map(to_value).transpose()?,
+            pic_ids: post.pic_ids.map(|v| to_value(&v)).transpose()?,
             pic_infos: post.pic_infos.map(|h| to_value(&h)).transpose()?,
+            pic_num: post.pic_num,
+            region_name: post.region_name,
             reposts_count: post.reposts_count,
-            comments_count: post.comments_count,
-            attitudes_count: post.attitudes_count,
             repost_type: post.repost_type,
-            edit_count: post.edit_count,
-            is_long_text: post.is_long_text,
-            geo: post.geo,
-            page_info: post.page_info,
-            unfavorited: post.unfavorited,
-            created_at: post.created_at.to_rfc3339(),
             retweeted_id: post.retweeted_status.map(|r| r.id),
+            source: post.source,
+            text: post.text,
             uid: post.user.map(|u| u.id),
+            unfavorited: post.unfavorited,
+            url_struct: post.url_struct.map(to_value).transpose()?,
         })
     }
 }
@@ -81,34 +78,32 @@ impl TryInto<Post> for PostInternal {
     type Error = Error;
     fn try_into(self) -> Result<Post> {
         Ok(Post {
-            id: self.id,
-            mblogid: self.mblogid,
-            source: self.source,
-            region_name: self.region_name,
+            attitudes_count: self.attitudes_count,
+            attitudes_status: self.attitudes_status,
+            comments_count: self.comments_count,
+            created_at: DateTime::parse_from_rfc3339(&self.created_at)?,
             deleted: self.deleted,
-            pic_ids: self.pic_ids.map(from_value).transpose()?,
-            pic_num: self.pic_num,
-            url_struct: self.url_struct.map(from_value).transpose()?,
-            topic_struct: self.topic_struct,
-            tag_struct: self.tag_struct,
-            common_struct: self.common_struct,
+            edit_count: self.edit_count,
+            favorited: self.favorited,
+            geo: self.geo,
+            id: self.id,
+            is_long_text: self.is_long_text,
+            long_text: self.long_text,
+            mblogid: self.mblogid,
             mix_media_ids: self.mix_media_ids.map(from_value).transpose()?,
             mix_media_info: self.mix_media_info.map(from_value).transpose()?,
-            text: self.text,
-            attitudes_status: self.attitudes_status,
-            favorited: self.favorited,
+            page_info: self.page_info.map(from_value).transpose()?,
+            pic_ids: self.pic_ids.map(from_value).transpose()?,
             pic_infos: self.pic_infos.map(from_value).transpose()?,
+            pic_num: self.pic_num,
+            region_name: self.region_name,
             reposts_count: self.reposts_count,
-            comments_count: self.comments_count,
-            attitudes_count: self.attitudes_count,
             repost_type: self.repost_type,
-            edit_count: self.edit_count,
-            is_long_text: self.is_long_text,
-            geo: self.geo,
-            page_info: self.page_info,
-            unfavorited: self.unfavorited,
-            created_at: DateTime::parse_from_rfc3339(&self.created_at)?,
             retweeted_status: None,
+            source: self.source,
+            text: self.text,
+            unfavorited: self.unfavorited,
+            url_struct: self.url_struct.map(from_value).transpose()?,
             user: None,
         })
     }
@@ -118,35 +113,33 @@ pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
     info!("Creating post table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS posts ( \
-         id INTEGER PRIMARY KEY, \
-         mblogid TEXT, \
-         source TEXT, \
-         region_name TEXT, \
+         attitudes_count INTEGER, \
+         attitudes_status INTEGER, \
+         comments_count INTEGER, \
+         created_at TEXT, \
          deleted INTEGER, \
-         pic_ids TEXT, \
-         pic_num INTEGER, \
-         url_struct TEXT, \
-         topic_struct TEXT, \
-         tag_struct TEXT, \
-         common_struct TEXT, \
+         edit_count INTEGER, \
+         favorited INTEGER, \
+         geo TEXT, \
+         id INTEGER PRIMARY KEY, \
+         isLongText INTEGER, \
+         longText TEXT, \
+         mblogid TEXT, \
          mix_media_ids TEXT, \
          mix_media_info TEXT, \
-         text TEXT, \
-         attitudes_status INTEGER, \
-         favorited INTEGER, \
-         pic_infos TEXT, \
-         reposts_count INTEGER, \
-         comments_count INTEGER, \
-         attitudes_count INTEGER, \
-         repost_type INTEGER, \
-         edit_count INTEGER, \
-         isLongText INTEGER, \
-         geo TEXT, \
          page_info TEXT, \
-         unfavorited INTEGER, \
-         created_at TEXT, \
+         pic_ids TEXT, \
+         pic_infos TEXT, \
+         pic_num INTEGER, \
+         region_name TEXT, \
+         reposts_count INTEGER, \
+         repost_type INTEGER, \
          retweeted_id INTEGER, \
-         uid INTEGER \
+         source TEXT, \
+         text TEXT, \
+         uid INTEGER, \
+         unfavorited INTEGER, \
+         url_struct TEXT\
          )",
     )
     .execute(db)
@@ -230,71 +223,67 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     sqlx::query(
         format!(
             "INSERT OR {} INTO posts (\
-                 id,\
-                 mblogid,\
-                 source,\
-                 region_name,\
+                 attitudes_count,\
+                 attitudes_status,\
+                 comments_count,\
+                 created_at,\
                  deleted,\
-                 pic_ids,\
-                 pic_num,\
-                 url_struct,\
-                 topic_struct,\
-                 tag_struct,\
-                 common_struct, \
+                 edit_count,\
+                 favorited,\
+                 geo,\
+                 id,\
+                 isLongText,\
+                 longText,\
+                 mblogid,\
                  mix_media_ids, \
                  mix_media_info,\
-                 text,\
-                 attitudes_status,\
-                 favorited,\
-                 pic_infos,\
-                 reposts_count,\
-                 comments_count,\
-                 attitudes_count,\
-                 repost_type,\
-                 edit_count,\
-                 isLongText,\
-                 geo,\
                  page_info,\
-                 unfavorited,\
-                 created_at,\
+                 pic_ids,\
+                 pic_infos,\
+                 pic_num,\
+                 region_name,\
+                 reposts_count,\
+                 repost_type,\
                  retweeted_id,\
-                 uid)\
+                 source,\
+                 text,\
+                 uid,\
+                 unfavorited,\
+                 url_struct)\
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
-                 ?, ?, ?, ?, ?, ?, ?, ?)",
+                 ?, ?, ?, ?, ?, ?, ?)",
             if overwrite { "REPLACE" } else { "IGNORE" }
         )
         .as_str(),
     )
-    .bind(post.id)
-    .bind(&post.mblogid)
-    .bind(&post.source)
-    .bind(&post.region_name)
+    .bind(post.attitudes_count)
+    .bind(post.attitudes_status)
+    .bind(post.comments_count)
+    .bind(&post.created_at)
     .bind(post.deleted)
-    .bind(&post.pic_ids)
-    .bind(post.pic_num)
-    .bind(&post.url_struct)
-    .bind(&post.topic_struct)
-    .bind(&post.tag_struct)
-    .bind(&post.common_struct)
+    .bind(post.edit_count)
+    .bind(post.favorited)
+    .bind(&post.geo)
+    .bind(post.id)
+    .bind(post.is_long_text)
+    .bind(&post.long_text)
+    .bind(&post.mblogid)
     .bind(&post.mix_media_ids)
     .bind(&post.mix_media_info)
-    .bind(&post.text)
-    .bind(post.attitudes_status)
-    .bind(post.favorited)
-    .bind(&post.pic_infos)
-    .bind(post.reposts_count)
-    .bind(post.comments_count)
-    .bind(post.attitudes_count)
-    .bind(post.repost_type)
-    .bind(post.edit_count)
-    .bind(post.is_long_text)
-    .bind(&post.geo)
     .bind(&post.page_info)
-    .bind(post.unfavorited)
-    .bind(&post.created_at)
+    .bind(&post.pic_ids)
+    .bind(&post.pic_infos)
+    .bind(post.pic_num)
+    .bind(&post.region_name)
+    .bind(post.reposts_count)
+    .bind(post.repost_type)
     .bind(post.retweeted_id)
+    .bind(&post.source)
+    .bind(&post.text)
     .bind(post.uid)
+    .bind(post.unfavorited)
+    .bind(&post.url_struct)
     .execute(db)
     .await?;
     Ok(())

@@ -67,9 +67,9 @@ impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
     async fn handle_long_text(&self, post: &mut Post, task_id: u64) -> Result<()> {
         if post.is_long_text {
             debug!("Fetching long text for post {}.", post.id);
-            match self.api_client.get_long_text(post.id).await {
-                Ok(long_text) => {
-                    post.text = long_text;
+            match self.api_client.statuses_show(post.id).await {
+                Ok(n_post) => {
+                    post.text = n_post.long_text.unwrap();
                 }
                 Err(e) => {
                     error!("Failed to fetch long text for post {}: {}", post.id, e);

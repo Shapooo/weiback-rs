@@ -6,36 +6,29 @@ use crate::models::User;
 
 #[derive(Debug, Clone, FromRow, PartialEq)]
 pub struct UserInternal {
-    pub id: i64,
-    pub screen_name: String,
-    pub profile_image_url: String,
-    pub avatar_large: String,
     pub avatar_hd: String,
-    #[sqlx(default)]
-    pub verified: bool,
-    #[sqlx(default)]
-    pub verified_type: i64,
+    pub avatar_large: String,
     #[sqlx(default)]
     pub domain: String,
+    pub following: bool,
     #[sqlx(default)]
     pub follow_me: bool,
-    #[sqlx(default)]
-    pub following: bool,
+    pub id: i64,
+    pub profile_image_url: String,
+    pub screen_name: String,
 }
 
 impl From<User> for UserInternal {
     fn from(value: User) -> Self {
         Self {
-            id: value.id,
-            screen_name: value.screen_name,
-            profile_image_url: value.profile_image_url,
-            avatar_large: value.avatar_large,
             avatar_hd: value.avatar_hd,
-            verified: value.verified,
-            verified_type: value.verified_type,
+            avatar_large: value.avatar_large,
             domain: value.domain,
-            follow_me: value.follow_me,
             following: value.following,
+            follow_me: value.follow_me,
+            id: value.id,
+            profile_image_url: value.profile_image_url,
+            screen_name: value.screen_name,
         }
     }
 }
@@ -43,16 +36,14 @@ impl From<User> for UserInternal {
 impl From<UserInternal> for User {
     fn from(val: UserInternal) -> Self {
         Self {
-            id: val.id,
-            screen_name: val.screen_name,
-            profile_image_url: val.profile_image_url,
-            avatar_large: val.avatar_large,
             avatar_hd: val.avatar_hd,
-            verified: val.verified,
-            verified_type: val.verified_type,
+            avatar_large: val.avatar_large,
             domain: val.domain,
-            follow_me: val.follow_me,
             following: val.following,
+            follow_me: val.follow_me,
+            id: val.id,
+            profile_image_url: val.profile_image_url,
+            screen_name: val.screen_name,
         }
     }
 }
@@ -61,16 +52,14 @@ pub async fn create_user_table(db: &SqlitePool) -> Result<()> {
     info!("Creating user table if not exists...");
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS users ( \
-             id INTEGER PRIMARY KEY, \
-             screen_name TEXT, \
-             profile_image_url TEXT, \
-             avatar_large TEXT, \
              avatar_hd TEXT, \
-             verified INTEGER, \
-             verified_type INTEGER, \
+             avatar_large TEXT, \
              domain TEXT, \
+             following INTEGER, \
              follow_me INTEGER, \
-             following INTEGER \
+             id INTEGER PRIMARY KEY, \
+             profile_image_url TEXT, \
+             screen_name TEXT \
              )",
     )
     .execute(db)
@@ -90,30 +79,25 @@ pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
 pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
     let _ = sqlx::query(
         "INSERT OR IGNORE INTO users (\
-             id,\
-             screen_name,\
-             profile_image_url,\
-             avatar_large,\
              avatar_hd,\
-             verified,\
-             verified_type,\
+             avatar_large,\
              domain,\
+             following,\
              follow_me,\
-             following)\
+             id,\
+             profile_image_url,\
+             screen_name)\
              VALUES \
-             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(user.id)
-    .bind(&user.screen_name)
-    .bind(&user.profile_image_url)
-    .bind(&user.avatar_large)
     .bind(&user.avatar_hd)
-    .bind(user.verified)
-    .bind(user.verified_type)
+    .bind(&user.avatar_large)
     .bind(&user.domain)
-    .bind(user.follow_me)
     .bind(user.following)
-    .bind(false)
+    .bind(user.follow_me)
+    .bind(user.id)
+    .bind(&user.profile_image_url)
+    .bind(&user.screen_name)
     .execute(db)
     .await?;
     Ok(())

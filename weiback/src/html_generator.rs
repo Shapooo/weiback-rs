@@ -8,6 +8,7 @@ use log::{debug, info};
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
 use weibosdk_rs::EmojiUpdateAPI;
+use weibosdk_rs::models::UrlStruct;
 
 use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
@@ -214,22 +215,30 @@ fn trans_text(
     pic_folder: &Path,
     emoji_map: Option<&HashMap<String, String>>,
 ) -> Result<String> {
+    // find all email suffixes
     let emails_suffixes = EMAIL_EXPR
         .find_iter(&post.text)
         .filter_map(|m| AT_EXPR.find(m.as_str()).map(|m| m.as_str()))
         .collect::<HashSet<_>>();
+
+    // convert all '\n' to '<br />' newline tag
     let text = NEWLINE_EXPR.replace_all(&post.text, "<br />");
+
+    // convert all url to hyperlink
     let text = {
         let res = URL_EXPR
             .find_iter(&text)
             .fold((Borrowed(""), 0), |(acc, i), m| {
                 (
-                    acc + &text[i..m.start()] + trans_url(post, &text[m.start()..m.end()]),
+                    acc + &text[i..m.start()]
+                        + trans_url(post.url_struct.as_ref(), &text[m.start()..m.end()]),
                     m.end(),
                 )
             });
         res.0 + Borrowed(&text[res.1..])
     };
+
+    // convert all @ to hyperlink, except email suffixes
     let text = {
         let res = AT_EXPR
             .find_iter(&text)
@@ -242,6 +251,8 @@ fn trans_text(
             });
         res.0 + Borrowed(&text[res.1..])
     };
+
+    // convert all topic to hyperlink
     let text = {
         let res = TOPIC_EXPR
             .find_iter(&text)
@@ -253,13 +264,15 @@ fn trans_text(
             });
         res.0 + Borrowed(&text[res.1..])
     };
+
+    // convert all emoji mark to emoji pic
     let text = {
         let res = EMOJI_EXPR
             .find_iter(&text)
             .fold((Borrowed(""), 0), |(acc, i), m| {
                 (
                     acc + &text[i..m.start()]
-                        + trans_emoji(&text[m.start()..m.end()], pic_folder, emoji_map).unwrap(),
+                        + trans_emoji(&text[m.start()..m.end()], pic_folder, emoji_map),
                     m.end(),
                 )
             });
@@ -272,26 +285,24 @@ fn trans_emoji<'a>(
     s: &'a str,
     pic_folder: &'a Path,
     emoji_map: Option<&HashMap<String, String>>,
-) -> Result<Cow<'a, str>> {
-    if let Some(url) = emoji_map.and_then(|m| m.get(s)) {
-        let pic = PictureMeta::other(url.to_string());
-        let pic_name = url_to_filename(pic.url())?;
-        Ok(Borrowed(r#"<img class="bk-emoji" alt=""#)
-            + s
-            + r#"" title=""#
-            + s
-            + r#"" src=""#
-            + Owned(
-                pic_folder
-                    .join(pic_name)
-                    .into_os_string()
-                    .into_string()
-                    .map_err(|e| Error::FormatError(format!("contain invalid unicode in {e:?}")))?,
-            )
-            + r#"" />"#)
-    } else {
-        Ok(Borrowed(s))
-    }
+) -> Cow<'a, str> {
+    let Some(emoji_url) = emoji_map.and_then(|m| m.get(s)) else {
+        return s.into();
+    };
+    let Ok(pic_name) = url_to_filename(emoji_url) else {
+        return s.into();
+    };
+    let pic_path = pic_folder.join(pic_name);
+    let Some(pic_path) = pic_path.to_str() else {
+        return s.into();
+    };
+    Borrowed(r#"<img class="bk-emoji" alt=""#)
+        + s
+        + r#"" title=""#
+        + s
+        + r#"" src=""#
+        + Owned(pic_path.to_owned())
+        + r#"" />"#
 }
 
 fn trans_user(s: &str) -> Cow<str> {
@@ -306,11 +317,8 @@ fn trans_topic(s: &str) -> Cow<str> {
         + "</a>"
 }
 
-fn trans_url<'a>(post: &'a Post, s: &'a str) -> Cow<'a, str> {
-    let this_struct = post
-        .url_struct
-        .as_ref()
-        .and_then(|p| p.0.iter().find(|u| u.ori_url == s));
+fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, s: &'a str) -> Cow<'a, str> {
+    let this_struct = url_struct.and_then(|p| p.0.iter().find(|u| u.short_url == s));
     let url_title = this_struct
         .map(|u| u.url_title.as_str())
         .unwrap_or("网页链接");
