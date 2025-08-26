@@ -305,11 +305,11 @@ fn trans_emoji<'a>(
         + r#"" />"#
 }
 
-fn trans_user(s: &str) -> Cow<str> {
+fn trans_user(s: &str) -> Cow<'_, str> {
     Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#) + &s[1..] + "\">" + s + "</a>"
 }
 
-fn trans_topic(s: &str) -> Cow<str> {
+fn trans_topic(s: &str) -> Cow<'_, str> {
     Borrowed(r#"<a class ="bk-link" href="https://s.weibo.com/weibo?q="#)
         + s
         + r#"" target="_blank">"#

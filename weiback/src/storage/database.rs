@@ -35,11 +35,11 @@ pub async fn create_db_pool() -> Result<SqlitePool> {
         Ok(db_pool)
     } else {
         info!("Database file not found at {db_path:?}. Creating new database...");
-        if let Some(parent) = db_path.parent() {
-            if !parent.exists() {
-                info!("Creating parent directory for database: {parent:?}");
-                tokio::fs::create_dir_all(parent).await?;
-            }
+        if let Some(parent) = db_path.parent()
+            && !parent.exists()
+        {
+            info!("Creating parent directory for database: {parent:?}");
+            tokio::fs::create_dir_all(parent).await?;
         }
         Sqlite::create_database(db_path.to_str().unwrap()).await?;
         info!("Database file created. Connecting...");

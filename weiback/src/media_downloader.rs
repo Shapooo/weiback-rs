@@ -109,8 +109,8 @@ impl DownloaderWorker {
         }) = self.receiver.recv().await
         {
             debug!("Downloading picture from {url}");
-            if let Err(err) = self.process_task(&url, callback).await {
-                if let Err(e) = self
+            if let Err(err) = self.process_task(&url, callback).await
+                && let Err(e) = self
                     .msg_sender
                     .send(Message::Err(ErrMsg {
                         r#type: ErrType::DownPicFail { url },
@@ -118,10 +118,9 @@ impl DownloaderWorker {
                         err: err.to_string(),
                     }))
                     .await
-                {
-                    error!("message send failed, channel broke down: {e}");
-                    panic!("message send failed, channel broke down: {e}");
-                }
+            {
+                error!("message send failed, channel broke down: {e}");
+                panic!("message send failed, channel broke down: {e}");
             }
         }
         info!("Media downloader actor finished.");
