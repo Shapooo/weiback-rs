@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::error::{Error, Result};
 use crate::models::Picture;
-use crate::utils::{make_resource_dir_name, url_to_filename};
+use crate::utils::{make_html_file_name, make_resource_dir_name, url_to_filename};
 use std::convert::TryFrom;
 
 pub trait Exporter: Send + Sync {
@@ -51,7 +51,7 @@ where {
             )
             .into());
         }
-        let html_file_name = page_name.to_string() + ".html";
+        let html_file_name = make_html_file_name(page_name);
 
         let mut operating_path = export_dir.to_owned();
         debug!("Writing HTML to file: {operating_path:?}");
@@ -151,7 +151,7 @@ mod tests {
             .unwrap();
 
         // Verify HTML file
-        let html_path = export_dir.join(page_name.clone() + ".html");
+        let html_path = export_dir.join(make_html_file_name(&page_name));
         assert!(html_path.exists());
         let html_content = fs::read_to_string(html_path).unwrap();
         assert_eq!(html_content, page.html);
@@ -184,7 +184,8 @@ mod tests {
             .unwrap();
 
         // Verify HTML file
-        let html_path = export_dir.join(format!("{}.html", page_name));
+        let html_name = make_html_file_name(&page_name);
+        let html_path = export_dir.join(html_name);
         assert!(html_path.exists());
         let html_content = fs::read_to_string(html_path).unwrap();
         assert_eq!(html_content, page.html);
@@ -199,7 +200,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let export_dir = temp_dir.path();
         let page_name = "wont_work".to_string();
-        let html_path = export_dir.join(page_name.clone() + ".html");
+        let html_path = export_dir.join(make_html_file_name(&page_name));
         fs::write(&html_path, "hello").unwrap();
 
         let exporter = ExporterImpl::new();

@@ -93,6 +93,10 @@ pub fn make_resource_dir_name(page_name: &str) -> String {
     page_name.to_string() + "_files"
 }
 
+pub fn make_html_file_name(page_name: &str) -> String {
+    page_name.to_string() + ".html"
+}
+
 pub fn make_page_name(task_name: &str, index: i32) -> String {
     format!("{task_name}-{index}")
 }
