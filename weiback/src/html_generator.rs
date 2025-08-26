@@ -20,7 +20,7 @@ use crate::picture::Picture;
 use crate::storage::Storage;
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, extract_all_pic_metas,
-    make_resource_dir_name, pic_id_to_url, process_in_post_pics, url_to_filename,
+    extract_in_post_pic_paths, make_resource_dir_name, url_to_filename,
 };
 
 pub fn create_tera(template_path: &Path) -> Result<Tera> {
@@ -330,18 +330,6 @@ fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, s: &'a str) -> Cow<'a, str> 
                timeline_card_small_web_default.png\"/>"
         + url_title
         + "</a>"
-}
-
-fn extract_in_post_pic_paths(
-    post: &Post,
-    pic_folder: &Path,
-    pic_quality: PictureDefinition,
-) -> Vec<String> {
-    process_in_post_pics(post, |id, pic_infos, _| {
-        pic_id_to_url(id, pic_infos, &pic_quality)
-            .and_then(|url| url_to_filename(url).ok())
-            .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
-    })
 }
 
 fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {

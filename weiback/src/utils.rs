@@ -5,7 +5,7 @@ use log::error;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
-use weibosdk_rs::models::{PicInfoDetail, PicInfoItem};
+use weibosdk_rs::models::{MixMediaInfoItem, PicInfoDetail, PicInfoItem};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
@@ -124,7 +124,7 @@ pub fn extract_all_pic_metas(
     pic_metas
 }
 
-fn def_to_picinfodetail<'a>(
+pub fn def_to_pic_info_detail<'a>(
     quality: &'a PictureDefinition,
     pic_info_item: &'a PicInfoItem,
 ) -> &'a PicInfoDetail {
@@ -136,16 +136,6 @@ fn def_to_picinfodetail<'a>(
         PictureDefinition::Largest => &pic_info_item.largest,
         PictureDefinition::Mw2000 => &pic_info_item.mw2000,
     }
-}
-
-pub fn pic_id_to_url<'a>(
-    pic_id: &'a str,
-    pic_infos: &'a HashMap<String, PicInfoItem>,
-    quality: &'a PictureDefinition,
-) -> Option<&'a str> {
-    pic_infos
-        .get(pic_id)
-        .map(|v| def_to_picinfodetail(quality, v).url.as_str())
 }
 
 fn extract_emoji_urls<'a>(
@@ -178,32 +168,66 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
 }
 
 fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    process_in_post_pics(post, |id, pic_infos, post| {
-        pic_id_to_url(id, pic_infos, &definition)
-            .map(|url| PictureMeta::in_post(url.to_string(), post.id))
+    process_in_post_pics(post, |pic_info_item| {
+        Some(PictureMeta::in_post(
+            def_to_pic_info_detail(&definition, pic_info_item)
+                .url
+                .clone(),
+            post.id,
+        ))
     })
 }
 
-pub fn process_in_post_pics<T, F>(post: &Post, mut f: F) -> Vec<T>
+pub fn extract_in_post_pic_paths(
+    post: &Post,
+    pic_folder: &Path,
+    pic_quality: PictureDefinition,
+) -> Vec<String> {
+    process_in_post_pics(post, |pic_info_item| {
+        url_to_filename(
+            def_to_pic_info_detail(&pic_quality, pic_info_item)
+                .url
+                .as_str(),
+        )
+        .ok()
+        .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
+    })
+}
+
+fn process_in_post_pics<T, F>(post: &Post, f: F) -> Vec<T>
 where
-    F: FnMut(&str, &HashMap<String, PicInfoItem>, &Post) -> Option<T>,
+    F: Fn(&PicInfoItem) -> Option<T> + Copy,
 {
     if let Some(retweeted_post) = &post.retweeted_status {
-        process_in_post_pics(retweeted_post, f)
-    } else if let Some(pic_ids) = post.pic_ids.as_ref()
-        && !pic_ids.is_empty()
-    {
-        let Some(pic_infos) = post.pic_infos.as_ref() else {
+        return process_in_post_pics(retweeted_post, f);
+    }
+
+    if let Some(pic_ids) = post.pic_ids.as_ref() {
+        if let Some(pic_infos) = post.pic_infos.as_ref() {
+            pic_ids
+                .iter()
+                .filter_map(|id| pic_infos.get(id).and_then(f))
+                .collect()
+        } else if let Some(mix_media_info) = post.mix_media_info.as_ref() {
+            let map = mix_media_info
+                .items
+                .iter()
+                .filter_map(|i| match i {
+                    MixMediaInfoItem::Pic { id, data } => Some((id, data)),
+                    _ => None,
+                })
+                .collect::<HashMap<&String, &Box<PicInfoItem>>>();
+            pic_ids
+                .iter()
+                .filter_map(|id| map.get(id).and_then(|item| f(item.as_ref())))
+                .collect()
+        } else {
             error!(
                 "Missing pic_infos while pic_ids exists for post {}",
                 post.id
             );
-            return Default::default();
-        };
-        pic_ids
-            .iter()
-            .filter_map(|id| f(id, pic_infos, post))
-            .collect()
+            Default::default()
+        }
     } else {
         Default::default()
     }
@@ -299,6 +323,11 @@ mod tests {
                 manifest_dir.join("tests/data/emoji.json").as_path(),
             )
             .unwrap();
+        client
+            .set_web_emoticon_response_from_file(
+                manifest_dir.join("tests/data/web_emoji.json").as_path(),
+            )
+            .unwrap();
         MockAPI::from_session(client.clone(), Default::default())
     }
 
@@ -353,25 +382,5 @@ mod tests {
         assert!(has_in_post, "Should extract in-post pictures");
         assert!(has_avatar, "Should extract user avatars");
         assert!(has_emoji, "Should extract emoji pictures");
-    }
-
-    #[tokio::test]
-    async fn test_pic_id_to_url() {
-        let client = MockClient::new();
-        let api = create_mock_api(&client);
-        let posts = create_posts(&api).await;
-        for post in posts {
-            if post.pic_ids.is_some() && !post.pic_ids.as_ref().unwrap().is_empty() {
-                for url in extract_in_post_pic_metas(&post, PictureDefinition::Original)
-                    .iter()
-                    .map(|p| p.url())
-                    .collect::<Vec<_>>()
-                {
-                    let pic_id = pic_url_to_id(&url).unwrap();
-                    let quality = PictureDefinition::Original;
-                    pic_id_to_url(&pic_id, post.pic_infos.as_ref().unwrap(), &quality);
-                }
-            }
-        }
     }
 }
