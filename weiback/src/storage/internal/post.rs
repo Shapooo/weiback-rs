@@ -392,13 +392,20 @@ mod tests {
     async fn test_save_and_get_post() {
         let db = setup_db().await;
         let posts = create_test_posts().await;
-        for post in posts {
+        for mut post in posts {
             let internal_post: PostInternal = post.clone().try_into().unwrap();
-
             save_post(&db, &internal_post, false).await.unwrap();
 
-            let fetched_post = get_post(&db, post.id).await.unwrap().unwrap();
-            assert_eq!(internal_post, fetched_post);
+            let fetched_post = get_post(&db, post.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .try_into()
+                .unwrap();
+
+            post.user.take();
+            post.retweeted_status.take();
+            assert_eq!(post, fetched_post);
         }
     }
 
