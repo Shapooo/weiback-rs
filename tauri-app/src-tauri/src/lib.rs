@@ -23,7 +23,7 @@ type WeiboAPIImpl = WAI<Client>;
 
 #[tauri::command]
 async fn backup_self(
-    core: State<'_, Mutex<Core>>,
+    core: State<'_, Core>,
     api_client: State<'_, Mutex<WeiboAPIImpl>>,
     range: RangeInclusive<u32>,
 ) -> Result<()> {
@@ -33,15 +33,9 @@ async fn backup_self(
 }
 
 #[tauri::command]
-async fn backup_user(
-    core: State<'_, Mutex<Core>>,
-    uid: String,
-    range: RangeInclusive<u32>,
-) -> Result<()> {
+async fn backup_user(core: State<'_, Core>, uid: String, range: RangeInclusive<u32>) -> Result<()> {
     info!("backup_user called with uid: {uid}, range: {range:?}");
     Ok(core
-        .lock()
-        .await
         .backup_user(TaskRequest::BackupUser(BUOptions {
             uid: uid.parse().map_err(|err| {
                 error!("Failed to parse uid: {err}");
@@ -53,19 +47,17 @@ async fn backup_user(
 }
 
 #[tauri::command]
-async fn backup_favorites(core: State<'_, Mutex<Core>>, range: RangeInclusive<u32>) -> Result<()> {
+async fn backup_favorites(core: State<'_, Core>, range: RangeInclusive<u32>) -> Result<()> {
     info!("backup_favorites called with range: {range:?}");
     Ok(core
-        .lock()
-        .await
         .backup_favorites(TaskRequest::BackupFavorites(BFOptions { range }))
         .await?)
 }
 
 #[tauri::command]
-async fn unfavorite_posts(core: State<'_, Mutex<Core>>) -> Result<()> {
+async fn unfavorite_posts(core: State<'_, Core>) -> Result<()> {
     info!("unfavorite_posts called");
-    Ok(core.lock().await.unfavorite_posts().await?)
+    Ok(core.unfavorite_posts().await?)
 }
 
 #[tauri::command]
@@ -136,7 +128,10 @@ pub fn run() -> Result<()> {
             login
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application"); // TODO
+        .map_err(|e| {
+            error!("{e}");
+            e
+        })?;
     Ok(())
 }
 
