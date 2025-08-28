@@ -181,7 +181,16 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     ));
     app.manage(core);
     app.manage(task_handler);
-    app.manage(Mutex::new(api_client));
+    app.manage(Mutex::new(api_client.clone()));
+
+    if let Ok(session) = Session::load(config.session_path.as_path()) {
+        tauri::async_runtime::spawn_blocking(async move || {
+            if let Err(e) = api_client.clone().login_with_session(session).await {
+                error!("{e}");
+            }
+        });
+    }
+
     info!("Tauri setup complete");
     Ok(())
 }
