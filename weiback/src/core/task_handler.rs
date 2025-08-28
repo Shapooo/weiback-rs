@@ -44,13 +44,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
             msg_sender.clone(),
         )?;
 
-        let path = std::env::current_exe()?;
-        let tera_path = path
-            .parent()
-            .expect("the executable should have parent, maybe bugs in there")
-            .join("templates");
-        debug!("Loading templates from: {tera_path:?}");
-        let tera = create_tera(&tera_path)?;
+        let tera = create_tera(crate::config::get_config().read()?.templates_path.as_path())?;
         let html_generator = HTMLGenerator::new(emoji_map, storage.clone(), downloader, tera);
 
         Ok(TaskHandler {
