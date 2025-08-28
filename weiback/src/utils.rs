@@ -5,7 +5,7 @@ use log::error;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
-use weibosdk_rs::models::{MixMediaInfoItem, PicInfoDetail, PicInfoItem};
+use weibosdk_rs::models::{MixMediaInfoItem, PicInfoDetail, PicInfoItem, PicInfosForStatusItem};
 
 use crate::error::{Error, Result};
 use crate::models::Post;
@@ -119,15 +119,20 @@ pub fn extract_all_pic_metas(
         .iter()
         .flat_map(extract_avatar_metas)
         .collect::<Vec<_>>();
+    let hyperlink_pic_metas = posts
+        .iter()
+        .flat_map(|post| extract_hyperlink_pic_metas(post, definition))
+        .collect::<Vec<_>>();
     pic_metas.extend(emoji_metas);
     pic_metas.extend(avatar_metas);
+    pic_metas.extend(hyperlink_pic_metas);
     pic_metas
 }
 
-pub fn def_to_pic_info_detail<'a>(
-    quality: &'a PictureDefinition,
-    pic_info_item: &'a PicInfoItem,
-) -> &'a PicInfoDetail {
+pub fn def_to_pic_info_detail(
+    pic_info_item: &PicInfoItem,
+    quality: PictureDefinition,
+) -> &PicInfoDetail {
     match quality {
         PictureDefinition::Thumbnail => &pic_info_item.thumbnail,
         PictureDefinition::Bmiddle => &pic_info_item.bmiddle,
@@ -136,6 +141,32 @@ pub fn def_to_pic_info_detail<'a>(
         PictureDefinition::Largest => &pic_info_item.largest,
         PictureDefinition::Mw2000 => &pic_info_item.mw2000,
     }
+}
+
+fn def_to_url_struct_detail(
+    pic_info_item: &PicInfosForStatusItem,
+    definition: PictureDefinition,
+) -> &PicInfoDetail {
+    match definition {
+        PictureDefinition::Thumbnail => &pic_info_item.thumbnail,
+        PictureDefinition::Bmiddle => &pic_info_item.bmiddle,
+        PictureDefinition::Large => &pic_info_item.large,
+        PictureDefinition::Original => &pic_info_item.woriginal,
+        PictureDefinition::Largest => &pic_info_item.woriginal,
+        PictureDefinition::Mw2000 => &pic_info_item.woriginal,
+    }
+}
+
+fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
+    let Some(url_struct) = post.url_struct.as_ref() else {
+        return Default::default();
+    };
+    url_struct
+        .0
+        .iter()
+        .filter_map(|i| i.pic_infos.as_ref())
+        .map(|p| PictureMeta::in_post(def_to_url_struct_detail(p, definition).url.clone(), post.id))
+        .collect()
 }
 
 fn extract_emoji_urls<'a>(
@@ -168,9 +199,9 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
 }
 
 fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    process_in_post_pics(post, |pic_info_item| {
+    process_in_post_pics(post, move |pic_info_item| {
         Some(PictureMeta::in_post(
-            def_to_pic_info_detail(&definition, pic_info_item)
+            def_to_pic_info_detail(pic_info_item, definition)
                 .url
                 .clone(),
             post.id,
@@ -181,11 +212,11 @@ fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<
 pub fn extract_in_post_pic_paths(
     post: &Post,
     pic_folder: &Path,
-    pic_quality: PictureDefinition,
+    definition: PictureDefinition,
 ) -> Vec<String> {
     process_in_post_pics(post, |pic_info_item| {
         url_to_filename(
-            def_to_pic_info_detail(&pic_quality, pic_info_item)
+            def_to_pic_info_detail(pic_info_item, definition)
                 .url
                 .as_str(),
         )
