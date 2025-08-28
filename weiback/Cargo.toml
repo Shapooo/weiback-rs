@@ -13,14 +13,11 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
-image = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-tauri = { workspace = true }
-tauri-plugin-opener = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -31,7 +28,6 @@ url = { workspace = true }
 weibosdk-rs = { workspace = true }
 
 [dev-dependencies]
-flate2 = "1.0.34"
-mockito = "1.5.0"
-tempfile = "3.20.0"
+mockito = "1"
+tempfile = "3"
 weibosdk-rs = { workspace = true, features = ["test-mocks"] }
