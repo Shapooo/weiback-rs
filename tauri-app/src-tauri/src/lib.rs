@@ -1,11 +1,14 @@
 mod error;
+mod status_manager;
 
 use std::ops::RangeInclusive;
+use std::sync::{Arc, Mutex};
 
 use log::{debug, error, info, warn};
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
-use tokio::sync::{Mutex, mpsc};
-use weiback::config::get_config;
+use tokio::sync::mpsc;
+
+use weiback::config::{self, get_config};
 use weiback::core::{
     BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
     task_manager::TaskManger,
@@ -17,6 +20,7 @@ use weiback::storage::StorageImpl;
 use weibosdk_rs::{Client, WeiboAPIImpl as WAI, weibo_api::LoginState};
 
 use error::{Error, Result};
+use status_manager::StatusManager;
 
 type TH = TaskHandler<WeiboAPIImpl, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 type WeiboAPIImpl = WAI<Client>;
@@ -28,7 +32,14 @@ async fn backup_self(
     range: RangeInclusive<u32>,
 ) -> Result<()> {
     info!("backup_self called with range: {range:?}");
-    let uid = api_client.lock().await.session()?.uid.clone();
+    let uid = api_client
+        .lock()
+        .unwrap()
+        .session()?
+        .lock()
+        .unwrap()
+        .uid
+        .clone();
     backup_user(core, uid, range).await
 }
 
@@ -71,7 +82,10 @@ async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u3
 }
 
 #[tauri::command]
-async fn send_code(api_client: State<'_, Mutex<WeiboAPIImpl>>, phone_number: String) -> Result<()> {
+async fn send_code(
+    api_client: State<'_, tokio::sync::Mutex<WeiboAPIImpl>>,
+    phone_number: String,
+) -> Result<()> {
     info!(
         "send_code called for phone number (partially hidden): ...{}",
         &phone_number.chars().skip(7).collect::<String>()
@@ -91,13 +105,20 @@ async fn send_code(api_client: State<'_, Mutex<WeiboAPIImpl>>, phone_number: Str
 }
 
 #[tauri::command]
-async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> Result<()> {
+async fn login(
+    api_client: State<'_, tokio::sync::Mutex<WeiboAPIImpl>>,
+    status_manager: State<'_, StatusManager>,
+    sms_code: String,
+) -> Result<()> {
     info!("login called with a sms_code");
     let mut api_client = api_client.lock().await;
     match api_client.login_state() {
         LoginState::WaitingForCode { .. } => {
             info!("Attempting to login with SMS code.");
             api_client.login(&sms_code).await?;
+            if let LoginState::LoggedIn { session } = api_client.login_state() {
+                status_manager.set_session(session.clone());
+            }
             info!("Login successful.");
             Ok(())
         }
@@ -110,6 +131,14 @@ async fn login(api_client: State<'_, Mutex<WeiboAPIImpl>>, sms_code: String) -> 
             Err(Error("FATAL: wrong login state to login".to_string()))
         }
     }
+}
+
+#[tauri::command]
+fn login_status(status_manager: State<'_, StatusManager>) -> Result<Option<String>> {
+    info!("get login status");
+    Ok(status_manager
+        .session()
+        .map(|s| s.lock().unwrap().uid.clone()))
 }
 
 pub fn run() -> Result<()> {
@@ -125,7 +154,8 @@ pub fn run() -> Result<()> {
             unfavorite_posts,
             export_from_local,
             send_code,
-            login
+            login,
+            login_status
         ])
         .run(tauri::generate_context!())
         .map_err(|e| {
@@ -163,7 +193,7 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     tauri::async_runtime::spawn(worker.run());
     info!("MediaDownloader initialized");
 
-    let api_client = WeiboAPIImpl::new(http_client.clone(), weibo_api_config);
+    let mut api_client = WeiboAPIImpl::new(http_client.clone(), config.weibo_api_config.clone());
     info!("WeiboAPIImpl initialized");
 
     let task_handler = TaskHandler::new(api_client.clone(), storage, exporter, handle, msg_sender)?;
@@ -171,6 +201,8 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let core = Core::new(task_handler.clone())?;
     info!("Core initialized");
+
+    let status_manager = StatusManager::new();
 
     info!("Setting up Tauri application");
 
@@ -184,12 +216,15 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     app.manage(Mutex::new(api_client.clone()));
 
     if let Ok(session) = Session::load(config.session_path.as_path()) {
+        let session = Arc::new(Mutex::new(session));
+        status_manager.set_session(session.clone());
         tauri::async_runtime::spawn_blocking(async move || {
-            if let Err(e) = api_client.clone().login_with_session(session).await {
+            if let Err(e) = api_client.login_with_session(session).await {
                 error!("{e}");
             }
         });
     }
+    app.manage(status_manager);
 
     info!("Tauri setup complete");
     Ok(())
