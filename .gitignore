@@ -21,3 +21,5 @@ target/
 tauri-app/src-tauri/gen/schemas
 
 **/node_modules/
+
+tauri-app/dist
