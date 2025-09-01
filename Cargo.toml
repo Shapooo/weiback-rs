@@ -1,5 +1,5 @@
 [workspace]
-members = ["weiback", "tauri-app/src-tauri"]
+members = ["weiback", "tauri-app/src-tauri", "tools"]
 resolver = "3"
 
 [workspace.package]

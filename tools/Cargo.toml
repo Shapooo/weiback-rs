@@ -1,0 +1,19 @@
+[package]
+name = "tools"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "db-upgrade-tool"
+path = "src/db-upgrade-tool.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+env_logger.workspace = true
+log.workspace = true
+once_cell.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true

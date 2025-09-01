@@ -5348,14 +5348,9 @@ name = "tauri-app"
 version = "0.2.4"
 dependencies = [
  "anyhow",
- "chrono",
  "env_logger",
  "log",
- "once_cell",
- "regex",
- "reqwest",
  "serde_json",
- "sqlx",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
@@ -5887,6 +5882,21 @@ name = "toml_writer"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
+
+[[package]]
+name = "tools"
+version = "0.2.4"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "env_logger",
+ "log",
+ "once_cell",
+ "regex",
+ "serde_json",
+ "sqlx",
+ "tokio",
+]
 
 [[package]]
 name = "tower"

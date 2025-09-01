@@ -9,21 +9,12 @@ default-run = "weiback-rs"
 name = "weiback-rs"
 path = "src/bin/weiback-rs/main.rs"
 
-[[bin]]
-name = "db-upgrade-tool"
-path = "src/bin/db-upgrade-tool.rs"
-
 [dependencies]
-chrono = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
-once_cell = { workspace = true }
-regex = { workspace = true }
-reqwest = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 serde_json = { workspace = true }
-sqlx = { workspace = true }
 tokio = { workspace = true }
 weibosdk-rs = { workspace = true }
 weiback-rs = { path = "../../weiback" }
