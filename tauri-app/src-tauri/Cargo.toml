@@ -10,15 +10,15 @@ name = "weiback-rs"
 path = "src/bin/weiback-rs/main.rs"
 
 [dependencies]
+anyhow = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
+serde_json = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-opener = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
-weibosdk-rs = { workspace = true }
 weiback-rs = { path = "../../weiback" }
-anyhow = "1.0.98"
+weibosdk-rs = { workspace = true }
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { workspace = true }
