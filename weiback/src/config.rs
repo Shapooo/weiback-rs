@@ -37,7 +37,7 @@ impl Default for Config {
         let config_dir = dirs::config_dir().unwrap_or_default().join("weiback");
         let data_dir = dirs::data_dir().unwrap_or_default().join("weiback");
         Self {
-            db_path: config_dir.join("weiback.db"),
+            db_path: data_dir.join("weiback.db"),
             templates_path: data_dir.join("templates"),
             session_path: config_dir.join("session.json"),
             download_pictures: true,
@@ -45,7 +45,7 @@ impl Default for Config {
             backup_task_interval: Duration::from_secs(3),
             other_task_interval: Duration::from_secs(1),
             posts_per_html: 200,
-            picture_path: PathBuf::from("resources/pictures"),
+            picture_path: data_dir.join("pictures"),
             weibo_api_config: Default::default(),
         }
     }
