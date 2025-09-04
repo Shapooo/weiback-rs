@@ -8,7 +8,8 @@ use log::{debug, error, info, warn};
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
 
-use weiback::config::{self, get_config};
+use weiback::api::DefaultApiClient;
+use weiback::config::get_config;
 use weiback::core::{
     BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
     task_manager::TaskManger,
@@ -17,18 +18,19 @@ use weiback::exporter::ExporterImpl;
 use weiback::media_downloader::{MediaDownloaderHandle, create_downloader};
 use weiback::message::{ErrMsg, Message, TaskProgress};
 use weiback::storage::StorageImpl;
-use weibosdk_rs::{Client, WeiboAPIImpl as WAI, weibo_api::LoginState};
+use weibosdk_rs::{
+    ApiClient as SdkApiClient, Client as HttpClient, api_client::LoginState, session::Session,
+};
 
 use error::{Error, Result};
 use status_manager::StatusManager;
 
-type TH = TaskHandler<WeiboAPIImpl, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
-type WeiboAPIImpl = WAI<Client>;
+type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 
 #[tauri::command]
 async fn backup_self(
     core: State<'_, Core>,
-    api_client: State<'_, Mutex<WeiboAPIImpl>>,
+    api_client: State<'_, Mutex<SdkApiClient<HttpClient>>>,
     range: RangeInclusive<u32>,
 ) -> Result<()> {
     info!("backup_self called with range: {range:?}");
@@ -83,7 +85,7 @@ async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u3
 
 #[tauri::command]
 async fn send_code(
-    api_client: State<'_, tokio::sync::Mutex<WeiboAPIImpl>>,
+    api_client: State<'_, tokio::sync::Mutex<SdkApiClient<HttpClient>>>,
     phone_number: String,
 ) -> Result<()> {
     info!(
@@ -106,7 +108,7 @@ async fn send_code(
 
 #[tauri::command]
 async fn login(
-    api_client: State<'_, tokio::sync::Mutex<WeiboAPIImpl>>,
+    api_client: State<'_, tokio::sync::Mutex<SdkApiClient<HttpClient>>>,
     status_manager: State<'_, StatusManager>,
     sms_code: String,
 ) -> Result<()> {
@@ -143,6 +145,7 @@ fn login_status(status_manager: State<'_, StatusManager>) -> Result<Option<Strin
 
 pub fn run() -> Result<()> {
     info!("Starting application");
+    weiback::config::init()?;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -166,15 +169,12 @@ pub fn run() -> Result<()> {
 }
 
 fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let weibo_api_config = get_config()
-        .read()
-        .map_err(|e| {
-            error!("Failed to read config: {e}");
-            anyhow::anyhow!("{e}")
-        })?
-        .weibo_api_config
-        .clone();
-    debug!("Weibo API config loaded: {weibo_api_config:?}");
+    let main_config = get_config();
+    let main_config = main_config.read().map_err(|e| {
+        error!("Failed to read config: {e}");
+        anyhow::anyhow!("{e}")
+    })?;
+    debug!("Weibo API config loaded: {main_config:?}");
 
     let (msg_sender, msg_receiver) = mpsc::channel(100);
     info!("MPSC channel created");
@@ -185,7 +185,7 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let exporter = ExporterImpl::new();
     info!("Exporter initialized");
 
-    let http_client = Client::new()?;
+    let http_client = HttpClient::new()?;
     info!("HTTP client created");
 
     let (handle, worker) =
@@ -193,10 +193,12 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     tauri::async_runtime::spawn(worker.run());
     info!("MediaDownloader initialized");
 
-    let mut api_client = WeiboAPIImpl::new(http_client.clone(), config.weibo_api_config.clone());
+    let mut sdk_api_client = SdkApiClient::new(http_client.clone(), main_config.sdk_config.clone());
     info!("WeiboAPIImpl initialized");
 
-    let task_handler = TaskHandler::new(api_client.clone(), storage, exporter, handle, msg_sender)?;
+    let api_client = DefaultApiClient::new(sdk_api_client.clone());
+
+    let task_handler = TaskHandler::new(api_client, storage, exporter, handle, msg_sender)?;
     info!("TaskHandler initialized");
 
     let core = Core::new(task_handler.clone())?;
@@ -213,13 +215,13 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     ));
     app.manage(core);
     app.manage(task_handler);
-    app.manage(Mutex::new(api_client.clone()));
+    app.manage(Mutex::new(sdk_api_client.clone()));
 
-    if let Ok(session) = Session::load(config.session_path.as_path()) {
+    if let Ok(session) = Session::load(main_config.session_path.as_path()) {
         let session = Arc::new(Mutex::new(session));
         status_manager.set_session(session.clone());
         tauri::async_runtime::spawn_blocking(async move || {
-            if let Err(e) = api_client.login_with_session(session).await {
+            if let Err(e) = sdk_api_client.login_with_session(session).await {
                 error!("{e}");
             }
         });

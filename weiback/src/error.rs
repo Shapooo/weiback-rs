@@ -26,7 +26,7 @@ pub enum Error {
     Network(#[from] reqwest::Error),
 
     #[error("Api error: {0:?}")]
-    ApiError(weibosdk_rs::models::ErrResponse),
+    ApiError(crate::models::ErrResponse),
 
     #[error("Lock error: {0}")]
     Lock(String),
@@ -76,7 +76,7 @@ impl From<weibosdk_rs::Error> for Error {
             SDKError::IoError(e) => Error::Io(e),
             SDKError::NotLoggedIn => Error::NotLoggedIn,
             SDKError::NetworkError(e) => Error::Network(e),
-            SDKError::ApiError(e) => Error::ApiError(e),
+            SDKError::ApiError(e) => Error::ApiError(e.into()),
             SDKError::DataConversionError(e) => Error::FormatError(e),
             SDKError::DeserializationError(e) => Error::FormatError(e.to_string()),
         }

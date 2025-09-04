@@ -1,0 +1,98 @@
+#![allow(async_fn_in_trait)]
+use log::{debug, error, info};
+use serde::Deserialize;
+use weibosdk_rs::http_client::HttpResponse;
+
+use super::HttpClient;
+use crate::api::ApiClientImpl;
+use crate::models::post::Post;
+use crate::{
+    error::{Error, Result},
+    models::err_response::ErrResponse,
+};
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EditConfig {
+    #[allow(unused)]
+    pub edited: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum StatusesShowResponse {
+    Succ(Post),
+    Fail(ErrResponse),
+}
+
+pub trait StatusesShowApi {
+    async fn statuses_show(&self, id: i64) -> Result<Post>;
+}
+
+impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
+    async fn statuses_show(&self, id: i64) -> Result<Post> {
+        info!("getting long text, id: {id}");
+
+        let response = self.client.statuses_show(id).await?;
+        let res = response.json::<StatusesShowResponse>().await?;
+        match res {
+            StatusesShowResponse::Succ(statuses_show) => {
+                debug!("got statuses success");
+                Ok(statuses_show)
+            }
+            StatusesShowResponse::Fail(err) => {
+                error!("failed to get long text: {err:?}");
+                Err(Error::ApiError(err))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod local_tests {
+    use std::path::Path;
+    use std::sync::{Arc, Mutex};
+
+    use super::*;
+    use weibosdk_rs::{ApiClient as SdkApiClient, mock::MockClient, session::Session};
+
+    #[tokio::test]
+    async fn test_get_statuses_show() {
+        let mock_client = MockClient::new();
+        let session = Session {
+            gsid: "test_gsid".to_string(),
+            uid: "test_uid".to_string(),
+            screen_name: "test_screen_name".to_string(),
+            cookie_store: Default::default(),
+        };
+        let session = Arc::new(Mutex::new(session));
+        let weibo_api =
+            ApiClientImpl::new(SdkApiClient::from_session(mock_client.clone(), session));
+
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let testcase_path = manifest_dir.join("tests/data/statuses_show.json");
+        mock_client
+            .set_statuses_show_response_from_file(&testcase_path)
+            .unwrap();
+
+        let _post = weibo_api.statuses_show(12345).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod real_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use weibosdk_rs::{ApiClient as SdkApiClient, http_client, session::Session};
+
+    #[tokio::test]
+    async fn test_real_get_statuses_show() {
+        let session_file = "session.json";
+        if let Ok(session) = Session::load(session_file) {
+            let session = Arc::new(Mutex::new(session));
+            let client = http_client::Client::new().unwrap();
+            let weibo_api = ApiClientImpl::new(SdkApiClient::from_session(client, session));
+            let post = weibo_api.statuses_show(5179586393932632).await.unwrap();
+            assert!(!post.long_text.unwrap().is_empty());
+        }
+    }
+}

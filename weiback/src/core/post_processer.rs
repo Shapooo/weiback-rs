@@ -5,8 +5,8 @@ use std::pin::Pin;
 use futures::stream::{self, StreamExt, TryStreamExt};
 use log::{debug, error, info};
 use tokio::sync::mpsc;
-use weibosdk_rs::WeiboAPI;
 
+use crate::api::ApiClient;
 use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
@@ -17,20 +17,20 @@ use crate::storage::Storage;
 use crate::utils::extract_all_pic_metas;
 
 #[derive(Debug, Clone)]
-pub struct PostProcesser<W: WeiboAPI, S: Storage, D: MediaDownloader> {
-    api_client: W,
+pub struct PostProcesser<A: ApiClient, S: Storage, D: MediaDownloader> {
+    api_client: A,
     storage: S,
     downloader: D,
-    emoji_map: EmojiMap<W>,
+    emoji_map: EmojiMap<A>,
     msg_sender: mpsc::Sender<Message>,
 }
 
-impl<W: WeiboAPI, S: Storage, D: MediaDownloader> PostProcesser<W, S, D> {
+impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
     pub fn new(
-        api_client: W,
+        api_client: A,
         storage: S,
         downloader: D,
-        emoji_map: EmojiMap<W>,
+        emoji_map: EmojiMap<A>,
         msg_sender: mpsc::Sender<Message>,
     ) -> Result<Self> {
         info!("Initializing PostProcesser...");

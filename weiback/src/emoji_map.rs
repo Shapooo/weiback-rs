@@ -2,17 +2,17 @@ use std::collections::HashMap;
 
 use log::warn;
 use tokio::sync::OnceCell;
-use weibosdk_rs::EmojiUpdateAPI;
 
+use crate::api::EmojiUpdateApi;
 use crate::error::Result;
 
 #[derive(Debug, Clone)]
-pub struct EmojiMap<W: EmojiUpdateAPI> {
-    api_client: W,
+pub struct EmojiMap<E: EmojiUpdateApi> {
+    api_client: E,
     emoji_map: OnceCell<HashMap<String, String>>,
 }
 
-impl<W: EmojiUpdateAPI> EmojiMap<W> {
+impl<W: EmojiUpdateApi> EmojiMap<W> {
     pub fn new(api_client: W) -> Self {
         Self {
             api_client,
@@ -21,28 +21,29 @@ impl<W: EmojiUpdateAPI> EmojiMap<W> {
     }
 
     pub async fn get_or_try_init(&self) -> Result<&HashMap<String, String>> {
-        Ok(self
-            .emoji_map
+        self.emoji_map
             .get_or_try_init(async || self.api_client.emoji_update().await)
             .await
             .map_err(|e| {
                 warn!("{e}");
                 e
-            })?)
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::Error;
     use std::path::Path;
-    use weibosdk_rs::mock::{MockAPI, MockClient};
+    use weibosdk_rs::mock::MockClient;
+
+    use crate::error::Error;
+    use crate::mock::MockApi;
 
     #[tokio::test]
     async fn test_get_emoji_fail() {
         let client = MockClient::new();
-        let api = MockAPI::new(client.clone());
+        let api = MockApi::new(client.clone());
         client.set_emoji_update_response_from_str("");
         let emoji_map = EmojiMap::new(api.clone());
         let res = emoji_map.get_or_try_init().await;

@@ -332,11 +332,14 @@ pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
 mod tests {
     use std::path::Path;
 
-    use super::*;
     use sqlx::SqlitePool;
-    use weibosdk_rs::{
-        FavoritesAPI, Post, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
+    use weibosdk_rs::mock::MockClient;
+
+    use super::*;
+    use crate::{
+        api::{FavoritesApi, ProfileStatusesApi},
+        mock::MockApi,
+        models::Post,
     };
 
     async fn setup_db() -> SqlitePool {
@@ -361,7 +364,7 @@ mod tests {
                     .as_path(),
             )
             .unwrap();
-        let api = MockAPI::from_session(client, Default::default());
+        let api = MockApi::new(client);
         posts.extend(api.favorites(1).await.unwrap());
         posts.extend(api.profile_statuses(1786055427, 1).await.unwrap());
         posts

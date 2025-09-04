@@ -3,14 +3,10 @@ use anyhow::Result;
 use env_logger::Builder;
 use log::{LevelFilter, info};
 
-// use weiback::core::Core;
-
 fn main() -> Result<()> {
-    // std::env::set_var("RUST_BACKTRACE", "1");
     init_logger()?;
+
     info!("start running...");
-    // let core = Core::new();
-    // core.run()?;
     tauri_app::run()?;
 
     info!("done");

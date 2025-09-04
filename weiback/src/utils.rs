@@ -5,11 +5,12 @@ use log::error;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
-use weibosdk_rs::models::{MixMediaInfoItem, PicInfoDetail, PicInfoItem, PicInfosForStatusItem};
 
 use crate::error::{Error, Result};
-use crate::models::Post;
-use crate::picture::{PictureDefinition, PictureMeta};
+use crate::models::{
+    MixMediaInfoItem, PicInfoDetail, PicInfoItem, PicInfosForStatusItem, PictureDefinition,
+    PictureMeta, Post,
+};
 
 #[allow(unused_macros)]
 macro_rules! here {
@@ -269,10 +270,10 @@ mod tests {
     use super::*;
     use std::path::Path;
 
-    use weibosdk_rs::{
-        EmojiUpdateAPI, FavoritesAPI, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
-    };
+    use weibosdk_rs::mock::MockClient;
+
+    use crate::api::{EmojiUpdateApi, FavoritesApi, ProfileStatusesApi};
+    use crate::mock::MockApi;
 
     #[test]
     fn test_strip_url_queries() {
@@ -335,7 +336,7 @@ mod tests {
         assert_eq!(url_to_path("http://example.com").unwrap(), "/".to_string());
     }
 
-    fn create_mock_api(client: &MockClient) -> MockAPI {
+    fn create_mock_api(client: &MockClient) -> MockApi {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         client
             .set_favorites_response_from_file(
@@ -359,10 +360,10 @@ mod tests {
                 manifest_dir.join("tests/data/web_emoji.json").as_path(),
             )
             .unwrap();
-        MockAPI::from_session(client.clone(), Default::default())
+        MockApi::new(client.clone())
     }
 
-    async fn create_posts(api: &MockAPI) -> Vec<Post> {
+    async fn create_posts(api: &MockApi) -> Vec<Post> {
         let mut posts = api.favorites(0).await.unwrap();
         posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
         posts

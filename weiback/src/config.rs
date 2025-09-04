@@ -9,7 +9,7 @@ use log::{debug, info, warn};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
-use weibosdk_rs::config::Conifg as WeiboApiConfig;
+use weibosdk_rs::config::Conifg as SdkConfig;
 
 use crate::error::Result;
 use crate::models::PictureDefinition;
@@ -29,7 +29,7 @@ pub struct Config {
     pub other_task_interval: Duration,
     pub posts_per_html: u32,
     pub picture_path: PathBuf,
-    pub weibo_api_config: WeiboApiConfig,
+    pub sdk_config: SdkConfig,
 }
 
 impl Default for Config {
@@ -46,7 +46,7 @@ impl Default for Config {
             other_task_interval: Duration::from_secs(1),
             posts_per_html: 200,
             picture_path: data_dir.join("pictures"),
-            weibo_api_config: Default::default(),
+            sdk_config: Default::default(),
         }
     }
 }

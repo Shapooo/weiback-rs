@@ -216,12 +216,12 @@ mod tests {
         path::Path,
     };
 
-    use super::*;
     use tempfile::tempdir;
-    use weibosdk_rs::{
-        FavoritesAPI, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
-    };
+    use weibosdk_rs::mock::MockClient;
+
+    use super::*;
+    use crate::api::{FavoritesApi, ProfileStatusesApi};
+    use crate::mock::MockApi;
 
     async fn setup_storage() -> StorageImpl {
         let db_pool = SqlitePool::connect(":memory:").await.unwrap();
@@ -250,7 +250,7 @@ mod tests {
                     .as_path(),
             )
             .unwrap();
-        let api = MockAPI::from_session(client, Default::default());
+        let api = MockApi::new(client);
         let mut posts = api.favorites(1).await.unwrap();
         posts.extend(api.profile_statuses(1786055427, 1).await.unwrap());
         posts

@@ -7,16 +7,14 @@ use futures::future::try_join_all;
 use log::{debug, info};
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
-use weibosdk_rs::EmojiUpdateAPI;
-use weibosdk_rs::models::UrlStruct;
 
+use crate::api::EmojiUpdateApi;
 use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
 use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, HTMLPicture};
 use crate::media_downloader::MediaDownloader;
-use crate::models::{PictureDefinition, PictureMeta, Post};
-use crate::picture::Picture;
+use crate::models::{Picture, PictureDefinition, PictureMeta, Post, UrlStruct};
 use crate::storage::Storage;
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, extract_all_pic_metas,
@@ -38,14 +36,14 @@ pub fn create_tera(template_path: &Path) -> Result<Tera> {
 }
 
 #[derive(Debug, Clone)]
-pub struct HTMLGenerator<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> {
+pub struct HTMLGenerator<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> {
     storage: S,
     downloader: D,
     templates: Tera,
     emoji_map: EmojiMap<E>,
 }
 
-impl<E: EmojiUpdateAPI, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
+impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
     pub fn new(emoji_map: EmojiMap<E>, storage: S, downloader: D, engine: Tera) -> Self {
         Self {
             storage,
@@ -357,12 +355,12 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mock::{media_downloader::MockMediaDownloader, storage::MockStorage};
     use std::path::PathBuf;
-    use weibosdk_rs::{
-        FavoritesAPI, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
-    };
+
+    use weibosdk_rs::mock::MockClient;
+
+    use crate::api::{FavoritesApi, ProfileStatusesApi};
+    use crate::mock::{MockApi, MockMediaDownloader, MockStorage};
 
     fn create_test_tera() -> Tera {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -374,7 +372,7 @@ mod tests {
         MockClient::new()
     }
 
-    fn create_mock_api(client: &MockClient) -> MockAPI {
+    fn create_mock_api(client: &MockClient) -> MockApi {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         client
             .set_favorites_response_from_file(
@@ -398,10 +396,10 @@ mod tests {
                 manifest_dir.join("tests/data/web_emoji.json").as_path(),
             )
             .unwrap();
-        MockAPI::from_session(client.clone(), Default::default())
+        MockApi::new(client.clone())
     }
 
-    fn create_generator(api: &MockAPI) -> HTMLGenerator<MockAPI, MockStorage, MockMediaDownloader> {
+    fn create_generator(api: &MockApi) -> HTMLGenerator<MockApi, MockStorage, MockMediaDownloader> {
         let tera = create_test_tera();
         let storage = MockStorage::new();
         let downloader = MockMediaDownloader::new(true);
@@ -409,7 +407,7 @@ mod tests {
         HTMLGenerator::new(emoji_map, storage, downloader, tera)
     }
 
-    async fn create_posts(api: &MockAPI) -> Vec<Post> {
+    async fn create_posts(api: &MockApi) -> Vec<Post> {
         let mut posts = api.favorites(0).await.unwrap();
         posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
         posts

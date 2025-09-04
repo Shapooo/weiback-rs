@@ -107,12 +107,14 @@ pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
 mod tests {
     use std::path::Path;
 
+    use sqlx::SqlitePool;
+    use weibosdk_rs::mock::MockClient;
+
     use super::*;
     use crate::models::{Post, User};
-    use sqlx::SqlitePool;
-    use weibosdk_rs::{
-        FavoritesAPI, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
+    use crate::{
+        api::{FavoritesApi, ProfileStatusesApi},
+        mock::MockApi,
     };
 
     async fn setup_db() -> SqlitePool {
@@ -136,7 +138,7 @@ mod tests {
                     .as_path(),
             )
             .unwrap();
-        let api = MockAPI::from_session(client, Default::default());
+        let api = MockApi::new(client);
         let posts: Vec<Post> = api
             .favorites(1)
             .await

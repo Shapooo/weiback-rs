@@ -175,11 +175,15 @@ impl Storage for MockStorage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::Path;
-    use weibosdk_rs::{
-        FavoritesAPI, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
+
+    use weibosdk_rs::mock::MockClient;
+
+    use super::*;
+    use crate::{
+        api::{FavoritesApi, ProfileStatusesApi},
+        mock::MockApi,
+        models::PictureMeta,
     };
 
     async fn create_posts() -> Vec<Post> {
@@ -202,7 +206,7 @@ mod tests {
                 manifest_dir.join("tests/data/statuses_show.json").as_path(),
             )
             .unwrap();
-        let api = MockAPI::from_session(client.clone(), Default::default());
+        let api = MockApi::new(client.clone());
         let mut posts = api.favorites(0).await.unwrap();
         posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
         posts
@@ -276,7 +280,7 @@ mod tests {
     async fn test_save_and_get_picture() {
         let storage = MockStorage::new();
         let picture = Picture {
-            meta: crate::picture::PictureMeta::in_post("test_url".to_string(), 123),
+            meta: PictureMeta::in_post("test_url".to_string(), 123),
             blob: Bytes::from_static(b"picture data"),
         };
         storage.save_picture(&picture).await.unwrap();

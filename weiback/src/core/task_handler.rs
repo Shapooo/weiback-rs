@@ -1,9 +1,9 @@
 use log::{debug, error, info};
 use std::future::Future;
 use tokio::{self, sync::mpsc::Sender, time::sleep};
-use weibosdk_rs::WeiboAPI;
 
 use super::post_processer::PostProcesser;
+use crate::api::ApiClient;
 use crate::config::get_config;
 use crate::core::task::{BFOptions, BUOptions, ExportOptions};
 use crate::emoji_map::EmojiMap;
@@ -17,18 +17,18 @@ use crate::storage::Storage;
 use crate::utils::make_page_name;
 
 #[derive(Debug, Clone)]
-pub struct TaskHandler<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> {
-    api_client: W,
+pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> {
+    api_client: A,
     storage: S,
     exporter: E,
-    processer: PostProcesser<W, S, D>,
-    html_generator: HTMLGenerator<W, S, D>,
+    processer: PostProcesser<A, S, D>,
+    html_generator: HTMLGenerator<A, S, D>,
     msg_sender: Sender<Message>,
 }
 
-impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S, E, D> {
+impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S, E, D> {
     pub fn new(
-        api_client: W,
+        api_client: A,
         storage: S,
         exporter: E,
         downloader: D,
@@ -119,7 +119,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // backup user posts
     pub(super) async fn backup_user(&self, task_id: u64, options: BUOptions) -> Result<()> {
-        let count = get_config().read()?.weibo_api_config.status_count as u32;
+        let count = get_config().read()?.sdk_config.status_count as u32;
         let uid = options.uid;
         let range = options.range.into_inner();
         info!(
@@ -147,7 +147,7 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
     // export favorite posts from weibo
     pub(super) async fn backup_favorites(&self, task_id: u64, options: BFOptions) -> Result<()> {
-        let count = get_config().read()?.weibo_api_config.fav_count as u32;
+        let count = get_config().read()?.sdk_config.fav_count as u32;
         let range = options.range.into_inner();
         info!("Start backing up favorites from {} to {}", range.0, range.1);
 
@@ -258,27 +258,32 @@ impl<W: WeiboAPI, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<W, S,
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use tokio::sync::mpsc;
+    use weibosdk_rs::mock::MockClient;
+
     use super::*;
     use crate::{
+        api::{FavoritesApi, ProfileStatusesApi},
         core::task::BUOptions,
+        mock::MockApi,
         mock::{
             exporter::MockExporter, media_downloader::MockMediaDownloader, storage::MockStorage,
         },
     };
-    use std::path::Path;
-    use tokio::sync::mpsc;
-    use weibosdk_rs::{
-        FavoritesAPI, ProfileStatusesAPI,
-        mock::{MockAPI, MockClient},
-    };
 
-    async fn create_posts(client: &MockClient, api: &MockAPI) -> Vec<Post> {
+    async fn create_posts(client: &MockClient, api: &MockApi) -> Vec<Post> {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let fav_path = manifest_dir.join("tests/data/favorites.json");
         client.set_favorites_response_from_file(&fav_path).unwrap();
         let prof_path = manifest_dir.join("tests/data/profile_statuses.json");
         client
             .set_profile_statuses_response_from_file(&prof_path)
+            .unwrap();
+        let statuses_show_path = manifest_dir.join("tests/data/statuses_show.json");
+        client
+            .set_statuses_show_response_from_file(&statuses_show_path)
             .unwrap();
         let mut posts = api.favorites(0).await.unwrap();
         posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
@@ -288,7 +293,7 @@ mod tests {
     #[tokio::test]
     async fn test_backup_user() {
         let client = MockClient::new();
-        let api_client = MockAPI::from_session(client.clone(), Default::default());
+        let api_client = MockApi::new(client.clone());
         let storage = MockStorage::new();
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
@@ -334,7 +339,7 @@ mod tests {
     #[tokio::test]
     async fn test_backup_favorites() {
         let client = MockClient::new();
-        let api_client = MockAPI::from_session(client.clone(), Default::default());
+        let api_client = MockApi::new(client.clone());
         let storage = MockStorage::new();
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
@@ -369,7 +374,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_from_local() {
         let client = MockClient::new();
-        let api_client = MockAPI::from_session(client.clone(), Default::default());
+        let api_client = MockApi::new(client.clone());
         let storage = MockStorage::new();
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
