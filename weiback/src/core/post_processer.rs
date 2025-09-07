@@ -3,44 +3,32 @@ use std::future::Future;
 use std::pin::Pin;
 
 use futures::stream::{self, StreamExt, TryStreamExt};
-use log::{debug, error, info};
-use tokio::sync::mpsc;
+use log::{debug, info};
 
 use crate::api::ApiClient;
 use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::media_downloader::MediaDownloader;
-use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
 use crate::utils::extract_all_pic_metas;
 
 #[derive(Debug, Clone)]
 pub struct PostProcesser<A: ApiClient, S: Storage, D: MediaDownloader> {
-    api_client: A,
     storage: S,
     downloader: D,
     emoji_map: EmojiMap<A>,
-    msg_sender: mpsc::Sender<Message>,
 }
 
 impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
-    pub fn new(
-        api_client: A,
-        storage: S,
-        downloader: D,
-        emoji_map: EmojiMap<A>,
-        msg_sender: mpsc::Sender<Message>,
-    ) -> Result<Self> {
+    pub fn new(storage: S, downloader: D, emoji_map: EmojiMap<A>) -> Result<Self> {
         info!("Initializing PostProcesser...");
         info!("PostProcesser initialized successfully.");
         Ok(Self {
-            api_client,
             storage,
             downloader,
             emoji_map,
-            msg_sender,
         })
     }
 
@@ -55,34 +43,11 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             .await?;
 
         info!("Finished downloading pictures. Processing posts...");
-        for mut post in posts {
-            self.handle_long_text(&mut post, task_id).await?;
+        for post in posts {
             self.storage.save_post(&post).await?;
         }
 
         info!("Finished processing posts for task {task_id}.");
-        Ok(())
-    }
-
-    async fn handle_long_text(&self, post: &mut Post, task_id: u64) -> Result<()> {
-        if post.is_long_text {
-            debug!("Fetching long text for post {}.", post.id);
-            match self.api_client.statuses_show(post.id).await {
-                Ok(n_post) => {
-                    post.text = n_post.long_text.unwrap();
-                }
-                Err(e) => {
-                    error!("Failed to fetch long text for post {}: {}", post.id, e);
-                    self.msg_sender
-                        .send(Message::Err(ErrMsg {
-                            r#type: ErrType::LongTextFail { post_id: post.id },
-                            task_id,
-                            err: e.to_string(),
-                        }))
-                        .await?;
-                }
-            }
-        }
         Ok(())
     }
 

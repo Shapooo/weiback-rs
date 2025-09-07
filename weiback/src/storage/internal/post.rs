@@ -17,10 +17,6 @@ pub struct PostInternal {
     pub favorited: bool,
     pub geo: Option<Value>,
     pub id: i64,
-    #[sqlx(rename = "isLongText")]
-    pub is_long_text: bool,
-    #[sqlx(rename = "longText")]
-    pub long_text: Option<String>,
     pub mblogid: String,
     pub mix_media_ids: Option<Value>,
     pub mix_media_info: Option<Value>,
@@ -52,8 +48,6 @@ impl TryFrom<Post> for PostInternal {
             favorited: post.favorited,
             geo: post.geo,
             id: post.id,
-            is_long_text: post.is_long_text,
-            long_text: post.long_text,
             mblogid: post.mblogid,
             mix_media_ids: post.mix_media_ids.map(to_value).transpose()?,
             mix_media_info: post.mix_media_info.map(to_value).transpose()?,
@@ -87,8 +81,6 @@ impl TryInto<Post> for PostInternal {
             favorited: self.favorited,
             geo: self.geo,
             id: self.id,
-            is_long_text: self.is_long_text,
-            long_text: self.long_text,
             mblogid: self.mblogid,
             mix_media_ids: self.mix_media_ids.map(from_value).transpose()?,
             mix_media_info: self.mix_media_info.map(from_value).transpose()?,
@@ -122,8 +114,6 @@ pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
          favorited INTEGER, \
          geo TEXT, \
          id INTEGER PRIMARY KEY, \
-         isLongText INTEGER, \
-         longText TEXT, \
          mblogid TEXT, \
          mix_media_ids TEXT, \
          mix_media_info TEXT, \
@@ -232,8 +222,6 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
                  favorited,\
                  geo,\
                  id,\
-                 isLongText,\
-                 longText,\
                  mblogid,\
                  mix_media_ids, \
                  mix_media_info,\
@@ -252,7 +240,7 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
                  url_struct)\
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
-                 ?, ?, ?, ?, ?, ?, ?)",
+                 ?, ?, ?, ?, ?)",
             if overwrite { "REPLACE" } else { "IGNORE" }
         )
         .as_str(),
@@ -266,8 +254,6 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(post.favorited)
     .bind(&post.geo)
     .bind(post.id)
-    .bind(post.is_long_text)
-    .bind(&post.long_text)
     .bind(&post.mblogid)
     .bind(&post.mix_media_ids)
     .bind(&post.mix_media_info)

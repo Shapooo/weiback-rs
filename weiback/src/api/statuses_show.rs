@@ -3,7 +3,7 @@ use log::{debug, error, info};
 use serde::Deserialize;
 use weibosdk_rs::http_client::HttpResponse;
 
-use super::HttpClient;
+use super::{HttpClient, internal::post::PostInternal};
 use crate::api::ApiClientImpl;
 use crate::models::post::Post;
 use crate::{
@@ -20,7 +20,7 @@ pub struct EditConfig {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum StatusesShowResponse {
-    Succ(Post),
+    Succ(PostInternal),
     Fail(ErrResponse),
 }
 
@@ -28,8 +28,8 @@ pub trait StatusesShowApi {
     async fn statuses_show(&self, id: i64) -> Result<Post>;
 }
 
-impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
-    async fn statuses_show(&self, id: i64) -> Result<Post> {
+impl<C: HttpClient> ApiClientImpl<C> {
+    pub(super) async fn statuses_show_internal(&self, id: i64) -> Result<PostInternal> {
         info!("getting long text, id: {id}");
 
         let response = self.client.statuses_show(id).await?;
@@ -44,6 +44,12 @@ impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
                 Err(Error::ApiError(err))
             }
         }
+    }
+}
+impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
+    async fn statuses_show(&self, id: i64) -> Result<Post> {
+        let ss = self.statuses_show_internal(id).await?;
+        self.process_post(ss).await
     }
 }
 
@@ -91,8 +97,7 @@ mod real_tests {
             let session = Arc::new(Mutex::new(session));
             let client = http_client::Client::new().unwrap();
             let weibo_api = ApiClientImpl::new(SdkApiClient::from_session(client, session));
-            let post = weibo_api.statuses_show(5179586393932632).await.unwrap();
-            assert!(!post.long_text.unwrap().is_empty());
+            let _ = weibo_api.statuses_show(5179586393932632).await.unwrap();
         }
     }
 }

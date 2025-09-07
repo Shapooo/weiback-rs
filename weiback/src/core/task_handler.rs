@@ -36,13 +36,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     ) -> Result<Self> {
         let emoji_map = EmojiMap::new(api_client.clone());
 
-        let processer = PostProcesser::new(
-            api_client.clone(),
-            storage.clone(),
-            downloader.clone(),
-            emoji_map.clone(),
-            msg_sender.clone(),
-        )?;
+        let processer = PostProcesser::new(storage.clone(), downloader.clone(), emoji_map.clone())?;
 
         let tera = create_tera(crate::config::get_config().read()?.templates_path.as_path())?;
         let html_generator = HTMLGenerator::new(emoji_map, storage.clone(), downloader, tera);

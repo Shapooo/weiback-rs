@@ -1,18 +1,20 @@
 #![allow(async_fn_in_trait)]
+use futures::stream::{self, StreamExt};
+use itertools::Itertools;
 use log::{debug, error, info};
 use serde::Deserialize;
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
 
 use super::ApiClientImpl;
+use super::internal::post::PostInternal;
 use crate::{
     error::{Error, Result},
-    models::Post,
-    models::err_response::ErrResponse,
+    models::{Post, err_response::ErrResponse},
 };
 
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct FavoritesPost {
-    pub status: Post,
+    pub status: PostInternal,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -30,7 +32,7 @@ pub(crate) struct FavoritesSucc {
     pub total_number: i32,
 }
 
-impl TryFrom<FavoritesResponse> for Vec<Post> {
+impl TryFrom<FavoritesResponse> for Vec<PostInternal> {
     type Error = Error;
     fn try_from(value: FavoritesResponse) -> Result<Self> {
         let res = value;
@@ -40,7 +42,7 @@ impl TryFrom<FavoritesResponse> for Vec<Post> {
                 let posts = favorites
                     .into_iter()
                     .map(|post| post.status)
-                    .collect::<Vec<Post>>();
+                    .collect::<Vec<PostInternal>>();
                 Ok(posts)
             }
             FavoritesResponse::Fail(err) => {
@@ -51,7 +53,7 @@ impl TryFrom<FavoritesResponse> for Vec<Post> {
     }
 }
 
-impl From<FavoritesSucc> for Vec<Post> {
+impl From<FavoritesSucc> for Vec<PostInternal> {
     fn from(value: FavoritesSucc) -> Self {
         value.favorites.into_iter().map(|p| p.status).collect()
     }
@@ -66,7 +68,14 @@ impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
     async fn favorites(&self, page: u32) -> Result<Vec<Post>> {
         info!("getting favorites, page: {page}");
         let response = self.client.favorites(page).await?;
-        response.json::<FavoritesResponse>().await?.try_into()
+        let posts: Vec<PostInternal> = response.json::<FavoritesResponse>().await?.try_into()?;
+        let posts = stream::iter(posts)
+            .map(|post| self.process_post(post))
+            .buffer_unordered(2)
+            .collect::<Vec<_>>()
+            .await;
+        let (oks, _errs): (Vec<_>, Vec<_>) = posts.into_iter().partition_result(); // TODO
+        Ok(oks)
     }
 
     async fn favorites_destroy(&self, id: i64) -> Result<()> {

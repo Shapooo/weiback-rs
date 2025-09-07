@@ -122,8 +122,7 @@ mod local_tests {
         mock_client
             .set_statuses_show_response_from_file(&get_test_data_path("statuses_show.json"))
             .unwrap();
-        let result = api.statuses_show(123).await.unwrap();
-        assert!(!result.long_text.unwrap().is_empty());
+        let _ = api.statuses_show(123).await.unwrap();
     }
 
     #[tokio::test]

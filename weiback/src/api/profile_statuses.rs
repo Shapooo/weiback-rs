@@ -1,4 +1,6 @@
 #![allow(async_fn_in_trait)]
+use futures::stream::{self, StreamExt};
+use itertools::Itertools;
 use log::{debug, error, info};
 use serde::Deserialize;
 use weibosdk_rs::{
@@ -6,7 +8,7 @@ use weibosdk_rs::{
     profile_statuses::ContainerType,
 };
 
-use super::ApiClientImpl;
+use super::{ApiClientImpl, internal::post::PostInternal};
 use crate::{
     error::{Error, Result},
     models::Post,
@@ -17,7 +19,7 @@ use crate::{
 struct Card {
     #[allow(unused)]
     card_type: i32,
-    mblog: Option<Post>,
+    mblog: Option<PostInternal>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -59,9 +61,15 @@ impl<C: HttpClient> ApiClientImpl<C> {
 
                 let posts = posts_iterator
                     .filter(|post| post.user.as_ref().is_none_or(|u| u.id == uid))
-                    .collect::<Vec<Post>>();
-                debug!("got {} posts", posts.len());
-                Ok(posts)
+                    .collect::<Vec<PostInternal>>();
+                let posts = stream::iter(posts)
+                    .map(|post| self.process_post(post))
+                    .buffer_unordered(2)
+                    .collect::<Vec<_>>()
+                    .await;
+                let (oks, _errs): (Vec<_>, Vec<_>) = posts.into_iter().partition_result(); // TODO
+                debug!("got {} posts", oks.len());
+                Ok(oks)
             }
             ProfileStatusesResponse::Fail(err) => {
                 error!("failed to get profile statuses: {err:?}");
@@ -121,7 +129,9 @@ mod local_tests {
 
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let testcase_path = manifest_dir.join("tests/data/profile_statuses.json");
-        mock_client.set_profile_statuses_response_from_file(&testcase_path).unwrap();
+        mock_client
+            .set_profile_statuses_response_from_file(&testcase_path)
+            .unwrap();
 
         weibo_api.profile_statuses_original(12345, 1).await.unwrap();
     }

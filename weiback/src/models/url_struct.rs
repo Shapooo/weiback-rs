@@ -1,8 +1,4 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::result::Result;
-
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::PicInfoDetail;
@@ -35,9 +31,7 @@ pub struct UrlStructItem {
     pub url_title: String,
     pub url_type: UrlType,
     pub url_type_pic: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_pic_ids")]
     pub pic_ids: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_pic_infos")]
     pub pic_infos: Option<PicInfosForStatusItem>,
     pub vip_gif: Option<Value>,
 }
@@ -50,7 +44,7 @@ pub struct PicInfosForStatusItem {
     pub woriginal: PicInfoDetail,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum UrlType {
     #[serde(rename = "link")]
     Link,
@@ -64,101 +58,13 @@ pub enum UrlType {
     Topic,
 }
 
-impl<'de> Deserialize<'de> for UrlType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum StrNum<'a> {
-            Num(u8),
-            Str(Cow<'a, str>),
-        }
-        match StrNum::deserialize(deserializer).unwrap() {
-            StrNum::Num(0) => Ok(Self::Link),
-            StrNum::Num(1) => Ok(Self::Picture),
-            StrNum::Num(36) => Ok(Self::Location),
-            StrNum::Num(39) => Ok(Self::Appendix),
-            StrNum::Num(n) => {
-                log::warn!("unknown url_struct type number {n}");
-                Ok(Self::Link)
-            }
-            StrNum::Str(c) => {
-                if c.is_empty() {
-                    Ok(Self::Topic)
-                } else if c == "link" {
-                    Ok(Self::Link)
-                } else if c == "pic" {
-                    Ok(Self::Picture)
-                } else if c == "loc" {
-                    Ok(Self::Location)
-                } else if c == "appendix" {
-                    Ok(Self::Appendix)
-                } else if c == "topic" {
-                    Ok(Self::Topic)
-                } else {
-                    Err(serde::de::Error::custom(format!(
-                        "unknown url_type str: {c}"
-                    )))
-                }
-            }
-        }
-    }
-}
-
-fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StrOrVec {
-        S(String),
-        V(Vec<String>),
-    }
-    let res = Option::<StrOrVec>::deserialize(deserializer)?.and_then(|sv| match sv {
-        StrOrVec::V(v) => {
-            if v.is_empty() {
-                None
-            } else {
-                v.into_iter().next()
-            }
-        }
-        StrOrVec::S(s) => Some(s),
-    });
-    Ok(res)
-}
-
-fn deserialize_pic_infos<'de, D>(deserializer: D) -> Result<Option<PicInfosForStatusItem>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum MapOrItem {
-        M(HashMap<String, PicInfosForStatusItem>),
-        I(PicInfosForStatusItem),
-    }
-    let res = Option::<MapOrItem>::deserialize(deserializer)?.and_then(|mi| match mi {
-        MapOrItem::I(i) => Some(i),
-        MapOrItem::M(m) => {
-            if m.is_empty() {
-                None
-            } else {
-                m.into_values().next()
-            }
-        }
-    });
-    Ok(res)
-}
-
 #[cfg(test)]
 mod local_tests {
     use std::{fs::read_to_string, path::Path};
 
     use serde_json::{Value, from_str, from_value, to_value};
 
+    use crate::api::internal::url_struct::UrlStructInternal;
     use crate::models::UrlStruct;
 
     fn get_url_structs() -> Vec<UrlStruct> {
@@ -171,7 +77,7 @@ mod local_tests {
             .unwrap()
             .iter_mut()
             .filter_map(|item| item["status"].get_mut("url_struct"))
-            .map(|v| from_value(v.take()).unwrap())
+            .map(|v| from_value::<UrlStructInternal>(v.take()).unwrap().into())
             .collect::<Vec<_>>();
         url_structs
     }
