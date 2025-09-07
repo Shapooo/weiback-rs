@@ -352,6 +352,7 @@ mod tests {
             .filter_map(|p| p.favorited.then_some(p.id))
             .collect::<Vec<_>>();
         ids.sort();
+        ids.dedup();
 
         let options = BFOptions { range: 1..=1 };
         task_handler.backup_favorites(1, options).await.unwrap();

@@ -16,10 +16,10 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Deserialize)]
-struct Card {
+pub struct Card {
     #[allow(unused)]
-    card_type: i32,
-    mblog: Option<PostInternal>,
+    pub card_type: i32,
+    pub mblog: Option<PostInternal>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -30,8 +30,8 @@ enum ProfileStatusesResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct ProfileStatusesSucc {
-    cards: Vec<Card>,
+pub struct ProfileStatusesSucc {
+    pub cards: Vec<Card>,
 }
 
 pub trait ProfileStatusesApi {

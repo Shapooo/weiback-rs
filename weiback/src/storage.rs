@@ -213,15 +213,17 @@ impl Storage for StorageImpl {
 mod tests {
     use std::{
         collections::{HashMap, HashSet},
+        fs::read_to_string,
         path::Path,
     };
 
     use tempfile::tempdir;
-    use weibosdk_rs::mock::MockClient;
 
     use super::*;
-    use crate::api::{FavoritesApi, ProfileStatusesApi};
-    use crate::mock::MockApi;
+    use crate::{
+        api::{favorites::FavoritesSucc, profile_statuses::ProfileStatusesSucc},
+        models::Post,
+    };
 
     async fn setup_storage() -> StorageImpl {
         let db_pool = SqlitePool::connect(":memory:").await.unwrap();
@@ -236,24 +238,27 @@ mod tests {
     }
 
     async fn create_test_posts() -> Vec<Post> {
-        let client = MockClient::new();
-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        client
-            .set_favorites_response_from_file(
-                manifest_dir.join("tests/data/favorites.json").as_path(),
-            )
-            .unwrap();
-        client
-            .set_profile_statuses_response_from_file(
-                manifest_dir
-                    .join("tests/data/profile_statuses.json")
-                    .as_path(),
-            )
-            .unwrap();
-        let api = MockApi::new(client);
-        let mut posts = api.favorites(1).await.unwrap();
-        posts.extend(api.profile_statuses(1786055427, 1).await.unwrap());
-        posts
+        let favorites = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/favorites.json");
+        let s = read_to_string(favorites).unwrap();
+        let favs = serde_json::from_str::<FavoritesSucc>(s.as_str()).unwrap();
+        let mut favs: Vec<Post> = favs
+            .favorites
+            .into_iter()
+            .map(|p| p.status.into())
+            .collect();
+        let profile_statuses =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/profile_statuses.json");
+        let statuses = serde_json::from_str::<ProfileStatusesSucc>(
+            read_to_string(profile_statuses).unwrap().as_str(),
+        )
+        .unwrap();
+        let statuses: Vec<Post> = statuses
+            .cards
+            .into_iter()
+            .filter_map(|c| c.mblog.map(|p| p.into()))
+            .collect();
+        favs.extend(statuses);
+        favs
     }
 
     #[tokio::test]
