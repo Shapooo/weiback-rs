@@ -215,7 +215,7 @@ mod tests {
         for post in posts.iter() {
             storage.save_post(post).await.unwrap();
         }
-        let fetched = storage.get_posts(0..=100, false).await.unwrap();
+        let fetched = storage.get_posts(0..=1000_000_000, false).await.unwrap();
         assert_eq!(fetched.len(), posts.len());
     }
 
@@ -237,21 +237,21 @@ mod tests {
         let storage = MockStorage::new();
         let posts = create_posts().await;
 
-        let mut favorated = 0;
+        let mut favorited = 0;
         let mut not_favorited = vec![];
         for post in posts {
             if post.favorited {
-                favorated += 1;
+                favorited += 1;
             } else {
                 not_favorited.push(post.id);
             }
             storage.save_post(&post).await.unwrap();
         }
 
-        assert_eq!(storage.get_favorited_sum().await.unwrap(), favorated);
+        assert_eq!(storage.get_favorited_sum().await.unwrap(), favorited);
 
         let to_unfav = storage.get_posts_id_to_unfavorite().await.unwrap();
-        assert_eq!(to_unfav.len(), 20);
+        assert_eq!(to_unfav.len(), favorited as usize);
 
         for i in 0..to_unfav.len() / 3 {
             storage.mark_post_unfavorited(to_unfav[i]).await.unwrap();
@@ -259,7 +259,7 @@ mod tests {
 
         assert_eq!(
             storage.get_posts_id_to_unfavorite().await.unwrap().len() as u32,
-            favorated - favorated / 3
+            favorited - favorited / 3
         );
 
         for i in 0..not_favorited.len() / 3 {
@@ -268,7 +268,7 @@ mod tests {
 
         assert_eq!(
             storage.get_posts_id_to_unfavorite().await.unwrap().len() as u32,
-            favorated - favorated / 3 + not_favorited.len() as u32 / 3
+            favorited - favorited / 3 + not_favorited.len() as u32 / 3
         );
     }
 
