@@ -78,7 +78,7 @@ pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
 
 pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
     let _ = sqlx::query(
-        "INSERT OR IGNORE INTO users (\
+        "INSERT OR REPLACE INTO users (\
              avatar_hd,\
              avatar_large,\
              domain,\
