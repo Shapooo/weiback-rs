@@ -33,7 +33,6 @@ pub struct Post {
     pub retweeted_status: Option<Box<Post>>,
     pub source: Option<String>,
     pub text: String,
-    pub unfavorited: bool,
     pub url_struct: Option<UrlStruct>,
     pub user: Option<User>,
 }

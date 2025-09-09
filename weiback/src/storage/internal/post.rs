@@ -31,7 +31,6 @@ pub struct PostInternal {
     pub source: Option<String>,
     pub text: String,
     pub uid: Option<i64>,
-    pub unfavorited: bool,
     pub url_struct: Option<Value>,
 }
 
@@ -62,7 +61,6 @@ impl TryFrom<Post> for PostInternal {
             source: post.source,
             text: post.text,
             uid: post.user.map(|u| u.id),
-            unfavorited: post.unfavorited,
             url_struct: post.url_struct.map(to_value).transpose()?,
         })
     }
@@ -94,7 +92,6 @@ impl TryInto<Post> for PostInternal {
             retweeted_status: None,
             source: self.source,
             text: self.text,
-            unfavorited: self.unfavorited,
             url_struct: self.url_struct.map(from_value).transpose()?,
             user: None,
         })
@@ -128,7 +125,6 @@ pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
          source TEXT, \
          text TEXT, \
          uid INTEGER, \
-         unfavorited INTEGER, \
          url_struct TEXT\
          )",
     )
@@ -136,6 +132,31 @@ pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
     .await?;
     info!("Post table created successfully.");
     Ok(())
+}
+
+pub async fn create_favorited_post_table(db: &SqlitePool) -> Result<()> {
+    info!("Creating favorited post table if not exists...");
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS favorited_posts ( \
+         id INTEGER PRIMARY KEY, \
+         unfavorited INTEGER \
+         )",
+    )
+    .execute(db)
+    .await?;
+    info!("Favorited post table created successfully.");
+    Ok(())
+}
+
+#[allow(unused)]
+async fn check_unfavorited(db: &SqlitePool, id: i64) -> Result<Option<bool>> {
+    Ok(
+        sqlx::query_as::<Sqlite, (bool,)>("SELECT unfavorited FROM favorited_posts WHERE id = ?;")
+            .bind(id)
+            .fetch_optional(db)
+            .await?
+            .map(|b| b.0),
+    )
 }
 
 pub async fn get_post(db: &SqlitePool, id: i64) -> Result<Option<PostInternal>> {
@@ -155,9 +176,21 @@ pub async fn get_favorites(
 ) -> Result<Vec<PostInternal>> {
     debug!("query favorites offset {offset}, limit {limit}, rev {reverse}");
     let sql_expr = if reverse {
-        "SELECT * FROM posts WHERE favorited ORDER BY id LIMIT ? OFFSET ?"
+        r#"SELECT *
+FROM posts
+WHERE id IN (SELECT id
+             FROM favorited_posts
+             ORDER BY id
+             LIMIT ?
+             OFFSET ?);"#
     } else {
-        "SELECT * FROM posts WHERE favorited ORDER BY id DESC LIMIT ? OFFSET ?"
+        r#"SELECT *
+FROM posts
+WHERE id IN (SELECT id
+             FROM favorited_posts
+             ORDER BY id DESC
+             LIMIT ?
+             OFFSET ?);"#
     };
     let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
         .bind(limit)
@@ -236,11 +269,10 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
                  source,\
                  text,\
                  uid,\
-                 unfavorited,\
                  url_struct)\
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
-                 ?, ?, ?, ?, ?)",
+                 ?, ?, ?, ?)",
             if overwrite { "REPLACE" } else { "IGNORE" }
         )
         .as_str(),
@@ -268,16 +300,18 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
     .bind(&post.source)
     .bind(&post.text)
     .bind(post.uid)
-    .bind(post.unfavorited)
     .bind(&post.url_struct)
     .execute(db)
     .await?;
+    if post.favorited {
+        mark_post_favorited(db, post.id).await?;
+    }
     Ok(())
 }
 
 pub async fn mark_post_unfavorited(db: &SqlitePool, id: i64) -> Result<()> {
     debug!("unfav post {id} in db");
-    sqlx::query("UPDATE posts SET unfavorited = true WHERE id = ?")
+    sqlx::query("UPDATE favorited_posts SET unfavorited = true WHERE id = ?")
         .bind(id)
         .execute(db)
         .await?;
@@ -286,16 +320,20 @@ pub async fn mark_post_unfavorited(db: &SqlitePool, id: i64) -> Result<()> {
 
 pub async fn mark_post_favorited(db: &SqlitePool, id: i64) -> Result<()> {
     debug!("mark favorited post {id} in db");
-    sqlx::query("UPDATE posts SET favorited = true WHERE id = ?")
-        .bind(id)
-        .execute(db)
-        .await?;
+    sqlx::query(
+        "INSERT OR REPLACE INTO favorited_posts (id, unfavorited)\
+    VALUES (?, ?)",
+    )
+    .bind(id)
+    .bind(false)
+    .execute(db)
+    .await?;
     Ok(())
 }
 
 pub async fn get_favorited_sum(db: &SqlitePool) -> Result<u32> {
     Ok(
-        sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM posts WHERE favorited")
+        sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM favorited_posts;")
             .fetch_one(db)
             .await?
             .0,
@@ -305,7 +343,7 @@ pub async fn get_favorited_sum(db: &SqlitePool) -> Result<u32> {
 pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
     debug!("query all posts to unfavorite");
     Ok(sqlx::query_as::<Sqlite, (i64,)>(
-        "SELECT id FROM posts WHERE unfavorited == false and favorited;",
+        "SELECT id FROM favorited_posts WHERE unfavorited == false;",
     )
     .fetch_all(db)
     .await?
@@ -327,6 +365,7 @@ mod tests {
     async fn setup_db() -> SqlitePool {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
         create_post_table(&pool).await.unwrap();
+        create_favorited_post_table(&pool).await.unwrap();
         pool
     }
 
@@ -438,12 +477,12 @@ mod tests {
             save_post(&db, &internal_post, false).await.unwrap();
 
             mark_post_favorited(&db, internal_post.id).await.unwrap();
-            let fetched = get_post(&db, internal_post.id).await.unwrap().unwrap();
-            assert!(fetched.favorited);
+            let unfavorited = get_post(&db, internal_post.id).await.unwrap();
+            assert!(unfavorited.is_some());
 
             mark_post_unfavorited(&db, internal_post.id).await.unwrap();
-            let fetched = get_post(&db, internal_post.id).await.unwrap().unwrap();
-            assert!(fetched.unfavorited);
+            let unfavorited = check_unfavorited(&db, internal_post.id).await.unwrap();
+            assert!(unfavorited.unwrap());
         }
     }
 
@@ -468,20 +507,20 @@ mod tests {
     async fn test_get_posts_id_to_unfavorite() {
         let db = setup_db().await;
         let posts = create_test_posts().await;
-        let mut unfavorite_ids = Vec::new();
+        let mut ids_to_unfavorite = Vec::new();
         for post in posts {
             let internal_post: PostInternal = post.try_into().unwrap();
-            if internal_post.favorited && !internal_post.unfavorited {
-                unfavorite_ids.push(internal_post.id);
+            if internal_post.favorited {
+                ids_to_unfavorite.push(internal_post.id);
             }
             save_post(&db, &internal_post, false).await.unwrap();
         }
 
         let ids = get_posts_id_to_unfavorite(&db).await.unwrap();
-        unfavorite_ids.sort();
+        ids_to_unfavorite.sort();
         let mut ids_sorted = ids;
         ids_sorted.sort();
-        assert_eq!(ids_sorted, unfavorite_ids);
+        assert_eq!(ids_sorted, ids_to_unfavorite);
     }
 
     #[tokio::test]

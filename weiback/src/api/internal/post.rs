@@ -77,7 +77,6 @@ impl From<PostInternal> for Post {
             retweeted_status: value.retweeted_status.map(|r| Box::new((*r).into())),
             source: value.source,
             text: value.text,
-            unfavorited: false,
             url_struct: value.url_struct.map(|u| u.into()),
             user: value.user,
         }
