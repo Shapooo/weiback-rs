@@ -92,3 +92,5 @@ impl<C: HttpClient> ApiClientImpl<C> {
 impl<C: HttpClient> ApiClient for ApiClientImpl<C> {}
 
 pub type DefaultApiClient = ApiClientImpl<weibosdk_rs::Client>;
+#[cfg(feature = "dev-mode")]
+pub type DevApiClient = ApiClientImpl<crate::dev_client::DevClient>;

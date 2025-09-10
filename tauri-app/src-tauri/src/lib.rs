@@ -8,7 +8,7 @@ use log::{debug, error, info, warn};
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
 
-use weiback::api::DefaultApiClient;
+use weiback::api::ApiClientImpl;
 use weiback::config::get_config;
 use weiback::core::{
     BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
@@ -25,7 +25,11 @@ use weibosdk_rs::{
 use error::{Error, Result};
 use status_manager::StatusManager;
 
-type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
+#[cfg(feature = "dev-mode")]
+type TH = TaskHandler<weiback::api::DevApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
+#[cfg(not(feature = "dev-mode"))]
+type TH =
+    TaskHandler<weiback::api::DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 
 #[tauri::command]
 async fn backup_self(
@@ -193,10 +197,18 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     tauri::async_runtime::spawn(worker.run());
     info!("MediaDownloader initialized");
 
+    #[cfg(feature = "dev-mode")]
+    let dev_client = weiback::dev_client::DevClient::new(
+        http_client.clone(),
+        main_config.dev_mode_out_dir.clone(),
+    );
+    #[cfg(feature = "dev-mode")]
+    let mut sdk_api_client = SdkApiClient::new(dev_client, main_config.sdk_config.clone());
+    #[cfg(not(feature = "dev-mode"))]
     let mut sdk_api_client = SdkApiClient::new(http_client.clone(), main_config.sdk_config.clone());
     info!("WeiboAPIImpl initialized");
 
-    let api_client = DefaultApiClient::new(sdk_api_client.clone());
+    let api_client = ApiClientImpl::new(sdk_api_client.clone());
 
     let task_handler = TaskHandler::new(api_client, storage, exporter, handle, msg_sender)?;
     info!("TaskHandler initialized");

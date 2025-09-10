@@ -8,7 +8,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::task::spawn;
 
+#[cfg(not(feature = "dev-mode"))]
 use crate::api::DefaultApiClient;
+#[cfg(feature = "dev-mode")]
+use crate::api::DevApiClient;
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderHandle;
@@ -18,7 +21,10 @@ pub use task::{BFOptions, BUOptions, ExportOptions, Task, TaskRequest, UserPostF
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
 
+#[cfg(not(feature = "dev-mode"))]
 type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
+#[cfg(feature = "dev-mode")]
+type TH = TaskHandler<DevApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 pub struct Core {
     next_task_id: AtomicU64,
     task_handler: &'static TH,

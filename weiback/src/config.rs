@@ -30,6 +30,8 @@ pub struct Config {
     pub posts_per_html: u32,
     pub picture_path: PathBuf,
     pub sdk_config: SdkConfig,
+    #[cfg(feature = "dev-mode")]
+    pub dev_mode_out_dir: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -47,6 +49,8 @@ impl Default for Config {
             posts_per_html: 200,
             picture_path: data_dir.join("pictures"),
             sdk_config: Default::default(),
+            #[cfg(feature = "dev-mode")]
+            dev_mode_out_dir: Default::default(),
         }
     }
 }

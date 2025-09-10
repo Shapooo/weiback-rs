@@ -22,3 +22,6 @@ weibosdk-rs = { workspace = true }
 
 [build-dependencies]
 tauri-build = { workspace = true }
+
+[features]
+"dev-mode" = ["weiback-rs/dev-mode"]

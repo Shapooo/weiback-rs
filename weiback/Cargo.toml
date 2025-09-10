@@ -25,9 +25,13 @@ tera = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true, optional = true }
 weibosdk-rs = { workspace = true }
 
 [dev-dependencies]
 mockito = "1"
 tempfile = "3"
 weibosdk-rs = { workspace = true, features = ["test-mocks"] }
+
+[features]
+dev-mode = [ "dep:uuid" ]

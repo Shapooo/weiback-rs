@@ -13,3 +13,6 @@ pub mod utils;
 
 #[cfg(test)]
 pub mod mock;
+
+#[cfg(feature = "dev-mode")]
+pub mod dev_client;
