@@ -101,32 +101,33 @@ impl TryInto<Post> for PostInternal {
 pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
     info!("Creating post table if not exists...");
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS posts ( \
-         attitudes_count INTEGER, \
-         attitudes_status INTEGER, \
-         comments_count INTEGER, \
-         created_at TEXT, \
-         deleted INTEGER, \
-         edit_count INTEGER, \
-         favorited INTEGER, \
-         geo TEXT, \
-         id INTEGER PRIMARY KEY, \
-         mblogid TEXT, \
-         mix_media_ids TEXT, \
-         mix_media_info TEXT, \
-         page_info TEXT, \
-         pic_ids TEXT, \
-         pic_infos TEXT, \
-         pic_num INTEGER, \
-         region_name TEXT, \
-         reposts_count INTEGER, \
-         repost_type INTEGER, \
-         retweeted_id INTEGER, \
-         source TEXT, \
-         text TEXT, \
-         uid INTEGER, \
-         url_struct TEXT\
-         )",
+        r#"CREATE TABLE
+    IF NOT EXISTS posts (
+        attitudes_count INTEGER,
+        attitudes_status INTEGER,
+        comments_count INTEGER,
+        created_at TEXT,
+        deleted INTEGER,
+        edit_count INTEGER,
+        favorited INTEGER,
+        geo TEXT,
+        id INTEGER PRIMARY KEY,
+        mblogid TEXT,
+        mix_media_ids TEXT,
+        mix_media_info TEXT,
+        page_info TEXT,
+        pic_ids TEXT,
+        pic_infos TEXT,
+        pic_num INTEGER,
+        region_name TEXT,
+        reposts_count INTEGER,
+        repost_type INTEGER,
+        retweeted_id INTEGER,
+        source TEXT,
+        text TEXT,
+        uid INTEGER,
+        url_struct TEXT
+    );"#,
     )
     .execute(db)
     .await?;
@@ -137,10 +138,8 @@ pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
 pub async fn create_favorited_post_table(db: &SqlitePool) -> Result<()> {
     info!("Creating favorited post table if not exists...");
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS favorited_posts ( \
-         id INTEGER PRIMARY KEY, \
-         unfavorited INTEGER \
-         )",
+        r#"CREATE TABLE
+    IF NOT EXISTS favorited_posts (id INTEGER PRIMARY KEY, unfavorited INTEGER);"#,
     )
     .execute(db)
     .await?;
@@ -176,21 +175,41 @@ pub async fn get_favorites(
 ) -> Result<Vec<PostInternal>> {
     debug!("query favorites offset {offset}, limit {limit}, rev {reverse}");
     let sql_expr = if reverse {
-        r#"SELECT *
-FROM posts
-WHERE id IN (SELECT id
-             FROM favorited_posts
-             ORDER BY id
-             LIMIT ?
-             OFFSET ?);"#
+        r#"SELECT
+    *
+FROM
+    posts
+WHERE
+    id IN (
+        SELECT
+            id
+        FROM
+            favorited_posts
+        ORDER BY
+            id
+        LIMIT
+            ?
+        OFFSET
+            ?
+    );"#
     } else {
-        r#"SELECT *
-FROM posts
-WHERE id IN (SELECT id
-             FROM favorited_posts
-             ORDER BY id DESC
-             LIMIT ?
-             OFFSET ?);"#
+        r#"SELECT
+    *
+FROM
+    posts
+WHERE
+    id IN (
+        SELECT
+            id
+        FROM
+            favorited_posts
+        ORDER BY
+            id DESC
+        LIMIT
+            ?
+        OFFSET
+            ?
+    );"#
     };
     let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
         .bind(limit)
@@ -208,9 +227,9 @@ pub async fn get_posts(
 ) -> Result<Vec<PostInternal>> {
     debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
     let sql_expr = if reverse {
-        "SELECT * FROM posts ORDER BY id LIMIT ? OFFSET ?"
+        "SELECT * FROM posts ORDER BY id LIMIT ? OFFSET ?;"
     } else {
-        "SELECT * FROM posts ORDER BY id DESC LIMIT ? OFFSET ?"
+        "SELECT * FROM posts ORDER BY id DESC LIMIT ? OFFSET ?;"
     };
     let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
         .bind(limit)
@@ -229,9 +248,9 @@ pub async fn get_ones_posts(
 ) -> Result<Vec<PostInternal>> {
     debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
     let sql_expr = if reverse {
-        "SELECT * FROM posts WHERE uid = ? ORDER BY id LIMIT ? OFFSET ?"
+        "SELECT * FROM posts WHERE uid = ? ORDER BY id LIMIT ? OFFSET ?;"
     } else {
-        "SELECT * FROM posts WHERE uid = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+        "SELECT * FROM posts WHERE uid = ? ORDER BY id DESC LIMIT ? OFFSET ?;"
     };
     let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
         .bind(uid)
@@ -245,34 +264,39 @@ pub async fn get_ones_posts(
 pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) -> Result<()> {
     sqlx::query(
         format!(
-            "INSERT OR {} INTO posts (\
-                 attitudes_count,\
-                 attitudes_status,\
-                 comments_count,\
-                 created_at,\
-                 deleted,\
-                 edit_count,\
-                 favorited,\
-                 geo,\
-                 id,\
-                 mblogid,\
-                 mix_media_ids, \
-                 mix_media_info,\
-                 page_info,\
-                 pic_ids,\
-                 pic_infos,\
-                 pic_num,\
-                 region_name,\
-                 reposts_count,\
-                 repost_type,\
-                 retweeted_id,\
-                 source,\
-                 text,\
-                 uid,\
-                 url_struct)\
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,\
-                 ?, ?, ?, ?)",
+            r#"INSERT
+OR {} INTO posts (
+    attitudes_count,
+    attitudes_status,
+    comments_count,
+    created_at,
+    deleted,
+    edit_count,
+    favorited,
+    geo,
+    id,
+    mblogid,
+    mix_media_ids,
+    mix_media_info,
+    page_info,
+    pic_ids,
+    pic_infos,
+    pic_num,
+    region_name,
+    reposts_count,
+    repost_type,
+    retweeted_id,
+    source,
+    text,
+    uid,
+    url_struct
+)
+VALUES
+    (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?
+    );"#,
             if overwrite { "REPLACE" } else { "IGNORE" }
         )
         .as_str(),
@@ -311,7 +335,7 @@ pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) ->
 
 pub async fn mark_post_unfavorited(db: &SqlitePool, id: i64) -> Result<()> {
     debug!("unfav post {id} in db");
-    sqlx::query("UPDATE favorited_posts SET unfavorited = true WHERE id = ?")
+    sqlx::query("UPDATE favorited_posts SET unfavorited = true WHERE id = ?;")
         .bind(id)
         .execute(db)
         .await?;
@@ -321,8 +345,10 @@ pub async fn mark_post_unfavorited(db: &SqlitePool, id: i64) -> Result<()> {
 pub async fn mark_post_favorited(db: &SqlitePool, id: i64) -> Result<()> {
     debug!("mark favorited post {id} in db");
     sqlx::query(
-        "INSERT OR REPLACE INTO favorited_posts (id, unfavorited)\
-    VALUES (?, ?)",
+        r#"INSERT
+OR REPLACE INTO favorited_posts (id, unfavorited)
+VALUES
+    (?, ?);"#,
     )
     .bind(id)
     .bind(false)

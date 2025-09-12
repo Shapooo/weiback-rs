@@ -51,16 +51,17 @@ impl From<UserInternal> for User {
 pub async fn create_user_table(db: &SqlitePool) -> Result<()> {
     info!("Creating user table if not exists...");
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS users ( \
-             avatar_hd TEXT, \
-             avatar_large TEXT, \
-             domain TEXT, \
-             following INTEGER, \
-             follow_me INTEGER, \
-             id INTEGER PRIMARY KEY, \
-             profile_image_url TEXT, \
-             screen_name TEXT \
-             )",
+        r#"CREATE TABLE
+    IF NOT EXISTS users (
+        avatar_hd TEXT,
+        avatar_large TEXT,
+        domain TEXT,
+        following INTEGER,
+        follow_me INTEGER,
+        id INTEGER PRIMARY KEY,
+        profile_image_url TEXT,
+        screen_name TEXT
+    );"#,
     )
     .execute(db)
     .await?;
@@ -69,7 +70,7 @@ pub async fn create_user_table(db: &SqlitePool) -> Result<()> {
 }
 
 pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
-    let user = sqlx::query_as::<Sqlite, UserInternal>("SELECT * FROM users WHERE id = ?")
+    let user = sqlx::query_as::<Sqlite, UserInternal>("SELECT * FROM users WHERE id = ?;")
         .bind(id)
         .fetch_optional(db)
         .await?;
@@ -78,17 +79,19 @@ pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
 
 pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
     let _ = sqlx::query(
-        "INSERT OR REPLACE INTO users (\
-             avatar_hd,\
-             avatar_large,\
-             domain,\
-             following,\
-             follow_me,\
-             id,\
-             profile_image_url,\
-             screen_name)\
-             VALUES \
-             (?, ?, ?, ?, ?, ?, ?, ?)",
+        r#"INSERT
+OR REPLACE INTO users (
+    avatar_hd,
+    avatar_large,
+    domain,
+    following,
+    follow_me,
+    id,
+    profile_image_url,
+    screen_name
+)
+VALUES
+    (?, ?, ?, ?, ?, ?, ?, ?);"#,
     )
     .bind(&user.avatar_hd)
     .bind(&user.avatar_large)
