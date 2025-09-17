@@ -118,7 +118,6 @@ impl<C: HttpClient> ApiClientImpl<C> {
 mod local_tests {
     use super::*;
     use std::path::Path;
-    use std::sync::{Arc, Mutex};
 
     use weibosdk_rs::{ApiClient as SdkApiClient, mock::MockClient, session::Session};
 
@@ -131,7 +130,6 @@ mod local_tests {
             screen_name: "test_screen_name".to_string(),
             cookie_store: Default::default(),
         };
-        let session = Arc::new(Mutex::new(session));
         let api_client =
             ApiClientImpl::new(SdkApiClient::from_session(mock_client.clone(), session));
 
@@ -156,7 +154,6 @@ mod local_tests {
 #[cfg(test)]
 mod real_tests {
     use std::path::Path;
-    use std::sync::{Arc, Mutex};
 
     use weibosdk_rs::{ApiClient as SdkApiClient, http_client, session::Session};
 
@@ -165,9 +162,9 @@ mod real_tests {
     #[tokio::test]
     async fn test_real_emoji_update() {
         let session_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("session.json");
-        let session = Arc::new(Mutex::new(Session::load(session_file).unwrap()));
+        let session = Session::load(session_file).unwrap();
         let client = http_client::Client::new().unwrap();
-        let mut api_client = SdkApiClient::new(client, Default::default());
+        let api_client = SdkApiClient::new(client, Default::default());
         api_client.login_with_session(session).await.unwrap();
         let api_client = ApiClientImpl::new(api_client);
         let emoji_map = api_client.emoji_update().await.unwrap();

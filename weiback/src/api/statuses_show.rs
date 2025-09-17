@@ -56,7 +56,6 @@ impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
 #[cfg(test)]
 mod local_tests {
     use std::path::Path;
-    use std::sync::{Arc, Mutex};
 
     use super::*;
     use weibosdk_rs::{ApiClient as SdkApiClient, mock::MockClient, session::Session};
@@ -70,7 +69,6 @@ mod local_tests {
             screen_name: "test_screen_name".to_string(),
             cookie_store: Default::default(),
         };
-        let session = Arc::new(Mutex::new(session));
         let weibo_api =
             ApiClientImpl::new(SdkApiClient::from_session(mock_client.clone(), session));
 
@@ -87,14 +85,12 @@ mod local_tests {
 #[cfg(test)]
 mod real_tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
     use weibosdk_rs::{ApiClient as SdkApiClient, http_client, session::Session};
 
     #[tokio::test]
     async fn test_real_get_statuses_show() {
         let session_file = "session.json";
         if let Ok(session) = Session::load(session_file) {
-            let session = Arc::new(Mutex::new(session));
             let client = http_client::Client::new().unwrap();
             let weibo_api = ApiClientImpl::new(SdkApiClient::from_session(client, session));
             let _ = weibo_api.statuses_show(5179586393932632).await.unwrap();

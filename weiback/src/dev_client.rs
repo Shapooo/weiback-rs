@@ -78,7 +78,7 @@ impl HttpClient for DevClient {
     }
 
     fn set_cookie(
-        &mut self,
+        &self,
         cookie_store: weibosdk_rs::http_client::CookieStore,
     ) -> weibosdk_rs::error::Result<()> {
         self.client.set_cookie(cookie_store)

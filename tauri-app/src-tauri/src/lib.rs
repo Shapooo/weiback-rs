@@ -203,9 +203,9 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
         main_config.dev_mode_out_dir.clone(),
     );
     #[cfg(feature = "dev-mode")]
-    let mut sdk_api_client = SdkApiClient::new(dev_client, main_config.sdk_config.clone());
+    let sdk_api_client = SdkApiClient::new(dev_client, main_config.sdk_config.clone());
     #[cfg(not(feature = "dev-mode"))]
-    let mut sdk_api_client = SdkApiClient::new(http_client.clone(), main_config.sdk_config.clone());
+    let sdk_api_client = SdkApiClient::new(http_client.clone(), main_config.sdk_config.clone());
     info!("WeiboAPIImpl initialized");
 
     let api_client = ApiClientImpl::new(sdk_api_client.clone());
@@ -230,8 +230,6 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     app.manage(Mutex::new(sdk_api_client.clone()));
 
     if let Ok(session) = Session::load(main_config.session_path.as_path()) {
-        let session = Arc::new(Mutex::new(session));
-        status_manager.set_session(session.clone());
         tauri::async_runtime::spawn_blocking(async move || {
             if let Err(e) = sdk_api_client.login_with_session(session).await {
                 error!("{e}");
