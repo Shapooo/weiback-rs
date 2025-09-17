@@ -4,6 +4,7 @@ pub(crate) mod internal;
 pub mod profile_statuses;
 pub mod statuses_show;
 
+use log::warn;
 use weibosdk_rs::{ApiClient as SdkApiClient, http_client::HttpClient};
 
 use crate::error::Result;
@@ -77,13 +78,23 @@ impl<C: HttpClient> ApiClientImpl<C> {
     pub async fn handle_long_text(&self, post: &mut PostInternal) -> Result<()> {
         if post.is_long_text {
             *post = self.statuses_show_internal(post.id).await?;
-            post.text = post.long_text.take().unwrap().content; // Promised to be Some
+            if let Some(long_text) = post.long_text.take() {
+                post.text = long_text.content; // should be Some
+            } else {
+                let id = post.id;
+                warn!("post {id} is_long_text without long_text");
+            }
         }
         if let Some(ret) = post.retweeted_status.as_mut()
             && ret.is_long_text
         {
             *ret = Box::new(self.statuses_show_internal(ret.id).await?);
-            ret.text = ret.long_text.take().unwrap().content; // Promised to be Some
+            if let Some(long_text) = ret.long_text.take() {
+                ret.text = long_text.content; // should be Some
+            } else {
+                let id = post.id;
+                warn!("post {id} is_long_text without long_text");
+            }
         }
         Ok(())
     }
