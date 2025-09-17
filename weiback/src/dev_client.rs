@@ -1,9 +1,10 @@
 use std::{
-    fs::read_to_string,
+    fs::{create_dir_all, read_to_string},
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
 };
 
+use log::{debug, info};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
@@ -25,15 +26,29 @@ pub struct DevClient {
 impl DevClient {
     pub fn new(client: Client, dev_mode_out_dir: Option<PathBuf>) -> Self {
         if let Some(path) = dev_mode_out_dir.clone() {
-            let records_s =
-                read_to_string(path.join(RECORDS_FN)).expect("read records.json failed");
-            let records = from_str(&records_s).expect("parse records failed");
-            RECORDS
-                .set(Record {
+            let json_path = path.join(RECORDS_FN);
+            if json_path.exists() {
+                info!("Loading existing records from {:?}", json_path);
+                let records_s =
+                    read_to_string(json_path.as_path()).expect("read records.json failed");
+                let records = from_str(&records_s).expect("parse records failed");
+                let records = Record {
                     records: Arc::new(Mutex::new(records)),
                     path,
-                })
-                .expect("set RECORDS failed");
+                };
+                RECORDS.set(records).expect("set RECORDS failed");
+            } else {
+                info!(
+                    "No records file found at {:?}, creating a new one.",
+                    json_path
+                );
+                create_dir_all(json_path.parent().unwrap()).expect("create dev records dir failed");
+                let records = Record {
+                    records: Default::default(),
+                    path,
+                };
+                RECORDS.set(records).expect("set RECORDS failed");
+            }
         }
         Self {
             client,
@@ -110,6 +125,7 @@ impl HttpResponse for DevResponse {
             let txt = self.res.text().await?;
             let file_name = Uuid::now_v7().simple().to_string();
             let path = path.join(&file_name);
+            info!("Saving response for {} to file {:?}", self.url, &path);
             let record = RecordItem {
                 url: self.url,
                 query: self.query,
@@ -128,6 +144,7 @@ impl HttpResponse for DevResponse {
             let txt = self.res.text().await?;
             let file_name = Uuid::now_v7().simple().to_string();
             let path = path.join(&file_name);
+            info!("Saving response for {} to file {:?}", self.url, &path);
             let record = RecordItem {
                 url: self.url,
                 query: self.query,
@@ -146,6 +163,7 @@ impl HttpResponse for DevResponse {
             let bt = self.res.bytes().await?;
             let file_name = Uuid::now_v7().simple().to_string();
             let path = path.join(&file_name);
+            info!("Saving response for {} to file {:?}", self.url, &path);
             let record = RecordItem {
                 url: self.url,
                 query: self.query,
@@ -162,6 +180,7 @@ impl HttpResponse for DevResponse {
 
 fn append_record(item: RecordItem) {
     if let Some(records) = RECORDS.get() {
+        debug!("Appending record for url: {}", &item.url);
         let mut records = records.records.lock().unwrap();
         records.push(item);
     }
@@ -174,7 +193,7 @@ struct RecordItem {
     file_name: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Record {
     pub records: Arc<Mutex<Vec<RecordItem>>>,
     pub path: PathBuf,
@@ -184,8 +203,10 @@ static RECORDS: OnceLock<Record> = OnceLock::new();
 
 impl Drop for Record {
     fn drop(&mut self) {
+        let records_path = self.path.join(RECORDS_FN);
+        info!("Writing records to {:?}", &records_path);
         let records = self.records.lock().unwrap();
         let s = to_string::<Vec<_>>(records.as_ref()).unwrap();
-        std::fs::write(self.path.join(RECORDS_FN), s).unwrap();
+        std::fs::write(records_path, s).unwrap();
     }
 }
