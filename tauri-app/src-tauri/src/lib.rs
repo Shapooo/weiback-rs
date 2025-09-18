@@ -110,6 +110,12 @@ async fn login(api_client: State<'_, SdkApiClient<HttpClient>>, sms_code: String
             info!("Attempting to login with SMS code.");
             api_client.login(&sms_code).await?;
             info!("Login successful.");
+            let session_path = get_config()
+                .read()
+                .expect("config lock failed")
+                .session_path
+                .clone();
+            api_client.session()?.save(session_path)?;
             Ok(())
         }
         LoginState::LoggedIn { .. } => {
@@ -213,10 +219,20 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     app.manage(task_handler);
     app.manage(sdk_api_client.clone());
 
-    if let Ok(session) = Session::load(main_config.session_path.as_path()) {
+    let session_path = main_config.session_path.clone();
+    if let Ok(session) = Session::load(session_path.as_path()) {
         tauri::async_runtime::spawn(async move {
             if let Err(e) = sdk_api_client.login_with_session(session).await {
-                error!("{e}");
+                error!("login with session failed: {e}");
+            }
+            let Ok(session) = sdk_api_client
+                .session()
+                .map_err(|e| error!("get new session failed: {e}"))
+            else {
+                return;
+            };
+            if let Err(e) = session.save(session_path) {
+                error!("save new session failed: {e}");
             }
         });
     }
