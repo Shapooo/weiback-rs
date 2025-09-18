@@ -1,10 +1,11 @@
 use std::{
     fs::{create_dir_all, read_to_string},
+    ops::Deref,
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
 };
 
-use log::{debug, info};
+use log::{debug, error, info};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
@@ -31,7 +32,7 @@ impl DevClient {
                 info!("Loading existing records from {:?}", json_path);
                 let records_s =
                     read_to_string(json_path.as_path()).expect("read records.json failed");
-                let records = from_str(&records_s).expect("parse records failed");
+                let records = from_str(&records_s).unwrap_or_default();
                 let records = Record {
                     records: Arc::new(Mutex::new(records)),
                     path,
@@ -201,12 +202,17 @@ struct Record {
 
 static RECORDS: OnceLock<Record> = OnceLock::new();
 
-impl Drop for Record {
-    fn drop(&mut self) {
-        let records_path = self.path.join(RECORDS_FN);
-        info!("Writing records to {:?}", &records_path);
-        let records = self.records.lock().unwrap();
-        let s = to_string::<Vec<_>>(records.as_ref()).unwrap();
-        std::fs::write(records_path, s).unwrap();
-    }
+pub fn save_records() {
+    let Some(records) = RECORDS.get() else {
+        return;
+    };
+
+    let records_path = records.path.join(RECORDS_FN);
+    info!("Writing records to {:?}", &records_path);
+    let Ok(records) = records.records.lock() else {
+        error!("records lock failed");
+        return;
+    };
+    let s = to_string::<Vec<_>>(records.deref()).unwrap();
+    std::fs::write(records_path, s).unwrap();
 }

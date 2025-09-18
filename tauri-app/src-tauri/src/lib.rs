@@ -146,11 +146,19 @@ pub fn run() -> Result<()> {
             login,
             login_status
         ])
-        .run(tauri::generate_context!())
-        .map_err(|e| {
-            error!("tauri run failed: {e}");
-            e
-        })?;
+        .build(tauri::generate_context!())
+        .expect("tauri app build failed")
+        .run(|_app_handle, _event| {
+            #[cfg(feature = "dev-mode")]
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = _event
+                && code.is_none()
+            {
+                api.prevent_exit();
+                weiback::dev_client::save_records();
+                _app_handle.cleanup_before_exit();
+                _app_handle.exit(0);
+            }
+        });
     Ok(())
 }
 
