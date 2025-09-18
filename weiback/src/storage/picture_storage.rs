@@ -1,10 +1,11 @@
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
 use log::debug;
 
 use crate::config::get_config;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::models::Picture;
 use crate::utils::url_to_path;
 
@@ -42,9 +43,13 @@ impl FileSystemPictureStorage {
     }
 
     pub async fn save_picture(&self, picture: &Picture) -> Result<()> {
-        let path = url_to_path(picture.meta.url())?;
+        let url = picture.meta.url();
+        let path = url_to_path(url)?;
         let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
         let path = self.picture_path.join(relative_path);
+        create_dir_all(path.parent().ok_or(Error::Io(std::io::Error::other(
+            "cannot get parent of picture path",
+        )))?)?;
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
