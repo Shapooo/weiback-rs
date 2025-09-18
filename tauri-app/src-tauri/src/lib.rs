@@ -1,8 +1,6 @@
 mod error;
-mod status_manager;
 
 use std::ops::RangeInclusive;
-use std::sync::{Arc, Mutex};
 
 use log::{debug, error, info, warn};
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
@@ -14,6 +12,8 @@ use weiback::core::{
     BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
     task_manager::TaskManger,
 };
+#[cfg(feature = "dev-mode")]
+use weiback::dev_client::DevClient;
 use weiback::exporter::ExporterImpl;
 use weiback::media_downloader::{MediaDownloaderHandle, create_downloader};
 use weiback::message::{ErrMsg, Message, TaskProgress};
@@ -23,29 +23,25 @@ use weibosdk_rs::{
 };
 
 use error::{Error, Result};
-use status_manager::StatusManager;
 
 #[cfg(feature = "dev-mode")]
 type TH = TaskHandler<weiback::api::DevApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 #[cfg(not(feature = "dev-mode"))]
 type TH =
     TaskHandler<weiback::api::DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
+#[cfg(feature = "dev-mode")]
+type CurrentSdkApiClient = SdkApiClient<DevClient>;
+#[cfg(not(feature = "dev-mode"))]
+type CurrentSdkApiClient = SdkApiClient<HttpClient>;
 
 #[tauri::command]
 async fn backup_self(
     core: State<'_, Core>,
-    api_client: State<'_, Mutex<SdkApiClient<HttpClient>>>,
+    api_client: State<'_, SdkApiClient<HttpClient>>,
     range: RangeInclusive<u32>,
 ) -> Result<()> {
     info!("backup_self called with range: {range:?}");
-    let uid = api_client
-        .lock()
-        .unwrap()
-        .session()?
-        .lock()
-        .unwrap()
-        .uid
-        .clone();
+    let uid = api_client.session()?.uid.clone();
     backup_user(core, uid, range).await
 }
 
@@ -88,15 +84,11 @@ async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u3
 }
 
 #[tauri::command]
-async fn send_code(
-    api_client: State<'_, tokio::sync::Mutex<SdkApiClient<HttpClient>>>,
-    phone_number: String,
-) -> Result<()> {
+async fn send_code(api_client: State<'_, CurrentSdkApiClient>, phone_number: String) -> Result<()> {
     info!(
         "send_code called for phone number (partially hidden): ...{}",
         &phone_number.chars().skip(7).collect::<String>()
     );
-    let mut api_client = api_client.lock().await;
     match api_client.login_state() {
         LoginState::LoggedIn { .. } => {
             warn!("Already logged in, skipping send_code.");
@@ -111,20 +103,12 @@ async fn send_code(
 }
 
 #[tauri::command]
-async fn login(
-    api_client: State<'_, tokio::sync::Mutex<SdkApiClient<HttpClient>>>,
-    status_manager: State<'_, StatusManager>,
-    sms_code: String,
-) -> Result<()> {
+async fn login(api_client: State<'_, SdkApiClient<HttpClient>>, sms_code: String) -> Result<()> {
     info!("login called with a sms_code");
-    let mut api_client = api_client.lock().await;
     match api_client.login_state() {
         LoginState::WaitingForCode { .. } => {
             info!("Attempting to login with SMS code.");
             api_client.login(&sms_code).await?;
-            if let LoginState::LoggedIn { session } = api_client.login_state() {
-                status_manager.set_session(session.clone());
-            }
             info!("Login successful.");
             Ok(())
         }
@@ -140,11 +124,9 @@ async fn login(
 }
 
 #[tauri::command]
-fn login_status(status_manager: State<'_, StatusManager>) -> Result<Option<String>> {
+fn login_status(api_client: State<'_, CurrentSdkApiClient>) -> Result<Option<String>> {
     info!("get login status");
-    Ok(status_manager
-        .session()
-        .map(|s| s.lock().unwrap().uid.clone()))
+    Ok(api_client.session().ok().map(|s| s.uid.to_owned()))
 }
 
 pub fn run() -> Result<()> {
@@ -166,7 +148,7 @@ pub fn run() -> Result<()> {
         ])
         .run(tauri::generate_context!())
         .map_err(|e| {
-            error!("{e}");
+            error!("tauri run failed: {e}");
             e
         })?;
     Ok(())
@@ -198,10 +180,7 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     info!("MediaDownloader initialized");
 
     #[cfg(feature = "dev-mode")]
-    let dev_client = weiback::dev_client::DevClient::new(
-        http_client.clone(),
-        main_config.dev_mode_out_dir.clone(),
-    );
+    let dev_client = DevClient::new(http_client.clone(), main_config.dev_mode_out_dir.clone());
     #[cfg(feature = "dev-mode")]
     let sdk_api_client = SdkApiClient::new(dev_client, main_config.sdk_config.clone());
     #[cfg(not(feature = "dev-mode"))]
@@ -216,10 +195,7 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let core = Core::new(task_handler.clone())?;
     info!("Core initialized");
 
-    let status_manager = StatusManager::new();
-
     info!("Setting up Tauri application");
-
     tauri::async_runtime::spawn(msg_loop(
         app.handle().clone(),
         core.task_manager().clone(),
@@ -227,16 +203,15 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     ));
     app.manage(core);
     app.manage(task_handler);
-    app.manage(Mutex::new(sdk_api_client.clone()));
+    app.manage(sdk_api_client.clone());
 
     if let Ok(session) = Session::load(main_config.session_path.as_path()) {
-        tauri::async_runtime::spawn_blocking(async move || {
+        tauri::async_runtime::spawn(async move {
             if let Err(e) = sdk_api_client.login_with_session(session).await {
                 error!("{e}");
             }
         });
     }
-    app.manage(status_manager);
 
     info!("Tauri setup complete");
     Ok(())
