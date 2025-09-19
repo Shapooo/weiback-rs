@@ -1,5 +1,5 @@
 #![allow(async_fn_in_trait)]
-use log::{debug, error, info};
+use log::{debug, error};
 use serde::Deserialize;
 use weibosdk_rs::http_client::HttpResponse;
 
@@ -30,7 +30,7 @@ pub trait StatusesShowApi {
 
 impl<C: HttpClient> ApiClientImpl<C> {
     pub(super) async fn statuses_show_internal(&self, id: i64) -> Result<PostInternal> {
-        info!("getting long text, id: {id}");
+        debug!("getting long text, id: {id}");
 
         let response = self.client.statuses_show(id).await?;
         let res = response.json::<StatusesShowResponse>().await?;

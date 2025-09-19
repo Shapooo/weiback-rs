@@ -70,16 +70,17 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         info!("Starting backup procedure for task {task_id:?}, type: {task_type:?}");
         let task_interval = get_config().read()?.backup_task_interval;
 
-        let (mut start, mut end) = range;
+        let (start, end) = range;
         let mut total_downloaded: usize = 0;
-        start = start.div_ceil(count);
-        end = end.div_ceil(count);
+        let start = start.div_ceil(count);
+        let end = end.div_ceil(count);
+        let len = end - start + 1;
         debug!("Backup task {task_id} page range: {start}..={end}");
         self.msg_sender
             .send(Message::TaskProgress(TaskProgress {
                 r#type: task_type.clone(),
                 task_id,
-                total_increment: (end - start + 1) as u64,
+                total_increment: len as u64,
                 progress_increment: 0,
             }))
             .await?;
@@ -91,7 +92,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             })?;
 
             total_downloaded += posts_sum;
-            info!("fetched {posts_sum} posts in {page}th page");
+            info!("fetched {posts_sum} posts in {page}th page ({page}/{len})");
 
             self.msg_sender
                 .send(Message::TaskProgress(TaskProgress {
@@ -188,7 +189,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 error!("Failed to unfavorite post {id}: {e}");
                 continue;
             }
-            info!("Post {id} unfavorited successfully");
+            info!("Post {id} ({i}/{len})unfavorited successfully");
             self.msg_sender
                 .send(Message::TaskProgress(TaskProgress {
                     r#type: TaskType::Unfav,

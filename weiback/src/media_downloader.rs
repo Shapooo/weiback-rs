@@ -141,7 +141,7 @@ impl DownloaderWorker {
             error!("Failed to read bytes from response for {url}: {e}");
             e
         })?;
-        info!("Successfully downloaded picture from {url}");
+        debug!("Successfully downloaded picture from {url}");
         (callback)(body).await
     }
 }
