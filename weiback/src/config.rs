@@ -50,7 +50,7 @@ impl Default for Config {
             picture_path: data_dir.join("pictures"),
             sdk_config: Default::default(),
             #[cfg(feature = "dev-mode")]
-            dev_mode_out_dir: Default::default(),
+            dev_mode_out_dir: dirs::download_dir().map(|dir| dir.join("weiback_records")),
         }
     }
 }
