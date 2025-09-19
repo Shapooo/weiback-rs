@@ -58,9 +58,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
             .0
             .into_iter()
             .partition(|u| match u.url_type {
-                UrlTypeInternal::Picture | UrlTypeInternal::Link => {
-                    text.find(&u.short_url).is_some()
-                }
+                UrlTypeInternal::Picture | UrlTypeInternal::Link => text.contains(&u.short_url),
                 UrlTypeInternal::Location => true,
                 UrlTypeInternal::Appendix => false,
                 UrlTypeInternal::Topic => false,
