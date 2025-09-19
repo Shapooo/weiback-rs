@@ -36,13 +36,14 @@ pub struct VideoInfo {
     pub author_mid: Option<String>,
     pub author_name: Option<String>,
     pub big_pic_info: Option<PicInfoItemSimple>,
-    pub duration: i32,
+    pub duration: Option<i32>,
     pub format: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonable_str")]
     pub h265_mp4_hd: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonable_str")]
     pub h265_mp4_ld: Option<String>,
-    pub h5_url: String,
+    #[serde(default, deserialize_with = "deserialize_nonable_str")]
+    pub h5_url: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonable_str")]
     pub hevc_mp4_720p: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonable_str")]
@@ -53,7 +54,7 @@ pub struct VideoInfo {
     pub inch_5_mp4_hd: Option<String>,
     pub is_short_video: Option<i32>,
     pub kol_title: Option<String>,
-    pub media_id: String,
+    pub media_id: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonable_str")]
     pub mp4_720p_mp4: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nonable_str")]
