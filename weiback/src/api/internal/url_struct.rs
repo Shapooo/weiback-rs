@@ -37,7 +37,7 @@ pub struct UrlStructItemInternal {
     pub object_type: Option<String>,
     pub ori_url: String,
     pub page_id: Option<String>,
-    pub short_url: Url,
+    pub short_url: String,
     pub url_title: String,
     pub url_type: UrlTypeInternal,
     #[serde(default, deserialize_with = "deserialize_nonable_url")]

@@ -28,7 +28,7 @@ pub struct UrlStructItem {
     pub object_type: Option<String>,
     pub ori_url: String,
     pub page_id: Option<String>,
-    pub short_url: Url,
+    pub short_url: String,
     pub url_title: String,
     pub url_type: UrlType,
     pub url_type_pic: Option<Url>,
