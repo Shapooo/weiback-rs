@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::PicInfoDetail;
+use super::{PicInfoDetail, common::deserialize_nonable_url};
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoItem {
     pub bmiddle: PicInfoDetail,
@@ -17,8 +18,10 @@ pub struct PicInfoItem {
     pub pic_status: i32,
     pub r#type: PicInfoType,
     pub thumbnail: PicInfoDetail,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
     pub video: Option<Url>,
     pub video_object_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
     pub video_hd: Option<Url>,
 }
 

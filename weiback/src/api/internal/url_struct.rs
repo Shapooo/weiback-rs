@@ -7,7 +7,10 @@ use serde_json::Value;
 use url::Url;
 
 use crate::error::Error;
-use crate::models::{PicInfosForStatusItem, UrlStruct, UrlStructItem, url_struct::UrlType};
+use crate::models::{
+    PicInfosForStatusItem, UrlStruct, UrlStructItem, common::deserialize_nonable_url,
+    url_struct::UrlType,
+};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UrlStructInternal(pub Vec<UrlStructItemInternal>);
@@ -29,14 +32,16 @@ impl PartialEq for UrlStructInternal {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UrlStructItemInternal {
-    pub long_url: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub long_url: Option<Url>,
     pub object_type: Option<String>,
     pub ori_url: String,
     pub page_id: Option<String>,
-    pub short_url: String,
+    pub short_url: Url,
     pub url_title: String,
     pub url_type: UrlTypeInternal,
-    pub url_type_pic: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub url_type_pic: Option<Url>,
     #[serde(default, deserialize_with = "deserialize_pic_ids")]
     pub pic_ids: Option<String>,
     #[serde(default, deserialize_with = "deserialize_pic_infos")]
@@ -102,14 +107,14 @@ impl TryFrom<UrlStructItemInternal> for UrlStructItem {
     type Error = Error;
     fn try_from(value: UrlStructItemInternal) -> std::result::Result<Self, Self::Error> {
         let res = Self {
-            long_url: value.long_url.map(|url| Url::parse(&url)).transpose()?,
+            long_url: value.long_url,
             object_type: value.object_type,
             ori_url: value.ori_url,
             page_id: value.page_id,
-            short_url: Url::parse(&value.short_url)?,
+            short_url: value.short_url,
             url_title: value.url_title,
             url_type: value.url_type.into(),
-            url_type_pic: value.url_type_pic.map(|url| Url::parse(&url)).transpose()?,
+            url_type_pic: value.url_type_pic,
             pic_ids: value.pic_ids,
             pic_infos: value.pic_infos,
             vip_gif: value.vip_gif,

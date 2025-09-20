@@ -112,9 +112,14 @@ where
     D: Deserializer<'de>,
 {
     let s = Option::<Cow<'_, str>>::deserialize(deserializer)?;
-    s.map(|s| Url::parse(&s))
-        .transpose()
-        .map_err(|e| serde::de::Error::custom(e))
+    let Some(s) = s else {
+        return Ok(None);
+    };
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        Some(Url::parse(&s).map_err(serde::de::Error::custom)).transpose()
+    }
 }
 
 #[cfg(test)]

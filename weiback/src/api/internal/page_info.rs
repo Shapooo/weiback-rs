@@ -6,7 +6,7 @@ use serde_json::Value;
 use url::Url;
 
 use crate::models::{
-    common::VideoInfo,
+    common::{VideoInfo, deserialize_nonable_url},
     page_info::{PageInfo, PagePicInfo},
 };
 
@@ -37,14 +37,18 @@ pub struct PageInfoInternal {
     pub oid: Option<i64>,
     pub page_desc: Option<String>,
     pub page_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
     pub page_pic: Option<Url>,
     pub page_title: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
     pub page_url: Option<Url>,
     pub pic_info: Option<PagePicInfo>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
     pub short_url: Option<Url>,
     pub source_type: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_str_num")]
     pub r#type: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
     pub type_icon: Option<Url>,
     pub user: Option<Value>,
 }
