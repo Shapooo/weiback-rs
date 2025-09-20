@@ -402,8 +402,9 @@ mod tests {
         let mut favs: Vec<Post> = favs
             .favorites
             .into_iter()
-            .map(|p| p.status.into())
-            .collect();
+            .map(|p| p.status.try_into())
+            .collect::<Result<_>>()
+            .unwrap();
         let profile_statuses =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/profile_statuses.json");
         let statuses = serde_json::from_str::<ProfileStatusesSucc>(
@@ -413,8 +414,9 @@ mod tests {
         let statuses: Vec<Post> = statuses
             .cards
             .into_iter()
-            .filter_map(|c| c.mblog.map(|p| p.into()))
-            .collect();
+            .filter_map(|c| c.mblog.map(|p| p.try_into()))
+            .collect::<Result<_>>()
+            .unwrap();
         favs.extend(statuses);
         favs
     }

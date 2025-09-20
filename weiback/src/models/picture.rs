@@ -1,5 +1,8 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use url::Url;
+
+use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub enum PictureDefinition {
@@ -51,25 +54,28 @@ impl From<u8> for PictureDefinition {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PictureMeta {
-    InPost { url: String, post_id: i64 },
-    Avatar { url: String, user_id: i64 },
-    Other { url: String },
+    InPost { url: Url, post_id: i64 },
+    Avatar { url: Url, user_id: i64 },
+    Other { url: Url },
 }
 
 impl PictureMeta {
-    pub fn in_post(url: String, post_id: i64) -> Self {
-        PictureMeta::InPost { url, post_id }
+    pub fn in_post(url: &str, post_id: i64) -> Result<Self> {
+        let url = Url::parse(url)?;
+        Ok(PictureMeta::InPost { url, post_id })
     }
 
-    pub fn avatar(url: String, user_id: i64) -> Self {
-        PictureMeta::Avatar { url, user_id }
+    pub fn avatar(url: &str, user_id: i64) -> Result<Self> {
+        let url = Url::parse(url)?;
+        Ok(PictureMeta::Avatar { url, user_id })
     }
 
-    pub fn other(url: String) -> Self {
-        PictureMeta::Other { url }
+    pub fn other(url: &str) -> Result<Self> {
+        let url = Url::parse(url)?;
+        Ok(PictureMeta::Other { url })
     }
 
-    pub fn url(&self) -> &str {
+    pub fn url(&self) -> &Url {
         match self {
             PictureMeta::InPost { url, .. } => url,
             PictureMeta::Avatar { url, .. } => url,

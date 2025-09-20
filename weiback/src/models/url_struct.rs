@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use url::Url;
 
 use super::PicInfoDetail;
 
@@ -23,14 +24,14 @@ impl PartialEq for UrlStruct {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct UrlStructItem {
-    pub long_url: Option<String>,
+    pub long_url: Option<Url>,
     pub object_type: Option<String>,
     pub ori_url: String,
     pub page_id: Option<String>,
-    pub short_url: String,
+    pub short_url: Url,
     pub url_title: String,
     pub url_type: UrlType,
-    pub url_type_pic: Option<String>,
+    pub url_type_pic: Option<Url>,
     pub pic_ids: Option<String>,
     pub pic_infos: Option<PicInfosForStatusItem>,
     pub vip_gif: Option<Value>,
@@ -65,6 +66,7 @@ mod local_tests {
     use serde_json::{Value, from_str, from_value, to_value};
 
     use crate::api::internal::url_struct::UrlStructInternal;
+    use crate::error::Result;
     use crate::models::UrlStruct;
 
     fn get_url_structs() -> Vec<UrlStruct> {
@@ -77,8 +79,13 @@ mod local_tests {
             .unwrap()
             .iter_mut()
             .filter_map(|item| item["status"].get_mut("url_struct"))
-            .map(|v| from_value::<UrlStructInternal>(v.take()).unwrap().into())
-            .collect::<Vec<_>>();
+            .map(|v| {
+                from_value::<UrlStructInternal>(v.take())
+                    .unwrap()
+                    .try_into()
+            })
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
         url_structs
     }
 

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use log::{debug, error, info};
 use serde::Deserialize;
 use serde_json::Value;
+use url::Url;
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
 
 use super::ApiClientImpl;
@@ -13,7 +14,7 @@ use crate::models::err_response::ErrResponse;
 #[derive(Debug, Clone, Deserialize)]
 struct Emoji {
     key: String,
-    url: String,
+    url: Url,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -34,11 +35,11 @@ enum EmojiUpdateResponse {
 }
 
 pub trait EmojiUpdateApi {
-    async fn emoji_update(&self) -> Result<HashMap<String, String>>;
+    async fn emoji_update(&self) -> Result<HashMap<String, Url>>;
 }
 
 impl<C: HttpClient> EmojiUpdateApi for ApiClientImpl<C> {
-    async fn emoji_update(&self) -> Result<HashMap<String, String>> {
+    async fn emoji_update(&self) -> Result<HashMap<String, Url>> {
         info!("getting emoji update");
         let mut res = self.fetch_from_mobile_api().await?;
         res.extend(self.fetch_from_web_api().await?);
@@ -48,7 +49,7 @@ impl<C: HttpClient> EmojiUpdateApi for ApiClientImpl<C> {
 }
 
 impl<C: HttpClient> ApiClientImpl<C> {
-    async fn fetch_from_web_api(&self) -> Result<HashMap<String, String>> {
+    async fn fetch_from_web_api(&self) -> Result<HashMap<String, Url>> {
         debug!("fetch emoticon");
         let res = self.client.fetch_from_web_api().await?;
         let mut json: Value = res.json().await?;
@@ -88,6 +89,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
                             "the format of emoticon is unexpected".to_string(),
                         ));
                     };
+                    let url = Url::parse(&url)?;
                     res.insert(phrase, url);
                 }
             }
@@ -95,7 +97,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
         Ok(res)
     }
 
-    async fn fetch_from_mobile_api(&self) -> Result<HashMap<String, String>> {
+    async fn fetch_from_mobile_api(&self) -> Result<HashMap<String, Url>> {
         let response = self.client.fetch_from_mobile_api().await?;
         let res = response.json::<EmojiUpdateResponse>().await?;
         match res {
@@ -145,7 +147,7 @@ mod local_tests {
         assert!(!emoji_map.is_empty());
         assert!(emoji_map.contains_key("[光夜萧逸]"));
         assert_eq!(
-            emoji_map.get("[光夜萧逸]").unwrap(),
+            emoji_map.get("[光夜萧逸]").unwrap().as_str(),
             "https://d.sinaimg.cn/prd/100/1378/2025/06/24/2025_LoveOsborn_mobile.png"
         );
     }

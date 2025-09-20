@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use url::Url;
 use weibosdk_rs::{api_client::ApiClient as SdkApiClient, mock::MockClient};
 
 use crate::{
@@ -24,7 +25,7 @@ impl MockApi {
 }
 
 impl EmojiUpdateApi for MockApi {
-    async fn emoji_update(&self) -> Result<HashMap<String, String>> {
+    async fn emoji_update(&self) -> Result<HashMap<String, Url>> {
         self.client.emoji_update().await
     }
 }

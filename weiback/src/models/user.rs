@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use url::Url;
 
+use super::common::deserialize_nonable_url;
 /** 用户数据
  * 从微博 API 获取的每条 post 会附带 user 字段，原始数据为 Json 格式，包含如下字段：
  * avatar_hd            高清头像URL，字符串格式
@@ -29,20 +31,12 @@ use serde::{Deserialize, Serialize};
  */
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct User {
-    #[serde(default)]
-    pub avatar_hd: String,
-    #[serde(default)]
-    pub avatar_large: String,
-    #[serde(default)]
+    pub avatar_hd: Url,
+    pub avatar_large: Url,
     pub domain: String,
-    #[serde(default)]
     pub following: bool,
-    #[serde(default)]
     pub follow_me: bool,
-    #[serde(default)]
     pub id: i64,
-    #[serde(default)]
-    pub profile_image_url: String,
-    #[serde(default)]
+    pub profile_image_url: Url,
     pub screen_name: String,
 }

@@ -4,7 +4,9 @@ use std::result::Result;
 
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
+use url::Url;
 
+use crate::error::Error;
 use crate::models::{PicInfosForStatusItem, UrlStruct, UrlStructItem, url_struct::UrlType};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -96,27 +98,37 @@ impl From<UrlTypeInternal> for UrlType {
     }
 }
 
-impl From<UrlStructItemInternal> for UrlStructItem {
-    fn from(value: UrlStructItemInternal) -> Self {
-        Self {
-            long_url: value.long_url,
+impl TryFrom<UrlStructItemInternal> for UrlStructItem {
+    type Error = Error;
+    fn try_from(value: UrlStructItemInternal) -> std::result::Result<Self, Self::Error> {
+        let res = Self {
+            long_url: value.long_url.map(|url| Url::parse(&url)).transpose()?,
             object_type: value.object_type,
             ori_url: value.ori_url,
             page_id: value.page_id,
-            short_url: value.short_url,
+            short_url: Url::parse(&value.short_url)?,
             url_title: value.url_title,
             url_type: value.url_type.into(),
-            url_type_pic: value.url_type_pic,
+            url_type_pic: value.url_type_pic.map(|url| Url::parse(&url)).transpose()?,
             pic_ids: value.pic_ids,
             pic_infos: value.pic_infos,
             vip_gif: value.vip_gif,
-        }
+        };
+        Ok(res)
     }
 }
 
-impl From<UrlStructInternal> for UrlStruct {
-    fn from(value: UrlStructInternal) -> Self {
-        Self(value.0.into_iter().map(|u| u.into()).collect())
+impl TryFrom<UrlStructInternal> for UrlStruct {
+    type Error = Error;
+    fn try_from(value: UrlStructInternal) -> Result<Self, Self::Error> {
+        let res = Self(
+            value
+                .0
+                .into_iter()
+                .map(|u| u.try_into())
+                .collect::<crate::error::Result<Vec<_>>>()?,
+        );
+        Ok(res)
     }
 }
 

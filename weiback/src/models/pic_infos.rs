@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use super::PicInfoDetail;
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoItem {
     pub bmiddle: PicInfoDetail,
     pub large: PicInfoDetail,
+    pub fid: Option<String>,
     pub focus_point: Option<FocusPoint>,
     pub largest: PicInfoDetail,
     pub mw2000: PicInfoDetail,
@@ -15,10 +17,9 @@ pub struct PicInfoItem {
     pub pic_status: i32,
     pub r#type: PicInfoType,
     pub thumbnail: PicInfoDetail,
-    pub video: Option<String>,
+    pub video: Option<Url>,
     pub video_object_id: Option<String>,
-    pub fid: Option<String>,
-    pub video_hd: Option<String>,
+    pub video_hd: Option<Url>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]

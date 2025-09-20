@@ -1,7 +1,7 @@
 #![allow(async_fn_in_trait)]
-mod database;
-mod internal;
-mod picture_storage;
+pub mod database;
+pub mod internal;
+pub mod picture_storage;
 
 use std::future::Future;
 use std::ops::RangeInclusive;
@@ -14,6 +14,7 @@ use log::{debug, error, info, trace, warn};
 use picture_storage::FileSystemPictureStorage;
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
+use url::Url;
 
 use crate::error::{Error, Result};
 use crate::models::{Picture, Post, User};
@@ -39,7 +40,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn get_favorited_sum(&self) -> Result<u32>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
     fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
-    async fn get_picture_blob(&self, url: &str) -> Result<Option<bytes::Bytes>>;
+    async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
 }
 
 #[derive(Debug, Clone)]
@@ -200,7 +201,7 @@ impl Storage for StorageImpl {
         post::get_posts_id_to_unfavorite(&self.db_pool).await
     }
 
-    async fn get_picture_blob(&self, url: &str) -> Result<Option<Bytes>> {
+    async fn get_picture_blob(&self, url: &Url) -> Result<Option<Bytes>> {
         self.pic_storage.get_picture_blob(url).await
     }
 
@@ -244,8 +245,9 @@ mod tests {
         let mut favs: Vec<Post> = favs
             .favorites
             .into_iter()
-            .map(|p| p.status.into())
-            .collect();
+            .map(|p| p.status.try_into())
+            .collect::<Result<_>>()
+            .unwrap();
         let profile_statuses =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/profile_statuses.json");
         let statuses = serde_json::from_str::<ProfileStatusesSucc>(
@@ -255,8 +257,9 @@ mod tests {
         let statuses: Vec<Post> = statuses
             .cards
             .into_iter()
-            .filter_map(|c| c.mblog.map(|p| p.into()))
-            .collect();
+            .filter_map(|c| c.mblog.map(|p| p.try_into()))
+            .collect::<Result<_>>()
+            .unwrap();
         favs.extend(statuses);
         favs
     }

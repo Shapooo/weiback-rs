@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
 use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal};
+use crate::error::Error;
 use crate::models::{Post, User, mix_media_info::MixMediaInfo, pic_infos::PicInfoItem};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -52,9 +53,10 @@ pub struct LongText {
     pub content: String,
 }
 
-impl From<PostInternal> for Post {
-    fn from(value: PostInternal) -> Self {
-        Self {
+impl TryFrom<PostInternal> for Post {
+    type Error = Error;
+    fn try_from(value: PostInternal) -> std::result::Result<Self, Self::Error> {
+        let res = Self {
             attitudes_count: value.attitudes_count,
             attitudes_status: value.attitudes_status,
             created_at: value.created_at,
@@ -74,12 +76,17 @@ impl From<PostInternal> for Post {
             region_name: value.region_name,
             reposts_count: value.reposts_count,
             repost_type: value.repost_type,
-            retweeted_status: value.retweeted_status.map(|r| Box::new((*r).into())),
+            retweeted_status: value
+                .retweeted_status
+                .map(|r| TryInto::try_into(*r))
+                .transpose()?
+                .map(Box::new),
             source: value.source,
             text: value.text,
-            url_struct: value.url_struct.map(|u| u.into()),
+            url_struct: value.url_struct.map(|u| u.try_into()).transpose()?,
             user: value.user,
-        }
+        };
+        Ok(res)
     }
 }
 

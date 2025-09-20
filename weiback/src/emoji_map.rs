@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use log::warn;
 use tokio::sync::OnceCell;
+use url::Url;
 
 use crate::api::EmojiUpdateApi;
 use crate::error::Result;
@@ -9,7 +10,7 @@ use crate::error::Result;
 #[derive(Debug, Clone)]
 pub struct EmojiMap<E: EmojiUpdateApi> {
     api_client: E,
-    emoji_map: OnceCell<HashMap<String, String>>,
+    emoji_map: OnceCell<HashMap<String, Url>>,
 }
 
 impl<W: EmojiUpdateApi> EmojiMap<W> {
@@ -20,7 +21,7 @@ impl<W: EmojiUpdateApi> EmojiMap<W> {
         }
     }
 
-    pub async fn get_or_try_init(&self) -> Result<&HashMap<String, String>> {
+    pub async fn get_or_try_init(&self) -> Result<&HashMap<String, Url>> {
         self.emoji_map
             .get_or_try_init(async || self.api_client.emoji_update().await)
             .await

@@ -7,6 +7,7 @@ use futures::future::try_join_all;
 use log::{debug, info};
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
+use url::Url;
 
 use crate::api::EmojiUpdateApi;
 use crate::config::get_config;
@@ -57,7 +58,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         &self,
         post: Post,
         page_name: &str,
-        emoji_map: Option<&HashMap<String, String>>,
+        emoji_map: Option<&HashMap<String, Url>>,
     ) -> Result<String> {
         let pic_folder = make_resource_dir_name(page_name);
         let pic_quality = get_config().read()?.picture_definition;
@@ -134,7 +135,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
             })
         } else {
             let storage = self.storage.clone();
-            let url = pic_meta.url().to_string();
+            let url = pic_meta.url().to_owned();
             let (sender, result) = tokio::sync::oneshot::channel();
             let callback = Box::new(
                 move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
@@ -152,7 +153,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
                 },
             );
             self.downloader
-                .download_picture(task_id, url, callback)
+                .download_picture(task_id, &url, callback)
                 .await?;
             Ok(result.await?)
         }
@@ -164,7 +165,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         task_id: u64,
         posts: &[Post],
         definition: PictureDefinition,
-        emoji_map: Option<&HashMap<String, String>>,
+        emoji_map: Option<&HashMap<String, Url>>,
     ) -> Result<Vec<Picture>> {
         let pic_metas = extract_all_pic_metas(posts, definition, emoji_map);
         let mut pics = Vec::new();
@@ -182,7 +183,7 @@ fn post_to_tera_value(
     mut post: Post,
     pic_folder: &str,
     pic_quality: PictureDefinition,
-    emoji_map: Option<&HashMap<String, String>>,
+    emoji_map: Option<&HashMap<String, Url>>,
 ) -> Result<Value> {
     let pic_folder = Path::new(pic_folder);
     post.text = trans_text(&post, Path::new(pic_folder), emoji_map)?;
@@ -211,7 +212,7 @@ fn post_to_tera_value(
 fn trans_text(
     post: &Post,
     pic_folder: &Path,
-    emoji_map: Option<&HashMap<String, String>>,
+    emoji_map: Option<&HashMap<String, Url>>,
 ) -> Result<String> {
     // find all email suffixes
     let emails_suffixes = EMAIL_EXPR
@@ -228,8 +229,7 @@ fn trans_text(
             .find_iter(&text)
             .fold((Borrowed(""), 0), |(acc, i), m| {
                 (
-                    acc + &text[i..m.start()]
-                        + trans_url(post.url_struct.as_ref(), &text[m.start()..m.end()]),
+                    acc + &text[i..m.start()] + trans_url(post.url_struct.as_ref(), m.as_str()),
                     m.end(),
                 )
             });
@@ -282,7 +282,7 @@ fn trans_text(
 fn trans_emoji<'a>(
     s: &'a str,
     pic_folder: &'a Path,
-    emoji_map: Option<&HashMap<String, String>>,
+    emoji_map: Option<&HashMap<String, Url>>,
 ) -> Cow<'a, str> {
     let Some(emoji_url) = emoji_map.and_then(|m| m.get(s)) else {
         return s.into();
@@ -315,12 +315,16 @@ fn trans_topic(s: &str) -> Cow<'_, str> {
         + "</a>"
 }
 
-fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, s: &'a str) -> Cow<'a, str> {
-    let this_struct = url_struct.and_then(|p| p.0.iter().find(|u| u.short_url == s));
+fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, url: &'a str) -> Cow<'a, str> {
+    let this_struct = url_struct.and_then(|p| p.0.iter().find(|u| u.short_url.as_str() == url));
     let url_title = this_struct
         .map(|u| u.url_title.as_str())
         .unwrap_or("网页链接");
-    let url = this_struct.and_then(|u| u.long_url.as_deref()).unwrap_or(s);
+    let url = if let Some(long_url) = this_struct.and_then(|u| u.long_url.as_ref()) {
+        long_url.as_str()
+    } else {
+        url
+    };
 
     Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
         + url

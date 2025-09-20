@@ -46,7 +46,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
         if post.url_struct.is_some() && post.retweeted_status.is_some() {
             self.refine_url_struct(&mut post).await?;
         }
-        Ok(post.into())
+        post.try_into()
     }
 
     pub async fn refine_url_struct(&self, post: &mut PostInternal) -> Result<()> {

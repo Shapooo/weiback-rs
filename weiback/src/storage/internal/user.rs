@@ -1,7 +1,8 @@
 use log::info;
 use sqlx::{FromRow, Sqlite, SqlitePool};
+use url::Url;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::models::User;
 
 #[derive(Debug, Clone, FromRow, PartialEq)]
@@ -21,30 +22,32 @@ pub struct UserInternal {
 impl From<User> for UserInternal {
     fn from(value: User) -> Self {
         Self {
-            avatar_hd: value.avatar_hd,
-            avatar_large: value.avatar_large,
+            avatar_hd: value.avatar_hd.to_string(),
+            avatar_large: value.avatar_large.to_string(),
             domain: value.domain,
             following: value.following,
             follow_me: value.follow_me,
             id: value.id,
-            profile_image_url: value.profile_image_url,
+            profile_image_url: value.profile_image_url.to_string(),
             screen_name: value.screen_name,
         }
     }
 }
 
-impl From<UserInternal> for User {
-    fn from(val: UserInternal) -> Self {
-        Self {
-            avatar_hd: val.avatar_hd,
-            avatar_large: val.avatar_large,
+impl TryFrom<UserInternal> for User {
+    type Error = Error;
+    fn try_from(val: UserInternal) -> std::result::Result<Self, Self::Error> {
+        let res = Self {
+            avatar_hd: Url::parse(&val.avatar_hd)?,
+            avatar_large: Url::parse(&val.avatar_large)?,
             domain: val.domain,
             following: val.following,
             follow_me: val.follow_me,
             id: val.id,
-            profile_image_url: val.profile_image_url,
+            profile_image_url: Url::parse(&val.profile_image_url)?,
             screen_name: val.screen_name,
-        }
+        };
+        Ok(res)
     }
 }
 
@@ -74,7 +77,7 @@ pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
         .bind(id)
         .fetch_optional(db)
         .await?;
-    Ok(user.map(|u| u.into()))
+    user.map(|u| u.try_into()).transpose()
 }
 
 pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
@@ -93,13 +96,13 @@ OR REPLACE INTO users (
 VALUES
     (?, ?, ?, ?, ?, ?, ?, ?);"#,
     )
-    .bind(&user.avatar_hd)
-    .bind(&user.avatar_large)
+    .bind(user.avatar_hd.as_str())
+    .bind(user.avatar_large.as_str())
     .bind(&user.domain)
     .bind(user.following)
     .bind(user.follow_me)
     .bind(user.id)
-    .bind(&user.profile_image_url)
+    .bind(user.profile_image_url.as_str())
     .bind(&user.screen_name)
     .execute(db)
     .await?;
@@ -115,6 +118,7 @@ mod tests {
 
     use super::*;
     use crate::api::{favorites::FavoritesSucc, profile_statuses::ProfileStatusesSucc};
+    use crate::error::Result;
     use crate::models::{Post, User};
 
     async fn setup_db() -> SqlitePool {
@@ -130,8 +134,9 @@ mod tests {
         let mut favs: Vec<Post> = favs
             .favorites
             .into_iter()
-            .map(|p| p.status.into())
-            .collect();
+            .map(|p| p.status.try_into())
+            .collect::<Result<_>>()
+            .unwrap();
         let profile_statuses =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/profile_statuses.json");
         let statuses = serde_json::from_str::<ProfileStatusesSucc>(
@@ -141,8 +146,9 @@ mod tests {
         let statuses: Vec<Post> = statuses
             .cards
             .into_iter()
-            .filter_map(|c| c.mblog.map(|p| p.into()))
-            .collect();
+            .filter_map(|c| c.mblog.map(|p| p.try_into()))
+            .collect::<Result<_>>()
+            .unwrap();
         favs.extend(statuses);
         favs.into_iter().filter_map(|p| p.user).collect()
     }
@@ -152,7 +158,7 @@ mod tests {
         let users = create_test_users().await;
         for user in users {
             let internal_user: UserInternal = user.clone().into();
-            let converted_user: User = internal_user.into();
+            let converted_user: User = internal_user.try_into().unwrap();
             assert_eq!(user, converted_user);
         }
     }

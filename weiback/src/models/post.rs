@@ -67,6 +67,7 @@ mod local_tests {
     use serde_json::from_str;
 
     use super::*;
+    use crate::error::Result;
 
     fn create_reponse_str() -> String {
         read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/favorites.json"))
@@ -90,8 +91,9 @@ mod local_tests {
         let posts = parsed_favorites
             .favorites
             .into_iter()
-            .map(|f| f.status.into())
-            .collect::<Vec<Post>>();
+            .map(|f| f.status.try_into())
+            .collect::<Result<Vec<Post>>>()
+            .unwrap();
 
         for post in posts {
             let value_from_struct =

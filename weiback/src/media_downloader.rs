@@ -6,6 +6,7 @@ use bytes::Bytes;
 use log::{debug, error, info};
 use reqwest::Client;
 use tokio::sync::mpsc;
+use url::Url;
 
 use crate::error::Result;
 use crate::message::{ErrMsg, ErrType, Message};
@@ -14,7 +15,7 @@ pub trait MediaDownloader: Clone + Send + Sync + 'static {
     async fn download_picture(
         &self,
         task_id: u64,
-        url: String,
+        url: &Url,
         callback: AsyncDownloadCallback,
     ) -> Result<()>;
 }
@@ -29,7 +30,7 @@ pub type AsyncDownloadCallback = Box<
 /// A task for the media downloader actor.
 struct DownloadTask {
     task_id: u64,
-    url: String,
+    url: Url,
     callback: AsyncDownloadCallback,
 }
 
@@ -79,12 +80,12 @@ impl MediaDownloader for MediaDownloaderHandle {
     async fn download_picture(
         &self,
         task_id: u64,
-        url: String,
+        url: &Url,
         callback: AsyncDownloadCallback,
     ) -> Result<()> {
         let task = DownloadTask {
             task_id,
-            url,
+            url: url.to_owned(),
             callback,
         };
         Ok(self.sender.send(task).await.map_err(|e| {
@@ -113,7 +114,9 @@ impl DownloaderWorker {
                 && let Err(e) = self
                     .msg_sender
                     .send(Message::Err(ErrMsg {
-                        r#type: ErrType::DownPicFail { url },
+                        r#type: ErrType::DownPicFail {
+                            url: url.to_string(),
+                        },
                         task_id,
                         err: err.to_string(),
                     }))
@@ -126,10 +129,10 @@ impl DownloaderWorker {
         info!("Media downloader actor finished.");
     }
 
-    async fn process_task(&self, url: &str, callback: AsyncDownloadCallback) -> Result<()> {
+    async fn process_task(&self, url: &Url, callback: AsyncDownloadCallback) -> Result<()> {
         let response = self
             .client
-            .get(url)
+            .get(url.to_owned())
             .send()
             .await
             .and_then(|r| r.error_for_status())
@@ -190,7 +193,10 @@ mod tests {
 
         tokio::spawn(worker.run());
 
-        handle.download_picture(1, url, callback).await.unwrap();
+        handle
+            .download_picture(1, &Url::parse(&url).unwrap(), callback)
+            .await
+            .unwrap();
 
         notify.notified().await;
         assert!(callback_executed.load(Ordering::SeqCst));
@@ -201,6 +207,7 @@ mod tests {
     async fn test_download_picture_network_error() {
         let mut server = Server::new_async().await;
         let url = server.url();
+        let url = Url::parse(&url).unwrap();
         let mock = server
             .mock("GET", "/")
             .with_status(404)
@@ -219,10 +226,7 @@ mod tests {
 
         tokio::spawn(worker.run());
 
-        handle
-            .download_picture(1, url.clone(), callback)
-            .await
-            .unwrap();
+        handle.download_picture(1, &url, callback).await.unwrap();
 
         let received_msg = msg_rx.recv().await.unwrap();
         match received_msg {
@@ -231,7 +235,7 @@ mod tests {
                 task_id,
                 ..
             }) => {
-                assert_eq!(err_url, url);
+                assert_eq!(err_url, url.as_str());
                 assert_eq!(task_id, 1);
             }
             _ => panic!("Expected an error message"),
@@ -268,7 +272,7 @@ mod tests {
         tokio::spawn(worker.run());
 
         handle
-            .download_picture(1, url.clone(), callback)
+            .download_picture(1, &Url::parse(&url).unwrap(), callback)
             .await
             .unwrap();
 
@@ -279,7 +283,7 @@ mod tests {
                 task_id,
                 err,
             }) => {
-                assert_eq!(err_url, url);
+                assert_eq!(Url::parse(&err_url), Url::parse(&url));
                 assert_eq!(task_id, 1);
                 assert_eq!(err, "I/O error: permission denied");
             }

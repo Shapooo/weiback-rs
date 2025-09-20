@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoDetail {
@@ -8,7 +9,7 @@ pub struct PicInfoDetail {
     pub height: i32,
     #[serde(deserialize_with = "deserialize_str_num")]
     pub width: i32,
-    pub url: String,
+    pub url: Url,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -23,9 +24,9 @@ pub struct HugeInfo {
     pub page_id: String,
     pub page_pic: String,
     pub page_title: String,
-    pub page_url: String,
+    pub page_url: Url,
     pub pic_info: PicInfoItemSimple,
-    pub short_url: String,
+    pub short_url: Url,
     pub r#type: String,
     pub type_icon: String,
     pub warn: String,
@@ -38,39 +39,39 @@ pub struct VideoInfo {
     pub big_pic_info: Option<PicInfoItemSimple>,
     pub duration: Option<i32>,
     pub format: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub h265_mp4_hd: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub h265_mp4_ld: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub h5_url: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub hevc_mp4_720p: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub inch_4_mp4_hd: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub inch_5_5_mp4_hd: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub inch_5_mp4_hd: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub h265_mp4_hd: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub h265_mp4_ld: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub h5_url: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub hevc_mp4_720p: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub inch_4_mp4_hd: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub inch_5_5_mp4_hd: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub inch_5_mp4_hd: Option<Url>,
     pub is_short_video: Option<i32>,
     pub kol_title: Option<String>,
     pub media_id: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub mp4_720p_mp4: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub mp4_hd_url: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub mp4_sd_url: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub mp4_720p_mp4: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub mp4_hd_url: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub mp4_sd_url: Option<Url>,
     pub name: Option<String>,
     pub next_title: Option<String>,
     pub online_users: Option<String>,
     pub online_users_number: Option<i32>,
     pub origin_total_bitrate: Option<i32>,
     pub prefetch_size: Option<i32>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub stream_url: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_nonable_str")]
-    pub stream_url_hd: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub stream_url: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    pub stream_url_hd: Option<Url>,
     pub video_orientation: Option<Orientation>,
     pub video_publish_time: Option<i32>,
 }
@@ -106,12 +107,14 @@ where
     }
 }
 
-pub fn deserialize_nonable_str<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+pub fn deserialize_nonable_url<'de, D>(deserializer: D) -> Result<Option<Url>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let s = Option::<String>::deserialize(deserializer)?;
-    Ok(s.and_then(|s| if s.is_empty() { None } else { Some(s) }))
+    let s = Option::<Cow<'_, str>>::deserialize(deserializer)?;
+    s.map(|s| Url::parse(&s))
+        .transpose()
+        .map_err(|e| serde::de::Error::custom(e))
 }
 
 #[cfg(test)]

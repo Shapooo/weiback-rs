@@ -4,6 +4,7 @@ use std::pin::Pin;
 
 use futures::stream::{self, StreamExt, TryStreamExt};
 use log::{debug, info};
+use url::Url;
 
 use crate::api::ApiClient;
 use crate::config::get_config;
@@ -55,7 +56,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         &self,
         posts: &[Post],
         pic_quality: PictureDefinition,
-        emoji_map: Option<&HashMap<String, String>>,
+        emoji_map: Option<&HashMap<String, Url>>,
         task_id: u64,
     ) -> Result<()> {
         let pic_metas = extract_all_pic_metas(posts, pic_quality, emoji_map);
@@ -71,7 +72,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
     }
 
     async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
-        let url = pic_meta.url().to_string();
+        let url = pic_meta.url().to_owned();
         // TODO: add method check existance of picture
         if self.storage.get_picture_blob(&url).await?.is_some() {
             debug!("Picture {url} already exists in local storage, skipping download.");
@@ -93,7 +94,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         );
 
         self.downloader
-            .download_picture(task_id, url, callback)
+            .download_picture(task_id, &url, callback)
             .await?;
         Ok(())
     }

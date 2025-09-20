@@ -7,6 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use url::Url;
 
 use crate::{
     error::Result,
@@ -167,9 +168,9 @@ impl Storage for MockStorage {
         }
     }
 
-    async fn get_picture_blob(&self, url: &str) -> Result<Option<bytes::Bytes>> {
+    async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>> {
         let inner = self.inner.lock().unwrap();
-        Ok(inner.pictures.get(url).cloned())
+        Ok(inner.pictures.get(url.as_str()).cloned())
     }
 }
 
@@ -191,8 +192,9 @@ mod tests {
         let mut favs: Vec<Post> = favs
             .favorites
             .into_iter()
-            .map(|p| p.status.into())
-            .collect();
+            .map(|p| p.status.try_into())
+            .collect::<Result<_>>()
+            .unwrap();
         let profile_statuses =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/profile_statuses.json");
         let statuses = serde_json::from_str::<ProfileStatusesSucc>(
@@ -202,8 +204,9 @@ mod tests {
         let statuses: Vec<Post> = statuses
             .cards
             .into_iter()
-            .filter_map(|c| c.mblog.map(|p| p.into()))
-            .collect();
+            .filter_map(|c| c.mblog.map(|p| p.try_into()))
+            .collect::<Result<_>>()
+            .unwrap();
         favs.extend(statuses);
         favs
     }
@@ -276,7 +279,7 @@ mod tests {
     async fn test_save_and_get_picture() {
         let storage = MockStorage::new();
         let picture = Picture {
-            meta: PictureMeta::in_post("test_url".to_string(), 123),
+            meta: PictureMeta::in_post("https://test_url.com/test_pic", 123).unwrap(),
             blob: Bytes::from_static(b"picture data"),
         };
         storage.save_picture(&picture).await.unwrap();

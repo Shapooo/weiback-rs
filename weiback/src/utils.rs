@@ -46,14 +46,12 @@ pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 
-pub fn url_to_path(url: &str) -> Result<String> {
-    let url = Url::parse(strip_url_queries(url))?;
+pub fn url_to_path(url: &Url) -> Result<String> {
     let path = url.path();
     Ok(path.to_string())
 }
 
-pub fn url_to_filename(url: &str) -> Result<String> {
-    let url = Url::parse(strip_url_queries(url))?;
+pub fn url_to_filename(url: &Url) -> Result<String> {
     url.path_segments()
         .and_then(|mut segments| segments.next_back())
         .and_then(|name| {
@@ -66,7 +64,7 @@ pub fn url_to_filename(url: &str) -> Result<String> {
         .ok_or_else(|| Error::FormatError(format!("no filename in url: {url}")))
 }
 
-pub fn pic_url_to_id(url: &str) -> Result<String> {
+pub fn pic_url_to_id(url: &Url) -> Result<String> {
     let file_name = url_to_filename(url)?;
     let path = Path::new(&file_name);
     if path.extension().is_none() {
@@ -86,10 +84,6 @@ pub fn pic_url_to_id(url: &str) -> Result<String> {
         .ok_or_else(|| Error::FormatError(format!("not a valid picture url: {url}")))
 }
 
-pub fn strip_url_queries(url: &str) -> &str {
-    url.split_once('?').map_or(url, |(base, _query)| base)
-}
-
 pub fn make_resource_dir_name(page_name: &str) -> String {
     page_name.to_string() + "_files"
 }
@@ -105,7 +99,7 @@ pub fn make_page_name(task_name: &str, index: i32) -> String {
 pub fn extract_all_pic_metas(
     posts: &[Post],
     definition: PictureDefinition,
-    emoji_map: Option<&HashMap<String, String>>,
+    emoji_map: Option<&HashMap<String, Url>>,
 ) -> HashSet<PictureMeta> {
     let mut pic_metas: HashSet<PictureMeta> = posts
         .iter()
@@ -114,7 +108,11 @@ pub fn extract_all_pic_metas(
     let emoji_metas = posts.iter().flat_map(|post| {
         extract_emoji_urls(&post.text, emoji_map)
             .into_iter()
-            .map(|url| PictureMeta::other(url.to_string()))
+            .filter_map(|url| {
+                PictureMeta::other(url)
+                    .map_err(|e| error!("cannot parse {url} {e}"))
+                    .ok()
+            })
     });
     let avatar_metas = posts
         .iter()
@@ -166,13 +164,18 @@ fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Ve
         .0
         .iter()
         .filter_map(|i| i.pic_infos.as_ref())
-        .map(|p| PictureMeta::in_post(def_to_url_struct_detail(p, definition).url.clone(), post.id))
+        .filter_map(|p| {
+            let url = def_to_url_struct_detail(p, definition).url.as_str();
+            PictureMeta::in_post(url, post.id)
+                .map_err(|e| error!("cannot parse {url} {e}"))
+                .ok()
+        })
         .collect()
 }
 
 fn extract_emoji_urls<'a>(
     text: &'a str,
-    emoji_map: Option<&'a HashMap<String, String>>,
+    emoji_map: Option<&'a HashMap<String, Url>>,
 ) -> Vec<&'a str> {
     EMOJI_EXPR
         .find_iter(text)
@@ -184,16 +187,19 @@ fn extract_emoji_urls<'a>(
 
 fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
     let mut res = Vec::new();
-    if let Some(user) = post.user.as_ref() {
-        let meta = PictureMeta::avatar(user.avatar_hd.to_owned(), user.id);
+    if let Some(user) = post.user.as_ref()
+        && let Ok(meta) = PictureMeta::avatar(user.avatar_hd.as_str(), user.id)
+            .map_err(|e| error!("cannot parse {} {e}", user.avatar_hd.as_str()))
+    {
         res.push(meta)
     }
     if let Some(u) = post
         .retweeted_status
         .as_ref()
         .and_then(|re| re.user.as_ref())
+        && let Ok(meta) = PictureMeta::avatar(u.avatar_hd.as_str(), u.id)
+            .map_err(|e| error!("cannot parse {} {e}", u.avatar_hd.as_str()))
     {
-        let meta = PictureMeta::avatar(u.avatar_hd.to_owned(), u.id);
         res.push(meta);
     }
     res
@@ -201,12 +207,12 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
 
 fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
     process_in_post_pics(post, move |pic_info_item| {
-        Some(PictureMeta::in_post(
-            def_to_pic_info_detail(pic_info_item, definition)
-                .url
-                .clone(),
-            post.id,
-        ))
+        let url = def_to_pic_info_detail(pic_info_item, definition)
+            .url
+            .as_str();
+        PictureMeta::in_post(url, post.id)
+            .map_err(|e| error!("cannot parse {url} {e}"))
+            .ok()
     })
 }
 
@@ -216,10 +222,11 @@ pub fn extract_in_post_pic_paths(
     definition: PictureDefinition,
 ) -> Vec<String> {
     process_in_post_pics(post, |pic_info_item| {
+        let url = def_to_pic_info_detail(pic_info_item, definition)
+            .url
+            .as_str();
         url_to_filename(
-            def_to_pic_info_detail(pic_info_item, definition)
-                .url
-                .as_str(),
+            &Url::parse(url).unwrap(), // TODO
         )
         .ok()
         .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
@@ -276,64 +283,52 @@ mod tests {
     use crate::mock::MockApi;
 
     #[test]
-    fn test_strip_url_queries() {
-        assert_eq!(
-            strip_url_queries("http://example.com/path?a=1&b=2"),
-            "http://example.com/path"
-        );
-        assert_eq!(
-            strip_url_queries("http://example.com/path"),
-            "http://example.com/path"
-        );
-        assert_eq!(
-            strip_url_queries("http://example.com/path?"),
-            "http://example.com/path"
-        );
-    }
-
-    #[test]
     fn test_url_to_filename() {
         assert_eq!(
-            url_to_filename("http://example.com/path/to/file.txt").unwrap(),
+            url_to_filename(&Url::parse("http://example.com/path/to/file.txt").unwrap()).unwrap(),
             "file.txt"
         );
         assert_eq!(
-            url_to_filename("http://example.com/path/to/file.txt?a=1").unwrap(),
+            url_to_filename(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap())
+                .unwrap(),
             "file.txt"
         );
-        assert!(url_to_filename("http://example.com/").is_err());
-        assert!(url_to_filename("http://example.com").is_err());
+        assert!(url_to_filename(&Url::parse("http://example.com/").unwrap()).is_err());
+        assert!(url_to_filename(&Url::parse("http://example.com").unwrap()).is_err());
     }
 
     #[test]
     fn test_pic_url_to_id() {
         assert_eq!(
-            pic_url_to_id("http://example.com/path/to/pic.jpg").unwrap(),
+            pic_url_to_id(&Url::parse("http://example.com/path/to/pic.jpg").unwrap()).unwrap(),
             "pic"
         );
         assert_eq!(
-            pic_url_to_id("http://example.com/path/to/pic.jpeg?a=1").unwrap(),
+            pic_url_to_id(&Url::parse("http://example.com/path/to/pic.jpeg?a=1").unwrap()).unwrap(),
             "pic"
         );
         assert_eq!(
-            pic_url_to_id("http://example.com/path/to/pic.tar.gz").unwrap(),
+            pic_url_to_id(&Url::parse("http://example.com/path/to/pic.tar.gz").unwrap()).unwrap(),
             "pic.tar"
         );
-        assert!(pic_url_to_id("http://example.com/path/to/pic").is_err());
-        assert!(pic_url_to_id("http://example.com/path/to/.jpg").is_err());
+        assert!(pic_url_to_id(&Url::parse("http://example.com/path/to/pic").unwrap()).is_err());
+        assert!(pic_url_to_id(&Url::parse("http://example.com/path/to/.jpg").unwrap()).is_err());
     }
 
     #[test]
     fn test_url_to_path() {
         assert_eq!(
-            url_to_path("http://example.com/path/to/file.txt").unwrap(),
+            url_to_path(&Url::parse("http://example.com/path/to/file.txt").unwrap()).unwrap(),
             "/path/to/file.txt".to_string()
         );
         assert_eq!(
-            url_to_path("http://example.com/path/to/file.txt?a=1").unwrap(),
+            url_to_path(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()).unwrap(),
             "/path/to/file.txt".to_string()
         );
-        assert_eq!(url_to_path("http://example.com").unwrap(), "/".to_string());
+        assert_eq!(
+            url_to_path(&Url::parse("http://example.com").unwrap()).unwrap(),
+            "/".to_string()
+        );
     }
 
     fn create_mock_api(client: &MockClient) -> MockApi {
@@ -409,7 +404,9 @@ mod tests {
         let has_avatar = metas
             .iter()
             .any(|m| matches!(m, PictureMeta::Avatar { .. }));
-        let has_emoji = metas.iter().any(|m| m.url().contains("face.t.sinajs.cn"));
+        let has_emoji = metas
+            .iter()
+            .any(|m| m.url().as_str().contains("face.t.sinajs.cn"));
 
         assert!(has_in_post, "Should extract in-post pictures");
         assert!(has_avatar, "Should extract user avatars");

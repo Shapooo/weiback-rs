@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
 use log::debug;
+use url::Url;
 
 use crate::config::get_config;
 use crate::error::{Error, Result};
@@ -31,7 +32,7 @@ impl FileSystemPictureStorage {
 }
 
 impl FileSystemPictureStorage {
-    pub async fn get_picture_blob(&self, url: &str) -> Result<Option<Bytes>> {
+    pub async fn get_picture_blob(&self, url: &Url) -> Result<Option<Bytes>> {
         let path = url_to_path(url)?;
         let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
         let path = self.picture_path.join(relative_path);
@@ -73,7 +74,7 @@ mod tests {
 
     fn create_test_picture(url: &str) -> Picture {
         Picture {
-            meta: PictureMeta::in_post(url.to_string(), 42),
+            meta: PictureMeta::in_post(url, 42).unwrap(),
             blob: Bytes::from_static(b"test picture data"),
         }
     }
@@ -102,7 +103,7 @@ mod tests {
         storage.save_picture(&picture).await.unwrap();
 
         let blob = storage
-            .get_picture_blob("http://example.com/test.jpg")
+            .get_picture_blob(&Url::parse("http://example.com/test.jpg").unwrap())
             .await
             .unwrap();
         assert!(blob.is_some());
@@ -115,7 +116,7 @@ mod tests {
         let storage = create_test_storage(temp_dir.path());
 
         let blob = storage
-            .get_picture_blob("http://example.com/non-existent.jpg")
+            .get_picture_blob(&Url::parse("http://example.com/non-existent.jpg").unwrap())
             .await
             .unwrap();
         assert!(blob.is_none());

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use url::Url;
 
 use crate::models::PicInfoDetail;
 
@@ -19,14 +20,14 @@ pub struct PageInfo {
     pub oid: Option<i64>,
     pub page_desc: Option<String>,
     pub page_id: Option<String>,
-    pub page_pic: Option<String>,
+    pub page_pic: Option<Url>,
     pub page_title: Option<String>,
-    pub page_url: Option<String>,
+    pub page_url: Option<Url>,
     pub pic_info: Option<PagePicInfo>,
-    pub short_url: Option<String>,
+    pub short_url: Option<Url>,
     pub source_type: Option<String>,
     pub r#type: Option<i64>,
-    pub type_icon: Option<String>,
+    pub type_icon: Option<Url>,
     pub user: Option<Value>,
 }
 
