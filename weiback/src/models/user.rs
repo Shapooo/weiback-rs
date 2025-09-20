@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::common::deserialize_nonable_url;
 /** 用户数据
  * 从微博 API 获取的每条 post 会附带 user 字段，原始数据为 Json 格式，包含如下字段：
  * avatar_hd            高清头像URL，字符串格式

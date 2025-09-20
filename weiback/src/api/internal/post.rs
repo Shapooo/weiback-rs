@@ -5,9 +5,9 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
-use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal};
+use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal, user::UserInternal};
 use crate::error::Error;
-use crate::models::{Post, User, mix_media_info::MixMediaInfo, pic_infos::PicInfoItem};
+use crate::models::{Post, mix_media_info::MixMediaInfo, pic_infos::PicInfoItem};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PostInternal {
@@ -45,7 +45,7 @@ pub struct PostInternal {
     pub text: String,
     pub url_struct: Option<UrlStructInternal>,
     #[serde(default, deserialize_with = "deserialize_user")]
-    pub user: Option<User>,
+    pub user: Option<UserInternal>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -84,17 +84,17 @@ impl TryFrom<PostInternal> for Post {
             source: value.source,
             text: value.text,
             url_struct: value.url_struct.map(|u| u.try_into()).transpose()?,
-            user: value.user,
+            user: value.user.map(|u| u.into()),
         };
         Ok(res)
     }
 }
 
-fn deserialize_user<'de, D>(deserializer: D) -> std::result::Result<Option<User>, D::Error>
+fn deserialize_user<'de, D>(deserializer: D) -> std::result::Result<Option<UserInternal>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let user = Option::<User>::deserialize(deserializer)?;
+    let user = Option::<UserInternal>::deserialize(deserializer)?;
     Ok(user.and_then(|u| if u.id == 0 { None } else { Some(u) }))
 }
 
