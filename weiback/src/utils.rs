@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use log::error;
 use once_cell::sync::Lazy;
@@ -46,9 +46,12 @@ pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 
-pub fn url_to_path(url: &Url) -> Result<String> {
-    let path = url.path();
-    Ok(path.to_string())
+pub fn url_to_path(url: &Url) -> PathBuf {
+    Path::new(url.host_str().expect("host cannot be none")).join(
+        url.path()
+            .strip_prefix("/")
+            .expect("url path start with `/'"),
+    )
 }
 
 pub fn url_to_filename(url: &Url) -> Result<String> {
@@ -65,14 +68,9 @@ pub fn url_to_filename(url: &Url) -> Result<String> {
 }
 
 pub fn pic_url_to_id(url: &Url) -> Result<String> {
-    let file_name = url_to_filename(url)?;
-    let path = Path::new(&file_name);
-    if path.extension().is_none() {
-        return Err(Error::FormatError(format!(
-            "no extension in filename of url: {url}"
-        )));
-    }
-    path.file_stem()
+    let file_path = url_to_path(url);
+    file_path
+        .file_stem()
         .and_then(|stem| stem.to_str())
         .and_then(|s| {
             if s.is_empty() {
@@ -311,23 +309,21 @@ mod tests {
             pic_url_to_id(&Url::parse("http://example.com/path/to/pic.tar.gz").unwrap()).unwrap(),
             "pic.tar"
         );
-        assert!(pic_url_to_id(&Url::parse("http://example.com/path/to/pic").unwrap()).is_err());
-        assert!(pic_url_to_id(&Url::parse("http://example.com/path/to/.jpg").unwrap()).is_err());
     }
 
     #[test]
     fn test_url_to_path() {
         assert_eq!(
-            url_to_path(&Url::parse("http://example.com/path/to/file.txt").unwrap()).unwrap(),
-            "/path/to/file.txt".to_string()
+            url_to_path(&Url::parse("http://example.com/path/to/file.txt").unwrap()),
+            Path::new("example.com/path/to/file.txt")
         );
         assert_eq!(
-            url_to_path(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()).unwrap(),
-            "/path/to/file.txt".to_string()
+            url_to_path(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()),
+            Path::new("example.com/path/to/file.txt")
         );
         assert_eq!(
-            url_to_path(&Url::parse("http://example.com").unwrap()).unwrap(),
-            "/".to_string()
+            url_to_path(&Url::parse("http://example.com").unwrap()),
+            Path::new("example.com")
         );
     }
 

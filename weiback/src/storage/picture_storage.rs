@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bytes::Bytes;
 use log::debug;
@@ -33,9 +33,8 @@ impl FileSystemPictureStorage {
 
 impl FileSystemPictureStorage {
     pub async fn get_picture_blob(&self, url: &Url) -> Result<Option<Bytes>> {
-        let path = url_to_path(url)?;
-        let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
-        let path = self.picture_path.join(relative_path);
+        let path = url_to_path(url);
+        let path = self.picture_path.join(path);
         match tokio::fs::read(&path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -45,9 +44,8 @@ impl FileSystemPictureStorage {
 
     pub async fn save_picture(&self, picture: &Picture) -> Result<()> {
         let url = picture.meta.url();
-        let path = url_to_path(url)?;
-        let relative_path = Path::new(&path).strip_prefix("/").unwrap(); // promised to start with '/'
-        let path = self.picture_path.join(relative_path);
+        let path = url_to_path(url);
+        let path = self.picture_path.join(path);
         create_dir_all(path.parent().ok_or(Error::Io(std::io::Error::other(
             "cannot get parent of picture path",
         )))?)?;
@@ -62,9 +60,12 @@ impl FileSystemPictureStorage {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use tempfile::tempdir;
+
     use super::*;
     use crate::models::{Picture, PictureMeta};
-    use tempfile::tempdir;
 
     fn create_test_storage(temp_dir: &Path) -> FileSystemPictureStorage {
         FileSystemPictureStorage {
