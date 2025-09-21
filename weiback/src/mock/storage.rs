@@ -172,6 +172,14 @@ impl Storage for MockStorage {
         let inner = self.inner.lock().unwrap();
         Ok(inner.pictures.get(url.as_str()).cloned())
     }
+
+    fn picture_saved(&self, url: &Url) -> bool {
+        self.inner
+            .lock()
+            .unwrap()
+            .pictures
+            .contains_key(url.as_str())
+    }
 }
 
 #[cfg(test)]

@@ -56,6 +56,11 @@ impl FileSystemPictureStorage {
         debug!("picture {} saved to {:?}", picture.meta.url(), path);
         Ok(())
     }
+
+    pub fn picture_saved(&self, url: &Url) -> bool {
+        let path = url_to_path(url);
+        path.exists()
+    }
 }
 
 #[cfg(test)]
@@ -89,7 +94,7 @@ mod tests {
         let result = storage.save_picture(&picture).await;
         assert!(result.is_ok());
 
-        let expected_path = temp_dir.path().join("original").join("test.jpg");
+        let expected_path = temp_dir.path().join("example.com/original/test.jpg");
         assert!(expected_path.exists());
         let data = tokio::fs::read(expected_path).await.unwrap();
         assert_eq!(data, picture.blob);
