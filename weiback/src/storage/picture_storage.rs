@@ -59,6 +59,7 @@ impl FileSystemPictureStorage {
 
     pub fn picture_saved(&self, url: &Url) -> bool {
         let path = url_to_path(url);
+        let path = self.picture_path.join(path);
         path.exists()
     }
 }
