@@ -121,6 +121,11 @@ impl Storage for MockStorage {
         Ok(())
     }
 
+    async fn get_post(&self, id: i64) -> Result<Option<Post>> {
+        let inner = self.inner.lock().unwrap();
+        Ok(inner.posts.get(&id).map(|r| r.0.clone()))
+    }
+
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
         let mut inner = self.inner.lock().unwrap();
         if let Some((_, unfavorited)) = inner.posts.get_mut(&id) {

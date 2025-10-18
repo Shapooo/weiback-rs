@@ -35,6 +35,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
         reverse: bool,
     ) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
+    async fn get_post(&self, id: i64) -> Result<Option<Post>>;
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
     async fn get_favorited_sum(&self) -> Result<u32>;
@@ -180,6 +181,10 @@ impl Storage for StorageImpl {
 
     async fn save_post(&self, post: &Post) -> Result<()> {
         self._save_post(post.clone()).await
+    }
+
+    async fn get_post(&self, id: i64) -> Result<Option<Post>> {
+        self.get_post(id).await
     }
 
     async fn save_user(&self, user: &User) -> Result<()> {
