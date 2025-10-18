@@ -189,6 +189,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 error!("Failed to unfavorite post {id}: {e}");
                 continue;
             }
+            self.storage.mark_post_unfavorited(id).await?;
             info!("Post {id} ({i}/{len})unfavorited successfully");
             self.msg_sender
                 .send(Message::TaskProgress(TaskProgress {
