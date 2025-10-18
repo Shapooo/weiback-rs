@@ -8,7 +8,10 @@ use std::ops::RangeInclusive;
 use std::pin::Pin;
 
 use bytes::Bytes;
-use futures::TryFutureExt;
+use futures::{
+    TryFutureExt,
+    stream::{self, StreamExt},
+};
 use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
 use picture_storage::FileSystemPictureStorage;
@@ -126,14 +129,17 @@ impl StorageImpl {
     }
 
     async fn hydrate_posts(&self, posts: Vec<PostInternal>) -> Vec<Post> {
-        let (posts, errs): (Vec<_>, Vec<_>) =
-            futures::future::join_all(posts.into_iter().map(|p| {
-                let id = p.id;
-                self.hydrate_post(p).map_err(move |e| (id, e))
-            }))
+        let posts = posts.into_iter().map(|p| {
+            let id = p.id;
+            self.hydrate_post(p).map_err(move |e| (id, e))
+        });
+        let (posts, errs): (Vec<_>, Vec<_>) = stream::iter(posts)
+            .buffered(4)
+            .collect::<Vec<_>>()
             .await
             .into_iter()
             .partition_result();
+
         warn!("{} posts constructed failed", errs.len());
         if log::log_enabled!(log::Level::Trace) {
             for (id, err) in errs {

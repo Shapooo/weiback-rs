@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use std::path::Path;
 
 use bytes::Bytes;
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use log::{debug, error, info, warn};
 use tokio::{
     fs::{DirBuilder, File},
@@ -85,9 +85,11 @@ where {
             })?;
             Result::<_>::Ok(())
         });
-        let fail_sum = join_all(pic_futures)
+        let fail_sum = stream::iter(pic_futures)
+            .buffered(4)
+            .collect::<Vec<_>>()
             .await
-            .iter()
+            .into_iter()
             .filter(|r| r.is_err())
             .count();
         warn! {"{fail_sum} pictures exports failed"}
