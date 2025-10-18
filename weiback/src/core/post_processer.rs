@@ -44,12 +44,23 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             .await?;
 
         info!("Finished downloading pictures. Processing posts...");
-        for post in posts {
-            self.storage.save_post(&post).await?;
-        }
+        stream::iter(posts)
+            .map(Ok)
+            .try_for_each_concurrent(2, |post| async move {
+                if self.need_insert(&post).await? {
+                    self.storage.save_post(&post).await
+                } else {
+                    Ok(())
+                }
+            })
+            .await?;
 
         info!("Finished processing posts for task {task_id}.");
         Ok(())
+    }
+
+    async fn need_insert(&self, post: &Post) -> Result<bool> {
+        Ok(is_valid_post(post) || self.storage.get_post(post.id).await?.is_none())
     }
 
     async fn handle_picture(
@@ -97,4 +108,10 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             .await?;
         Ok(())
     }
+}
+
+fn is_valid_post(post: &Post) -> bool {
+    post.user.is_some()
+        && (post.retweeted_status.is_none()
+            || post.retweeted_status.as_ref().unwrap().user.is_some())
 }
