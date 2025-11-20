@@ -49,12 +49,13 @@ pub struct UrlStructItemInternal {
     pub vip_gif: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum UrlTypeInternal {
     Link,
     Picture,
     Location,
     Appendix,
+    #[default]
     Topic,
 }
 
@@ -69,7 +70,10 @@ impl<'de> Deserialize<'de> for UrlTypeInternal {
             Num(u8),
             Str(Cow<'a, str>),
         }
-        match StrNum::deserialize(deserializer).unwrap() {
+        let Ok(deser_res) = StrNum::deserialize(deserializer) else {
+            return Ok(Default::default());
+        };
+        match deser_res {
             StrNum::Num(0) => Ok(Self::Link),
             StrNum::Num(1) => Ok(Self::Picture),
             StrNum::Num(36) => Ok(Self::Location),
