@@ -3,14 +3,12 @@ use std::collections::HashMap;
 use std::result::Result;
 
 use serde::{Deserialize, Deserializer};
+use serde_aux::prelude::*;
 use serde_json::Value;
 use url::Url;
 
 use crate::error::Error;
-use crate::models::{
-    PicInfosForStatusItem, UrlStruct, UrlStructItem, common::deserialize_nonable_url,
-    url_struct::UrlType,
-};
+use crate::models::{PicInfosForStatusItem, UrlStruct, UrlStructItem, url_struct::UrlType};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UrlStructInternal(pub Vec<UrlStructItemInternal>);
@@ -32,7 +30,7 @@ impl PartialEq for UrlStructInternal {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UrlStructItemInternal {
-    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub long_url: Option<Url>,
     pub object_type: Option<String>,
     pub ori_url: String,
@@ -40,7 +38,7 @@ pub struct UrlStructItemInternal {
     pub short_url: String,
     pub url_title: String,
     pub url_type: UrlTypeInternal,
-    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub url_type_pic: Option<Url>,
     #[serde(default, deserialize_with = "deserialize_pic_ids")]
     pub pic_ids: Option<String>,

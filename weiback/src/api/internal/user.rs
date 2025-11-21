@@ -1,13 +1,14 @@
 use serde::Deserialize;
+use serde_aux::prelude::*;
 use url::Url;
 
-use crate::models::{User, common::deserialize_nonable_url};
+use crate::models::User;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UserInternal {
-    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub avatar_hd: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub avatar_large: Option<Url>,
     #[serde(default)]
     pub domain: String,
@@ -17,7 +18,7 @@ pub struct UserInternal {
     pub follow_me: bool,
     #[serde(default)]
     pub id: i64,
-    #[serde(default, deserialize_with = "deserialize_nonable_url")]
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub profile_image_url: Option<Url>,
     #[serde(default)]
     pub screen_name: String,
