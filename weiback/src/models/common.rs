@@ -73,6 +73,7 @@ pub struct VideoInfo {
     pub stream_url: Option<Url>,
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub stream_url_hd: Option<Url>,
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub video_orientation: Option<Orientation>,
     pub video_publish_time: Option<i32>,
 }
