@@ -1,7 +1,4 @@
-use std::borrow::Cow;
-use std::result::Result;
-
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_aux::prelude::*;
 use serde_json::Value;
 use url::Url;
@@ -23,7 +20,7 @@ macro_rules! merge_optional_fields {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PageInfoInternal {
-    #[serde(default, deserialize_with = "deserialize_opt_str_num")]
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
     pub author_id: Option<i64>,
     pub card_info: Option<Value>,
     pub cards: Option<Vec<PageInfoInternal>>,
@@ -34,7 +31,7 @@ pub struct PageInfoInternal {
     pub media_info: Option<VideoInfo>,
     pub object_id: Option<String>,
     pub object_type: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_opt_str_num")]
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
     pub oid: Option<i64>,
     pub page_desc: Option<String>,
     pub page_id: Option<String>,
@@ -47,7 +44,7 @@ pub struct PageInfoInternal {
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub short_url: Option<Url>,
     pub source_type: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_opt_str_num")]
+    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
     pub r#type: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub type_icon: Option<Url>,
@@ -109,23 +106,6 @@ impl From<PageInfoInternal> for PageInfo {
             type_icon: page_info.type_icon,
             user: page_info.user,
         }
-    }
-}
-
-fn deserialize_opt_str_num<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Either<'a> {
-        Str(Cow<'a, str>),
-        Num(i64),
-    }
-    match Option::<Either>::deserialize(deserializer)? {
-        Some(Either::Str(s)) => s.parse().map_err(serde::de::Error::custom).map(Some),
-        Some(Either::Num(n)) => Ok(Some(n)),
-        None => Ok(None),
     }
 }
 

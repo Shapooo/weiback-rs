@@ -1,14 +1,12 @@
-use std::borrow::Cow;
-
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoDetail {
-    #[serde(deserialize_with = "deserialize_str_num")]
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub height: i32,
-    #[serde(deserialize_with = "deserialize_str_num")]
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub width: i32,
     pub url: Url,
 }
@@ -91,22 +89,6 @@ pub enum Orientation {
     Vertical,
     #[serde(rename = "horizontal")]
     Horizontal,
-}
-
-pub fn deserialize_str_num<'de, D>(deserializer: D) -> std::result::Result<i32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Either<'a> {
-        Str(Cow<'a, str>),
-        Num(i32),
-    }
-    match Either::deserialize(deserializer)? {
-        Either::Str(s) => s.parse().map_err(serde::de::Error::custom),
-        Either::Num(n) => Ok(n),
-    }
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Deserializer};
+use serde_aux::prelude::*;
 use serde_json::Value;
 
 use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal, user::UserInternal};
@@ -17,7 +18,7 @@ pub struct PostInternal {
     #[serde(deserialize_with = "deserialize_created_at")]
     pub created_at: DateTime<FixedOffset>,
     pub comments_count: Option<i64>,
-    #[serde(default, deserialize_with = "deserialize_deleted")]
+    #[serde(default, deserialize_with = "deserialize_bool_from_anything")]
     pub deleted: bool,
     pub edit_count: Option<i64>,
     #[serde(default)]
@@ -96,14 +97,6 @@ where
 {
     let user = Option::<UserInternal>::deserialize(deserializer)?;
     Ok(user.and_then(|u| if u.id == 0 { None } else { Some(u) }))
-}
-
-fn deserialize_deleted<'de, D>(deserializer: D) -> std::result::Result<bool, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    Ok(s == "1")
 }
 
 pub fn deserialize_ids<'de, D>(
