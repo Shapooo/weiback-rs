@@ -3,8 +3,10 @@ use std::path::PathBuf;
 
 use bytes::Bytes;
 use log::debug;
+use sqlx::SqlitePool;
 use url::Url;
 
+use super::internal::picture;
 use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::models::Picture;
@@ -32,8 +34,10 @@ impl FileSystemPictureStorage {
 }
 
 impl FileSystemPictureStorage {
-    pub async fn get_picture_blob(&self, url: &Url) -> Result<Option<Bytes>> {
-        let path = url_to_path(url);
+    pub async fn get_picture_blob(&self, db: &SqlitePool, url: &Url) -> Result<Option<Bytes>> {
+        let Some(path) = picture::get_picture_path(db, url).await? else {
+            return Ok(None);
+        };
         let path = self.picture_path.join(path);
         match tokio::fs::read(&path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
@@ -42,25 +46,36 @@ impl FileSystemPictureStorage {
         }
     }
 
-    pub async fn save_picture(&self, picture: &Picture) -> Result<()> {
+    pub async fn save_picture(&self, db: &SqlitePool, picture: &Picture) -> Result<()> {
         let url = picture.meta.url();
-        let path = url_to_path(url);
-        let path = self.picture_path.join(path);
-        create_dir_all(path.parent().ok_or(Error::Io(std::io::Error::other(
-            "cannot get parent of picture path",
-        )))?)?;
-        if let Some(parent) = path.parent() {
+        let relative_path = url_to_path(url);
+        let absolute_path = self.picture_path.join(relative_path.as_path());
+        create_dir_all(
+            absolute_path
+                .parent()
+                .ok_or(Error::Io(std::io::Error::other(
+                    "cannot get parent of picture path",
+                )))?,
+        )?;
+        if let Some(parent) = absolute_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        tokio::fs::write(&path, &picture.blob).await?;
-        debug!("picture {} saved to {:?}", picture.meta.url(), path);
+        tokio::fs::write(&absolute_path, &picture.blob).await?;
+        picture::save_picture_meta(db, &picture.meta, Some(relative_path.as_path())).await?;
+        debug!(
+            "picture {} saved to {:?}",
+            picture.meta.url(),
+            absolute_path
+        );
         Ok(())
     }
 
-    pub fn picture_saved(&self, url: &Url) -> bool {
-        let path = url_to_path(url);
-        let path = self.picture_path.join(path);
-        path.exists()
+    pub async fn picture_saved(&self, db: &SqlitePool, url: &Url) -> Result<bool> {
+        let Some(relative_path) = picture::get_picture_path(db, url).await? else {
+            return Ok(false);
+        };
+        let absolute_path = self.picture_path.join(relative_path);
+        Ok(absolute_path.exists())
     }
 }
 
@@ -72,6 +87,14 @@ mod tests {
 
     use super::*;
     use crate::models::{Picture, PictureMeta};
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        super::super::internal::picture::create_picture_table(&pool)
+            .await
+            .unwrap();
+        pool
+    }
 
     fn create_test_storage(temp_dir: &Path) -> FileSystemPictureStorage {
         FileSystemPictureStorage {
@@ -92,7 +115,8 @@ mod tests {
         let storage = create_test_storage(temp_dir.path());
         let picture = create_test_picture("http://example.com/original/test.jpg");
 
-        let result = storage.save_picture(&picture).await;
+        let db = setup_db().await;
+        let result = storage.save_picture(&db, &picture).await;
         assert!(result.is_ok());
 
         let expected_path = temp_dir.path().join("example.com/original/test.jpg");
@@ -107,10 +131,11 @@ mod tests {
         let storage = create_test_storage(temp_dir.path());
         let picture = create_test_picture("http://example.com/test.jpg");
 
-        storage.save_picture(&picture).await.unwrap();
+        let db = setup_db().await;
+        storage.save_picture(&db, &picture).await.unwrap();
 
         let blob = storage
-            .get_picture_blob(&Url::parse("http://example.com/test.jpg").unwrap())
+            .get_picture_blob(&db, &Url::parse("http://example.com/test.jpg").unwrap())
             .await
             .unwrap();
         assert!(blob.is_some());
@@ -122,8 +147,12 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let storage = create_test_storage(temp_dir.path());
 
+        let db = setup_db().await;
         let blob = storage
-            .get_picture_blob(&Url::parse("http://example.com/non-existent.jpg").unwrap())
+            .get_picture_blob(
+                &db,
+                &Url::parse("http://example.com/non-existent.jpg").unwrap(),
+            )
             .await
             .unwrap();
         assert!(blob.is_none());

@@ -84,7 +84,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
 
     async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
         let url = pic_meta.url().to_owned();
-        if self.storage.picture_saved(&url) {
+        if self.storage.picture_saved(&url).await? {
             debug!("Picture {url} already exists in local storage, skipping download.");
             return Ok(());
         }

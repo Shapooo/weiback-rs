@@ -2,7 +2,7 @@ use log::{debug, error, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 
 use super::VALIDE_DB_VERSION;
-use super::internal::{post, user};
+use super::internal::{picture, post, user};
 use crate::config::get_config;
 use crate::error::{Error, Result};
 
@@ -55,6 +55,7 @@ pub async fn create_tables(db_pool: &SqlitePool) -> Result<()> {
     post::create_post_table(db_pool).await?;
     post::create_favorited_post_table(db_pool).await?;
     user::create_user_table(db_pool).await?;
+    picture::create_picture_table(db_pool).await?;
     sqlx::query(format!("PRAGMA user_version = {VALIDE_DB_VERSION};").as_str())
         .execute(db_pool)
         .await?;

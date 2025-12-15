@@ -178,12 +178,13 @@ impl Storage for MockStorage {
         Ok(inner.pictures.get(url.as_str()).cloned())
     }
 
-    fn picture_saved(&self, url: &Url) -> bool {
-        self.inner
+    async fn picture_saved(&self, url: &Url) -> Result<bool> {
+        Ok(self
+            .inner
             .lock()
             .unwrap()
             .pictures
-            .contains_key(url.as_str())
+            .contains_key(url.as_str()))
     }
 }
 

@@ -45,7 +45,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
     fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
     async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
-    fn picture_saved(&self, url: &Url) -> bool;
+    async fn picture_saved(&self, url: &Url) -> Result<bool>;
 }
 
 #[derive(Debug, Clone)]
@@ -214,15 +214,15 @@ impl Storage for StorageImpl {
     }
 
     async fn get_picture_blob(&self, url: &Url) -> Result<Option<Bytes>> {
-        self.pic_storage.get_picture_blob(url).await
+        self.pic_storage.get_picture_blob(&self.db_pool, url).await
     }
 
     async fn save_picture(&self, picture: &Picture) -> Result<()> {
-        self.pic_storage.save_picture(picture).await
+        self.pic_storage.save_picture(&self.db_pool, picture).await
     }
 
-    fn picture_saved(&self, url: &Url) -> bool {
-        self.pic_storage.picture_saved(url)
+    async fn picture_saved(&self, url: &Url) -> Result<bool> {
+        self.pic_storage.picture_saved(&self.db_pool, url).await
     }
 }
 
