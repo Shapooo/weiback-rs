@@ -7,11 +7,11 @@ use crate::config::get_config;
 use crate::error::{Error, Result};
 
 pub async fn check_db_version(db_pool: &SqlitePool) -> Result<()> {
-    let version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
+    let version = sqlx::query_scalar::<Sqlite, i64>("PRAGMA user_version;")
         .fetch_one(db_pool)
         .await?;
-    debug!("db version: {}", version.0);
-    if version.0 == VALIDE_DB_VERSION {
+    debug!("db version: {}", version);
+    if version == VALIDE_DB_VERSION {
         Ok(())
     } else {
         Err(Error::DbError(
@@ -56,7 +56,8 @@ pub async fn create_tables(db_pool: &SqlitePool) -> Result<()> {
     post::create_favorited_post_table(db_pool).await?;
     user::create_user_table(db_pool).await?;
     picture::create_picture_table(db_pool).await?;
-    sqlx::query(format!("PRAGMA user_version = {VALIDE_DB_VERSION};").as_str())
+    sqlx::query("PRAGMA user_version = ?;")
+        .bind(VALIDE_DB_VERSION)
         .execute(db_pool)
         .await?;
     Ok(())
@@ -91,11 +92,11 @@ mod tests {
         assert!(!user_table_info.unwrap().is_empty());
 
         // Verify that the version was set
-        let version = sqlx::query_as::<Sqlite, (i64,)>("PRAGMA user_version;")
+        let version = sqlx::query_scalar::<Sqlite, i64>("PRAGMA user_version;")
             .fetch_one(&db)
             .await
             .unwrap();
-        assert_eq!(version.0, VALIDE_DB_VERSION);
+        assert_eq!(version, VALIDE_DB_VERSION);
     }
 
     #[tokio::test]

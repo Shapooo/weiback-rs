@@ -149,13 +149,12 @@ pub async fn create_favorited_post_table(db: &SqlitePool) -> Result<()> {
 
 #[allow(unused)]
 async fn check_unfavorited(db: &SqlitePool, id: i64) -> Result<Option<bool>> {
-    Ok(
-        sqlx::query_as::<Sqlite, (bool,)>("SELECT unfavorited FROM favorited_posts WHERE id = ?;")
-            .bind(id)
-            .fetch_optional(db)
-            .await?
-            .map(|b| b.0),
+    Ok(sqlx::query_scalar::<Sqlite, (bool)>(
+        "SELECT unfavorited FROM favorited_posts WHERE id = ?;",
     )
+    .bind(id)
+    .fetch_optional(db)
+    .await?)
 }
 
 pub async fn get_post(db: &SqlitePool, id: i64) -> Result<Option<PostInternal>> {
@@ -359,22 +358,20 @@ VALUES
 
 pub async fn get_favorited_sum(db: &SqlitePool) -> Result<u32> {
     Ok(
-        sqlx::query_as::<Sqlite, (u32,)>("SELECT COUNT(1) FROM favorited_posts;")
+        sqlx::query_scalar::<Sqlite, u32>("SELECT COUNT(1) FROM favorited_posts;")
             .fetch_one(db)
-            .await?
-            .0,
+            .await?,
     )
 }
 
 pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
     debug!("query all posts to unfavorite");
-    Ok(sqlx::query_as::<Sqlite, (i64,)>(
+    Ok(sqlx::query_scalar::<Sqlite, i64>(
         "SELECT id FROM favorited_posts WHERE unfavorited == false;",
     )
     .fetch_all(db)
     .await?
     .into_iter()
-    .map(|t| t.0)
     .collect())
 }
 

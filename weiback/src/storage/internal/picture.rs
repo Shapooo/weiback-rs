@@ -58,9 +58,10 @@ VALUES
 }
 
 pub async fn get_picture_path(db: &SqlitePool, url: &Url) -> Result<Option<PathBuf>> {
-    let raw_res = sqlx::query_as::<Sqlite, (String,)>(r#"SELECT path FROM picture WHERE url = ?;"#)
-        .bind(url.as_str())
-        .fetch_optional(db)
-        .await?;
-    Ok(raw_res.map(|s| PathBuf::from(s.0)))
+    let raw_res =
+        sqlx::query_scalar::<Sqlite, String>(r#"SELECT path FROM picture WHERE url = ?;"#)
+            .bind(url.as_str())
+            .fetch_optional(db)
+            .await?;
+    Ok(raw_res.map(PathBuf::from))
 }
