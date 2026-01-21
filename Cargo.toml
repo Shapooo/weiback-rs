@@ -33,6 +33,6 @@ tokio = { version = "1", features = [
     "time",
     "fs",
 ] }
-url = "2"
+url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v7"] }
 weibosdk-rs = { git = "https://github.com/Shapooo/weibosdk-rs.git", rev = "b27b57e97512e61e1db8967ff25c4af39b338853" }
