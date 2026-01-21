@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use log::{debug, info};
+use log::debug;
 use serde_json::{Value, from_value, to_value};
 use sqlx::{FromRow, Sqlite, SqlitePool};
 
@@ -96,55 +96,6 @@ impl TryInto<Post> for PostInternal {
             user: None,
         })
     }
-}
-
-pub async fn create_post_table(db: &SqlitePool) -> Result<()> {
-    info!("Creating post table if not exists...");
-    sqlx::query(
-        r#"CREATE TABLE
-    IF NOT EXISTS posts (
-        attitudes_count INTEGER,
-        attitudes_status INTEGER,
-        comments_count INTEGER,
-        created_at TEXT,
-        deleted INTEGER,
-        edit_count INTEGER,
-        favorited INTEGER,
-        geo TEXT,
-        id INTEGER PRIMARY KEY,
-        mblogid TEXT,
-        mix_media_ids TEXT,
-        mix_media_info TEXT,
-        page_info TEXT,
-        pic_ids TEXT,
-        pic_infos TEXT,
-        pic_num INTEGER,
-        region_name TEXT,
-        reposts_count INTEGER,
-        repost_type INTEGER,
-        retweeted_id INTEGER,
-        source TEXT,
-        text TEXT,
-        uid INTEGER,
-        url_struct TEXT
-    );"#,
-    )
-    .execute(db)
-    .await?;
-    info!("Post table created successfully.");
-    Ok(())
-}
-
-pub async fn create_favorited_post_table(db: &SqlitePool) -> Result<()> {
-    info!("Creating favorited post table if not exists...");
-    sqlx::query(
-        r#"CREATE TABLE
-    IF NOT EXISTS favorited_posts (id INTEGER PRIMARY KEY, unfavorited INTEGER);"#,
-    )
-    .execute(db)
-    .await?;
-    info!("Favorited post table created successfully.");
-    Ok(())
 }
 
 #[allow(unused)]
@@ -387,8 +338,7 @@ mod tests {
 
     async fn setup_db() -> SqlitePool {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
-        create_post_table(&pool).await.unwrap();
-        create_favorited_post_table(&pool).await.unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
         pool
     }
 
@@ -416,13 +366,6 @@ mod tests {
             .unwrap();
         favs.extend(statuses);
         favs
-    }
-
-    #[tokio::test]
-    async fn test_create_post_table() {
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
-        let result = create_post_table(&pool).await;
-        assert!(result.is_ok());
     }
 
     #[tokio::test]

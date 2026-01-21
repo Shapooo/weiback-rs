@@ -90,9 +90,7 @@ mod tests {
 
     async fn setup_db() -> SqlitePool {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
-        super::super::internal::picture::create_picture_table(&pool)
-            .await
-            .unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
         pool
     }
 

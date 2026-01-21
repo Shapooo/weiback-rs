@@ -1,30 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use log::info;
 use sqlx::{Sqlite, SqlitePool};
 use url::Url;
 
 use crate::error::Result;
 use crate::models::PictureMeta;
 use crate::utils::pic_url_to_id;
-
-pub async fn create_picture_table(db: &SqlitePool) -> Result<()> {
-    info!("Creating post table if not exists...");
-    sqlx::query(
-        r#"CREATE TABLE
-    IF NOT EXISTS picture (
-        id TEXT,
-        path TEXT,
-        post_id TEXT,
-        url TEXT PRIMARY KEY,
-        user_id TEXT
-    );"#,
-    )
-    .execute(db)
-    .await?;
-    info!("Picture table created successfully.");
-    Ok(())
-}
 
 pub async fn save_picture_meta(
     db: &SqlitePool,

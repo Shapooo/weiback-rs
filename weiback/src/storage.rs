@@ -24,8 +24,6 @@ use crate::models::{Picture, Post, User};
 use internal::post::{self, PostInternal};
 use internal::user;
 
-const VALIDE_DB_VERSION: i64 = 2;
-
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
@@ -244,7 +242,7 @@ mod tests {
 
     async fn setup_storage() -> StorageImpl {
         let db_pool = SqlitePool::connect(":memory:").await.unwrap();
-        database::create_tables(&db_pool).await.unwrap();
+        sqlx::migrate!().run(&db_pool).await.unwrap();
         let temp_dir = tempdir().unwrap();
         let pic_storage = FileSystemPictureStorage::from_picture_path(temp_dir.path().into());
 

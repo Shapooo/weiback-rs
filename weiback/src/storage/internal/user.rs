@@ -1,4 +1,3 @@
-use log::info;
 use sqlx::{FromRow, Sqlite, SqlitePool};
 use url::Url;
 
@@ -49,27 +48,6 @@ impl TryFrom<UserInternal> for User {
         };
         Ok(res)
     }
-}
-
-pub async fn create_user_table(db: &SqlitePool) -> Result<()> {
-    info!("Creating user table if not exists...");
-    sqlx::query(
-        r#"CREATE TABLE
-    IF NOT EXISTS users (
-        avatar_hd TEXT,
-        avatar_large TEXT,
-        domain TEXT,
-        following INTEGER,
-        follow_me INTEGER,
-        id INTEGER PRIMARY KEY,
-        profile_image_url TEXT,
-        screen_name TEXT
-    );"#,
-    )
-    .execute(db)
-    .await?;
-    info!("User table created successfully.");
-    Ok(())
 }
 
 pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
@@ -123,7 +101,7 @@ mod tests {
 
     async fn setup_db() -> SqlitePool {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
-        create_user_table(&pool).await.unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
         pool
     }
 
@@ -161,18 +139,6 @@ mod tests {
             let converted_user: User = internal_user.try_into().unwrap();
             assert_eq!(user, converted_user);
         }
-    }
-
-    #[tokio::test]
-    async fn test_create_user_table() {
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
-        let result = create_user_table(&pool).await;
-        assert!(result.is_ok());
-
-        // Verify that the table was created by trying to insert a user
-        let user = create_test_users().await.remove(0);
-        let result = save_user(&pool, &user).await;
-        assert!(result.is_ok());
     }
 
     #[tokio::test]
