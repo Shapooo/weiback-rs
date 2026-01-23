@@ -29,6 +29,7 @@ pub struct Config {
     pub other_task_interval: Duration,
     pub posts_per_html: u32,
     pub picture_path: PathBuf,
+    pub video_path: PathBuf,
     pub sdk_config: SdkConfig,
     #[cfg(feature = "dev-mode")]
     pub dev_mode_out_dir: Option<PathBuf>,
@@ -48,6 +49,7 @@ impl Default for Config {
             other_task_interval: Duration::from_secs(1),
             posts_per_html: 200,
             picture_path: data_dir.join("pictures"),
+            video_path: data_dir.join("videos"),
             sdk_config: Default::default(),
             #[cfg(feature = "dev-mode")]
             dev_mode_out_dir: dirs::download_dir().map(|dir| dir.join("weiback_records")),

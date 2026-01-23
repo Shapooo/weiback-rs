@@ -1,5 +1,6 @@
 -- Add migration script here
-CREATE TABLE posts (
+CREATE TABLE
+    posts (
         attitudes_count INTEGER,
         attitudes_status INTEGER,
         comments_count INTEGER,
@@ -25,8 +26,12 @@ CREATE TABLE posts (
         uid INTEGER,
         url_struct TEXT
     );
-CREATE TABLE favorited_posts (id INTEGER PRIMARY KEY, unfavorited BOOLEAN);
-CREATE TABLE users (
+
+CREATE TABLE
+    favorited_posts (id INTEGER PRIMARY KEY, unfavorited BOOLEAN);
+
+CREATE TABLE
+    users (
         avatar_hd TEXT,
         avatar_large TEXT,
         domain TEXT,
@@ -37,10 +42,14 @@ CREATE TABLE users (
         screen_name TEXT
     );
 
-CREATE TABLE picture (
-    id TEXT,
-    path TEXT,
-    post_id TEXT,
-    url TEXT PRIMARY KEY,
-    user_id TEXT
-);
+CREATE TABLE
+    picture (
+        id TEXT,
+        path TEXT,
+        post_id TEXT,
+        url TEXT PRIMARY KEY,
+        user_id TEXT
+    );
+
+CREATE TABLE
+    video (url TEXT PRIMARY KEY, path TEXT, post_id TEXT);

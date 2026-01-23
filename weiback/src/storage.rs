@@ -2,6 +2,7 @@
 pub mod database;
 pub mod internal;
 pub mod picture_storage;
+pub mod video_storage;
 
 use std::future::Future;
 use std::ops::RangeInclusive;

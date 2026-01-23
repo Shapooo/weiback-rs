@@ -7,6 +7,7 @@ pub mod picture;
 pub mod post;
 pub mod url_struct;
 pub mod user;
+pub mod video;
 
 mod build_comments;
 
@@ -18,3 +19,4 @@ pub use picture::{Picture, PictureDefinition, PictureMeta};
 pub use post::Post;
 pub use url_struct::{PicInfosForStatusItem, UrlStruct, UrlStructItem};
 pub use user::User;
+pub use video::{Video, VideoMeta};
