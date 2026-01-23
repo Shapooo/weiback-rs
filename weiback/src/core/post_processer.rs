@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 
@@ -11,7 +11,7 @@ use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::media_downloader::MediaDownloader;
-use crate::models::{Picture, PictureDefinition, PictureMeta, Post};
+use crate::models::{PicInfoType, Picture, PictureDefinition, PictureMeta, Post, VideoMeta};
 use crate::storage::Storage;
 use crate::utils::extract_all_pic_metas;
 
@@ -42,6 +42,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
 
         self.handle_picture(&posts, pic_quality, emoji_map, task_id)
             .await?;
+        self.handle_livephoto_video(&posts, task_id).await?;
 
         info!("Finished downloading pictures. Processing posts...");
         stream::iter(posts)
@@ -108,10 +109,79 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             .await?;
         Ok(())
     }
+
+    async fn handle_livephoto_video(&self, posts: &[Post], task_id: u64) -> Result<()> {
+        let video_metas = extract_livephoto_video_metas(posts);
+        info!(
+            "Found {} unique livephoto videos to download.",
+            video_metas.len()
+        );
+
+        stream::iter(video_metas)
+            .map(Ok)
+            .try_for_each_concurrent(10, |meta| async move {
+                self.download_video_to_local(task_id, meta).await
+            })
+            .await?;
+        Ok(())
+    }
+
+    async fn download_video_to_local(&self, task_id: u64, video_meta: VideoMeta) -> Result<()> {
+        let url = video_meta.url().to_owned();
+        if self.storage.video_saved(&url).await? {
+            debug!("Video {url} already exists in local storage, skipping download.");
+            return Ok(());
+        }
+        debug!("Downloading video {url} to local storage.");
+        let storage = self.storage.clone();
+        let callback = Box::new(
+            move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                Box::pin(async move {
+                    let video = crate::models::Video {
+                        meta: video_meta,
+                        blob,
+                    };
+                    storage.save_video(&video).await?;
+                    Ok(())
+                })
+            },
+        );
+
+        self.downloader
+            .download_media(task_id, &url, callback)
+            .await?;
+        Ok(())
+    }
 }
 
 fn is_valid_post(post: &Post) -> bool {
     post.user.is_some()
         && (post.retweeted_status.is_none()
             || post.retweeted_status.as_ref().unwrap().user.is_some())
+}
+
+fn extract_livephoto_video_metas(posts: &[Post]) -> Vec<VideoMeta> {
+    let mut metas = Vec::new();
+    let mut seen_urls = HashSet::new();
+
+    for post in posts.iter().flat_map(post_and_retweeted) {
+        if let Some(pic_infos) = &post.pic_infos {
+            for pic_info in pic_infos.values() {
+                if let PicInfoType::Livephoto = pic_info.r#type
+                    && let Some(video_url) = &pic_info.video
+                    && seen_urls.insert(video_url.clone())
+                {
+                    metas.push(VideoMeta {
+                        url: video_url.clone(),
+                        post_id: post.id,
+                    });
+                }
+            }
+        }
+    }
+    metas
+}
+
+fn post_and_retweeted(post: &Post) -> impl Iterator<Item = &Post> {
+    std::iter::once(post).chain(post.retweeted_status.as_deref())
 }
