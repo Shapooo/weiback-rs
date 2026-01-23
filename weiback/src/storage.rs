@@ -20,8 +20,11 @@ use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 use url::Url;
 
-use crate::error::{Error, Result};
-use crate::models::{Picture, Post, User};
+use crate::models::{Picture, Post, User, Video};
+use crate::{
+    error::{Error, Result},
+    storage::video_storage::FileSystemVideoStorage,
+};
 use internal::post::{self, PostInternal};
 use internal::user;
 
@@ -45,12 +48,16 @@ pub trait Storage: Send + Sync + Clone + 'static {
     fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
     async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
     async fn picture_saved(&self, url: &Url) -> Result<bool>;
+    fn save_video(&self, picture: &Video) -> impl Future<Output = Result<()>> + Send;
+    async fn get_video_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
+    async fn video_saved(&self, url: &Url) -> Result<bool>;
 }
 
 #[derive(Debug, Clone)]
 pub struct StorageImpl {
     db_pool: SqlitePool,
     pic_storage: FileSystemPictureStorage,
+    video_storage: FileSystemVideoStorage,
 }
 
 impl StorageImpl {
@@ -63,11 +70,13 @@ impl StorageImpl {
                 e
             })?;
         let pic_storage = FileSystemPictureStorage::new()?;
+        let video_storage = FileSystemVideoStorage::new()?;
 
         info!("Storage initialized successfully.");
         Ok(StorageImpl {
             db_pool,
             pic_storage,
+            video_storage,
         })
     }
 
@@ -223,6 +232,18 @@ impl Storage for StorageImpl {
     async fn picture_saved(&self, url: &Url) -> Result<bool> {
         self.pic_storage.picture_saved(&self.db_pool, url).await
     }
+
+    async fn get_video_blob(&self, url: &Url) -> Result<Option<Bytes>> {
+        self.video_storage.get_video_blob(&self.db_pool, url).await
+    }
+
+    async fn save_video(&self, video: &Video) -> Result<()> {
+        self.video_storage.save_video(&self.db_pool, video).await
+    }
+
+    async fn video_saved(&self, url: &Url) -> Result<bool> {
+        self.video_storage.video_saved(&self.db_pool, url).await
+    }
 }
 
 #[cfg(test)]
@@ -246,10 +267,12 @@ mod tests {
         sqlx::migrate!().run(&db_pool).await.unwrap();
         let temp_dir = tempdir().unwrap();
         let pic_storage = FileSystemPictureStorage::from_picture_path(temp_dir.path().into());
+        let video_storage = FileSystemVideoStorage::from_video_path(temp_dir.path().into());
 
         StorageImpl {
             db_pool,
             pic_storage,
+            video_storage,
         }
     }
 

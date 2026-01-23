@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::{
     error::Result,
-    models::{Picture, Post, User},
+    models::{Picture, Post, User, Video},
     storage::Storage,
 };
 
@@ -25,6 +25,7 @@ struct Inner {
     users: HashMap<i64, User>,
     posts: HashMap<i64, (Post, bool)>,
     pictures: HashMap<String, Bytes>,
+    videos: HashMap<String, Bytes>,
 }
 
 impl MockStorage {
@@ -186,6 +187,26 @@ impl Storage for MockStorage {
             .pictures
             .contains_key(url.as_str()))
     }
+
+    fn save_video(&self, video: &Video) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            self.inner
+                .lock()
+                .unwrap()
+                .videos
+                .insert(video.meta.url().to_string(), video.blob.clone());
+            Ok(())
+        }
+    }
+
+    async fn get_video_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>> {
+        let inner = self.inner.lock().unwrap();
+        Ok(inner.videos.get(url.as_str()).cloned())
+    }
+
+    async fn video_saved(&self, url: &Url) -> Result<bool> {
+        Ok(self.inner.lock().unwrap().videos.contains_key(url.as_str()))
+    }
 }
 
 #[cfg(test)]
@@ -299,5 +320,18 @@ mod tests {
         storage.save_picture(&picture).await.unwrap();
         let blob = storage.get_picture_blob(picture.meta.url()).await.unwrap();
         assert_eq!(blob.unwrap(), picture.blob);
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_video() {
+        use crate::models::VideoMeta;
+        let storage = MockStorage::new();
+        let video = Video {
+            meta: VideoMeta::new("https://test_url.com/test_video", 123).unwrap(),
+            blob: Bytes::from_static(b"video data"),
+        };
+        storage.save_video(&video).await.unwrap();
+        let blob = storage.get_video_blob(video.meta.url()).await.unwrap();
+        assert_eq!(blob.unwrap(), video.blob);
     }
 }
