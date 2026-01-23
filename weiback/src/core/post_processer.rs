@@ -104,7 +104,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         );
 
         self.downloader
-            .download_picture(task_id, &url, callback)
+            .download_media(task_id, &url, callback)
             .await?;
         Ok(())
     }

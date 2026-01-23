@@ -12,7 +12,7 @@ use crate::error::Result;
 use crate::message::{ErrMsg, ErrType, Message};
 
 pub trait MediaDownloader: Clone + Send + Sync + 'static {
-    async fn download_picture(
+    async fn download_media(
         &self,
         task_id: u64,
         url: &Url,
@@ -44,7 +44,7 @@ pub struct DownloaderWorker {
     msg_sender: mpsc::Sender<Message>,
 }
 
-/// A media downloader that handles downloading pictures in a separate actor.
+/// A media downloader that handles downloading media file in a separate actor.
 #[derive(Debug, Clone)]
 pub struct MediaDownloaderHandle {
     sender: mpsc::Sender<DownloadTask>,
@@ -72,12 +72,12 @@ pub fn create_downloader(
 }
 
 impl MediaDownloader for MediaDownloaderHandle {
-    /// Queues a picture for download.
+    /// Queues a media file for download.
     ///
     /// This method sends a task to the background downloader actor and returns immediately.
     /// The provided async callback will be executed once the download is complete and successful.
     /// If the download fails, the task is discarded and the callback is never called.
-    async fn download_picture(
+    async fn download_media(
         &self,
         task_id: u64,
         url: &Url,
@@ -109,12 +109,12 @@ impl DownloaderWorker {
             callback,
         }) = self.receiver.recv().await
         {
-            debug!("Downloading picture from {url}");
+            debug!("Downloading media from {url}");
             if let Err(err) = self.process_task(&url, callback).await
                 && let Err(e) = self
                     .msg_sender
                     .send(Message::Err(ErrMsg {
-                        r#type: ErrType::DownPicFail {
+                        r#type: ErrType::DownMediaFail {
                             url: url.to_string(),
                         },
                         task_id,
@@ -137,14 +137,14 @@ impl DownloaderWorker {
             .await
             .and_then(|r| r.error_for_status())
             .map_err(|e| {
-                error!("Failed to send request when download picture from {url}: {e}");
+                error!("Failed to send request when download media file from {url}: {e}");
                 e
             })?;
         let body = response.bytes().await.map_err(|e| {
             error!("Failed to read bytes from response for {url}: {e}");
             e
         })?;
-        debug!("Successfully downloaded picture from {url}");
+        debug!("Successfully downloaded media file from {url}");
         (callback)(body).await
     }
 }
@@ -161,7 +161,7 @@ mod tests {
     use tokio::sync::Notify;
 
     #[tokio::test]
-    async fn test_download_picture_success() {
+    async fn test_download_media_success() {
         let mut server = Server::new_async().await;
         let url = server.url();
         let mock_body = "picture data";
@@ -194,7 +194,7 @@ mod tests {
         tokio::spawn(worker.run());
 
         handle
-            .download_picture(1, &Url::parse(&url).unwrap(), callback)
+            .download_media(1, &Url::parse(&url).unwrap(), callback)
             .await
             .unwrap();
 
@@ -204,7 +204,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_picture_network_error() {
+    async fn test_download_media_network_error() {
         let mut server = Server::new_async().await;
         let url = server.url();
         let url = Url::parse(&url).unwrap();
@@ -226,12 +226,12 @@ mod tests {
 
         tokio::spawn(worker.run());
 
-        handle.download_picture(1, &url, callback).await.unwrap();
+        handle.download_media(1, &url, callback).await.unwrap();
 
         let received_msg = msg_rx.recv().await.unwrap();
         match received_msg {
             Message::Err(ErrMsg {
-                r#type: ErrType::DownPicFail { url: err_url },
+                r#type: ErrType::DownMediaFail { url: err_url },
                 task_id,
                 ..
             }) => {
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_picture_callback_error() {
+    async fn test_download_media_callback_error() {
         let mut server = Server::new_async().await;
         let url = server.url();
         let mock_body = "picture data";
@@ -272,14 +272,14 @@ mod tests {
         tokio::spawn(worker.run());
 
         handle
-            .download_picture(1, &Url::parse(&url).unwrap(), callback)
+            .download_media(1, &Url::parse(&url).unwrap(), callback)
             .await
             .unwrap();
 
         let received_msg = msg_rx.recv().await.unwrap();
         match received_msg {
             Message::Err(ErrMsg {
-                r#type: ErrType::DownPicFail { url: err_url },
+                r#type: ErrType::DownMediaFail { url: err_url },
                 task_id,
                 err,
             }) => {

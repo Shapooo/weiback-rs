@@ -39,7 +39,7 @@ impl MockMediaDownloader {
 }
 
 impl MediaDownloader for MockMediaDownloader {
-    async fn download_picture(
+    async fn download_media(
         &self,
         _task_id: u64,
         url: &Url,
@@ -70,7 +70,7 @@ mod tests {
     use std::io;
 
     #[tokio::test]
-    async fn test_download_picture_success() {
+    async fn test_download_media_success() {
         let mock_downloader = MockMediaDownloader::new(true);
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
         let expected_data = Bytes::from_static(b"picture data");
@@ -87,13 +87,13 @@ mod tests {
             },
         );
 
-        let result = mock_downloader.download_picture(1, &url, callback).await;
+        let result = mock_downloader.download_media(1, &url, callback).await;
         assert!(result.is_ok());
         assert!(*callback_executed.lock().unwrap());
     }
 
     #[tokio::test]
-    async fn test_download_picture_error() {
+    async fn test_download_media_error() {
         let mock_downloader = MockMediaDownloader::new(true);
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
         let error = Error::Io(io::Error::new(io::ErrorKind::NotFound, "not found"));
@@ -105,7 +105,7 @@ mod tests {
             },
         );
 
-        let result = mock_downloader.download_picture(1, &url, callback).await;
+        let result = mock_downloader.download_media(1, &url, callback).await;
         assert!(result.is_err());
         match result {
             Err(Error::Io(e)) => assert_eq!(e.kind(), io::ErrorKind::NotFound),
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_picture_not_mocked() {
+    async fn test_download_media_not_mocked() {
         let mock_downloader = MockMediaDownloader::new(false);
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
 
@@ -124,7 +124,7 @@ mod tests {
             },
         );
 
-        let result = mock_downloader.download_picture(1, &url, callback).await;
+        let result = mock_downloader.download_media(1, &url, callback).await;
         assert!(result.is_err());
         match result {
             Err(Error::InconsistentTask(msg)) => assert!(msg.contains("URL not mocked")),

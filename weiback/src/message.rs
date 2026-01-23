@@ -26,7 +26,7 @@ pub struct TaskProgress {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum ErrType {
-    DownPicFail { url: String },
+    DownMediaFail { url: String },
     LongTextFail { post_id: i64 },
     LongTaskFail { task_id: u64 },
 }

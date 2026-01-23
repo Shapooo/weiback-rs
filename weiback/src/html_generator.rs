@@ -153,7 +153,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
                 },
             );
             self.downloader
-                .download_picture(task_id, &url, callback)
+                .download_media(task_id, &url, callback)
                 .await?;
             Ok(result.await?)
         }
