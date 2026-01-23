@@ -74,3 +74,81 @@ impl FileSystemVideoStorage {
         Ok(absolute_path.exists())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::models::{Video, VideoMeta};
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
+        pool
+    }
+
+    fn create_test_storage(temp_dir: &Path) -> FileSystemVideoStorage {
+        FileSystemVideoStorage {
+            video_path: temp_dir.to_path_buf(),
+        }
+    }
+
+    fn create_test_video(url: &str) -> Video {
+        Video {
+            meta: VideoMeta::new(url, 42).unwrap(),
+            blob: Bytes::from_static(b"test video data"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_save_video() {
+        let temp_dir = tempdir().unwrap();
+        let storage = create_test_storage(temp_dir.path());
+        let video = create_test_video("http://example.com/original/test.mp4");
+
+        let db = setup_db().await;
+        let result = storage.save_video(&db, &video).await;
+        assert!(result.is_ok());
+
+        let expected_path = temp_dir.path().join("example.com/original/test.mp4");
+        assert!(expected_path.exists());
+        let data = tokio::fs::read(expected_path).await.unwrap();
+        assert_eq!(data, video.blob);
+    }
+
+    #[tokio::test]
+    async fn test_get_video_blob() {
+        let temp_dir = tempdir().unwrap();
+        let storage = create_test_storage(temp_dir.path());
+        let video = create_test_video("http://example.com/test.mp4");
+
+        let db = setup_db().await;
+        storage.save_video(&db, &video).await.unwrap();
+
+        let blob = storage
+            .get_video_blob(&db, &Url::parse("http://example.com/test.mp4").unwrap())
+            .await
+            .unwrap();
+        assert!(blob.is_some());
+        assert_eq!(blob.unwrap(), video.blob);
+    }
+
+    #[tokio::test]
+    async fn test_get_non_existent_video_blob() {
+        let temp_dir = tempdir().unwrap();
+        let storage = create_test_storage(temp_dir.path());
+
+        let db = setup_db().await;
+        let blob = storage
+            .get_video_blob(
+                &db,
+                &Url::parse("http://example.com/non-existent.mp4").unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(blob.is_none());
+    }
+}
