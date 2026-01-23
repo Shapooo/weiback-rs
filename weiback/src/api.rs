@@ -86,7 +86,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
         if let Some(ret) = post.retweeted_status.as_mut()
             && ret.is_long_text
         {
-            *ret = Box::new(self.statuses_show_internal(ret.id).await?);
+            **ret = self.statuses_show_internal(ret.id).await?;
             if let Some(long_text) = ret.long_text.take() {
                 ret.text = long_text.content; // should be Some
             } else {
