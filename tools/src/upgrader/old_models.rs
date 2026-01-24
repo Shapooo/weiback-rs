@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, FixedOffset, TimeZone};
 use futures::Stream;
 use serde_json::Value;
@@ -32,24 +32,28 @@ impl TryFrom<OldUser> for User {
     type Error = anyhow::Error;
 
     fn try_from(old: OldUser) -> Result<Self, Self::Error> {
+        let id = old.id;
         Ok(User {
-            id: old.id,
+            id,
             screen_name: old.screen_name.unwrap_or_default(),
             avatar_hd: Url::parse(
                 old.avatar_hd
-                    .ok_or_else(|| anyhow!("user {} missing avatar_hd", old.id))?
+                    .context(format!("user {id} missing avatar_hd"))?
                     .as_str(),
-            )?,
+            )
+            .with_context(|| format!("user {id} failed to parse avatar_hd"))?,
             avatar_large: Url::parse(
                 old.avatar_large
-                    .ok_or_else(|| anyhow!("user {} missing avatar_large", old.id))?
+                    .context(format!("user {id} missing avatar_large"))?
                     .as_str(),
-            )?,
+            )
+            .with_context(|| format!("user {id} failed to parse avatar_large"))?,
             profile_image_url: Url::parse(
                 old.profile_image_url
-                    .ok_or_else(|| anyhow!("user {} missing profile_image_url", old.id))?
+                    .context(format!("user {id} missing profile_image_url"))?
                     .as_str(),
-            )?,
+            )
+            .with_context(|| format!("user {id} failed to parse profile_image_url"))?,
             domain: old.domain.unwrap_or_default(),
             following: old.following.unwrap_or(false),
             follow_me: old.follow_me.unwrap_or(false),
@@ -141,58 +145,75 @@ impl TryFrom<OldPost> for PostInternal {
     type Error = anyhow::Error;
 
     fn try_from(old: OldPost) -> Result<Self> {
+        let id = old.id;
         let created_at = if let Some(s) = old.created_at {
-            // The old format is like "Sat Mar 28 22:38:44 +0800 2020"
+            // The old format like "Sat Mar 28 22:38:44 +0800 2020"
             DateTime::parse_from_str(&s, "%a %b %d %T %z %Y")
-                .or_else(|_| DateTime::parse_from_rfc3339(&s))?
+                // The old format like "2020-07-08 22:38:44 +0800"
+                .or_else(|_| DateTime::parse_from_str(&s, "%Y-%m-%d %T %:z"))
+                .or_else(|_| DateTime::parse_from_rfc3339(&s))
+                .with_context(|| format!("post {id}, parsing created_at {s}"))?
                 .to_rfc3339()
         } else if let Some(ts) = old.created_at_timestamp {
             let tz_str = old.created_at_tz.unwrap_or_else(|| "+08:00".to_string());
-            let tz = tz_str.parse::<FixedOffset>()?;
+            let tz = tz_str
+                .parse::<FixedOffset>()
+                .with_context(|| format!("post {id}, parsing created_at_tz"))?;
             tz.timestamp_opt(ts, 0)
                 .single()
-                .ok_or_else(|| anyhow!("Invalid timestamp"))?
+                .ok_or_else(|| anyhow!("Invalid timestamp"))
+                .with_context(|| format!("post {id}, converting timestamp"))?
                 .to_rfc3339()
         } else {
-            return Err(anyhow!("Post {} has no creation date", old.id));
+            return Err(anyhow!("Post {} has no creation date", id));
         };
 
         let page_info = old
             .page_info
             .map(|v| {
-                let internal: PageInfoInternal = serde_json::from_value(v)?;
+                let internal: PageInfoInternal = serde_json::from_value(v)
+                    .with_context(|| format!("post {id}, deserializing PageInfoInternal"))?;
                 let model: PageInfo = internal.into();
                 serde_json::to_value(model)
+                    .with_context(|| format!("post {id}, serializing PageInfo"))
             })
             .transpose()?;
 
         let url_struct = old
             .url_struct
             .map(|v| {
-                let url_struct: UrlStructInternal = serde_json::from_value(v)?;
-                let url_struct: UrlStruct = url_struct.try_into().map_err(|e| anyhow!("{e}"))?;
-                anyhow::Ok(serde_json::to_value(url_struct)?)
+                let internal: UrlStructInternal = serde_json::from_value(v)
+                    .with_context(|| format!("post {id}, deserializing UrlStructInternal"))?;
+                let model: UrlStruct = internal
+                    .try_into()
+                    .with_context(|| format!("post {id}, converting UrlStruct"))?;
+                serde_json::to_value(model)
+                    .with_context(|| format!("post {id}, serializing UrlStruct"))
             })
             .transpose()?;
 
         let pic_infos = old
             .pic_infos
             .map(|v| {
-                let model: HashMap<String, PicInfoItem> = serde_json::from_value(v)?;
+                let model: HashMap<String, PicInfoItem> = serde_json::from_value(v)
+                    .with_context(|| format!("post {id}, deserializing PicInfoItem"))?;
                 serde_json::to_value(model)
+                    .with_context(|| format!("post {id}, serializing PicInfoItem"))
             })
             .transpose()?;
 
         let mix_media_info = old
             .mix_media_info
             .map(|v| {
-                let model: MixMediaInfo = serde_json::from_value(v)?;
+                let model: MixMediaInfo = serde_json::from_value(v)
+                    .with_context(|| format!("post {id}, deserializing MixMediaInfo"))?;
                 serde_json::to_value(model)
+                    .with_context(|| format!("post {id}, serializing MixMediaInfo"))
             })
             .transpose()?;
 
         Ok(PostInternal {
-            id: old.id,
+            id,
             mblogid: old.mblogid,
             uid: old.uid,
             created_at,
