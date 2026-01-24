@@ -234,11 +234,31 @@ impl TryFrom<OldPost> for PostInternal {
             })
             .transpose()?;
 
-        let mix_media_info = old
+        let mix_media_info_model = old
             .mix_media_info
             .map(|v| {
                 let model: MixMediaInfo = serde_json::from_value(v)
                     .with_context(|| format!("post {id}, deserializing MixMediaInfo"))?;
+                anyhow::Ok(model)
+            })
+            .transpose()?;
+
+        // Extract mix_media_ids from the model, if available
+        let mix_media_ids = mix_media_info_model.as_ref().map(|mmi| {
+            mmi.items
+                .iter()
+                .map(|item| match item {
+                    weiback::models::mix_media_info::MixMediaInfoItem::Pic { id, .. } => id.clone(),
+                    weiback::models::mix_media_info::MixMediaInfoItem::Video { id, .. } => {
+                        id.clone()
+                    }
+                })
+                .collect()
+        });
+
+        // Re-serialize the MixMediaInfo model back to a Value
+        let mix_media_info = mix_media_info_model
+            .map(|model| {
                 serde_json::to_value(model)
                     .with_context(|| format!("post {id}, serializing MixMediaInfo"))
             })
@@ -268,7 +288,7 @@ impl TryFrom<OldPost> for PostInternal {
             retweeted_id: old.retweeted_id,
             source: old.source,
             url_struct,
-            mix_media_ids: None, // This was not in old DB
+            mix_media_ids,
         })
     }
 }
