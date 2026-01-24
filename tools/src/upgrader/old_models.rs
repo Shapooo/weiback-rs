@@ -1,6 +1,5 @@
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, FixedOffset, TimeZone};
-use futures::Stream;
 use serde_json::Value;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -90,8 +89,8 @@ pub struct OldPost {
     pub url_struct: Option<Value>,
 }
 
-pub fn get_old_users(db: &SqlitePool) -> impl Stream<Item = Result<OldUser, sqlx::Error>> {
-    sqlx::query_as::<_, OldUser>(
+pub async fn get_old_users_paged(db: &SqlitePool, limit: i64, offset: i64) -> Result<Vec<OldUser>> {
+    Ok(sqlx::query_as::<_, OldUser>(
         r#"SELECT
     id,
     screen_name,
@@ -102,15 +101,26 @@ pub fn get_old_users(db: &SqlitePool) -> impl Stream<Item = Result<OldUser, sqlx
     following,
     follow_me
 FROM
-    users;"#,
+    users
+ORDER BY
+    id
+LIMIT
+    ?
+OFFSET
+    ?;"#,
     )
-    .fetch(db)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(db)
+    .await?)
 }
 
-pub fn get_old_posts(
+pub async fn get_old_posts_paged(
     db: &SqlitePool,
     old_version: i64,
-) -> impl Stream<Item = Result<OldPost, sqlx::Error>> {
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<OldPost>> {
     let query = match old_version {
         0 => {
             r#"SELECT
@@ -119,7 +129,13 @@ pub fn get_old_posts(
     NULL as created_at_timestamp,
     NULL as created_at_tz
 FROM
-    posts;"#
+    posts
+ORDER BY
+    id
+LIMIT
+    ?
+OFFSET
+    ?;"#
         }
         1 => {
             r#"SELECT
@@ -128,17 +144,33 @@ FROM
     created_at as created_at_timestamp,
     NULL as created_at
 FROM
-    posts;"#
+    posts
+ORDER BY
+    id
+LIMIT
+    ?
+OFFSET
+    ?;"#
         }
         2 => {
             r#"SELECT
     *
 FROM
-    posts;"#
+    posts
+ORDER BY
+    id
+LIMIT
+    ?
+OFFSET
+    ?;"#
         }
         _ => unreachable!(),
     };
-    sqlx::query_as::<_, OldPost>(query).fetch(db)
+    Ok(sqlx::query_as(query)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(db)
+        .await?)
 }
 
 impl TryFrom<OldPost> for PostInternal {
