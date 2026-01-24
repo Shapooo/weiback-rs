@@ -3,8 +3,18 @@ use chrono::{DateTime, FixedOffset, TimeZone};
 use futures::Stream;
 use serde_json::Value;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use url::Url;
-use weiback::{internals::storage_internal::post::PostInternal, models::User};
+use weiback::{
+    internals::{
+        page_info::PageInfoInternal, storage_internal::post::PostInternal,
+        url_struct::UrlStructInternal,
+    },
+    models::{
+        User, mix_media_info::MixMediaInfo, page_info::PageInfo, pic_infos::PicInfoItem,
+        url_struct::UrlStruct,
+    },
+};
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct OldUser {
@@ -147,6 +157,40 @@ impl TryFrom<OldPost> for PostInternal {
             return Err(anyhow!("Post {} has no creation date", old.id));
         };
 
+        let page_info = old
+            .page_info
+            .map(|v| {
+                let internal: PageInfoInternal = serde_json::from_value(v)?;
+                let model: PageInfo = internal.into();
+                serde_json::to_value(model)
+            })
+            .transpose()?;
+
+        let url_struct = old
+            .url_struct
+            .map(|v| {
+                let url_struct: UrlStructInternal = serde_json::from_value(v)?;
+                let url_struct: UrlStruct = url_struct.try_into().map_err(|e| anyhow!("{e}"))?;
+                anyhow::Ok(serde_json::to_value(url_struct)?)
+            })
+            .transpose()?;
+
+        let pic_infos = old
+            .pic_infos
+            .map(|v| {
+                let model: HashMap<String, PicInfoItem> = serde_json::from_value(v)?;
+                serde_json::to_value(model)
+            })
+            .transpose()?;
+
+        let mix_media_info = old
+            .mix_media_info
+            .map(|v| {
+                let model: MixMediaInfo = serde_json::from_value(v)?;
+                serde_json::to_value(model)
+            })
+            .transpose()?;
+
         Ok(PostInternal {
             id: old.id,
             mblogid: old.mblogid,
@@ -161,16 +205,16 @@ impl TryFrom<OldPost> for PostInternal {
             favorited: old.favorited,
             edit_count: old.edit_count,
             geo: old.geo,
-            mix_media_info: old.mix_media_info,
-            page_info: old.page_info,
+            mix_media_info,
+            page_info,
             pic_ids: old.pic_ids,
-            pic_infos: old.pic_infos,
+            pic_infos,
             pic_num: old.pic_num,
             region_name: old.region_name,
             repost_type: old.repost_type,
             retweeted_id: old.retweeted_id,
             source: old.source,
-            url_struct: old.url_struct,
+            url_struct,
             mix_media_ids: None, // This was not in old DB
         })
     }
