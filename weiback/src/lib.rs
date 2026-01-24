@@ -16,3 +16,9 @@ pub mod mock;
 
 #[cfg(feature = "dev-mode")]
 pub mod dev_client;
+
+#[cfg(feature = "internal-models")]
+pub mod internals {
+    pub use crate::api::internal::{page_info, url_struct};
+    pub use crate::storage::{database, internal as storage_internal, picture_storage};
+}

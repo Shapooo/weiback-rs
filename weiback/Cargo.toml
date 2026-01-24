@@ -36,3 +36,4 @@ weibosdk-rs = { workspace = true, features = ["test-mocks"] }
 
 [features]
 dev-mode = [ "dep:uuid" ]
+internal-models = []
