@@ -10,7 +10,7 @@ use log::{info, warn};
 use sqlx::SqlitePool;
 
 use old_picture::{extract_avatar_id, extract_in_post_pic_ids, get_pic_blob};
-use old_post::get_old_posts_paged;
+use old_post::{convert_old_to_internal_post, get_old_posts_paged};
 use old_user::{get_old_users_paged, get_users};
 use weiback::{
     internals::storage_internal::{post::save_post, user::save_user},
@@ -74,6 +74,7 @@ impl Upgrader {
     }
 
     async fn migrate_posts_and_favorites(&mut self, old_version: i64) -> Result<()> {
+        let mut incompat_post_urls = Vec::new();
         let limit = 500;
         let mut offset = 0;
         loop {
@@ -83,7 +84,7 @@ impl Upgrader {
             }
 
             for post in old_posts {
-                match post.try_into() {
+                match convert_old_to_internal_post(post, &mut incompat_post_urls) {
                     Ok(internal_post) => {
                         if let Err(e) = save_post(&self.new_db, &internal_post, true).await {
                             warn!("Failed to save post {}: {:?}", internal_post.id, e);
@@ -96,6 +97,13 @@ impl Upgrader {
             }
             offset += limit;
             info!("Processed {offset} posts...");
+        }
+
+        warn!(
+            "Some posts are INCOMPATIBLE for the conversion, we STRONGLY recommand you to RE-BACKUP:"
+        );
+        for url in incompat_post_urls {
+            warn!("{url}");
         }
 
         info!("Posts and favorites migration finished.");

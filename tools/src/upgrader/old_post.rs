@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, FixedOffset, TimeZone};
+use log::warn;
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::SqlitePool;
@@ -222,126 +223,154 @@ OFFSET
         .await?)
 }
 
-impl TryFrom<OldPost> for PostInternal {
-    type Error = anyhow::Error;
+pub fn convert_old_to_internal_post(
+    old: OldPost,
+    incompat_post_url: &mut Vec<String>,
+) -> Result<PostInternal> {
+    let id = old.id;
+    let uid = old.uid;
+    let created_at = if let Some(s) = old.created_at {
+        // The old format like "Sat Mar 28 22:38:44 +0800 2020"
+        DateTime::parse_from_str(&s, "%a %b %d %T %z %Y")
+            // The old format like "2020-07-08 22:38:44 +0800"
+            .or_else(|_| DateTime::parse_from_str(&s, "%Y-%m-%d %T %:z"))
+            .or_else(|_| DateTime::parse_from_rfc3339(&s))
+            .with_context(|| format!("post {id}, parsing created_at {s}"))?
+            .to_rfc3339()
+    } else if let Some(ts) = old.created_at_timestamp {
+        let tz_str = old.created_at_tz.unwrap_or_else(|| "+08:00".to_string());
+        let tz = tz_str
+            .parse::<FixedOffset>()
+            .with_context(|| format!("post {id}, parsing created_at_tz"))?;
+        tz.timestamp_opt(ts, 0)
+            .single()
+            .ok_or_else(|| anyhow!("Invalid timestamp"))
+            .with_context(|| format!("post {id}, converting timestamp"))?
+            .to_rfc3339()
+    } else {
+        return Err(anyhow!("Post {} has no creation date", id));
+    };
 
-    fn try_from(old: OldPost) -> Result<Self> {
-        let id = old.id;
-        let created_at = if let Some(s) = old.created_at {
-            // The old format like "Sat Mar 28 22:38:44 +0800 2020"
-            DateTime::parse_from_str(&s, "%a %b %d %T %z %Y")
-                // The old format like "2020-07-08 22:38:44 +0800"
-                .or_else(|_| DateTime::parse_from_str(&s, "%Y-%m-%d %T %:z"))
-                .or_else(|_| DateTime::parse_from_rfc3339(&s))
-                .with_context(|| format!("post {id}, parsing created_at {s}"))?
-                .to_rfc3339()
-        } else if let Some(ts) = old.created_at_timestamp {
-            let tz_str = old.created_at_tz.unwrap_or_else(|| "+08:00".to_string());
-            let tz = tz_str
-                .parse::<FixedOffset>()
-                .with_context(|| format!("post {id}, parsing created_at_tz"))?;
-            tz.timestamp_opt(ts, 0)
-                .single()
-                .ok_or_else(|| anyhow!("Invalid timestamp"))
-                .with_context(|| format!("post {id}, converting timestamp"))?
-                .to_rfc3339()
-        } else {
-            return Err(anyhow!("Post {} has no creation date", id));
-        };
-
-        let page_info = old
-            .page_info
-            .map(|v| {
-                let internal: PageInfoInternal = serde_json::from_value(v)
-                    .with_context(|| format!("post {id}, deserializing PageInfoInternal"))?;
-                let model: PageInfo = internal.into();
-                serde_json::to_value(model)
-                    .with_context(|| format!("post {id}, serializing PageInfo"))
-            })
-            .transpose()?;
-
-        let url_struct = old
-            .url_struct
-            .map(|v| {
-                let internal: UrlStructInternal = serde_json::from_value(v)
-                    .with_context(|| format!("post {id}, deserializing UrlStructInternal"))?;
-                let model: UrlStruct = internal
-                    .try_into()
-                    .with_context(|| format!("post {id}, converting UrlStruct"))?;
-                serde_json::to_value(model)
-                    .with_context(|| format!("post {id}, serializing UrlStruct"))
-            })
-            .transpose()?;
-
-        let pic_infos = old
-            .pic_infos
-            .map(|v| {
-                deserialize_pic_infos(v, id).and_then(|op| {
-                    op.map(|v| {
-                        serde_json::to_value(v)
-                            .with_context(|| format!("post {id}, serializing PicInfoItem"))
-                    })
-                    .transpose()
-                })
-            })
-            .transpose()?
-            .flatten();
-
-        let mix_media_info_model = old
-            .mix_media_info
-            .map(|v| {
-                let model: MixMediaInfo = serde_json::from_value(v)
-                    .with_context(|| format!("post {id}, deserializing MixMediaInfo"))?;
-                anyhow::Ok(model)
-            })
-            .transpose()?;
-
-        // Extract mix_media_ids from the model, if available
-        let mix_media_ids = mix_media_info_model.as_ref().map(|mmi| {
-            mmi.items
-                .iter()
-                .map(|item| match item {
-                    weiback::models::mix_media_info::MixMediaInfoItem::Pic { id, .. } => id.clone(),
-                    weiback::models::mix_media_info::MixMediaInfoItem::Video { id, .. } => {
-                        id.clone()
-                    }
-                })
-                .collect()
+    let page_info = old
+        .page_info
+        .map(|v| {
+            let internal: PageInfoInternal = serde_json::from_value(v)
+                .with_context(|| format!("post {id}, deserializing PageInfoInternal"))?;
+            let model: PageInfo = internal.into();
+            serde_json::to_value(model).with_context(|| format!("post {id}, serializing PageInfo"))
+        })
+        .transpose()
+        .unwrap_or_else(|e| {
+            if let Some(uid) = uid {
+                incompat_post_url.push(generate_weibo_url(id, uid));
+            }
+            warn!("post {id} convert page_info failed: {e}");
+            None
         });
 
-        // Re-serialize the MixMediaInfo model back to a Value
-        let mix_media_info = mix_media_info_model
-            .map(|model| {
-                serde_json::to_value(model)
-                    .with_context(|| format!("post {id}, serializing MixMediaInfo"))
-            })
-            .transpose()?;
-
-        Ok(PostInternal {
-            id,
-            mblogid: old.mblogid,
-            uid: old.uid,
-            created_at,
-            text: old.text_raw,
-            reposts_count: old.reposts_count,
-            comments_count: old.comments_count,
-            attitudes_count: old.attitudes_count,
-            attitudes_status: old.attitudes_status,
-            deleted: old.deleted,
-            favorited: old.favorited,
-            edit_count: old.edit_count,
-            geo: old.geo,
-            mix_media_info,
-            page_info,
-            pic_ids: old.pic_ids,
-            pic_infos,
-            pic_num: old.pic_num,
-            region_name: old.region_name,
-            repost_type: old.repost_type,
-            retweeted_id: old.retweeted_id,
-            source: old.source,
-            url_struct,
-            mix_media_ids,
+    let url_struct = old
+        .url_struct
+        .map(|v| {
+            let internal: UrlStructInternal = serde_json::from_value(v)
+                .with_context(|| format!("post {id}, deserializing UrlStructInternal"))?;
+            let model: UrlStruct = internal
+                .try_into()
+                .with_context(|| format!("post {id}, converting UrlStruct"))?;
+            serde_json::to_value(model).with_context(|| format!("post {id}, serializing UrlStruct"))
         })
-    }
+        .transpose()
+        .unwrap_or_else(|e| {
+            if let Some(uid) = uid {
+                incompat_post_url.push(generate_weibo_url(id, uid));
+            }
+            warn!("post {id} convert url_struct failed: {e}");
+            None
+        });
+
+    let pic_infos = old
+        .pic_infos
+        .map(|v| {
+            deserialize_pic_infos(v, id).and_then(|op| {
+                op.map(|v| {
+                    serde_json::to_value(v)
+                        .with_context(|| format!("post {id}, serializing PicInfoItem"))
+                })
+                .transpose()
+            })
+        })
+        .transpose()
+        .unwrap_or_else(|e| {
+            if let Some(uid) = uid {
+                incompat_post_url.push(generate_weibo_url(id, uid));
+            }
+            warn!("post {id} convert pic_infos failed: {e}");
+            None
+        })
+        .flatten();
+
+    let mix_media_info_model = old
+        .mix_media_info
+        .map(|v| {
+            let model: MixMediaInfo = serde_json::from_value(v)
+                .with_context(|| format!("post {id}, deserializing MixMediaInfo"))?;
+            anyhow::Ok(model)
+        })
+        .transpose()
+        .unwrap_or_else(|e| {
+            if let Some(uid) = uid {
+                incompat_post_url.push(generate_weibo_url(id, uid));
+            }
+            warn!("post {id} convert mix_media_info failed: {e}");
+            None
+        });
+
+    // Extract mix_media_ids from the model, if available
+    let mix_media_ids = mix_media_info_model.as_ref().map(|mmi| {
+        mmi.items
+            .iter()
+            .map(|item| match item {
+                weiback::models::mix_media_info::MixMediaInfoItem::Pic { id, .. } => id.clone(),
+                weiback::models::mix_media_info::MixMediaInfoItem::Video { id, .. } => id.clone(),
+            })
+            .collect()
+    });
+
+    // Re-serialize the MixMediaInfo model back to a Value
+    let mix_media_info = mix_media_info_model
+        .map(|model| {
+            serde_json::to_value(model)
+                .with_context(|| format!("post {id}, serializing MixMediaInfo"))
+        })
+        .transpose()?;
+
+    Ok(PostInternal {
+        id,
+        mblogid: old.mblogid,
+        uid: old.uid,
+        created_at,
+        text: old.text_raw,
+        reposts_count: old.reposts_count,
+        comments_count: old.comments_count,
+        attitudes_count: old.attitudes_count,
+        attitudes_status: old.attitudes_status,
+        deleted: old.deleted,
+        favorited: old.favorited,
+        edit_count: old.edit_count,
+        geo: old.geo,
+        mix_media_info,
+        page_info,
+        pic_ids: old.pic_ids,
+        pic_infos,
+        pic_num: old.pic_num,
+        region_name: old.region_name,
+        repost_type: old.repost_type,
+        retweeted_id: old.retweeted_id,
+        source: old.source,
+        url_struct,
+        mix_media_ids,
+    })
+}
+
+fn generate_weibo_url(post_id: i64, user_id: i64) -> String {
+    format!("https://weibo.com/{user_id}/{post_id}")
 }
