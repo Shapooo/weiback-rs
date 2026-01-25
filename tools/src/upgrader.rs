@@ -1,10 +1,18 @@
-pub mod old_models;
+pub mod old_post;
+pub mod old_user;
 
-use self::old_models::{get_old_posts_paged, get_old_users_paged};
 use anyhow::Result;
 use log::{info, warn};
 use sqlx::SqlitePool;
 use weiback::internals::storage_internal::{post::save_post, user::save_user};
+use weiback::{
+    internals::storage_internal::{post::save_post, user::save_user},
+    models::{Picture, PictureMeta},
+    storage::picture_storage::FileSystemPictureStorage,
+};
+
+use old_post::get_old_posts_paged;
+use old_user::{get_old_users_paged, get_users};
 
 pub struct Upgrader {
     old_db: SqlitePool,

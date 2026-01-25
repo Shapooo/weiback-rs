@@ -7,6 +7,7 @@ use env_logger::Builder;
 use log::{LevelFilter, error, info, warn};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 use tokio::fs;
+
 use upgrader::Upgrader;
 use weiback::config;
 
