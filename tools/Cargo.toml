@@ -9,6 +9,7 @@ path = "src/db-upgrade-tool.rs"
 
 [dependencies]
 anyhow.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 env_logger.workspace = true
 futures.workspace = true
