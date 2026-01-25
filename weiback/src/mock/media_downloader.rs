@@ -45,7 +45,7 @@ impl MediaDownloader for MockMediaDownloader {
         url: &Url,
         callback: AsyncDownloadCallback,
     ) -> Result<()> {
-        let response = self.inner.lock().unwrap().responses.remove(&url);
+        let response = self.inner.lock().unwrap().responses.remove(url);
         match response {
             Some(Ok(data)) => {
                 (callback)(data).await?;

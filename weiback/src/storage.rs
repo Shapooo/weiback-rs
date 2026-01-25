@@ -320,7 +320,7 @@ mod tests {
         }
 
         let fetched_posts = storage
-            .get_favorites(0..=1000_000_000, false)
+            .get_favorites(0..=1_000_000_000, false)
             .await
             .unwrap();
 
@@ -350,8 +350,8 @@ mod tests {
         let posts = create_test_posts().await;
         let mut ids = HashSet::new();
         for post in posts.iter() {
-            if post.retweeted_status.is_some() {
-                ids.insert(post.retweeted_status.as_ref().unwrap().id);
+            if let Some(ret) = post.retweeted_status.as_ref() {
+                ids.insert(ret.id);
             }
             ids.insert(post.id);
             storage.save_post(post).await.unwrap();
@@ -416,8 +416,8 @@ mod tests {
         let to_unfav = storage.get_posts_id_to_unfavorite().await.unwrap();
         assert_eq!(to_unfav.len(), favorited as usize);
 
-        for i in 0..to_unfav.len() / 3 {
-            storage.mark_post_unfavorited(to_unfav[i]).await.unwrap();
+        for id in to_unfav.iter().take(to_unfav.len() / 3) {
+            storage.mark_post_unfavorited(*id).await.unwrap();
         }
 
         assert_eq!(
@@ -425,8 +425,8 @@ mod tests {
             favorited - favorited / 3
         );
 
-        for i in 0..not_favorited.len() / 3 {
-            storage.mark_post_favorited(not_favorited[i]).await.unwrap();
+        for id in not_favorited.iter().take(to_unfav.len() / 3) {
+            storage.mark_post_favorited(*id).await.unwrap();
         }
 
         assert_eq!(

@@ -74,7 +74,8 @@ mod local_tests {
             read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/favorites.json"))
                 .unwrap();
         let mut value: Value = from_str(&json_str).unwrap();
-        let url_structs = value["favorites"]
+
+        value["favorites"]
             .as_array_mut()
             .unwrap()
             .iter_mut()
@@ -85,8 +86,7 @@ mod local_tests {
                     .try_into()
             })
             .collect::<Result<Vec<_>>>()
-            .unwrap();
-        url_structs
+            .unwrap()
     }
 
     #[test]

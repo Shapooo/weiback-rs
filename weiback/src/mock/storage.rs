@@ -1,7 +1,6 @@
 //! Test mock for storage
 use std::{
     collections::HashMap,
-    future::Future,
     ops::RangeInclusive,
     sync::{Arc, Mutex},
 };
@@ -51,7 +50,7 @@ impl Storage for MockStorage {
         let mut posts: Vec<_> = inner
             .posts
             .values()
-            .filter_map(|(p, _)| p.favorited.then(|| p))
+            .filter_map(|(p, _)| p.favorited.then_some(p))
             .cloned()
             .collect();
         posts.sort_by_key(|p| p.id);
@@ -163,15 +162,13 @@ impl Storage for MockStorage {
             .collect::<Vec<_>>())
     }
 
-    fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            self.inner
-                .lock()
-                .unwrap()
-                .pictures
-                .insert(picture.meta.url().to_string(), picture.blob.clone());
-            Ok(())
-        }
+    async fn save_picture(&self, picture: &Picture) -> Result<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .pictures
+            .insert(picture.meta.url().to_string(), picture.blob.clone());
+        Ok(())
     }
 
     async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>> {
@@ -188,15 +185,13 @@ impl Storage for MockStorage {
             .contains_key(url.as_str()))
     }
 
-    fn save_video(&self, video: &Video) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            self.inner
-                .lock()
-                .unwrap()
-                .videos
-                .insert(video.meta.url().to_string(), video.blob.clone());
-            Ok(())
-        }
+    async fn save_video(&self, video: &Video) -> Result<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .videos
+            .insert(video.meta.url().to_string(), video.blob.clone());
+        Ok(())
     }
 
     async fn get_video_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>> {
@@ -253,7 +248,7 @@ mod tests {
         for post in posts.iter() {
             storage.save_post(post).await.unwrap();
         }
-        let fetched = storage.get_posts(0..=1000_000_000, false).await.unwrap();
+        let fetched = storage.get_posts(0..=1_000_000_000, false).await.unwrap();
         assert_eq!(fetched.len(), posts.len());
     }
 
@@ -291,8 +286,8 @@ mod tests {
         let to_unfav = storage.get_posts_id_to_unfavorite().await.unwrap();
         assert_eq!(to_unfav.len(), favorited as usize);
 
-        for i in 0..to_unfav.len() / 3 {
-            storage.mark_post_unfavorited(to_unfav[i]).await.unwrap();
+        for id in to_unfav.iter().take(to_unfav.len() / 3) {
+            storage.mark_post_unfavorited(*id).await.unwrap();
         }
 
         assert_eq!(
@@ -300,8 +295,8 @@ mod tests {
             favorited - favorited / 3
         );
 
-        for i in 0..not_favorited.len() / 3 {
-            storage.mark_post_favorited(not_favorited[i]).await.unwrap();
+        for id in not_favorited.iter().take(not_favorited.len() / 3) {
+            storage.mark_post_favorited(*id).await.unwrap();
         }
 
         assert_eq!(

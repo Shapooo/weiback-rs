@@ -108,7 +108,7 @@ mod local_tests {
         value["favorites"]
             .as_array_mut()
             .unwrap()
-            .into_iter()
+            .iter_mut()
             .map(|f| f["status"].take())
             .collect::<Vec<_>>()
     }

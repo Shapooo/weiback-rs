@@ -40,7 +40,7 @@ mod local_tests {
             .unwrap()
             .iter_mut()
             .filter_map(|p| {
-                p["status"].as_object_mut().take().and_then(|m| {
+                p["status"].as_object_mut().and_then(|m| {
                     if let Some(ret) = m.get_mut("retweeted_status") {
                         ret.as_object_mut().unwrap().remove("mix_media_info")
                     } else {

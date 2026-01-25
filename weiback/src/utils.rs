@@ -373,7 +373,7 @@ mod tests {
         let ids = posts
             .into_iter()
             .filter_map(|p| p.pic_ids)
-            .flat_map(|v| v)
+            .flatten()
             .collect::<Vec<_>>();
         for id in ids {
             set.get(&id).unwrap();

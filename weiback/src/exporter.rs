@@ -209,7 +209,7 @@ mod tests {
 
         let page = create_test_page("test", 0);
         exporter
-            .export_page(page, &page_name, &export_dir)
+            .export_page(page, &page_name, export_dir)
             .await
             .unwrap();
     }
