@@ -2,8 +2,10 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, FixedOffset, TimeZone};
+use serde::Deserialize;
 use serde_json::Value;
 use sqlx::SqlitePool;
+use url::Url;
 
 use weiback::{
     internals::{
@@ -11,10 +13,127 @@ use weiback::{
         url_struct::UrlStructInternal,
     },
     models::{
-        mix_media_info::MixMediaInfo, page_info::PageInfo, pic_infos::PicInfoItem,
+        common::PicInfoDetail,
+        mix_media_info::MixMediaInfo,
+        page_info::PageInfo,
+        pic_infos::{PicInfoItem, PicInfoType},
         url_struct::UrlStruct,
     },
 };
+
+#[derive(Debug, Deserialize)]
+struct OldPicInfoItem {
+    pic_id: String,
+    r#type: PicInfoType,
+    bmiddle: OldPicInfoDetail,
+    large: OldPicInfoDetail,
+}
+
+#[derive(Debug, Deserialize)]
+struct OldPicInfoDetail {
+    url: String,
+}
+
+fn create_pic_info_detail(id: &str, host: &str, clarity_type: &str, ext: &str) -> PicInfoDetail {
+    let url_str = format!("https://{}/{}/{}.{}", host, clarity_type, id, ext);
+    PicInfoDetail {
+        height: 0, // Default value
+        width: 0,  // Default value
+        url: url_str.parse().unwrap_or_else(|_| {
+            log::warn!("Failed to parse reconstructed URL: {}", url_str);
+            // Fallback to a dummy URL or handle error
+            "https://example.com/placeholder.jpg".parse().unwrap()
+        }),
+    }
+}
+
+fn extract_host_and_ext(url_str: &str) -> Result<(String, String)> {
+    let url = url_str.parse::<Url>()?;
+    let host = url.host_str().context("URL has no host")?.to_string();
+    let Some(ext) = url
+        .path_segments()
+        .and_then(|mut s| s.next_back())
+        .and_then(|filename| filename.rsplit('.').next())
+    else {
+        return Err(anyhow!("URL has no file extension"));
+    };
+    Ok((host, ext.to_string()))
+}
+
+impl TryFrom<OldPicInfoItem> for PicInfoItem {
+    type Error = anyhow::Error;
+
+    fn try_from(old: OldPicInfoItem) -> Result<Self> {
+        let id = old.pic_id;
+
+        // Try to extract host and ext from a valid URL
+        let (host, ext) = if let Ok((h, e)) = extract_host_and_ext(&old.large.url) {
+            (h, e)
+        } else if let Ok((h, e)) = extract_host_and_ext(&old.bmiddle.url) {
+            (h, e)
+        } else {
+            return Err(anyhow!(
+                "Could not extract host and extension from pic_id {}",
+                id
+            ));
+        };
+
+        Ok(Self {
+            pic_id: id.clone(),
+            object_id: id.clone(),
+            r#type: old.r#type,
+            bmiddle: create_pic_info_detail(&id, &host, "bmiddle", &ext),
+            large: create_pic_info_detail(&id, &host, "large", &ext),
+            largest: create_pic_info_detail(&id, &host, "largest", &ext),
+            original: create_pic_info_detail(&id, &host, "original", &ext),
+            thumbnail: create_pic_info_detail(&id, &host, "thumbnail", &ext),
+            mw2000: create_pic_info_detail(&id, &host, "mw2000", &ext),
+            focus_point: Default::default(),
+            photo_tag: Default::default(),
+            pic_status: Default::default(),
+            video: Default::default(),
+            video_hd: Default::default(),
+            video_object_id: Default::default(),
+            fid: Default::default(),
+        })
+    }
+}
+
+fn deserialize_pic_infos(
+    value: Value,
+    post_id: i64,
+) -> Result<Option<HashMap<String, PicInfoItem>>> {
+    let modern_format: Result<HashMap<String, PicInfoItem>, _> =
+        serde_json::from_value(value.clone());
+    if let Ok(pic_infos) = modern_format {
+        return Ok(Some(pic_infos));
+    }
+
+    let legacy_format: Result<HashMap<String, OldPicInfoItem>, _> = serde_json::from_value(value);
+    match legacy_format {
+        Ok(legacy_pic_infos) => {
+            let pic_infos = legacy_pic_infos
+                .into_iter()
+                .filter_map(|(id, old_item)| match old_item.try_into() {
+                    Ok(item) => Some((id, item)),
+                    Err(e) => {
+                        log::warn!(
+                            "post {post_id}, failed to convert OldPicInfoItem for id {id}: {e}"
+                        );
+                        None
+                    }
+                })
+                .collect();
+            Ok(Some(pic_infos))
+        }
+        Err(e) => {
+            log::warn!(
+                "post {post_id}, can't parse pic_infos as modern or legacy format, err: {e}"
+            );
+            Ok(None)
+        }
+    }
+}
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct OldPost {
@@ -157,12 +276,16 @@ impl TryFrom<OldPost> for PostInternal {
         let pic_infos = old
             .pic_infos
             .map(|v| {
-                let model: HashMap<String, PicInfoItem> = serde_json::from_value(v)
-                    .with_context(|| format!("post {id}, deserializing PicInfoItem"))?;
-                serde_json::to_value(model)
-                    .with_context(|| format!("post {id}, serializing PicInfoItem"))
+                deserialize_pic_infos(v, id).and_then(|op| {
+                    op.map(|v| {
+                        serde_json::to_value(v)
+                            .with_context(|| format!("post {id}, serializing PicInfoItem"))
+                    })
+                    .transpose()
+                })
             })
-            .transpose()?;
+            .transpose()?
+            .flatten();
 
         let mix_media_info_model = old
             .mix_media_info
