@@ -14,7 +14,9 @@ pub struct PicInfoDetail {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct HugeInfo {
     pub author_id: String,
+    #[serde(default)]
     pub content1: String,
+    #[serde(default)]
     pub content2: String,
     pub media_info: VideoInfo,
     pub object_id: String,
