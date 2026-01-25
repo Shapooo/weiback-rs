@@ -86,11 +86,11 @@ impl Upgrader {
                 match post.try_into() {
                     Ok(internal_post) => {
                         if let Err(e) = save_post(&self.new_db, &internal_post, true).await {
-                            warn!("Failed to save post {}: {}", internal_post.id, e);
+                            warn!("Failed to save post {}: {:?}", internal_post.id, e);
                         }
                     }
                     Err(e) => {
-                        warn!("Failed to convert old post record: {e}, skipping.");
+                        warn!("Failed to convert old post record: {e:?}, skipping.");
                     }
                 }
             }
