@@ -28,17 +28,25 @@ const UserBackupSection: React.FC = () => {
 
 
     const handleBackup = async () => {
-        if (!userId) {
-            enqueueSnackbar('请输入用户ID', { variant: 'error' });
-            return;
+        let backupId = userId;
+
+        if (!backupId) {
+            const loggedInId = await invoke<string | null>('login_status');
+            if (loggedInId) {
+                backupId = loggedInId;
+            } else {
+                enqueueSnackbar('请输入用户ID', { variant: 'error' });
+                return;
+            }
         }
+
         if (startPage > endPage) {
             enqueueSnackbar('起始页不能大于结束页', { variant: 'error' });
             return;
         }
         enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
-            await invoke('backup_user', { uid: userId, range: [startPage, endPage] });
+            await invoke('backup_user', { uid: backupId, range: [startPage, endPage] });
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -55,7 +63,7 @@ const UserBackupSection: React.FC = () => {
                     <Stack spacing={2}>
                         <TextField
                             fullWidth
-                            label="用户ID"
+                            label="用户ID (不填写默认为当前登录用户)"
                             value={userId}
                             onChange={(e) => setUserId(e.target.value)}
                         />
