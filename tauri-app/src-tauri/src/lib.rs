@@ -148,6 +148,21 @@ fn login_status(api_client: State<'_, CurrentSdkApiClient>) -> Result<Option<Str
     Ok(api_client.session().ok().map(|s| s.uid.to_owned()))
 }
 
+#[tauri::command]
+async fn get_username_by_id(
+    task_handler: State<'_, TH>,
+    uid: String,
+) -> std::result::Result<Option<String>, String> {
+    let Ok(uid) = uid.parse::<i64>() else {
+        return Ok(None);
+    };
+    task_handler
+        .get_user(uid)
+        .await
+        .map(|opt_user| opt_user.map(|user| user.screen_name))
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() -> Result<()> {
     info!("Starting application");
     weiback::config::init()?;
@@ -165,7 +180,8 @@ pub fn run() -> Result<()> {
             login,
             login_status,
             get_config_command,
-            set_config_command
+            set_config_command,
+            get_username_by_id
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

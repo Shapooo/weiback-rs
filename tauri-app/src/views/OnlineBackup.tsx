@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack, Grid } from '@mui/material';
@@ -6,8 +6,26 @@ import { Card, CardContent, Typography, TextField, Button, Box, Stack, Grid } fr
 const UserBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [userId, setUserId] = useState('');
+    const [userName, setUserName] = useState<string | null>(null);
     const [startPage, setStartPage] = useState(1);
     const [endPage, setEndPage] = useState(10);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            if (userId) {
+                invoke<string | null>('get_username_by_id', { uid: userId })
+                    .then(setUserName)
+                    .catch(console.error);
+            } else {
+                setUserName(null);
+            }
+        }, 500); // 500ms debounce
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [userId]);
+
 
     const handleBackup = async () => {
         if (!userId) {
@@ -39,9 +57,13 @@ const UserBackupSection: React.FC = () => {
                             fullWidth
                             label="用户ID"
                             value={userId}
-                            defaultValue={"1234"}
                             onChange={(e) => setUserId(e.target.value)}
                         />
+                        {userName && (
+                            <Typography variant="body2" color="text.secondary" sx={{ pl: 1, mt: 0 }}>
+                                用户名: {userName}
+                            </Typography>
+                        )}
                         <Grid container spacing={2} alignItems="center">
                             <Grid size={{ xs: 5 }} >
                                 <TextField

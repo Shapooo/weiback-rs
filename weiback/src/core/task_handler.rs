@@ -55,6 +55,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         &self.msg_sender
     }
 
+    pub async fn get_user(&self, uid: i64) -> Result<Option<crate::models::User>> {
+        self.storage.get_user(uid).await
+    }
+
     async fn backup_procedure<F, Fut>(
         &self,
         task_id: u64,
