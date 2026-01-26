@@ -25,6 +25,7 @@ sqlx = { workspace = true }
 tera = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+toml = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true, optional = true }
 weibosdk-rs = { workspace = true }
@@ -35,5 +36,5 @@ tempfile = "3"
 weibosdk-rs = { workspace = true, features = ["test-mocks"] }
 
 [features]
-dev-mode = [ "dep:uuid" ]
+dev-mode = ["dep:uuid"]
 internal-models = []

@@ -8,7 +8,6 @@ use std::{
 use log::{debug, info, warn};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use serde_json::from_str;
 use weibosdk_rs::config::Conifg as SdkConfig;
 
 use crate::error::Result;
@@ -106,26 +105,26 @@ fn load_from_files() -> Result<Option<Config>> {
         return Ok(None);
     };
     let content = fs::read_to_string(config_path)?;
-    Ok(from_str(&content)?)
+    Ok(toml::from_str(&content)?)
 }
 
 // 尝试加载配置，如果找不到，则创建并保存一个新的默认配置。
 fn load_or_create() -> Result<Config> {
     if let Some(path) = find_config_file()? {
         let content = fs::read_to_string(path)?;
-        return Ok(from_str(&content)?);
+        return Ok(toml::from_str(&content)?);
     }
 
     // 未找到配置文件，创建并写入默认配置
     let config = Config::default();
     let config_local_path = dirs::config_local_dir()
         .unwrap_or_default()
-        .join("weiback/config.json");
+        .join("weiback/config.toml");
 
     if let Some(parent) = config_local_path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(&config_local_path, serde_json::to_string_pretty(&config)?)?;
+    fs::write(&config_local_path, toml::to_string_pretty(&config)?)?;
     debug!("Default configuration file created at: {config_local_path:?}",);
 
     Ok(config)
@@ -139,11 +138,11 @@ fn find_config_file() -> Result<Option<PathBuf>> {
     let paths = [
         dirs::config_local_dir()
             .unwrap_or_default()
-            .join("weiback/config.json"),
+            .join("weiback/config.toml"),
         dirs::config_dir()
             .unwrap_or_default()
-            .join("weiback/config.json"),
-        exe_dir.join("weiback/config.json"),
+            .join("weiback/config.toml"),
+        exe_dir.join("weiback/config.toml"),
     ];
 
     Ok(paths.into_iter().find(|p| p.exists()))

@@ -95,6 +95,18 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<toml::de::Error> for Error {
+    fn from(value: toml::de::Error) -> Self {
+        Self::FormatError(value.to_string())
+    }
+}
+
+impl From<toml::ser::Error> for Error {
+    fn from(value: toml::ser::Error) -> Self {
+        Self::FormatError(value.to_string())
+    }
+}
+
 impl From<url::ParseError> for Error {
     fn from(err: url::ParseError) -> Self {
         Self::FormatError(err.to_string())
