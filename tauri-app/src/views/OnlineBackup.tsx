@@ -65,7 +65,14 @@ const UserBackupSection: React.FC = () => {
                             fullWidth
                             label="用户ID (不填写默认为当前登录用户)"
                             value={userId}
-                            onChange={(e) => setUserId(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || /^\d+$/.test(value)) {
+                                    setUserId(value);
+                                }
+                            }}
+                            type="text" // Keep as text to allow custom validation
+                            slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }} // Use slotProps.htmlInput
                         />
                         {userName && (
                             <Typography variant="body2" color="text.secondary" sx={{ pl: 1, mt: 0 }}>
