@@ -16,6 +16,27 @@ use crate::models::PictureDefinition;
 // 使用 OnceCell 替代 Lazy，以支持可能失败的、显式的初始化。
 static CONFIG: OnceCell<Arc<RwLock<Config>>> = OnceCell::new();
 
+mod duration_as_secs {
+    use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u64(duration.as_secs())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let secs = u64::deserialize(deserializer)?;
+        Ok(Duration::from_secs(secs))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -24,7 +45,9 @@ pub struct Config {
     pub session_path: PathBuf,
     pub download_pictures: bool,
     pub picture_definition: PictureDefinition,
+    #[serde(with = "duration_as_secs")]
     pub backup_task_interval: Duration,
+    #[serde(with = "duration_as_secs")]
     pub other_task_interval: Duration,
     pub posts_per_html: u32,
     pub picture_path: PathBuf,
