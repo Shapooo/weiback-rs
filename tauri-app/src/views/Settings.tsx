@@ -190,14 +190,14 @@ const SettingsPage: React.FC = () => {
                             <Typography variant="h6" sx={{ mt: 2 }}>路径</Typography>
                         </Grid>
                         <Grid size={{ xs: 12 }}>
-                            <TextField fullWidth label="图片保存路径" value={config.picture_path} InputProps={{ readOnly: true }} />
+                            <TextField fullWidth label="图片保存路径" value={config.picture_path} slotProps={{ htmlInput: { readOnly: true } }} />
                         </Grid>
                         <Grid size={{ xs: 12 }}>
-                            <TextField fullWidth label="视频保存路径" value={config.video_path} InputProps={{ readOnly: true }} />
+                            <TextField fullWidth label="视频保存路径" value={config.video_path} slotProps={{ htmlInput: { readOnly: true } }} />
                         </Grid>
                         {config.dev_mode_out_dir &&
                             <Grid size={{ xs: 12 }}>
-                                <TextField fullWidth label="开发者模式输出路径" value={config.dev_mode_out_dir} InputProps={{ readOnly: true }} />
+                                <TextField fullWidth label="开发者模式输出路径" value={config.dev_mode_out_dir} slotProps={{ htmlInput: { readOnly: true } }} />
                             </Grid>
                         }
                     </Grid>
