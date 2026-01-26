@@ -7,7 +7,7 @@ use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
 
 use weiback::api::ApiClientImpl;
-use weiback::config::get_config;
+use weiback::config::{get_config, Config};
 use weiback::core::{
     BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
     task_manager::TaskManger,
@@ -33,6 +33,19 @@ type TH =
 type CurrentSdkApiClient = SdkApiClient<DevClient>;
 #[cfg(not(feature = "dev-mode"))]
 type CurrentSdkApiClient = SdkApiClient<HttpClient>;
+
+#[tauri::command]
+fn get_config_command() -> std::result::Result<Config, String> {
+    get_config()
+        .read()
+        .map(|guard| guard.clone())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn set_config_command(config: Config) -> std::result::Result<(), String> {
+    weiback::config::save_config(&config).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 async fn backup_self(
@@ -150,7 +163,9 @@ pub fn run() -> Result<()> {
             export_from_local,
             send_code,
             login,
-            login_status
+            login_status,
+            get_config_command,
+            set_config_command
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

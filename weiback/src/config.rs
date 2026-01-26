@@ -122,6 +122,32 @@ pub fn get_config() -> Arc<RwLock<Config>> {
         .clone()
 }
 
+pub fn save_config(config: &Config) -> Result<()> {
+    let config_path = if let Some(path) = find_config_file()? {
+        path
+    } else {
+        // from load_or_create
+        let path = dirs::config_local_dir()
+            .unwrap_or_default()
+            .join("weiback/config.toml");
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        path
+    };
+
+    fs::write(&config_path, toml::to_string_pretty(config)?)?;
+    debug!("Configuration file saved at: {config_path:?}");
+
+    if let Some(g_config) = CONFIG.get() {
+        if let Ok(mut g_config) = g_config.write() {
+            *g_config = config.clone();
+        }
+    }
+
+    Ok(())
+}
+
 // 尝试从所有已知路径加载配置。
 fn load_from_files() -> Result<Option<Config>> {
     let Some(config_path) = find_config_file()? else {
