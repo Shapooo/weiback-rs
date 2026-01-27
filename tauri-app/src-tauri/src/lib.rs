@@ -3,6 +3,7 @@ mod error;
 use std::ops::RangeInclusive;
 
 use log::{debug, error, info, warn};
+use serde_json::Value;
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
 
@@ -146,9 +147,9 @@ async fn login(api_client: State<'_, SdkApiClient<HttpClient>>, sms_code: String
 }
 
 #[tauri::command]
-fn login_state(api_client: State<'_, CurrentSdkApiClient>) -> Result<Option<String>> {
+async fn login_state(api_client: State<'_, CurrentSdkApiClient>) -> Result<Option<Value>> {
     info!("get login state");
-    Ok(api_client.session().ok().map(|s| s.uid.to_owned()))
+    Ok(api_client.session().ok().map(|s| s.user))
 }
 
 #[tauri::command]

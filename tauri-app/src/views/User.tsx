@@ -13,7 +13,7 @@ enum LoginStatus {
 }
 
 interface UserInfo {
-  uid: string;
+  id: number;
   screen_name: string;
 }
 
@@ -28,9 +28,9 @@ const UserPage: React.FC = () => {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        const uid: string | null = await invoke('login_state');
-        if (typeof uid === 'string') {
-          setUserInfo({ screen_name: '', uid: uid as string });
+        const user: UserInfo | null = await invoke('login_state');
+        if (user) {
+          setUserInfo(user);
           setLoginStatus(LoginStatus.LoggedIn);
         } else {
           setLoginStatus(LoginStatus.Init);
@@ -65,9 +65,9 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      const res: string | null = await invoke('login', { sms_code: code });
+      const res: UserInfo | null = await invoke('login', { sms_code: code });
       if (res) {
-        setUserInfo({ screen_name: '', uid: res as string });
+        setUserInfo(res);
         setLoginStatus(LoginStatus.LoggedIn);
         enqueueSnackbar('登录成功！', { variant: 'success' });
       }
@@ -116,7 +116,7 @@ const UserPage: React.FC = () => {
             <TableContainer component={Paper}>
               <Table>
                 <TableBody>
-                  <TableRow><TableCell>UID</TableCell><TableCell>{userInfo.uid}</TableCell></TableRow>
+                  <TableRow><TableCell>UID</TableCell><TableCell>{userInfo.id}</TableCell></TableRow>
                   <TableRow><TableCell>用户名</TableCell><TableCell>{userInfo.screen_name}</TableCell></TableRow>
                 </TableBody>
               </Table>
