@@ -18,6 +18,7 @@ use weiback::dev_client::DevClient;
 use weiback::exporter::ExporterImpl;
 use weiback::media_downloader::{MediaDownloaderHandle, create_downloader};
 use weiback::message::{ErrMsg, Message, TaskProgress};
+use weiback::models::User;
 use weiback::storage::StorageImpl;
 use weibosdk_rs::{
     ApiClient as SdkApiClient, Client as HttpClient, api_client::LoginState, session::Session,
@@ -120,7 +121,11 @@ async fn get_sms_code(
 }
 
 #[tauri::command]
-async fn login(api_client: State<'_, SdkApiClient<HttpClient>>, sms_code: String) -> Result<()> {
+async fn login(
+    api_client: State<'_, SdkApiClient<HttpClient>>,
+    task_handler: State<'_, TH>,
+    sms_code: String,
+) -> Result<()> {
     info!("login called with a sms_code");
     match api_client.login_state() {
         LoginState::WaitingForCode { .. } => {
@@ -132,7 +137,19 @@ async fn login(api_client: State<'_, SdkApiClient<HttpClient>>, sms_code: String
                 .expect("config lock failed")
                 .session_path
                 .clone();
-            api_client.session()?.save(session_path)?;
+            let session = api_client.session()?;
+            session.save(session_path)?;
+
+            let user: User = serde_json::from_value(session.user)?;
+            let user_id = user.id;
+            let th = task_handler.inner().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = th.save_user_info(&user).await {
+                    error!("Save user info failed: {e}");
+                }
+            });
+            info!("Logged in user {} saved.", user_id);
+
             Ok(())
         }
         LoginState::LoggedIn { .. } => {
@@ -260,6 +277,7 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
             if let Err(e) = sdk_api_client.login_with_session(session).await {
                 error!("login with session failed: {e}");
             }
+            info!("login with session successfully");
             let Ok(session) = sdk_api_client
                 .session()
                 .map_err(|e| error!("get new session failed: {e}"))

@@ -1,5 +1,8 @@
-use log::{debug, error, info};
 use std::future::Future;
+use std::pin::Pin;
+
+use bytes::Bytes;
+use log::{debug, error, info};
 use tokio::{self, sync::mpsc::Sender, time::sleep};
 
 use super::post_processer::PostProcesser;
@@ -12,7 +15,7 @@ use crate::exporter::Exporter;
 use crate::html_generator::{HTMLGenerator, create_tera};
 use crate::media_downloader::MediaDownloader;
 use crate::message::{Message, TaskProgress, TaskType};
-use crate::models::Post;
+use crate::models::{Picture, PictureMeta, Post, User};
 use crate::storage::Storage;
 use crate::utils::make_page_name;
 
@@ -21,6 +24,7 @@ pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader
     api_client: A,
     storage: S,
     exporter: E,
+    downloader: D,
     processer: PostProcesser<A, S, D>,
     html_generator: HTMLGenerator<A, S, D>,
     msg_sender: Sender<Message>,
@@ -39,12 +43,14 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let processer = PostProcesser::new(storage.clone(), downloader.clone(), emoji_map.clone())?;
 
         let tera = create_tera(crate::config::get_config().read()?.templates_path.as_path())?;
-        let html_generator = HTMLGenerator::new(emoji_map, storage.clone(), downloader, tera);
+        let html_generator =
+            HTMLGenerator::new(emoji_map, storage.clone(), downloader.clone(), tera);
 
         Ok(TaskHandler {
             api_client,
             storage,
             exporter,
+            downloader,
             processer,
             html_generator,
             msg_sender,
@@ -55,8 +61,46 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         &self.msg_sender
     }
 
-    pub async fn get_user(&self, uid: i64) -> Result<Option<crate::models::User>> {
+    pub async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         self.storage.get_user(uid).await
+    }
+
+    pub async fn save_user_info(&self, user: &User) -> Result<()> {
+        info!("Saving user info for user id: {}", user.id);
+        self.storage.save_user(user).await?;
+        info!(
+            "User {} with name {} saved to db",
+            user.id, user.screen_name
+        );
+
+        let avatar_url = user.avatar_hd.clone();
+
+        if self.storage.picture_saved(&avatar_url).await? {
+            return Ok(());
+        }
+        let user_id = user.id;
+        let pic_meta = PictureMeta::avatar(avatar_url.as_str(), user_id)?;
+        let storage = self.storage.clone();
+
+        let callback = Box::new(
+            move |blob: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                Box::pin(async move {
+                    let pic = Picture {
+                        meta: pic_meta,
+                        blob,
+                    };
+                    storage.save_picture(&pic).await?;
+                    Ok(())
+                })
+            },
+        );
+
+        // Using task_id 0 as this is not a user-initiated task with progress tracking.
+        self.downloader
+            .download_media(0, &avatar_url, callback)
+            .await?;
+
+        Ok(())
     }
 
     async fn backup_procedure<F, Fut>(
