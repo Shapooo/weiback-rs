@@ -14,7 +14,7 @@ use futures::{
     stream::{self, StreamExt},
 };
 use itertools::Itertools;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use picture_storage::FileSystemPictureStorage;
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
@@ -149,10 +149,8 @@ impl StorageImpl {
             .partition_result();
 
         warn!("{} posts constructed failed", errs.len());
-        if log::log_enabled!(log::Level::Trace) {
-            for (id, err) in errs {
-                trace!("{id} cons failed: {err}");
-            }
+        for (id, err) in errs {
+            warn!("{id} cons failed: {err}");
         }
         posts
     }
