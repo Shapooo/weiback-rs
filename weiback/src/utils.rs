@@ -46,6 +46,13 @@ pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 
+pub fn url_to_db_key(url: &Url) -> Url {
+    let mut url = url.to_owned();
+    url.set_fragment(None);
+    url.set_query(None);
+    url
+}
+
 pub fn url_to_path(url: &Url) -> PathBuf {
     Path::new(url.host_str().expect("host cannot be none")).join(
         url.path()
