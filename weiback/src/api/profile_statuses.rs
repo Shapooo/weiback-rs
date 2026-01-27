@@ -119,7 +119,7 @@ mod local_tests {
         let session = Session {
             gsid: "test_gsid".to_string(),
             uid: "test_uid".to_string(),
-            screen_name: "test_screen_name".to_string(),
+            user: serde_json::Value::Null,
             cookie_store: Default::default(),
         };
         let weibo_api =
