@@ -134,7 +134,7 @@ const FavoritesBackupSection: React.FC = () => {
     const handleUnfavorite = async () => {
         try {
             await invoke("unfavorite_posts");
-            enqueueSnackbar('开始取消所有收藏', { variant: 'success' })
+            enqueueSnackbar('开始取消已备份收藏', { variant: 'success' })
         } catch (e) {
             enqueueSnackbar(`取消收藏失败：${e}`, { variant: 'error' })
         }
@@ -175,7 +175,7 @@ const FavoritesBackupSection: React.FC = () => {
                             开始备份
                         </Button>
                         <Button variant="contained" onClick={handleUnfavorite}>
-                            取消所有收藏
+                            取消已备份收藏
                         </Button>
                     </Stack>
                 </Box>

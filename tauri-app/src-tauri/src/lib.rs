@@ -7,7 +7,7 @@ use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
 
 use weiback::api::ApiClientImpl;
-use weiback::config::{get_config, Config};
+use weiback::config::{Config, get_config};
 use weiback::core::{
     BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_handler::TaskHandler,
     task_manager::TaskManger,
@@ -97,7 +97,10 @@ async fn export_from_local(task_handler: State<'_, TH>, range: RangeInclusive<u3
 }
 
 #[tauri::command]
-async fn send_code(api_client: State<'_, CurrentSdkApiClient>, phone_number: String) -> Result<()> {
+async fn get_sms_code(
+    api_client: State<'_, CurrentSdkApiClient>,
+    phone_number: String,
+) -> Result<()> {
     info!(
         "send_code called for phone number (partially hidden): ...{}",
         &phone_number.chars().skip(7).collect::<String>()
@@ -143,8 +146,8 @@ async fn login(api_client: State<'_, SdkApiClient<HttpClient>>, sms_code: String
 }
 
 #[tauri::command]
-fn login_status(api_client: State<'_, CurrentSdkApiClient>) -> Result<Option<String>> {
-    info!("get login status");
+fn login_state(api_client: State<'_, CurrentSdkApiClient>) -> Result<Option<String>> {
+    info!("get login state");
     Ok(api_client.session().ok().map(|s| s.uid.to_owned()))
 }
 
@@ -176,9 +179,9 @@ pub fn run() -> Result<()> {
             backup_favorites,
             unfavorite_posts,
             export_from_local,
-            send_code,
+            get_sms_code,
             login,
-            login_status,
+            login_state,
             get_config_command,
             set_config_command,
             get_username_by_id

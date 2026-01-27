@@ -28,7 +28,7 @@ const UserPage: React.FC = () => {
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        const uid: string | null = await invoke('login_status');
+        const uid: string | null = await invoke('login_state');
         if (typeof uid === 'string') {
           setUserInfo({ screen_name: '', uid: uid as string });
           setLoginStatus(LoginStatus.LoggedIn);
@@ -49,7 +49,7 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      await invoke('send_code', { phone_number: phone });
+      await invoke('get_sms_code', { phone_number: phone });
       setLoginStatus(LoginStatus.CodeSent);
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
       inputRefs.current[0]?.focus();
