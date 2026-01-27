@@ -39,10 +39,10 @@ pub struct PageInfoInternal {
     pub page_pic: Option<Url>,
     pub page_title: Option<String>,
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
-    pub page_url: Option<Url>,
+    pub page_url: Option<String>,
     pub pic_info: Option<PagePicInfo>,
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
-    pub short_url: Option<Url>,
+    pub short_url: Option<String>,
     pub source_type: Option<String>,
     #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
     pub r#type: Option<i64>,

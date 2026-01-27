@@ -320,7 +320,9 @@ fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, url: &'a str) -> Cow<'a, str
     let url_title = this_struct
         .map(|u| u.url_title.as_str())
         .unwrap_or("网页链接");
-    let url = if let Some(long_url) = this_struct.and_then(|u| u.long_url.as_ref()) {
+    let url = if let Some(long_url) = this_struct.and_then(|u| u.long_url.as_ref())
+        && Url::parse(long_url).is_ok()
+    {
         long_url.as_str()
     } else {
         url

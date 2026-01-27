@@ -31,7 +31,7 @@ impl PartialEq for UrlStructInternal {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UrlStructItemInternal {
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
-    pub long_url: Option<Url>,
+    pub long_url: Option<String>,
     pub object_type: Option<String>,
     pub ori_url: String,
     pub page_id: Option<String>,

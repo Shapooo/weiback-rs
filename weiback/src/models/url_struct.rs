@@ -24,7 +24,7 @@ impl PartialEq for UrlStruct {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct UrlStructItem {
-    pub long_url: Option<Url>,
+    pub long_url: Option<String>,
     pub object_type: Option<String>,
     pub ori_url: String,
     pub page_id: Option<String>,
