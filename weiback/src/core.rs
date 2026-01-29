@@ -20,7 +20,7 @@ use crate::config::get_config;
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderHandle;
-use crate::message::{ErrMsg, ErrType, Message};
+use crate::message::{ErrType, Message};
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
@@ -233,21 +233,20 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
     };
     if let Err(err) = res {
         error!("Task {} failed: {}", ctx.task_id, err);
-        ctx.msg_sender
-            .send(Message::Err(ErrMsg {
-                r#type: ErrType::LongTaskFail {
-                    task_id: ctx.task_id,
-                },
+        ctx.send_error(
+            ErrType::LongTaskFail {
                 task_id: ctx.task_id,
-                err: err.to_string(),
-            }))
-            .await
-            .unwrap_or_else(|e| {
-                error!(
-                    "Failed to send error message for task {}: {}",
-                    ctx.task_id, e
-                )
-            });
+            },
+            ctx.task_id,
+            err.to_string(),
+        )
+        .await
+        .unwrap_or_else(|e| {
+            error!(
+                "Failed to send error message for task {}: {}",
+                ctx.task_id, e
+            )
+        });
     } else {
         info!("Task {} completed successfully", ctx.task_id);
     }

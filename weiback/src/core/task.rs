@@ -3,7 +3,10 @@ use std::path::PathBuf;
 
 use tokio::sync::mpsc;
 
-use crate::{config::Config, message::Message};
+use crate::{
+    config::Config,
+    message::{ErrMsg, ErrType, Message, TaskProgress, TaskType},
+};
 
 pub struct Task {
     pub id: u64,
@@ -17,6 +20,39 @@ pub struct TaskContext {
     pub task_id: u64,
     pub config: Config,
     pub msg_sender: mpsc::Sender<Message>,
+}
+
+impl TaskContext {
+    pub async fn send_progress(
+        &self,
+        r#type: TaskType,
+        total_increment: u64,
+        progress_increment: u64,
+    ) -> Result<(), mpsc::error::SendError<Message>> {
+        self.msg_sender
+            .send(Message::TaskProgress(TaskProgress {
+                r#type,
+                task_id: self.task_id,
+                total_increment,
+                progress_increment,
+            }))
+            .await
+    }
+
+    pub async fn send_error(
+        &self,
+        r#type: ErrType,
+        task_id: u64,
+        err: String,
+    ) -> Result<(), mpsc::error::SendError<Message>> {
+        self.msg_sender
+            .send(Message::Err(ErrMsg {
+                r#type,
+                task_id,
+                err,
+            }))
+            .await
+    }
 }
 
 #[derive(Debug, Clone)]

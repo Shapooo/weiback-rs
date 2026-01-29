@@ -11,7 +11,7 @@ use url::Url;
 
 use super::core::task::TaskContext;
 use crate::error::Result;
-use crate::message::{ErrMsg, ErrType, Message};
+use crate::message::ErrType;
 
 pub trait MediaDownloader: Clone + Send + Sync + 'static {
     async fn download_media(
@@ -106,14 +106,13 @@ impl DownloaderWorker {
             debug!("Downloading media from {url}");
             if let Err(err) = self.process_task(ctx.clone(), &url, callback).await
                 && let Err(e) = ctx
-                    .msg_sender
-                    .send(Message::Err(ErrMsg {
-                        r#type: ErrType::DownMediaFail {
+                    .send_error(
+                        ErrType::DownMediaFail {
                             url: url.to_string(),
                         },
-                        task_id: ctx.task_id,
-                        err: err.to_string(),
-                    }))
+                        ctx.task_id,
+                        err.to_string(),
+                    )
                     .await
             {
                 error!("message send failed, channel broke down: {e}");
@@ -160,6 +159,7 @@ mod local_tests {
 
     use super::*;
     use crate::error::Error;
+    use crate::message::{ErrMsg, Message};
 
     #[tokio::test]
     async fn test_download_media_success() {

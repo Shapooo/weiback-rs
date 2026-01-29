@@ -15,7 +15,7 @@ use crate::error::Result;
 use crate::exporter::Exporter;
 use crate::html_generator::{HTMLGenerator, create_tera};
 use crate::media_downloader::MediaDownloader;
-use crate::message::{Message, TaskProgress, TaskType};
+use crate::message::TaskType;
 use crate::models::{Picture, PictureMeta, Post, User};
 use crate::storage::Storage;
 use crate::utils::make_page_name;
@@ -119,14 +119,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             "Backup task {} page range: {}..={}",
             ctx.task_id, start, end
         );
-        ctx.msg_sender
-            .send(Message::TaskProgress(TaskProgress {
-                r#type: task_type.clone(),
-                task_id: ctx.task_id,
-                total_increment: len as u64,
-                progress_increment: 0,
-            }))
-            .await?;
+        ctx.send_progress(task_type.clone(), len as u64, 0).await?;
 
         for page in start..=end {
             let posts_sum = page_backup_fn(page).await.map_err(|e| {
@@ -145,14 +138,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 len
             );
 
-            ctx.msg_sender
-                .send(Message::TaskProgress(TaskProgress {
-                    r#type: task_type.clone(),
-                    task_id: ctx.task_id,
-                    total_increment: 0,
-                    progress_increment: 1,
-                }))
-                .await?;
+            ctx.send_progress(task_type.clone(), 0, 1).await?;
             if page != end {
                 sleep(task_interval).await;
             }
@@ -239,14 +225,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         info!("Found {len} posts to unfavorite");
-        ctx.msg_sender
-            .send(Message::TaskProgress(TaskProgress {
-                r#type: TaskType::Unfav,
-                task_id: ctx.task_id,
-                total_increment: len as u64,
-                progress_increment: 0,
-            }))
-            .await?;
+        ctx.send_progress(TaskType::Unfav, len as u64, 0).await?;
         for (i, id) in ids.into_iter().enumerate() {
             if let Err(e) = self.api_client.favorites_destroy(id).await {
                 error!("Failed to unfavorite post {id}: {e}");
@@ -254,14 +233,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
             self.storage.mark_post_unfavorited(id).await?;
             info!("Post {id} ({i}/{len})unfavorited successfully");
-            ctx.msg_sender
-                .send(Message::TaskProgress(TaskProgress {
-                    r#type: TaskType::Unfav,
-                    task_id: ctx.task_id,
-                    total_increment: 0,
-                    progress_increment: 1,
-                }))
-                .await?;
+            ctx.send_progress(TaskType::Unfav, 0, 1).await?;
             if i < len - 1 {
                 tokio::time::sleep(task_interval).await;
             }
