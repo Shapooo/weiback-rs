@@ -24,7 +24,10 @@ pub trait MediaDownloader: Clone + Send + Sync + 'static {
 
 /// The callback is for success cases and is async.
 pub type AsyncDownloadCallback = Box<
-    dyn FnOnce(Bytes) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
+    dyn FnOnce(
+            Arc<TaskContext>,
+            Bytes,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>
         + Send
         + 'static,
 >;
@@ -101,7 +104,7 @@ impl DownloaderWorker {
         info!("Media downloader actor started.");
         while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
             debug!("Downloading media from {url}");
-            if let Err(err) = self.process_task(&url, callback).await
+            if let Err(err) = self.process_task(ctx.clone(), &url, callback).await
                 && let Err(e) = ctx
                     .msg_sender
                     .send(Message::Err(ErrMsg {
@@ -120,7 +123,12 @@ impl DownloaderWorker {
         info!("Media downloader actor finished.");
     }
 
-    async fn process_task(&self, url: &Url, callback: AsyncDownloadCallback) -> Result<()> {
+    async fn process_task(
+        &self,
+        ctx: Arc<TaskContext>,
+        url: &Url,
+        callback: AsyncDownloadCallback,
+    ) -> Result<()> {
         let response = self
             .client
             .get(url.to_owned())
@@ -136,7 +144,7 @@ impl DownloaderWorker {
             e
         })?;
         debug!("Successfully downloaded media file from {url}");
-        (callback)(body).await
+        (callback)(ctx, body).await
     }
 }
 
@@ -174,7 +182,9 @@ mod local_tests {
         let callback_executed_clone = callback_executed.clone();
 
         let callback = Box::new(
-            move |data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_ctx: Arc<TaskContext>,
+                  data: Bytes|
+                  -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 let expected_data = Bytes::from(mock_body);
                 assert_eq!(data, expected_data);
                 callback_executed_clone.store(true, Ordering::SeqCst);
@@ -216,7 +226,7 @@ mod local_tests {
         let (handle, worker) = create_downloader(1, client);
 
         let callback = Box::new(
-            |_: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            |_: Arc<TaskContext>, _: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 panic!("Callback should not be called on network error");
             },
         );
@@ -265,7 +275,9 @@ mod local_tests {
         let (handle, worker) = create_downloader(1, client);
 
         let callback = Box::new(
-            move |_: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_: Arc<TaskContext>,
+                  _: Bytes|
+                  -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async {
                     Err(Error::Io(std::io::Error::from(
                         std::io::ErrorKind::PermissionDenied,

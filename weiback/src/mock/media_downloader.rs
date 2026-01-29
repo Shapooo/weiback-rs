@@ -43,20 +43,20 @@ impl MockMediaDownloader {
 impl MediaDownloader for MockMediaDownloader {
     async fn download_media(
         &self,
-        _ctx: Arc<TaskContext>,
+        ctx: Arc<TaskContext>,
         url: &Url,
         callback: AsyncDownloadCallback,
     ) -> Result<()> {
         let response = self.inner.lock().unwrap().responses.remove(url);
         match response {
             Some(Ok(data)) => {
-                (callback)(data).await?;
+                (callback)(ctx, data).await?;
                 Ok(())
             }
             Some(Err(e)) => Err(e),
             None => {
                 if self.default_succ {
-                    (callback)(Bytes::from("default media")).await?;
+                    (callback)(ctx, Bytes::from("default media")).await?;
                     Ok(())
                 } else {
                     Err(Error::InconsistentTask(format!("URL not mocked: {}", url)))
@@ -82,7 +82,7 @@ mod local_tests {
         let callback_executed_clone = callback_executed.clone();
 
         let callback = Box::new(
-            move |data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_, data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 assert_eq!(data, expected_data);
                 *callback_executed_clone.lock().unwrap() = true;
                 Box::pin(async { Ok(()) })
@@ -110,7 +110,7 @@ mod local_tests {
         mock_downloader.add_response(url.clone(), Err(error));
 
         let callback = Box::new(
-            move |_data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_, _data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 panic!("callback should not be called");
             },
         );
@@ -137,7 +137,7 @@ mod local_tests {
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
 
         let callback = Box::new(
-            move |_data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_, _data: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 panic!("callback should not be called");
             },
         );

@@ -72,7 +72,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let storage = self.storage.clone();
 
         let callback = Box::new(
-            move |blob: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_, blob: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async move {
                     let pic = Picture {
                         meta: pic_meta,

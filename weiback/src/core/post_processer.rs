@@ -98,7 +98,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         debug!("Downloading picture {url} to local storage.");
         let storage = self.storage.clone();
         let callback = Box::new(
-            move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async move {
                     let pic = Picture {
                         meta: pic_meta,
@@ -146,7 +146,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         debug!("Downloading video {url} to local storage.");
         let storage = self.storage.clone();
         let callback = Box::new(
-            move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |_, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async move {
                     let video = crate::models::Video {
                         meta: video_meta,

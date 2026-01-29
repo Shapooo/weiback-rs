@@ -140,7 +140,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
             let url = pic_meta.url().to_owned();
             let (sender, result) = tokio::sync::oneshot::channel();
             let callback = Box::new(
-                move |blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                move |_ctx, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                     Box::pin(async move {
                         let pic = Picture {
                             meta: pic_meta,
