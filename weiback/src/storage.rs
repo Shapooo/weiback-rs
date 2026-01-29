@@ -245,7 +245,7 @@ impl Storage for StorageImpl {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use std::{
         collections::{HashMap, HashSet},
         fs::read_to_string,

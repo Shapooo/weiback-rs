@@ -327,7 +327,7 @@ pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use std::fs::read_to_string;
     use std::path::Path;
 

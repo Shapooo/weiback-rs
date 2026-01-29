@@ -316,7 +316,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use std::path::Path;
 
     use tokio::sync::mpsc;

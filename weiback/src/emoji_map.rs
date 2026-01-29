@@ -33,7 +33,7 @@ impl<W: EmojiUpdateApi> EmojiMap<W> {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use super::*;
     use std::path::Path;
     use weibosdk_rs::mock::MockClient;

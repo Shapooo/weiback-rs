@@ -141,7 +141,7 @@ impl DownloaderWorker {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},

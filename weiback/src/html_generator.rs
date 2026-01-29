@@ -359,7 +359,7 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use super::*;
     use std::path::PathBuf;
 

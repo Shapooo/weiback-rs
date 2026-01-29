@@ -278,7 +278,7 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use super::*;
     use std::path::Path;
 

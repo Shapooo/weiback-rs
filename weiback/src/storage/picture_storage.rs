@@ -80,7 +80,7 @@ impl FileSystemPictureStorage {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use std::path::Path;
 
     use tempfile::tempdir;

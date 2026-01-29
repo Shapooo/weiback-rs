@@ -88,7 +88,7 @@ VALUES
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use std::fs::read_to_string;
     use std::path::Path;
 
