@@ -6,9 +6,11 @@ use std::{
 };
 
 use bytes::Bytes;
+use chrono::{Local, Offset, TimeZone};
 use url::Url;
 
 use crate::{
+    core::task::{PaginatedPosts, PostQuery},
     error::Result,
     models::{Picture, Post, User, Video},
     storage::Storage,
@@ -124,6 +126,74 @@ impl Storage for MockStorage {
     async fn get_post(&self, id: i64) -> Result<Option<Post>> {
         let inner = self.inner.lock().unwrap();
         Ok(inner.posts.get(&id).map(|r| r.0.clone()))
+    }
+
+    async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
+        let inner = self.inner.lock().unwrap();
+
+        let offset = Local::now().offset().fix();
+        let start_dt = query
+            .start_date
+            .and_then(|ts| offset.timestamp_opt(ts, 0).single());
+        let end_dt = query
+            .end_date
+            .and_then(|ts| offset.timestamp_opt(ts, 0).single());
+
+        let mut filtered_posts: Vec<Post> = inner
+            .posts
+            .values()
+            .filter_map(|(post, _)| {
+                let mut matches = true;
+
+                if let Some(user_id) = query.user_id
+                    && post.user.as_ref().is_none_or(|u| u.id != user_id)
+                {
+                    matches = false;
+                }
+
+                if let Some(s_dt) = start_dt
+                    && post.created_at < s_dt
+                {
+                    matches = false;
+                }
+
+                if let Some(e_dt) = end_dt
+                    && post.created_at > e_dt
+                {
+                    matches = false;
+                }
+
+                if !query.is_favorited || post.favorited {
+                    matches = false;
+                }
+
+                if matches { Some(post.clone()) } else { None }
+            })
+            .collect();
+
+        filtered_posts.sort_by_key(|p| p.id);
+        if !query.reverse_order {
+            filtered_posts.reverse();
+        }
+
+        let total_items = filtered_posts.len() as u64;
+
+        let posts_per_page = query.posts_per_page as usize;
+        let page = query.page.saturating_sub(1) as usize; // 0-indexed page
+
+        let start_index = page * posts_per_page;
+        let end_index = (start_index + posts_per_page).min(filtered_posts.len());
+
+        let paginated_posts = if start_index < end_index {
+            filtered_posts[start_index..end_index].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        Ok(PaginatedPosts {
+            posts: paginated_posts,
+            total_items,
+        })
     }
 
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {

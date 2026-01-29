@@ -10,7 +10,8 @@ use tokio::sync::mpsc;
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
-    BFOptions, BUOptions, Core, ExportOptions, TaskRequest, task_manager::TaskManger,
+    BFOptions, BUOptions, Core, ExportOptions, PaginatedPosts, PostQuery, TaskRequest,
+    task_manager::TaskManger,
 };
 use weiback::message::{ErrMsg, Message, TaskProgress};
 
@@ -79,6 +80,12 @@ async fn export_from_local(core: State<'_, Arc<Core>>, range: RangeInclusive<u32
 }
 
 #[tauri::command]
+async fn query_local_posts(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<PaginatedPosts> {
+    info!("query_local_posts called with query: {:?}", query);
+    Ok(core.query_local_posts(query).await?)
+}
+
+#[tauri::command]
 async fn get_sms_code(core: State<'_, Arc<Core>>, phone_number: String) -> Result<()> {
     Ok(core.get_sms_code(phone_number).await?)
 }
@@ -119,6 +126,7 @@ pub fn run() -> Result<()> {
             backup_favorites,
             unfavorite_posts,
             export_from_local,
+            query_local_posts,
             get_sms_code,
             login,
             login_state,

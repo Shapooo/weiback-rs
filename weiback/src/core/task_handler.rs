@@ -9,7 +9,7 @@ use tokio::time::sleep;
 use super::post_processer::PostProcesser;
 use super::task::TaskContext;
 use crate::api::ApiClient;
-use crate::core::task::{BFOptions, BUOptions, ExportOptions};
+use crate::core::task::{BFOptions, BUOptions, ExportOptions, PaginatedPosts, PostQuery};
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
@@ -284,6 +284,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     // get total number of favorites in local database
     pub async fn get_favorited_sum(&self) -> Result<u32> {
         self.storage.get_favorited_sum().await
+    }
+
+    pub async fn query_local_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
+        info!("Querying local posts with query: {:?}", query);
+        self.storage.query_posts(query).await
     }
 }
 

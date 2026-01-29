@@ -20,6 +20,7 @@ use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 use url::Url;
 
+use crate::core::task::{PaginatedPosts, PostQuery};
 use crate::models::{Picture, Post, User, Video};
 use crate::{
     error::{Error, Result},
@@ -41,6 +42,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
     ) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn get_post(&self, id: i64) -> Result<Option<Post>>;
+    async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts>;
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
     async fn get_favorited_sum(&self) -> Result<u32>;
@@ -197,6 +199,12 @@ impl Storage for StorageImpl {
 
     async fn get_post(&self, id: i64) -> Result<Option<Post>> {
         self.get_post(id).await
+    }
+
+    async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
+        let (posts_internal, total_items) = post::query_posts(&self.db_pool, query).await?;
+        let posts = self.hydrate_posts(posts_internal).await;
+        Ok(PaginatedPosts { posts, total_items })
     }
 
     async fn save_user(&self, user: &User) -> Result<()> {

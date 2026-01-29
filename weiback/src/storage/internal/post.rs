@@ -3,6 +3,7 @@ use log::debug;
 use serde_json::{Value, from_value, to_value};
 use sqlx::{FromRow, Sqlite, SqlitePool};
 
+use crate::core::task::PostQuery;
 use crate::error::{Error, Result};
 use crate::models::Post;
 
@@ -324,6 +325,63 @@ pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
     .await?
     .into_iter()
     .collect())
+}
+
+pub async fn query_posts(db: &SqlitePool, query: PostQuery) -> Result<(Vec<PostInternal>, u64)> {
+    let mut where_conditions = Vec::new();
+    if query.user_id.is_some() {
+        where_conditions.push("uid = ?");
+    }
+    if query.start_date.is_some() {
+        where_conditions.push("created_at >= ?");
+    }
+    if query.end_date.is_some() {
+        where_conditions.push("created_at <= ?");
+    }
+    if query.is_favorited {
+        where_conditions.push("id IN (SELECT id FROM favorited_posts)");
+    }
+
+    let where_clause = if where_conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", where_conditions.join(" AND "))
+    };
+
+    let count_sql = format!("SELECT COUNT(*) FROM posts {}", where_clause);
+    let mut count_query = sqlx::query_scalar(&count_sql);
+
+    let order = if query.reverse_order { "ASC" } else { "DESC" };
+    let posts_sql = format!(
+        "SELECT * FROM posts {} ORDER BY id {} LIMIT ? OFFSET ?",
+        where_clause, order,
+    );
+    let mut posts_query = sqlx::query_as(&posts_sql);
+
+    if let Some(user_id) = query.user_id {
+        count_query = count_query.bind(user_id);
+        posts_query = posts_query.bind(user_id);
+    }
+    if let Some(start_date) = query.start_date {
+        let dt = DateTime::from_timestamp(start_date, 0)
+            .unwrap()
+            .to_rfc3339();
+        count_query = count_query.bind(dt.clone());
+        posts_query = posts_query.bind(dt);
+    }
+    if let Some(end_date) = query.end_date {
+        let dt = DateTime::from_timestamp(end_date, 0).unwrap().to_rfc3339();
+        count_query = count_query.bind(dt.clone());
+        posts_query = posts_query.bind(dt);
+    }
+
+    let total_items = count_query.fetch_one(db).await?;
+
+    let limit = query.posts_per_page;
+    let offset = query.page.saturating_sub(1) * limit;
+    let posts = posts_query.bind(limit).bind(offset).fetch_all(db).await?;
+
+    Ok((posts, total_items))
 }
 
 #[cfg(test)]
