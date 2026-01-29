@@ -1,11 +1,22 @@
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
 
+use tokio::sync::mpsc;
+
+use crate::{config::Config, message::Message};
+
 pub struct Task {
     pub id: u64,
     pub total: u64,
     pub progress: u64,
     pub request: TaskRequest,
+}
+
+#[derive(Debug)]
+pub struct TaskContext {
+    pub task_id: u64,
+    pub config: Config,
+    pub msg_sender: mpsc::Sender<Message>,
 }
 
 #[derive(Debug, Clone)]

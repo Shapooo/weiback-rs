@@ -1,13 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use futures::stream::{self, StreamExt, TryStreamExt};
 use log::{debug, info};
 use url::Url;
 
+use super::task::TaskContext;
 use crate::api::ApiClient;
-use crate::config::get_config;
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::media_downloader::MediaDownloader;
@@ -33,16 +34,16 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         })
     }
 
-    pub async fn process(&self, task_id: u64, posts: Vec<Post>) -> Result<()> {
-        info!("Processing {} posts for task {}.", posts.len(), task_id);
-        let pic_quality = get_config().read()?.picture_definition;
+    pub async fn process(&self, ctx: Arc<TaskContext>, posts: Vec<Post>) -> Result<()> {
+        info!("Processing {} posts for task {}.", posts.len(), ctx.task_id);
+        let pic_quality = ctx.config.picture_definition;
         debug!("Picture definition set to: {pic_quality:?}");
 
         let emoji_map = self.emoji_map.get_or_try_init().await.ok();
 
-        self.handle_picture(&posts, pic_quality, emoji_map, task_id)
+        self.handle_picture(ctx.clone(), &posts, pic_quality, emoji_map)
             .await?;
-        self.handle_livephoto_video(&posts, task_id).await?;
+        self.handle_livephoto_video(ctx.clone(), &posts).await?;
 
         info!("Finished downloading pictures. Processing posts...");
         stream::iter(posts)
@@ -56,7 +57,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             })
             .await?;
 
-        info!("Finished processing posts for task {task_id}.");
+        info!("Finished processing posts for task {}.", ctx.task_id);
         Ok(())
     }
 
@@ -66,24 +67,29 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
 
     async fn handle_picture(
         &self,
+        ctx: Arc<TaskContext>,
         posts: &[Post],
         pic_quality: PictureDefinition,
         emoji_map: Option<&HashMap<String, Url>>,
-        task_id: u64,
     ) -> Result<()> {
         let pic_metas = extract_all_pic_metas(posts, pic_quality, emoji_map);
         info!("Found {} unique pictures to download.", pic_metas.len());
 
         stream::iter(pic_metas)
             .map(Ok)
-            .try_for_each_concurrent(10, |meta| async move {
-                self.download_pic_to_local(task_id, meta).await
+            .try_for_each_concurrent(10, |meta| {
+                let ctx_clone = ctx.clone();
+                async move { self.download_pic_to_local(ctx_clone, meta).await }
             })
             .await?;
         Ok(())
     }
 
-    async fn download_pic_to_local(&self, task_id: u64, pic_meta: PictureMeta) -> Result<()> {
+    async fn download_pic_to_local(
+        &self,
+        ctx: Arc<TaskContext>,
+        pic_meta: PictureMeta,
+    ) -> Result<()> {
         let url = pic_meta.url().to_owned();
         if self.storage.picture_saved(&url).await? {
             debug!("Picture {url} already exists in local storage, skipping download.");
@@ -105,12 +111,12 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         );
 
         self.downloader
-            .download_media(task_id, &url, callback)
+            .download_media(ctx.clone(), &url, callback)
             .await?;
         Ok(())
     }
 
-    async fn handle_livephoto_video(&self, posts: &[Post], task_id: u64) -> Result<()> {
+    async fn handle_livephoto_video(&self, ctx: Arc<TaskContext>, posts: &[Post]) -> Result<()> {
         let video_metas = extract_livephoto_video_metas(posts);
         info!(
             "Found {} unique livephoto videos to download.",
@@ -119,14 +125,19 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
 
         stream::iter(video_metas)
             .map(Ok)
-            .try_for_each_concurrent(10, |meta| async move {
-                self.download_video_to_local(task_id, meta).await
+            .try_for_each_concurrent(10, |meta| {
+                let ctx_clone = ctx.clone();
+                async move { self.download_video_to_local(ctx_clone, meta).await }
             })
             .await?;
         Ok(())
     }
 
-    async fn download_video_to_local(&self, task_id: u64, video_meta: VideoMeta) -> Result<()> {
+    async fn download_video_to_local(
+        &self,
+        ctx: Arc<TaskContext>,
+        video_meta: VideoMeta,
+    ) -> Result<()> {
         let url = video_meta.url().to_owned();
         if self.storage.video_saved(&url).await? {
             debug!("Video {url} already exists in local storage, skipping download.");
@@ -148,7 +159,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         );
 
         self.downloader
-            .download_media(task_id, &url, callback)
+            .download_media(ctx.clone(), &url, callback)
             .await?;
         Ok(())
     }

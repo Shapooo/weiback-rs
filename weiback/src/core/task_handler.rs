@@ -1,13 +1,14 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use log::{debug, error, info};
-use tokio::{self, sync::mpsc::Sender, time::sleep};
+use tokio::time::sleep;
 
 use super::post_processer::PostProcesser;
+use super::task::TaskContext;
 use crate::api::ApiClient;
-use crate::config::get_config;
 use crate::core::task::{BFOptions, BUOptions, ExportOptions};
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
@@ -27,17 +28,10 @@ pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader
     downloader: D,
     processer: PostProcesser<A, S, D>,
     html_generator: HTMLGenerator<A, S, D>,
-    msg_sender: Sender<Message>,
 }
 
 impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S, E, D> {
-    pub fn new(
-        api_client: A,
-        storage: S,
-        exporter: E,
-        downloader: D,
-        msg_sender: Sender<Message>,
-    ) -> Result<Self> {
+    pub fn new(api_client: A, storage: S, exporter: E, downloader: D) -> Result<Self> {
         let emoji_map = EmojiMap::new(api_client.clone());
 
         let processer = PostProcesser::new(storage.clone(), downloader.clone(), emoji_map.clone())?;
@@ -53,19 +47,14 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             downloader,
             processer,
             html_generator,
-            msg_sender,
         })
-    }
-
-    pub fn msg_sender(&self) -> &Sender<Message> {
-        &self.msg_sender
     }
 
     pub async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         self.storage.get_user(uid).await
     }
 
-    pub async fn save_user_info(&self, user: &User) -> Result<()> {
+    pub async fn save_user_info(&self, ctx: Arc<TaskContext>, user: &User) -> Result<()> {
         info!("Saving user info for user id: {}", user.id);
         self.storage.save_user(user).await?;
         info!(
@@ -97,7 +86,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         // Using task_id 0 as this is not a user-initiated task with progress tracking.
         self.downloader
-            .download_media(0, &avatar_url, callback)
+            .download_media(ctx, &avatar_url, callback)
             .await?;
 
         Ok(())
@@ -105,7 +94,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
     async fn backup_procedure<F, Fut>(
         &self,
-        task_id: u64,
+        ctx: Arc<TaskContext>,
         range: (u32, u32),
         count: u32,
         task_type: TaskType,
@@ -115,19 +104,25 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         F: Fn(u32) -> Fut,
         Fut: Future<Output = Result<usize>>,
     {
-        info!("Starting backup procedure for task {task_id:?}, type: {task_type:?}");
-        let task_interval = get_config().read()?.backup_task_interval;
+        info!(
+            "Starting backup procedure for task {}, type: {:?}",
+            ctx.task_id, task_type
+        );
+        let task_interval = ctx.config.backup_task_interval;
 
         let (start, end) = range;
         let mut total_downloaded: usize = 0;
         let start = start.div_ceil(count);
         let end = end.div_ceil(count);
         let len = end - start + 1;
-        debug!("Backup task {task_id} page range: {start}..={end}");
-        self.msg_sender
+        debug!(
+            "Backup task {} page range: {}..={}",
+            ctx.task_id, start, end
+        );
+        ctx.msg_sender
             .send(Message::TaskProgress(TaskProgress {
                 r#type: task_type.clone(),
-                task_id,
+                task_id: ctx.task_id,
                 total_increment: len as u64,
                 progress_increment: 0,
             }))
@@ -135,17 +130,25 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         for page in start..=end {
             let posts_sum = page_backup_fn(page).await.map_err(|e| {
-                error!("Failed to backup page {page} for task {task_id}: {e}");
+                error!(
+                    "Failed to backup page {} for task {}: {}",
+                    page, ctx.task_id, e
+                );
                 e
             })?;
 
             total_downloaded += posts_sum;
-            info!("fetched {posts_sum} posts in {page}th page ({page}/{len})");
+            info!(
+                "fetched {posts_sum} posts in {}th page ({}/{})",
+                page,
+                page - start + 1,
+                len
+            );
 
-            self.msg_sender
+            ctx.msg_sender
                 .send(Message::TaskProgress(TaskProgress {
                     r#type: task_type.clone(),
-                    task_id,
+                    task_id: ctx.task_id,
                     total_increment: 0,
                     progress_increment: 1,
                 }))
@@ -155,14 +158,19 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
         }
         info!(
-            "Backup procedure for task {task_id:?} finished. Fetched {total_downloaded} posts in total"
+            "Backup procedure for task {} finished. Fetched {} posts in total",
+            ctx.task_id, total_downloaded
         );
         Ok(())
     }
 
     // backup user posts
-    pub(super) async fn backup_user(&self, task_id: u64, options: BUOptions) -> Result<()> {
-        let count = get_config().read()?.sdk_config.status_count as u32;
+    pub(super) async fn backup_user(
+        &self,
+        ctx: Arc<TaskContext>,
+        options: BUOptions,
+    ) -> Result<()> {
+        let count = ctx.config.sdk_config.status_count as u32;
         let uid = options.uid;
         let range = options.range.into_inner();
         info!(
@@ -170,8 +178,8 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             range.0, range.1
         );
 
-        self.backup_procedure(task_id, range, count, TaskType::BackUser, |page| {
-            self.backup_one_page(task_id, uid, page)
+        self.backup_procedure(ctx.clone(), range, count, TaskType::BackUser, |page| {
+            self.backup_one_page(ctx.clone(), uid, page)
         })
         .await?;
 
@@ -180,22 +188,29 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     // backup one page of posts of the user
-    async fn backup_one_page(&self, task_id: u64, uid: i64, page: u32) -> Result<usize> {
-        debug!("Backing up page {page} for user {uid}, task {task_id}");
+    async fn backup_one_page(&self, ctx: Arc<TaskContext>, uid: i64, page: u32) -> Result<usize> {
+        debug!(
+            "Backing up page {page} for user {uid}, task {}",
+            ctx.task_id
+        );
         let posts = self.api_client.profile_statuses(uid, page).await?;
         let result = posts.len();
-        self.processer.process(task_id, posts).await?;
+        self.processer.process(ctx, posts).await?;
         Ok(result)
     }
 
     // export favorite posts from weibo
-    pub(super) async fn backup_favorites(&self, task_id: u64, options: BFOptions) -> Result<()> {
-        let count = get_config().read()?.sdk_config.fav_count as u32;
+    pub(super) async fn backup_favorites(
+        &self,
+        ctx: Arc<TaskContext>,
+        options: BFOptions,
+    ) -> Result<()> {
+        let count = ctx.config.sdk_config.fav_count as u32;
         let range = options.range.into_inner();
         info!("Start backing up favorites from {} to {}", range.0, range.1);
 
-        self.backup_procedure(task_id, range, count, TaskType::BackFav, |page| {
-            self.backup_one_fav_page(task_id, page)
+        self.backup_procedure(ctx.clone(), range, count, TaskType::BackFav, |page| {
+            self.backup_one_fav_page(ctx.clone(), page)
         })
         .await?;
         info!("Finished backing up favorites.");
@@ -203,12 +218,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     // backup one page of favorites
-    async fn backup_one_fav_page(&self, task_id: u64, page: u32) -> Result<usize> {
-        debug!("Backing up favorites page {page}, task {task_id}");
+    async fn backup_one_fav_page(&self, ctx: Arc<TaskContext>, page: u32) -> Result<usize> {
+        debug!("Backing up favorites page {page}, task {}", ctx.task_id);
         let posts = self.api_client.favorites(page).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
-        self.processer.process(task_id, posts).await?;
+        self.processer.process(ctx, posts).await?;
 
         // call mark_user_backed_up after all posts inserted, to ensure the post is in db
         for id in ids {
@@ -218,16 +233,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     // unfavorite all posts that are in weibo favorites
-    pub(super) async fn unfavorite_posts(&self, task_id: u64) -> Result<()> {
-        info!("Starting unfavorite posts task {task_id}");
-        let task_interval = get_config().read()?.other_task_interval;
+    pub(super) async fn unfavorite_posts(&self, ctx: Arc<TaskContext>) -> Result<()> {
+        info!("Starting unfavorite posts task {}", ctx.task_id);
+        let task_interval = ctx.config.other_task_interval;
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
         info!("Found {len} posts to unfavorite");
-        self.msg_sender
+        ctx.msg_sender
             .send(Message::TaskProgress(TaskProgress {
                 r#type: TaskType::Unfav,
-                task_id,
+                task_id: ctx.task_id,
                 total_increment: len as u64,
                 progress_increment: 0,
             }))
@@ -239,10 +254,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
             self.storage.mark_post_unfavorited(id).await?;
             info!("Post {id} ({i}/{len})unfavorited successfully");
-            self.msg_sender
+            ctx.msg_sender
                 .send(Message::TaskProgress(TaskProgress {
                     r#type: TaskType::Unfav,
-                    task_id,
+                    task_id: ctx.task_id,
                     total_increment: 0,
                     progress_increment: 1,
                 }))
@@ -251,13 +266,13 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 tokio::time::sleep(task_interval).await;
             }
         }
-        info!("Unfavorite posts task {task_id} finished");
+        info!("Unfavorite posts task {} finished", ctx.task_id);
         Ok(())
     }
 
     pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
         info!("Starting export from local with options: {options:?}");
-        let limit = get_config().read()?.posts_per_html;
+        let limit = crate::config::get_config().read()?.posts_per_html;
         let posts_sum = self.get_favorited_sum().await?;
         info!("Found {posts_sum} favorited posts in local database");
         let (mut start, end) = options.range.into_inner();
@@ -341,15 +356,8 @@ mod tests {
         let storage = MockStorage::new();
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
-        let (msg_sender, _recv) = mpsc::channel(100);
-        let task_handler = TaskHandler::new(
-            api_client.clone(),
-            storage.clone(),
-            exporter,
-            downloader,
-            msg_sender,
-        )
-        .unwrap();
+        let task_handler =
+            TaskHandler::new(api_client.clone(), storage.clone(), exporter, downloader).unwrap();
         let uid = 1786055427;
         let posts = create_posts(&client, &api_client).await;
         let mut ids = posts
@@ -368,7 +376,16 @@ mod tests {
             uid: 1786055427,
             range: 1..=1,
         };
-        task_handler.backup_user(1, options).await.unwrap();
+        let (msg_sender, _recv) = mpsc::channel(100);
+        let dummy_context = Arc::new(TaskContext {
+            task_id: 0,
+            config: Default::default(),
+            msg_sender,
+        });
+        task_handler
+            .backup_user(dummy_context, options)
+            .await
+            .unwrap();
         let ids_in_db = storage
             .get_ones_posts(uid, 0..=100000, false)
             .await
@@ -387,15 +404,8 @@ mod tests {
         let storage = MockStorage::new();
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
-        let (msg_sender, _recv) = mpsc::channel(100);
-        let task_handler = TaskHandler::new(
-            api_client.clone(),
-            storage.clone(),
-            exporter,
-            downloader,
-            msg_sender,
-        )
-        .unwrap();
+        let task_handler =
+            TaskHandler::new(api_client.clone(), storage.clone(), exporter, downloader).unwrap();
         let posts = create_posts(&client, &api_client).await;
         let mut ids = posts
             .iter()
@@ -405,7 +415,16 @@ mod tests {
         ids.dedup();
 
         let options = BFOptions { range: 1..=1 };
-        task_handler.backup_favorites(1, options).await.unwrap();
+        let (msg_sender, _recv) = mpsc::channel(100);
+        let dummy_context = Arc::new(TaskContext {
+            task_id: 0,
+            config: Default::default(),
+            msg_sender,
+        });
+        task_handler
+            .backup_favorites(dummy_context, options)
+            .await
+            .unwrap();
         let ids_in_db = storage
             .get_favorites(0..=100000, false)
             .await
@@ -423,9 +442,7 @@ mod tests {
         let storage = MockStorage::new();
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
-        let (msg_sender, _recv) = mpsc::channel(100);
-        let task_handler =
-            TaskHandler::new(api_client, storage, exporter, downloader, msg_sender).unwrap();
+        let task_handler = TaskHandler::new(api_client, storage, exporter, downloader).unwrap();
         let export_dir = Path::new("export_dir").into();
         let task_name = "test".to_string();
 

@@ -9,7 +9,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use tokio::spawn;
+use tokio::{spawn, sync::mpsc};
 use weibosdk_rs::{ApiClient as SdkApiClient, api_client::LoginState, session::Session};
 
 #[cfg(not(feature = "dev-mode"))]
@@ -23,7 +23,9 @@ use crate::media_downloader::MediaDownloaderHandle;
 use crate::message::{ErrMsg, ErrType, Message};
 use crate::models::User;
 use crate::storage::StorageImpl;
-pub use task::{BFOptions, BUOptions, ExportOptions, Task, TaskRequest, UserPostFilter};
+pub use task::{
+    BFOptions, BUOptions, ExportOptions, Task, TaskContext, TaskRequest, UserPostFilter,
+};
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
 
@@ -42,15 +44,21 @@ pub struct Core {
     task_handler: Arc<TH>,
     task_manager: Arc<TaskManger>,
     sdk_api_client: Arc<CurrentSdkApiClient>,
+    msg_sender: mpsc::Sender<Message>,
 }
 
 impl Core {
-    pub fn new(task_handler: TH, sdk_api_client: Arc<CurrentSdkApiClient>) -> Result<Self> {
+    pub(crate) fn new(
+        task_handler: TH,
+        sdk_api_client: Arc<CurrentSdkApiClient>,
+        msg_sender: mpsc::Sender<Message>,
+    ) -> Result<Self> {
         Ok(Self {
             next_task_id: AtomicU64::new(1),
             task_handler: Arc::new(task_handler),
             task_manager: Arc::new(TaskManger::new()),
             sdk_api_client,
+            msg_sender,
         })
     }
 
@@ -110,8 +118,9 @@ impl Core {
                 let user_id = user.id;
 
                 let th = self.task_handler.clone();
+                let ctx = self.create_task_context().await?;
                 spawn(async move {
-                    if let Err(e) = th.save_user_info(&user).await {
+                    if let Err(e) = th.save_user_info(ctx, &user).await {
                         error!("Save user info failed: {e}");
                     }
                 });
@@ -160,65 +169,86 @@ impl Core {
     }
 
     pub async fn backup_user(&self, request: TaskRequest) -> Result<()> {
-        let id = self.record_task(request.clone()).await?;
-        spawn(handle_task_request(self.task_handler.clone(), id, request));
+        let ctx = self.create_task_context().await?;
+        self.record_task(&ctx, request.clone()).await?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
         Ok(())
     }
 
     pub async fn backup_favorites(&self, request: TaskRequest) -> Result<()> {
-        let id = self.record_task(request.clone()).await?;
-        spawn(handle_task_request(self.task_handler.clone(), id, request));
+        let ctx = self.create_task_context().await?;
+        self.record_task(&ctx, request.clone()).await?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
         Ok(())
     }
 
     pub async fn unfavorite_posts(&self) -> Result<()> {
-        let id = self.record_task(TaskRequest::UnfavoritePosts).await?;
+        let ctx = self.create_task_context().await?;
+        self.record_task(&ctx, TaskRequest::UnfavoritePosts).await?;
         spawn(handle_task_request(
             self.task_handler.clone(),
-            id,
+            ctx,
             TaskRequest::UnfavoritePosts,
         ));
         Ok(())
     }
 
-    async fn record_task(&self, request: TaskRequest) -> Result<u64> {
+    async fn create_task_context(&self) -> Result<Arc<TaskContext>> {
         let id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
-        info!("Recording new task with id: {id}, request: {request:?}");
+        let ctx = Arc::new(TaskContext {
+            task_id: id,
+            config: get_config().read()?.clone(),
+            msg_sender: self.msg_sender.clone(),
+        });
+        Ok(ctx)
+    }
+
+    async fn record_task(&self, ctx: &TaskContext, request: TaskRequest) -> Result<()> {
+        info!(
+            "Recording new task with id: {}, request: {:?}",
+            ctx.task_id, request
+        );
         let total = request.total() as u64;
         let task = Task {
-            id,
+            id: ctx.task_id,
             total,
             progress: 0,
             request,
         };
-        self.task_manager.new_task(id, task)?;
-        debug!("Task {id} recorded successfully");
-        Ok(id)
+        self.task_manager.new_task(task.id, task)?;
+        debug!("Task {} recorded successfully", ctx.task_id);
+        Ok(())
     }
 }
 
-async fn handle_task_request(task_handler: Arc<TH>, task_id: u64, request: TaskRequest) {
-    info!("Handling task request for task_id: {task_id}");
-    debug!("Task request details: {request:?}");
+async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, request: TaskRequest) {
+    info!("Handling task request for task_id: {}", ctx.task_id);
+    debug!("Task request details: {:?}", request);
     let res = match request {
-        TaskRequest::BackupUser(options) => task_handler.backup_user(task_id, options).await,
-        TaskRequest::UnfavoritePosts => task_handler.unfavorite_posts(task_id).await,
+        TaskRequest::BackupUser(options) => task_handler.backup_user(ctx.clone(), options).await,
+        TaskRequest::UnfavoritePosts => task_handler.unfavorite_posts(ctx.clone()).await,
         TaskRequest::BackupFavorites(options) => {
-            task_handler.backup_favorites(task_id, options).await
+            task_handler.backup_favorites(ctx.clone(), options).await
         }
     };
     if let Err(err) = res {
-        error!("Task {task_id} failed: {err}");
-        task_handler
-            .msg_sender()
+        error!("Task {} failed: {}", ctx.task_id, err);
+        ctx.msg_sender
             .send(Message::Err(ErrMsg {
-                r#type: ErrType::LongTaskFail { task_id },
-                task_id,
+                r#type: ErrType::LongTaskFail {
+                    task_id: ctx.task_id,
+                },
+                task_id: ctx.task_id,
                 err: err.to_string(),
             }))
             .await
-            .unwrap_or_else(|e| error!("Failed to send error message for task {task_id}: {e}"));
+            .unwrap_or_else(|e| {
+                error!(
+                    "Failed to send error message for task {}: {}",
+                    ctx.task_id, e
+                )
+            });
     } else {
-        info!("Task {task_id} completed successfully");
+        info!("Task {} completed successfully", ctx.task_id);
     }
 }

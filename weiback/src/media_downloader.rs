@@ -1,6 +1,7 @@
 #![allow(async_fn_in_trait)]
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use log::{debug, error, info};
@@ -8,13 +9,14 @@ use reqwest::Client;
 use tokio::sync::mpsc;
 use url::Url;
 
+use super::core::task::TaskContext;
 use crate::error::Result;
 use crate::message::{ErrMsg, ErrType, Message};
 
 pub trait MediaDownloader: Clone + Send + Sync + 'static {
     async fn download_media(
         &self,
-        task_id: u64,
+        ctx: Arc<TaskContext>,
         url: &Url,
         callback: AsyncDownloadCallback,
     ) -> Result<()>;
@@ -29,19 +31,18 @@ pub type AsyncDownloadCallback = Box<
 
 /// A task for the media downloader actor.
 struct DownloadTask {
-    task_id: u64,
+    ctx: Arc<TaskContext>,
     url: Url,
     callback: AsyncDownloadCallback,
 }
 
 /// The worker that runs in a background task.
-/// It owns the receiver, msg_sender and the HTTP client,
+/// It owns the receiver and the HTTP client,
 /// and is consumed when its `run` method is called.
 #[must_use = "The worker must be spawned to process download requests"]
 pub struct DownloaderWorker {
     receiver: mpsc::Receiver<DownloadTask>,
     client: Client,
-    msg_sender: mpsc::Sender<Message>,
 }
 
 /// A media downloader that handles downloading media file in a separate actor.
@@ -59,15 +60,10 @@ pub struct MediaDownloaderHandle {
 pub fn create_downloader(
     buffer: usize,
     client: Client,
-    msg_sender: mpsc::Sender<Message>,
 ) -> (MediaDownloaderHandle, DownloaderWorker) {
     let (sender, receiver) = mpsc::channel(buffer);
     let handle = MediaDownloaderHandle { sender };
-    let worker = DownloaderWorker {
-        receiver,
-        client,
-        msg_sender,
-    };
+    let worker = DownloaderWorker { receiver, client };
     (handle, worker)
 }
 
@@ -79,12 +75,12 @@ impl MediaDownloader for MediaDownloaderHandle {
     /// If the download fails, the task is discarded and the callback is never called.
     async fn download_media(
         &self,
-        task_id: u64,
+        ctx: Arc<TaskContext>,
         url: &Url,
         callback: AsyncDownloadCallback,
     ) -> Result<()> {
         let task = DownloadTask {
-            task_id,
+            ctx,
             url: url.to_owned(),
             callback,
         };
@@ -103,21 +99,16 @@ impl DownloaderWorker {
     /// all messages have been processed.
     pub async fn run(mut self) {
         info!("Media downloader actor started.");
-        while let Some(DownloadTask {
-            task_id,
-            url,
-            callback,
-        }) = self.receiver.recv().await
-        {
+        while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
             debug!("Downloading media from {url}");
             if let Err(err) = self.process_task(&url, callback).await
-                && let Err(e) = self
+                && let Err(e) = ctx
                     .msg_sender
                     .send(Message::Err(ErrMsg {
                         r#type: ErrType::DownMediaFail {
                             url: url.to_string(),
                         },
-                        task_id,
+                        task_id: ctx.task_id,
                         err: err.to_string(),
                     }))
                     .await
@@ -151,14 +142,16 @@ impl DownloaderWorker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::error::Error;
-    use mockito::Server;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     };
+
+    use mockito::Server;
     use tokio::sync::Notify;
+
+    use super::*;
+    use crate::error::Error;
 
     #[tokio::test]
     async fn test_download_media_success() {
@@ -172,9 +165,8 @@ mod tests {
             .create_async()
             .await;
 
-        let (msg_tx, _) = mpsc::channel(1);
         let client = Client::new();
-        let (handle, worker) = create_downloader(1, client, msg_tx);
+        let (handle, worker) = create_downloader(1, client);
 
         let notify = Arc::new(Notify::new());
         let notify_clone = notify.clone();
@@ -193,8 +185,14 @@ mod tests {
 
         tokio::spawn(worker.run());
 
+        let (msg_sender, _) = mpsc::channel(20);
+        let dummy_context = Arc::new(TaskContext {
+            task_id: 1,
+            config: Default::default(),
+            msg_sender,
+        });
         handle
-            .download_media(1, &Url::parse(&url).unwrap(), callback)
+            .download_media(dummy_context, &Url::parse(&url).unwrap(), callback)
             .await
             .unwrap();
 
@@ -214,9 +212,8 @@ mod tests {
             .create_async()
             .await;
 
-        let (msg_tx, mut msg_rx) = mpsc::channel(1);
         let client = Client::new();
-        let (handle, worker) = create_downloader(1, client, msg_tx);
+        let (handle, worker) = create_downloader(1, client);
 
         let callback = Box::new(
             |_: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
@@ -226,9 +223,18 @@ mod tests {
 
         tokio::spawn(worker.run());
 
-        handle.download_media(1, &url, callback).await.unwrap();
+        let (msg_sender, mut msg_receiver) = mpsc::channel(20);
+        let dummy_context = Arc::new(TaskContext {
+            task_id: 1,
+            config: Default::default(),
+            msg_sender,
+        });
+        handle
+            .download_media(dummy_context, &url, callback)
+            .await
+            .unwrap();
 
-        let received_msg = msg_rx.recv().await.unwrap();
+        let received_msg = msg_receiver.recv().await.unwrap();
         match received_msg {
             Message::Err(ErrMsg {
                 r#type: ErrType::DownMediaFail { url: err_url },
@@ -255,9 +261,8 @@ mod tests {
             .create_async()
             .await;
 
-        let (msg_tx, mut msg_rx) = mpsc::channel(1);
         let client = Client::new();
-        let (handle, worker) = create_downloader(1, client, msg_tx);
+        let (handle, worker) = create_downloader(1, client);
 
         let callback = Box::new(
             move |_: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
@@ -271,12 +276,18 @@ mod tests {
 
         tokio::spawn(worker.run());
 
+        let (msg_sender, mut msg_receiver) = mpsc::channel(20);
+        let dummy_context = Arc::new(TaskContext {
+            task_id: 1,
+            config: Default::default(),
+            msg_sender,
+        });
         handle
-            .download_media(1, &Url::parse(&url).unwrap(), callback)
+            .download_media(dummy_context, &Url::parse(&url).unwrap(), callback)
             .await
             .unwrap();
 
-        let received_msg = msg_rx.recv().await.unwrap();
+        let received_msg = msg_receiver.recv().await.unwrap();
         match received_msg {
             Message::Err(ErrMsg {
                 r#type: ErrType::DownMediaFail { url: err_url },

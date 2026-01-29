@@ -19,6 +19,9 @@ use crate::api::DefaultApiClient;
 #[cfg(feature = "dev-mode")]
 use crate::{api::DevApiClient, dev_client::DevClient};
 
+const DOWNLOADER_BUFFER_SIZE: usize = 100;
+const MESSAGE_BUFFER_SIZE: usize = 100;
+
 pub struct CoreBuilder;
 
 impl CoreBuilder {
@@ -31,7 +34,7 @@ impl CoreBuilder {
         let main_config = get_config();
         let main_config_read_guard = main_config.read()?;
 
-        let (msg_sender, msg_receiver) = mpsc::channel(100);
+        let (msg_sender, msg_receiver) = mpsc::channel(MESSAGE_BUFFER_SIZE);
         info!("MPSC channel created");
 
         let storage = StorageImpl::new()?;
@@ -44,7 +47,7 @@ impl CoreBuilder {
         info!("HTTP client created");
 
         let (handle, worker) =
-            create_downloader(100, http_client.main_client().clone(), msg_sender.clone());
+            create_downloader(DOWNLOADER_BUFFER_SIZE, http_client.main_client().clone());
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(worker.run());
         } else {
@@ -76,10 +79,10 @@ impl CoreBuilder {
         };
         info!("ApiClient and SdkApiClient initialized");
 
-        let task_handler = TaskHandler::new(api_client, storage, exporter, handle, msg_sender)?;
+        let task_handler = TaskHandler::new(api_client, storage, exporter, handle)?;
         info!("TaskHandler initialized");
 
-        let core = Arc::new(Core::new(task_handler, sdk_api_client)?);
+        let core = Arc::new(Core::new(task_handler, sdk_api_client, msg_sender)?);
         info!("Core service built successfully.");
 
         Ok((core, msg_receiver))

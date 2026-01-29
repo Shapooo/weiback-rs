@@ -2,6 +2,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use futures::future::try_join_all;
 use log::{debug, info};
@@ -11,6 +12,7 @@ use url::Url;
 
 use crate::api::EmojiUpdateApi;
 use crate::config::get_config;
+use crate::core::task::TaskContext;
 use crate::emoji_map::EmojiMap;
 use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, HTMLPicture};
@@ -125,7 +127,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
     #[allow(unused)]
     async fn load_picture_from_local_or_server(
         &self,
-        task_id: u64,
+        ctx: Arc<TaskContext>,
         pic_meta: PictureMeta,
     ) -> Result<Picture> {
         if let Some(blob) = self.storage.get_picture_blob(pic_meta.url()).await? {
@@ -152,9 +154,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
                     })
                 },
             );
-            self.downloader
-                .download_media(task_id, &url, callback)
-                .await?;
+            self.downloader.download_media(ctx, &url, callback).await?;
             Ok(result.await?)
         }
     }
@@ -162,7 +162,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
     #[allow(unused)]
     async fn get_pictures(
         &self,
-        task_id: u64,
+        ctx: Arc<TaskContext>,
         posts: &[Post],
         definition: PictureDefinition,
         emoji_map: Option<&HashMap<String, Url>>,
@@ -171,7 +171,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         let mut pics = Vec::new();
         for metas in pic_metas {
             pics.push(
-                self.load_picture_from_local_or_server(task_id, metas)
+                self.load_picture_from_local_or_server(ctx.clone(), metas)
                     .await?,
             );
         }
