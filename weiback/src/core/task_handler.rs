@@ -16,7 +16,7 @@ use crate::exporter::Exporter;
 use crate::html_generator::{HTMLGenerator, create_tera};
 use crate::media_downloader::MediaDownloader;
 use crate::message::TaskType;
-use crate::models::{Picture, PictureMeta, Post, User};
+use crate::models::{Picture, PictureMeta, User};
 use crate::storage::Storage;
 use crate::utils::make_page_name;
 
@@ -242,48 +242,37 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    pub async fn export_from_local(&self, mut options: ExportOptions) -> Result<()> {
+    pub async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
         info!("Starting export from local with options: {options:?}");
-        let limit = crate::config::get_config().read()?.posts_per_html;
-        let posts_sum = self.get_favorited_sum().await?;
-        info!("Found {posts_sum} favorited posts in local database");
-        let (mut start, end) = options.range.into_inner();
-        for index in 1.. {
-            options.range = start..=end.min(start + limit);
-            debug!("Exporting range: {:?}", options.range);
-            let local_posts = self.load_favorites(&options).await?;
-            if local_posts.is_empty() {
+        let posts_per_page = crate::config::get_config().read()?.posts_per_html;
+        let mut query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: options.reverse,
+            page: 1,
+            posts_per_page,
+        };
+        for page_index in 1.. {
+            query.page = page_index;
+            let local_posts = self.storage.query_posts(query.clone()).await?;
+            if local_posts.posts.is_empty() {
                 info!("No more posts to export. Exiting loop.");
                 break;
             }
 
-            let page_name = make_page_name(&options.task_name, index);
+            let page_name = make_page_name(&options.task_name, page_index as i32);
             let html = self
                 .html_generator
-                .generate_html(local_posts, &page_name)
+                .generate_html(local_posts.posts, &page_name)
                 .await?;
             self.exporter
                 .export_page(html, &page_name, &options.export_dir)
                 .await?;
-
-            if start >= end {
-                break;
-            }
-            start = end.min(start + limit);
         }
         info!("Finished exporting from local");
         Ok(())
-    }
-
-    pub async fn load_favorites(&self, options: &ExportOptions) -> Result<Vec<Post>> {
-        self.storage
-            .get_favorites(options.range.clone(), options.reverse)
-            .await
-    }
-
-    // get total number of favorites in local database
-    pub async fn get_favorited_sum(&self) -> Result<u32> {
-        self.storage.get_favorited_sum().await
     }
 
     pub async fn query_local_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
@@ -307,6 +296,7 @@ mod local_tests {
         mock::{
             exporter::MockExporter, media_downloader::MockMediaDownloader, storage::MockStorage,
         },
+        models::Post,
     };
 
     async fn create_posts(client: &MockClient, api: &MockApi) -> Vec<Post> {
@@ -348,6 +338,7 @@ mod local_tests {
             })
             .collect::<Vec<_>>();
         ids.sort();
+        ids.reverse();
 
         let options = BUOptions {
             uid: 1786055427,
@@ -363,10 +354,20 @@ mod local_tests {
             .backup_user(dummy_context, options)
             .await
             .unwrap();
+        let query = PostQuery {
+            user_id: Some(uid),
+            start_date: None,
+            end_date: None,
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 1_000_000,
+        };
         let ids_in_db = storage
-            .get_ones_posts(uid, 0..=100000, false)
+            .query_posts(query)
             .await
             .unwrap()
+            .posts
             .into_iter()
             .map(|p| p.id)
             .collect::<Vec<_>>();
@@ -390,6 +391,7 @@ mod local_tests {
             .collect::<Vec<_>>();
         ids.sort();
         ids.dedup();
+        ids.reverse();
 
         let options = BFOptions { range: 1..=1 };
         let (msg_sender, _recv) = mpsc::channel(100);
@@ -402,10 +404,20 @@ mod local_tests {
             .backup_favorites(dummy_context, options)
             .await
             .unwrap();
+        let query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 1_000_000,
+        };
         let ids_in_db = storage
-            .get_favorites(0..=100000, false)
+            .query_posts(query)
             .await
             .unwrap()
+            .posts
             .iter()
             .map(|p| p.id)
             .collect::<Vec<_>>();

@@ -118,100 +118,6 @@ pub async fn get_post(db: &SqlitePool, id: i64) -> Result<Option<PostInternal>> 
     )
 }
 
-pub async fn get_favorites(
-    db: &SqlitePool,
-    limit: u32,
-    offset: u32,
-    reverse: bool,
-) -> Result<Vec<PostInternal>> {
-    debug!("query favorites offset {offset}, limit {limit}, rev {reverse}");
-    let sql_expr = if reverse {
-        r#"SELECT
-    *
-FROM
-    posts
-WHERE
-    id IN (
-        SELECT
-            id
-        FROM
-            favorited_posts
-        ORDER BY
-            id
-        LIMIT
-            ?
-        OFFSET
-            ?
-    );"#
-    } else {
-        r#"SELECT
-    *
-FROM
-    posts
-WHERE
-    id IN (
-        SELECT
-            id
-        FROM
-            favorited_posts
-        ORDER BY
-            id DESC
-        LIMIT
-            ?
-        OFFSET
-            ?
-    );"#
-    };
-    let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
-    Ok(posts)
-}
-
-pub async fn get_posts(
-    db: &SqlitePool,
-    limit: u32,
-    offset: u32,
-    reverse: bool,
-) -> Result<Vec<PostInternal>> {
-    debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
-    let sql_expr = if reverse {
-        "SELECT * FROM posts ORDER BY id LIMIT ? OFFSET ?;"
-    } else {
-        "SELECT * FROM posts ORDER BY id DESC LIMIT ? OFFSET ?;"
-    };
-    let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
-    Ok(posts)
-}
-
-pub async fn get_ones_posts(
-    db: &SqlitePool,
-    uid: i64,
-    limit: u32,
-    offset: u32,
-    reverse: bool,
-) -> Result<Vec<PostInternal>> {
-    debug!("query posts offset {offset}, limit {limit}, rev {reverse}");
-    let sql_expr = if reverse {
-        "SELECT * FROM posts WHERE uid = ? ORDER BY id LIMIT ? OFFSET ?;"
-    } else {
-        "SELECT * FROM posts WHERE uid = ? ORDER BY id DESC LIMIT ? OFFSET ?;"
-    };
-    let posts = sqlx::query_as::<Sqlite, PostInternal>(sql_expr)
-        .bind(uid)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
-    Ok(posts)
-}
-
 pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) -> Result<()> {
     sqlx::query(
         format!(
@@ -306,14 +212,6 @@ VALUES
     .execute(db)
     .await?;
     Ok(())
-}
-
-pub async fn get_favorited_sum(db: &SqlitePool) -> Result<u32> {
-    Ok(
-        sqlx::query_scalar::<Sqlite, u32>("SELECT COUNT(1) FROM favorited_posts;")
-            .fetch_one(db)
-            .await?,
-    )
 }
 
 pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
@@ -487,10 +385,20 @@ mod local_tests {
             save_post(&db, &internal_post, false).await.unwrap();
         }
 
-        let posts = get_favorites(&db, 2, 1, false).await.unwrap();
+        let mut query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 2,
+        };
+        let (posts, _sum) = query_posts(&db, query.clone()).await.unwrap();
         assert_eq!(posts.len(), 2);
 
-        let posts_rev = get_favorites(&db, 2, 1, true).await.unwrap();
+        query.reverse_order = true;
+        let (posts_rev, _sum) = query_posts(&db, query).await.unwrap();
         assert_eq!(posts_rev.len(), 2);
     }
 
@@ -525,7 +433,16 @@ mod local_tests {
             save_post(&db, &internal_post, false).await.unwrap();
         }
 
-        let sum = get_favorited_sum(&db).await.unwrap();
+        let query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 2,
+        };
+        let (_, sum) = query_posts(&db, query).await.unwrap();
         assert_eq!(sum, favorited_count);
     }
 
@@ -558,14 +475,24 @@ mod local_tests {
             save_post(&db, &internal_post, false).await.unwrap();
         }
 
-        let fetched_posts = get_posts(&db, 5, 0, false).await.unwrap();
+        let mut query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 5,
+        };
+        let (fetched_posts, _sum) = query_posts(&db, query.clone()).await.unwrap();
         assert_eq!(fetched_posts.len(), 5);
         assert_eq!(
             fetched_posts[0].id,
             posts.iter().map(|p| p.id).max().unwrap()
         );
 
-        let fetched_posts_rev = get_posts(&db, 5, 0, true).await.unwrap();
+        query.reverse_order = true;
+        let (fetched_posts_rev, _sum) = query_posts(&db, query).await.unwrap();
         assert_eq!(fetched_posts_rev.len(), 5);
         assert_eq!(
             fetched_posts_rev[0].id,
@@ -590,14 +517,22 @@ mod local_tests {
             save_post(&db, &internal_post, false).await.unwrap();
         }
 
-        let fetched_posts = get_ones_posts(&db, uid, ones_posts_num as u32, 0, false)
-            .await
-            .unwrap();
+        let mut query = PostQuery {
+            user_id: Some(uid),
+            start_date: None,
+            end_date: None,
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: ones_posts_num as u32,
+        };
+        let (fetched_posts, sum) = query_posts(&db, query.clone()).await.unwrap();
         assert_eq!(fetched_posts.len(), ones_posts_num);
+        assert_eq!(sum as usize, ones_posts_num);
 
-        let fetched_posts_rev = get_ones_posts(&db, uid, ones_posts_num as u32, 0, true)
-            .await
-            .unwrap();
+        query.reverse_order = true;
+        let (fetched_posts_rev, sum) = query_posts(&db, query).await.unwrap();
         assert_eq!(fetched_posts_rev.len(), ones_posts_num);
+        assert_eq!(sum as usize, ones_posts_num);
     }
 }

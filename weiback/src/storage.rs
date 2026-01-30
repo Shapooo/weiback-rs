@@ -5,7 +5,6 @@ pub mod picture_storage;
 pub mod video_storage;
 
 use std::future::Future;
-use std::ops::RangeInclusive;
 use std::pin::Pin;
 
 use bytes::Bytes;
@@ -32,20 +31,11 @@ use internal::user;
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
-    async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>>;
-    async fn get_posts(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>>;
-    async fn get_ones_posts(
-        &self,
-        uid: i64,
-        range: RangeInclusive<u32>,
-        reverse: bool,
-    ) -> Result<Vec<Post>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn get_post(&self, id: i64) -> Result<Option<Post>>;
     async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts>;
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
-    async fn get_favorited_sum(&self) -> Result<u32>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
     fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
     async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
@@ -159,36 +149,6 @@ impl StorageImpl {
 }
 
 impl Storage for StorageImpl {
-    async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
-        let (start, end) = range.into_inner();
-        let posts = post::get_favorites(&self.db_pool, end - start + 1, start, reverse).await?;
-        let posts = self.hydrate_posts(posts).await;
-        debug!("geted {} favorites from local", posts.len());
-        Ok(posts)
-    }
-
-    async fn get_posts(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
-        let (start, end) = range.into_inner();
-        let posts = post::get_posts(&self.db_pool, end - start + 1, start, reverse).await?;
-        let posts = self.hydrate_posts(posts).await;
-        debug!("geted {} post from local", posts.len());
-        Ok(posts)
-    }
-
-    async fn get_ones_posts(
-        &self,
-        uid: i64,
-        range: RangeInclusive<u32>,
-        reverse: bool,
-    ) -> Result<Vec<Post>> {
-        let (start, end) = range.into_inner();
-        let posts =
-            post::get_ones_posts(&self.db_pool, uid, end - start + 1, start, reverse).await?;
-        let posts = self.hydrate_posts(posts).await;
-        debug!("geted {} post of user {} from local", posts.len(), uid);
-        Ok(posts)
-    }
-
     async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         user::get_user(&self.db_pool, uid).await
     }
@@ -217,10 +177,6 @@ impl Storage for StorageImpl {
 
     async fn mark_post_favorited(&self, id: i64) -> Result<()> {
         post::mark_post_favorited(&self.db_pool, id).await
-    }
-
-    async fn get_favorited_sum(&self) -> Result<u32> {
-        post::get_favorited_sum(&self.db_pool).await
     }
 
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
@@ -325,10 +281,17 @@ mod local_tests {
             storage.save_post(post).await.unwrap();
         }
 
-        let fetched_posts = storage
-            .get_favorites(0..=1_000_000_000, false)
-            .await
-            .unwrap();
+        let query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 1_000_000_000,
+        };
+        let paginated_posts = storage.query_posts(query).await.unwrap();
+        let fetched_posts = paginated_posts.posts;
 
         assert_eq!(fetched_posts.len(), favorited_sum);
 
@@ -363,11 +326,21 @@ mod local_tests {
             storage.save_post(post).await.unwrap();
         }
 
-        let fetched_posts = storage.get_posts(0..=1000000, false).await.unwrap();
-        assert_eq!(fetched_posts.len(), ids.len());
+        let mut query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 1_000_000,
+        };
+        let fetched_posts = storage.query_posts(query.clone()).await.unwrap();
+        assert_eq!(fetched_posts.posts.len(), ids.len());
 
-        let fetched_posts_rev = storage.get_posts(0..=1000000, true).await.unwrap();
-        assert_eq!(fetched_posts_rev.len(), ids.len());
+        query.reverse_order = true;
+        let fetched_posts_rev = storage.query_posts(query).await.unwrap();
+        assert_eq!(fetched_posts_rev.posts.len(), ids.len());
     }
 
     #[tokio::test]
@@ -388,17 +361,21 @@ mod local_tests {
             storage.save_post(post).await.unwrap();
         }
 
-        let fetched_posts = storage
-            .get_ones_posts(uid, 0..=ones_posts_num as u32, false)
-            .await
-            .unwrap();
-        assert_eq!(fetched_posts.len(), ones_posts_num);
+        let mut query = PostQuery {
+            user_id: Some(uid),
+            start_date: None,
+            end_date: None,
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: ones_posts_num as u32,
+        };
+        let fetched_posts = storage.query_posts(query.clone()).await.unwrap();
+        assert_eq!(fetched_posts.posts.len(), ones_posts_num);
 
-        let fetched_posts_rev = storage
-            .get_ones_posts(uid, 0..=ones_posts_num as u32, true)
-            .await
-            .unwrap();
-        assert_eq!(fetched_posts_rev.len(), ones_posts_num);
+        query.reverse_order = true;
+        let fetched_posts_rev = storage.query_posts(query).await.unwrap();
+        assert_eq!(fetched_posts_rev.posts.len(), ones_posts_num);
     }
 
     #[tokio::test]
@@ -417,7 +394,17 @@ mod local_tests {
             storage.save_post(&post).await.unwrap();
         }
 
-        assert_eq!(storage.get_favorited_sum().await.unwrap(), favorited);
+        let query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 2,
+        };
+        let paginated_posts = storage.query_posts(query).await.unwrap();
+        assert_eq!(paginated_posts.total_items, favorited);
 
         let to_unfav = storage.get_posts_id_to_unfavorite().await.unwrap();
         assert_eq!(to_unfav.len(), favorited as usize);
@@ -427,7 +414,7 @@ mod local_tests {
         }
 
         assert_eq!(
-            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u32,
+            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
             favorited - favorited / 3
         );
 
@@ -436,8 +423,8 @@ mod local_tests {
         }
 
         assert_eq!(
-            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u32,
-            favorited - favorited / 3 + not_favorited.len() as u32 / 3
+            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
+            favorited - favorited / 3 + not_favorited.len() as u64 / 3
         );
     }
 }

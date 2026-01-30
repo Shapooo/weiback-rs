@@ -1,7 +1,6 @@
 //! Test mock for storage
 use std::{
     collections::HashMap,
-    ops::RangeInclusive,
     sync::{Arc, Mutex},
 };
 
@@ -45,76 +44,6 @@ impl Storage for MockStorage {
     async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         let inner = self.inner.lock().unwrap();
         Ok(inner.users.get(&uid).cloned())
-    }
-
-    async fn get_favorites(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
-        let inner = self.inner.lock().unwrap();
-        let mut posts: Vec<_> = inner
-            .posts
-            .values()
-            .filter_map(|(p, _)| p.favorited.then_some(p))
-            .cloned()
-            .collect();
-        posts.sort_by_key(|p| p.id);
-        if reverse {
-            posts.reverse();
-        }
-        let (start, end) = range.into_inner();
-        let start = start as usize;
-        let end = end as usize;
-        if start >= posts.len() {
-            return Ok(vec![]);
-        }
-        let end = std::cmp::min(end, posts.len() - 1);
-        Ok(posts.get(start..=end).unwrap_or_default().to_vec())
-    }
-
-    async fn get_posts(&self, range: RangeInclusive<u32>, reverse: bool) -> Result<Vec<Post>> {
-        let inner = self.inner.lock().unwrap();
-        let mut posts: Vec<_> = inner.posts.values().map(|(p, _)| p).cloned().collect();
-        posts.sort_by_key(|p| p.id);
-        if reverse {
-            posts.reverse();
-        }
-        let (start, end) = range.into_inner();
-        let start = start as usize;
-        let end = end as usize;
-        if start >= posts.len() {
-            return Ok(vec![]);
-        }
-        let end = std::cmp::min(end, posts.len() - 1);
-        Ok(posts.get(start..=end).unwrap_or_default().to_vec())
-    }
-
-    async fn get_ones_posts(
-        &self,
-        uid: i64,
-        range: RangeInclusive<u32>,
-        reverse: bool,
-    ) -> Result<Vec<Post>> {
-        let inner = self.inner.lock().unwrap();
-        let mut posts: Vec<_> = inner
-            .posts
-            .values()
-            .filter_map(|(p, _)| {
-                p.user
-                    .as_ref()
-                    .and_then(|u| if u.id == uid { Some(p) } else { None })
-            })
-            .cloned()
-            .collect();
-        posts.sort_by_key(|p| p.id);
-        if reverse {
-            posts.reverse();
-        }
-        let (start, end) = range.into_inner();
-        let start = start as usize;
-        let end = end as usize;
-        if start >= posts.len() {
-            return Ok(vec![]);
-        }
-        let end = std::cmp::min(end, posts.len() - 1);
-        Ok(posts.get(start..=end).unwrap_or_default().to_vec())
     }
 
     async fn save_post(&self, post: &Post) -> Result<()> {
@@ -163,7 +92,7 @@ impl Storage for MockStorage {
                     matches = false;
                 }
 
-                if !query.is_favorited || post.favorited {
+                if query.is_favorited && !post.favorited {
                     matches = false;
                 }
 
@@ -210,11 +139,6 @@ impl Storage for MockStorage {
             post.favorited = true;
         }
         Ok(())
-    }
-
-    async fn get_favorited_sum(&self) -> Result<u32> {
-        let inner = self.inner.lock().unwrap();
-        Ok(inner.posts.values().filter(|(p, _)| p.favorited).count() as u32)
     }
 
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
@@ -318,8 +242,18 @@ mod local_tests {
         for post in posts.iter() {
             storage.save_post(post).await.unwrap();
         }
-        let fetched = storage.get_posts(0..=1_000_000_000, false).await.unwrap();
-        assert_eq!(fetched.len(), posts.len());
+
+        let query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 1_000_000,
+        };
+        let fetched = storage.query_posts(query).await.unwrap();
+        assert_eq!(fetched.posts.len(), posts.len());
     }
 
     #[tokio::test]
@@ -351,7 +285,17 @@ mod local_tests {
             storage.save_post(&post).await.unwrap();
         }
 
-        assert_eq!(storage.get_favorited_sum().await.unwrap(), favorited);
+        let query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            is_favorited: true,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 2,
+        };
+        let paginated_posts = storage.query_posts(query).await.unwrap();
+        assert_eq!(paginated_posts.total_items, favorited);
 
         let to_unfav = storage.get_posts_id_to_unfavorite().await.unwrap();
         assert_eq!(to_unfav.len(), favorited as usize);
@@ -361,7 +305,7 @@ mod local_tests {
         }
 
         assert_eq!(
-            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u32,
+            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
             favorited - favorited / 3
         );
 
@@ -370,8 +314,8 @@ mod local_tests {
         }
 
         assert_eq!(
-            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u32,
-            favorited - favorited / 3 + not_favorited.len() as u32 / 3
+            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
+            favorited - favorited / 3 + not_favorited.len() as u64 / 3
         );
     }
 
