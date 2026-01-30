@@ -24,8 +24,8 @@ use crate::message::{ErrType, Message};
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
-    BFOptions, BUOptions, ExportOptions, PaginatedPosts, PostQuery, Task, TaskContext, TaskRequest,
-    UserPostFilter,
+    BFOptions, BUOptions, ExportJobOptions, PaginatedPosts, PostQuery, Task, TaskContext,
+    TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
@@ -71,8 +71,8 @@ impl Core {
         Ok(self.sdk_api_client.session()?.uid.clone())
     }
 
-    pub async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
-        self.task_handler.export_from_local(options).await
+    pub async fn export_posts(&self, options: ExportJobOptions) -> Result<()> {
+        self.task_handler.export_posts(options).await
     }
 
     pub async fn query_local_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {

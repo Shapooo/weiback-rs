@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
-    BFOptions, BUOptions, Core, ExportOptions, PaginatedPosts, PostQuery, TaskRequest,
+    BFOptions, BUOptions, Core, ExportJobOptions, PaginatedPosts, PostQuery, TaskRequest,
     task_manager::TaskManger,
 };
 use weiback::message::{ErrMsg, Message, TaskProgress};
@@ -70,13 +70,9 @@ async fn unfavorite_posts(core: State<'_, Arc<Core>>) -> Result<()> {
 }
 
 #[tauri::command]
-async fn export_from_local(core: State<'_, Arc<Core>>, range: RangeInclusive<u32>) -> Result<()> {
-    info!("export_from_local called with range: {:?}", range);
-    let options = ExportOptions {
-        range,
-        ..Default::default()
-    };
-    Ok(core.export_from_local(options).await?)
+async fn export_posts(core: State<'_, Arc<Core>>, options: ExportJobOptions) -> Result<()> {
+    info!("export_from_local called with options: {:?}", options);
+    Ok(core.export_posts(options).await?)
 }
 
 #[tauri::command]
@@ -125,7 +121,7 @@ pub fn run() -> Result<()> {
             backup_self,
             backup_favorites,
             unfavorite_posts,
-            export_from_local,
+            export_posts,
             query_local_posts,
             get_sms_code,
             login,

@@ -9,7 +9,7 @@ use tokio::time::sleep;
 use super::post_processer::PostProcesser;
 use super::task::TaskContext;
 use crate::api::ApiClient;
-use crate::core::task::{BFOptions, BUOptions, ExportOptions, PaginatedPosts, PostQuery};
+use crate::core::task::{BFOptions, BUOptions, ExportJobOptions, PaginatedPosts, PostQuery};
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
@@ -242,18 +242,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    pub async fn export_from_local(&self, options: ExportOptions) -> Result<()> {
+    pub async fn export_posts(&self, options: ExportJobOptions) -> Result<()> {
         info!("Starting export from local with options: {options:?}");
         let posts_per_page = crate::config::get_config().read()?.posts_per_html;
-        let mut query = PostQuery {
-            user_id: None,
-            start_date: None,
-            end_date: None,
-            is_favorited: true,
-            reverse_order: options.reverse,
-            page: 1,
-            posts_per_page,
-        };
+        let mut query = options.query;
+        query.posts_per_page = posts_per_page;
+
         for page_index in 1.. {
             query.page = page_index;
             let local_posts = self.storage.query_posts(query.clone()).await?;
@@ -262,13 +256,13 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 break;
             }
 
-            let page_name = make_page_name(&options.task_name, page_index as i32);
+            let page_name = make_page_name(&options.output.task_name, page_index as i32);
             let html = self
                 .html_generator
                 .generate_html(local_posts.posts, &page_name)
                 .await?;
             self.exporter
-                .export_page(html, &page_name, &options.export_dir)
+                .export_page(html, &page_name, &options.output.export_dir)
                 .await?;
         }
         info!("Finished exporting from local");
@@ -291,7 +285,7 @@ mod local_tests {
     use super::*;
     use crate::{
         api::{FavoritesApi, ProfileStatusesApi},
-        core::task::BUOptions,
+        core::task::{BUOptions, ExportOutputConfig},
         mock::MockApi,
         mock::{
             exporter::MockExporter, media_downloader::MockMediaDownloader, storage::MockStorage,
@@ -435,12 +429,21 @@ mod local_tests {
         let export_dir = Path::new("export_dir").into();
         let task_name = "test".to_string();
 
-        let options = ExportOptions {
-            task_name,
-            range: 1..=20,
-            reverse: false,
-            export_dir,
+        let options = ExportJobOptions {
+            query: PostQuery {
+                user_id: None,
+                start_date: None,
+                end_date: None,
+                is_favorited: true,
+                reverse_order: false,
+                page: 1,
+                posts_per_page: 20,
+            },
+            output: ExportOutputConfig {
+                task_name,
+                export_dir,
+            },
         };
-        task_handler.export_from_local(options).await.unwrap();
+        task_handler.export_posts(options).await.unwrap();
     }
 }

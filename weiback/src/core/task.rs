@@ -1,6 +1,7 @@
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -101,26 +102,19 @@ pub enum UserPostFilter {
     Picture,
 }
 
-#[derive(Debug, Clone)]
-pub struct ExportOptions {
-    pub export_dir: PathBuf,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportOutputConfig {
     pub task_name: String,
-    pub reverse: bool,
-    pub range: RangeInclusive<u32>,
+    pub export_dir: PathBuf,
 }
 
-impl Default for ExportOptions {
-    fn default() -> Self {
-        Self {
-            export_dir: PathBuf::from("."),
-            task_name: "weiback_export".to_string(),
-            reverse: false,
-            range: 0..=1_000_000_000,
-        }
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportJobOptions {
+    pub query: PostQuery,
+    pub output: ExportOutputConfig,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostQuery {
     pub user_id: Option<i64>,
     pub start_date: Option<i64>, // Unix timestamp
@@ -132,7 +126,7 @@ pub struct PostQuery {
     pub posts_per_page: u32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaginatedPosts {
     pub posts: Vec<crate::models::Post>,
     pub total_items: u64,
