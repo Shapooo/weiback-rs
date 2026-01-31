@@ -1,4 +1,5 @@
 #![allow(async_fn_in_trait)]
+use std::path::PathBuf;
 pub mod database;
 pub mod internal;
 pub mod picture_storage;
@@ -20,13 +21,20 @@ use tokio::runtime::Runtime;
 use url::Url;
 
 use crate::core::task::{PaginatedPosts, PostQuery};
-use crate::models::{Picture, Post, User, Video};
+use crate::models::{Picture, PictureMeta, Post, User, Video};
 use crate::{
     error::{Error, Result},
     storage::video_storage::FileSystemVideoStorage,
 };
+use internal::picture;
 use internal::post::{self, PostInternal};
 use internal::user;
+
+#[derive(Debug, Clone)]
+pub struct PictureInfo {
+    pub meta: PictureMeta,
+    pub path: PathBuf,
+}
 
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
@@ -38,6 +46,10 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
     fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
+    async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>>;
+    async fn get_attachment_paths(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
+    async fn get_avatar_path(&self, user_id: i64) -> Result<Option<PictureInfo>>;
+    async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
     async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
     async fn picture_saved(&self, url: &Url) -> Result<bool>;
     fn save_video(&self, picture: &Video) -> impl Future<Output = Result<()>> + Send;
@@ -205,6 +217,22 @@ impl Storage for StorageImpl {
 
     async fn video_saved(&self, url: &Url) -> Result<bool> {
         self.video_storage.video_saved(&self.db_pool, url).await
+    }
+
+    async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>> {
+        picture::get_picture_path(&self.db_pool, url).await
+    }
+
+    async fn get_attachment_paths(&self, post_id: i64) -> Result<Vec<PictureInfo>> {
+        picture::get_pictures_by_post_id(&self.db_pool, post_id).await
+    }
+
+    async fn get_avatar_path(&self, user_id: i64) -> Result<Option<PictureInfo>> {
+        picture::get_avatar_by_user_id(&self.db_pool, user_id).await
+    }
+
+    async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>> {
+        picture::get_pictures_by_ids(&self.db_pool, ids).await
     }
 }
 
