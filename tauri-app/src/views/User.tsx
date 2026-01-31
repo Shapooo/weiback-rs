@@ -5,7 +5,7 @@ import {
   Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer
 } from '@mui/material';
 
-enum LoginStatus {
+enum LoginState {
   Init,
   WaitingCode,
   CodeSent,
@@ -19,28 +19,28 @@ interface UserInfo {
 
 const UserPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
-  const [loginStatus, setLoginStatus] = useState<LoginStatus>(LoginStatus.Init);
+  const [loginState, setLoginState] = useState<LoginState>(LoginState.Init);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState(Array(6).fill(''));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    const checkLoginStatus = async () => {
+    const checkLoginState = async () => {
       try {
         const user: UserInfo | null = await invoke('login_state');
         if (user) {
           setUserInfo(user);
-          setLoginStatus(LoginStatus.LoggedIn);
+          setLoginState(LoginState.LoggedIn);
         } else {
-          setLoginStatus(LoginStatus.Init);
+          setLoginState(LoginState.Init);
         }
       } catch (e) {
         enqueueSnackbar(`检查登录状态失败: ${e}`, { variant: 'error' });
-        setLoginStatus(LoginStatus.Init);
+        setLoginState(LoginState.Init);
       }
     };
-    checkLoginStatus();
+    checkLoginState();
   }, [enqueueSnackbar]);
 
   const handleGetCode = async () => {
@@ -50,7 +50,7 @@ const UserPage: React.FC = () => {
     }
     try {
       await invoke('get_sms_code', { phone_number: phone });
-      setLoginStatus(LoginStatus.CodeSent);
+      setLoginState(LoginState.CodeSent);
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
       inputRefs.current[0]?.focus();
     } catch (e) {
@@ -68,7 +68,7 @@ const UserPage: React.FC = () => {
       const res: UserInfo | null = await invoke('login', { sms_code: code });
       if (res) {
         setUserInfo(res);
-        setLoginStatus(LoginStatus.LoggedIn);
+        setLoginState(LoginState.LoggedIn);
         enqueueSnackbar('登录成功！', { variant: 'success' });
       }
       setPhone('');
@@ -81,7 +81,7 @@ const UserPage: React.FC = () => {
   const handleLogout = async () => {
     try {
       // await invoke('logout');
-      setLoginStatus(LoginStatus.Init);
+      setLoginState(LoginState.Init);
       setUserInfo(null);
       enqueueSnackbar('已退出登录', { variant: 'info' });
     } catch (e) {
@@ -108,10 +108,10 @@ const UserPage: React.FC = () => {
     <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
       <CardContent>
         <Typography variant="h5" component="div" sx={{ mb: 2 }}>
-          {loginStatus === LoginStatus.LoggedIn ? '用户信息' : '用户登录'}
+          {loginState === LoginState.LoggedIn ? '用户信息' : '用户登录'}
         </Typography>
 
-        {loginStatus === LoginStatus.LoggedIn && userInfo ? (
+        {loginState === LoginState.LoggedIn && userInfo ? (
           <Box>
             <TableContainer component={Paper}>
               <Table>
@@ -127,7 +127,7 @@ const UserPage: React.FC = () => {
           </Box>
         ) : (
           <Box component="form" noValidate autoComplete="off">
-            {loginStatus !== LoginStatus.CodeSent ? (
+            {loginState !== LoginState.CodeSent ? (
               <Stack spacing={2}>
                 <TextField
                   fullWidth
