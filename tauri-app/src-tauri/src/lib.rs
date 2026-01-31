@@ -31,14 +31,11 @@ fn set_config_command(config: Config) -> std::result::Result<(), String> {
 
 #[tauri::command]
 async fn backup_user(core: State<'_, Arc<Core>>, uid: String, num_pages: u32) -> Result<()> {
-    info!(
-        "backup_user called with uid: {}, pages num: {:?}",
-        uid, num_pages
-    );
+    info!("backup_user called with uid: {uid}, pages num: {num_pages}");
     Ok(core
         .backup_user(TaskRequest::BackupUser(BackupUserPostsOptions {
             uid: uid.parse().map_err(|err| {
-                error!("Failed to parse uid: {}", err);
+                error!("Failed to parse uid: {err}");
                 err
             })?,
             num_pages,
@@ -48,7 +45,7 @@ async fn backup_user(core: State<'_, Arc<Core>>, uid: String, num_pages: u32) ->
 
 #[tauri::command]
 async fn backup_favorites(core: State<'_, Arc<Core>>, num_pages: u32) -> Result<()> {
-    info!("backup_favorites called with pages num: {:?}", num_pages);
+    info!("backup_favorites called with pages num: {num_pages}");
     Ok(core
         .backup_favorites(TaskRequest::BackupFavorites(BackupFavoritesOptions {
             num_pages,
@@ -64,28 +61,31 @@ async fn unfavorite_posts(core: State<'_, Arc<Core>>) -> Result<()> {
 
 #[tauri::command]
 async fn export_posts(core: State<'_, Arc<Core>>, options: ExportJobOptions) -> Result<()> {
-    info!("export_from_local called with options: {:?}", options);
+    info!("export_from_local called with options: {options:?}");
     Ok(core.export_posts(options).await?)
 }
 
 #[tauri::command]
 async fn query_local_posts(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<PaginatedPosts> {
-    info!("query_local_posts called with query: {:?}", query);
+    info!("query_local_posts called with query: {query:?}");
     Ok(core.query_local_posts(query).await?)
 }
 
 #[tauri::command]
 async fn get_sms_code(core: State<'_, Arc<Core>>, phone_number: String) -> Result<()> {
+    info!("get_sms_code called with phone number: {phone_number}");
     Ok(core.get_sms_code(phone_number).await?)
 }
 
 #[tauri::command]
 async fn login(core: State<'_, Arc<Core>>, sms_code: String) -> Result<()> {
+    info!("login called with sms code: {sms_code}");
     Ok(core.login(sms_code).await?)
 }
 
 #[tauri::command]
 async fn login_state(core: State<'_, Arc<Core>>) -> Result<Option<Value>> {
+    info!("login_state called");
     Ok(core.login_state().await?)
 }
 
