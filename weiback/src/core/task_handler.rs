@@ -66,7 +66,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         let avatar_url = user.avatar_hd.clone();
 
-        if self.storage.picture_saved(&avatar_url).await? {
+        if self.storage.picture_saved(ctx.clone(), &avatar_url).await? {
             return Ok(());
         }
         let user_id = user.id;
@@ -74,13 +74,15 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let storage = self.storage.clone();
 
         let callback = Box::new(
-            move |_, blob: Bytes| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |ctx: Arc<TaskContext>,
+                  blob: Bytes|
+                  -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async move {
                     let pic = Picture {
                         meta: pic_meta,
                         blob,
                     };
-                    storage.save_picture(&pic).await?;
+                    storage.save_picture(ctx, &pic).await?;
                     Ok(())
                 })
             },
@@ -238,7 +240,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    pub async fn export_posts(&self, options: ExportJobOptions) -> Result<()> {
+    pub async fn export_posts(
+        &self,
+        ctx: Arc<TaskContext>,
+        options: ExportJobOptions,
+    ) -> Result<()> {
         info!("Starting export from local with options: {options:?}");
         let posts_per_page = crate::config::get_config().read()?.posts_per_html;
         let mut query = options.query;
@@ -255,7 +261,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             let page_name = make_page_name(&options.output.task_name, page_index as i32);
             let html = self
                 .html_generator
-                .generate_html(local_posts.posts, &page_name)
+                .generate_html(ctx.clone(), local_posts.posts, &page_name)
                 .await?;
             self.exporter
                 .export_page(html, &page_name, &options.output.export_dir)
@@ -440,6 +446,15 @@ mod local_tests {
                 export_dir,
             },
         };
-        task_handler.export_posts(options).await.unwrap();
+        let (msg_sender, _recv) = mpsc::channel(100);
+        let dummy_context = Arc::new(TaskContext {
+            task_id: 0,
+            config: Default::default(),
+            msg_sender,
+        });
+        task_handler
+            .export_posts(dummy_context, options)
+            .await
+            .unwrap();
     }
 }

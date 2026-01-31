@@ -1,12 +1,13 @@
 #![allow(async_fn_in_trait)]
-use std::path::PathBuf;
 pub mod database;
 pub mod internal;
 pub mod picture_storage;
 pub mod video_storage;
 
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::{
@@ -20,7 +21,7 @@ use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 use url::Url;
 
-use crate::core::task::{PaginatedPosts, PostQuery};
+use crate::core::task::{PaginatedPosts, PostQuery, TaskContext};
 use crate::models::{Picture, PictureMeta, Post, User, Video};
 use crate::{
     error::{Error, Result},
@@ -45,16 +46,32 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
-    fn save_picture(&self, picture: &Picture) -> impl Future<Output = Result<()>> + Send;
+    fn save_picture(
+        &self,
+        ctx: Arc<TaskContext>,
+        picture: &Picture,
+    ) -> impl Future<Output = Result<()>> + Send;
     async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>>;
     async fn get_attachment_paths(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
     async fn get_avatar_path(&self, user_id: i64) -> Result<Option<PictureInfo>>;
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
-    async fn get_picture_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
-    async fn picture_saved(&self, url: &Url) -> Result<bool>;
-    fn save_video(&self, picture: &Video) -> impl Future<Output = Result<()>> + Send;
-    async fn get_video_blob(&self, url: &Url) -> Result<Option<bytes::Bytes>>;
-    async fn video_saved(&self, url: &Url) -> Result<bool>;
+    async fn get_picture_blob(
+        &self,
+        ctx: Arc<TaskContext>,
+        url: &Url,
+    ) -> Result<Option<bytes::Bytes>>;
+    async fn picture_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool>;
+    fn save_video(
+        &self,
+        ctx: Arc<TaskContext>,
+        picture: &Video,
+    ) -> impl Future<Output = Result<()>> + Send;
+    async fn get_video_blob(
+        &self,
+        ctx: Arc<TaskContext>,
+        url: &Url,
+    ) -> Result<Option<bytes::Bytes>>;
+    async fn video_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool>;
 }
 
 #[derive(Debug, Clone)]
@@ -73,14 +90,12 @@ impl StorageImpl {
                 error!("Failed to create database pool: {e}");
                 e
             })?;
-        let pic_storage = FileSystemPictureStorage::new()?;
-        let video_storage = FileSystemVideoStorage::new()?;
 
         info!("Storage initialized successfully.");
         Ok(StorageImpl {
             db_pool,
-            pic_storage,
-            video_storage,
+            pic_storage: Default::default(),
+            video_storage: Default::default(),
         })
     }
 
@@ -195,28 +210,40 @@ impl Storage for StorageImpl {
         post::get_posts_id_to_unfavorite(&self.db_pool).await
     }
 
-    async fn get_picture_blob(&self, url: &Url) -> Result<Option<Bytes>> {
-        self.pic_storage.get_picture_blob(&self.db_pool, url).await
+    async fn get_picture_blob(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<Bytes>> {
+        self.pic_storage
+            .get_picture_blob(&ctx.config.picture_path, &self.db_pool, url)
+            .await
     }
 
-    async fn save_picture(&self, picture: &Picture) -> Result<()> {
-        self.pic_storage.save_picture(&self.db_pool, picture).await
+    async fn save_picture(&self, ctx: Arc<TaskContext>, picture: &Picture) -> Result<()> {
+        self.pic_storage
+            .save_picture(&ctx.config.picture_path, &self.db_pool, picture)
+            .await
     }
 
-    async fn picture_saved(&self, url: &Url) -> Result<bool> {
-        self.pic_storage.picture_saved(&self.db_pool, url).await
+    async fn picture_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool> {
+        self.pic_storage
+            .picture_saved(&ctx.config.picture_path, &self.db_pool, url)
+            .await
     }
 
-    async fn get_video_blob(&self, url: &Url) -> Result<Option<Bytes>> {
-        self.video_storage.get_video_blob(&self.db_pool, url).await
+    async fn get_video_blob(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<Bytes>> {
+        self.video_storage
+            .get_video_blob(&ctx.config.video_path, &self.db_pool, url)
+            .await
     }
 
-    async fn save_video(&self, video: &Video) -> Result<()> {
-        self.video_storage.save_video(&self.db_pool, video).await
+    async fn save_video(&self, ctx: Arc<TaskContext>, video: &Video) -> Result<()> {
+        self.video_storage
+            .save_video(&ctx.config.video_path, &self.db_pool, video)
+            .await
     }
 
-    async fn video_saved(&self, url: &Url) -> Result<bool> {
-        self.video_storage.video_saved(&self.db_pool, url).await
+    async fn video_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool> {
+        self.video_storage
+            .video_saved(&ctx.config.video_path, &self.db_pool, url)
+            .await
     }
 
     async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>> {
@@ -244,8 +271,6 @@ mod local_tests {
         path::Path,
     };
 
-    use tempfile::tempdir;
-
     use super::*;
     use crate::{
         api::{favorites::FavoritesSucc, profile_statuses::ProfileStatusesSucc},
@@ -255,14 +280,10 @@ mod local_tests {
     async fn setup_storage() -> StorageImpl {
         let db_pool = SqlitePool::connect(":memory:").await.unwrap();
         sqlx::migrate!().run(&db_pool).await.unwrap();
-        let temp_dir = tempdir().unwrap();
-        let pic_storage = FileSystemPictureStorage::from_picture_path(temp_dir.path().into());
-        let video_storage = FileSystemVideoStorage::from_video_path(temp_dir.path().into());
-
         StorageImpl {
             db_pool,
-            pic_storage,
-            video_storage,
+            pic_storage: Default::default(),
+            video_storage: Default::default(),
         }
     }
 

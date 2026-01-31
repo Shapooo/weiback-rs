@@ -86,7 +86,12 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         Ok(html)
     }
 
-    pub async fn generate_html(&self, posts: Vec<Post>, page_name: &str) -> Result<HTMLPage> {
+    pub async fn generate_html(
+        &self,
+        ctx: Arc<TaskContext>,
+        posts: Vec<Post>,
+        page_name: &str,
+    ) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
         let pic_quality = get_config().read()?.picture_definition;
         let emoji_map = self.emoji_map.get_or_try_init().await.ok();
@@ -98,7 +103,7 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         );
         let pic_futures = pic_metas
             .into_iter()
-            .map(|m| self.load_picture_from_local(m));
+            .map(|m| self.load_picture_from_local(ctx.clone(), m));
         let pics = try_join_all(pic_futures).await?;
         let pics = pics
             .into_iter()
@@ -113,10 +118,14 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         })
     }
 
-    async fn load_picture_from_local(&self, pic_meta: PictureMeta) -> Result<Option<Picture>> {
+    async fn load_picture_from_local(
+        &self,
+        ctx: Arc<TaskContext>,
+        pic_meta: PictureMeta,
+    ) -> Result<Option<Picture>> {
         Ok(self
             .storage
-            .get_picture_blob(pic_meta.url())
+            .get_picture_blob(ctx, pic_meta.url())
             .await?
             .map(|blob| Picture {
                 meta: pic_meta,
@@ -130,7 +139,11 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
         ctx: Arc<TaskContext>,
         pic_meta: PictureMeta,
     ) -> Result<Picture> {
-        if let Some(blob) = self.storage.get_picture_blob(pic_meta.url()).await? {
+        if let Some(blob) = self
+            .storage
+            .get_picture_blob(ctx.clone(), pic_meta.url())
+            .await?
+        {
             Ok(Picture {
                 meta: pic_meta,
                 blob,
@@ -140,13 +153,13 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
             let url = pic_meta.url().to_owned();
             let (sender, result) = tokio::sync::oneshot::channel();
             let callback = Box::new(
-                move |_ctx, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+                move |ctx, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                     Box::pin(async move {
                         let pic = Picture {
                             meta: pic_meta,
                             blob,
                         };
-                        storage.save_picture(&pic).await?;
+                        storage.save_picture(ctx, &pic).await?;
                         sender.send(pic).map_err(|pic| {
                             Error::Tokio(format!("pic {} send failed", pic.meta.url()))
                         })?;

@@ -72,7 +72,8 @@ impl Core {
     }
 
     pub async fn export_posts(&self, options: ExportJobOptions) -> Result<()> {
-        self.task_handler.export_posts(options).await
+        let ctx = self.create_task_context().await?;
+        self.task_handler.export_posts(ctx, options).await
     }
 
     pub async fn query_local_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {

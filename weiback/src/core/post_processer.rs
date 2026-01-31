@@ -91,28 +91,26 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         pic_meta: PictureMeta,
     ) -> Result<()> {
         let url = pic_meta.url().to_owned();
-        if self.storage.picture_saved(&url).await? {
+        if self.storage.picture_saved(ctx.clone(), &url).await? {
             debug!("Picture {url} already exists in local storage, skipping download.");
             return Ok(());
         }
         debug!("Downloading picture {url} to local storage.");
         let storage = self.storage.clone();
         let callback = Box::new(
-            move |_, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |ctx, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async move {
                     let pic = Picture {
                         meta: pic_meta,
                         blob,
                     };
-                    storage.save_picture(&pic).await?;
+                    storage.save_picture(ctx, &pic).await?;
                     Ok(())
                 })
             },
         );
 
-        self.downloader
-            .download_media(ctx.clone(), &url, callback)
-            .await?;
+        self.downloader.download_media(ctx, &url, callback).await?;
         Ok(())
     }
 
@@ -139,28 +137,26 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         video_meta: VideoMeta,
     ) -> Result<()> {
         let url = video_meta.url().to_owned();
-        if self.storage.video_saved(&url).await? {
+        if self.storage.video_saved(ctx.clone(), &url).await? {
             debug!("Video {url} already exists in local storage, skipping download.");
             return Ok(());
         }
         debug!("Downloading video {url} to local storage.");
         let storage = self.storage.clone();
         let callback = Box::new(
-            move |_, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+            move |ctx, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
                 Box::pin(async move {
                     let video = crate::models::Video {
                         meta: video_meta,
                         blob,
                     };
-                    storage.save_video(&video).await?;
+                    storage.save_video(ctx, &video).await?;
                     Ok(())
                 })
             },
         );
 
-        self.downloader
-            .download_media(ctx.clone(), &url, callback)
-            .await?;
+        self.downloader.download_media(ctx, &url, callback).await?;
         Ok(())
     }
 }
