@@ -36,6 +36,7 @@ interface Post {
     favorited: boolean;
     created_at: string;
     user: User | null;
+    retweeted_status?: Post | null;
 }
 
 interface PaginatedPosts {
@@ -271,6 +272,16 @@ const LocalExportPage: React.FC = () => {
                                                 <Typography variant="body2" sx={{ mt: 1 }}>
                                                     {post.text}
                                                 </Typography>
+                                                {post.retweeted_status && (
+                                                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
+                                                        <Typography variant="subtitle2" color="text.secondary">
+                                                            @{post.retweeted_status.user?.screen_name || '未知用户'}
+                                                        </Typography>
+                                                        <Typography variant="body2" sx={{ mt: 1 }}>
+                                                            {post.retweeted_status.text}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     </Grid>
