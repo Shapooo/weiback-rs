@@ -3,6 +3,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack } from '@mui/material';
 
+interface UserInfo {
+    id: number;
+    screen_name: string;
+}
+
 const UserBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [userId, setUserId] = useState('');
@@ -30,9 +35,9 @@ const UserBackupSection: React.FC = () => {
         let backupId = userId;
 
         if (!backupId) {
-            const loggedInId = await invoke<string | null>('login_status');
-            if (loggedInId) {
-                backupId = loggedInId;
+            const loggedInUser: UserInfo | null = await invoke('login_state');
+            if (loggedInUser && loggedInUser.id) {
+                backupId = loggedInUser.id.toString();
             } else {
                 enqueueSnackbar('请输入用户ID', { variant: 'error' });
                 return;
