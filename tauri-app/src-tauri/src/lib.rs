@@ -30,13 +30,6 @@ fn set_config_command(config: Config) -> std::result::Result<(), String> {
 }
 
 #[tauri::command]
-async fn backup_self(core: State<'_, Arc<Core>>, num_pages: u32) -> Result<()> {
-    info!("backup_self called with pages num: {:?}", num_pages);
-    let uid = core.get_my_uid()?;
-    backup_user(core, uid, num_pages).await
-}
-
-#[tauri::command]
 async fn backup_user(core: State<'_, Arc<Core>>, uid: String, num_pages: u32) -> Result<()> {
     info!(
         "backup_user called with uid: {}, pages num: {:?}",
@@ -118,7 +111,6 @@ pub fn run() -> Result<()> {
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
             backup_user,
-            backup_self,
             backup_favorites,
             unfavorite_posts,
             export_posts,
