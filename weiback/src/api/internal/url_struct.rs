@@ -166,6 +166,7 @@ fn deserialize_pic_infos<'de, D>(deserializer: D) -> Result<Option<PicInfosForSt
 where
     D: Deserializer<'de>,
 {
+    #[allow(clippy::large_enum_variant)]
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum MapOrItem {

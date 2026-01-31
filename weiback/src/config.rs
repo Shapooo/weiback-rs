@@ -139,10 +139,10 @@ pub fn save_config(config: &Config) -> Result<()> {
     fs::write(&config_path, toml::to_string_pretty(config)?)?;
     debug!("Configuration file saved at: {config_path:?}");
 
-    if let Some(g_config) = CONFIG.get() {
-        if let Ok(mut g_config) = g_config.write() {
-            *g_config = config.clone();
-        }
+    if let Some(g_config) = CONFIG.get()
+        && let Ok(mut g_config) = g_config.write()
+    {
+        *g_config = config.clone();
     }
 
     Ok(())

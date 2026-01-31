@@ -17,6 +17,7 @@ pub struct EditConfig {
     pub edited: bool,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum StatusesShowResponse {
