@@ -1,4 +1,3 @@
-use std::ops::RangeInclusive;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -59,37 +58,31 @@ impl TaskContext {
 #[derive(Debug, Clone)]
 pub enum TaskRequest {
     // to download favorites (range, with pic, image definition level)
-    BackupFavorites(BFOptions),
+    BackupFavorites(BackupFavoritesOptions),
     // to unfavorite favorite post
     UnfavoritePosts,
     // to backup user (id, with pic, image definition level)
-    BackupUser(BUOptions),
+    BackupUser(BackupUserPostsOptions),
 }
 
 impl TaskRequest {
     pub fn total(&self) -> u32 {
         match self {
-            TaskRequest::BackupFavorites(o) => {
-                let range = o.range.to_owned();
-                range.end() - range.start() + 1
-            }
-            TaskRequest::BackupUser(o) => {
-                let range = o.range.to_owned();
-                range.end() - range.start() + 1
-            }
-            TaskRequest::UnfavoritePosts => 0,
+            TaskRequest::BackupFavorites(options) => options.num_pages,
+            TaskRequest::BackupUser(options) => options.num_pages,
+            TaskRequest::UnfavoritePosts => 1,
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct BFOptions {
-    pub range: RangeInclusive<u32>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupFavoritesOptions {
+    pub num_pages: u32,
 }
 
-#[derive(Debug, Clone)]
-pub struct BUOptions {
-    pub range: RangeInclusive<u32>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupUserPostsOptions {
+    pub num_pages: u32,
     pub uid: i64,
 }
 

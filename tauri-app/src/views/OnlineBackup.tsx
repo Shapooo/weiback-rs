@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
-import { Card, CardContent, Typography, TextField, Button, Box, Stack, Grid } from '@mui/material';
+import { Card, CardContent, Typography, TextField, Button, Box, Stack } from '@mui/material';
 
 const UserBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [userId, setUserId] = useState('');
     const [userName, setUserName] = useState<string | null>(null);
-    const [startPage, setStartPage] = useState(1);
-    const [endPage, setEndPage] = useState(10);
+    const [numPages, setNumPages] = useState(10);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -40,13 +39,13 @@ const UserBackupSection: React.FC = () => {
             }
         }
 
-        if (startPage > endPage) {
-            enqueueSnackbar('起始页不能大于结束页', { variant: 'error' });
+        if (numPages <= 0) {
+            enqueueSnackbar('备份页数必须为正数', { variant: 'error' });
             return;
         }
         enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
-            await invoke('backup_user', { uid: backupId, range: [startPage, endPage] });
+            await invoke('backup_user', { uid: backupId, num_pages: numPages });
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -79,29 +78,14 @@ const UserBackupSection: React.FC = () => {
                                 用户名: {userName}
                             </Typography>
                         )}
-                        <Grid container spacing={2} alignItems="center">
-                            <Grid size={{ xs: 5 }} >
-                                <TextField
-                                    fullWidth
-                                    label="起始页"
-                                    type="number"
-                                    value={startPage}
-                                    onChange={(e) => setStartPage(parseInt(e.target.value, 10) || 1)}
-                                    slotProps={{ htmlInput: { min: 1 } }}
-                                />
-                            </Grid>
-                            <Grid size={{ xs: 2 }} sx={{ textAlign: 'center' }}>-</Grid>
-                            <Grid size={{ xs: 5 }}>
-                                <TextField
-                                    fullWidth
-                                    label="结束页"
-                                    type="number"
-                                    value={endPage}
-                                    onChange={(e) => setEndPage(parseInt(e.target.value, 10) || 1)}
-                                    slotProps={{ htmlInput: { min: 1 } }}
-                                />
-                            </Grid>
-                        </Grid>
+                        <TextField
+                            fullWidth
+                            label="备份页数"
+                            type="number"
+                            value={numPages}
+                            onChange={(e) => setNumPages(parseInt(e.target.value, 10) || 1)}
+                            slotProps={{ htmlInput: { min: 1 } }}
+                        />
                         <Button variant="contained" onClick={handleBackup}>
                             开始备份
                         </Button>
@@ -114,17 +98,16 @@ const UserBackupSection: React.FC = () => {
 
 const FavoritesBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
-    const [startPage, setStartPage] = useState(1);
-    const [endPage, setEndPage] = useState(10);
+    const [numPages, setNumPages] = useState(10);
 
     const handleBackup = async () => {
-        if (startPage > endPage) {
-            enqueueSnackbar('起始页不能大于结束页', { variant: 'error' });
+        if (numPages <= 0) {
+            enqueueSnackbar('备份页数必须为正数', { variant: 'error' });
             return;
         }
         enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
-            await invoke('backup_favorites', { range: [startPage, endPage] });
+            await invoke('backup_favorites', { num_pages: numPages });
             enqueueSnackbar('收藏备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -148,29 +131,14 @@ const FavoritesBackupSection: React.FC = () => {
                 </Typography>
                 <Box component="form" noValidate autoComplete="off">
                     <Stack spacing={2}>
-                        <Grid container spacing={2} alignItems="center">
-                            <Grid size={{ xs: 5 }}>
-                                <TextField
-                                    fullWidth
-                                    label="起始页"
-                                    type="number"
-                                    value={startPage}
-                                    onChange={(e) => setStartPage(parseInt(e.target.value, 10) || 1)}
-                                    slotProps={{ htmlInput: { min: 1 } }}
-                                />
-                            </Grid>
-                            <Grid size={{ xs: 2 }} sx={{ textAlign: 'center' }}>至</Grid>
-                            <Grid size={{ xs: 5 }}>
-                                <TextField
-                                    fullWidth
-                                    label="结束页"
-                                    type="number"
-                                    value={endPage}
-                                    onChange={(e) => setEndPage(parseInt(e.target.value, 10) || 1)}
-                                    slotProps={{ htmlInput: { min: 1 } }}
-                                />
-                            </Grid>
-                        </Grid>
+                        <TextField
+                            fullWidth
+                            label="备份页数"
+                            type="number"
+                            value={numPages}
+                            onChange={(e) => setNumPages(parseInt(e.target.value, 10) || 1)}
+                            slotProps={{ htmlInput: { min: 1 } }}
+                        />
                         <Button variant="contained" onClick={handleBackup}>
                             开始备份
                         </Button>

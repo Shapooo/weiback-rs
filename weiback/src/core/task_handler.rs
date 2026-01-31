@@ -9,7 +9,9 @@ use tokio::time::sleep;
 use super::post_processer::PostProcesser;
 use super::task::TaskContext;
 use crate::api::ApiClient;
-use crate::core::task::{BFOptions, BUOptions, ExportJobOptions, PaginatedPosts, PostQuery};
+use crate::core::task::{
+    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPosts, PostQuery,
+};
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
@@ -95,8 +97,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     async fn backup_procedure<F, Fut>(
         &self,
         ctx: Arc<TaskContext>,
-        range: (u32, u32),
-        count: u32,
+        num_pages: u32,
         task_type: TaskType,
         page_backup_fn: F,
     ) -> Result<()>
@@ -110,16 +111,15 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         );
         let task_interval = ctx.config.backup_task_interval;
 
-        let (start, end) = range;
         let mut total_downloaded: usize = 0;
-        let start = start.div_ceil(count);
-        let end = end.div_ceil(count);
-        let len = end - start + 1;
+        let start = 1;
+        let end = num_pages + start;
         debug!(
             "Backup task {} page range: {}..={}",
-            ctx.task_id, start, end
+            ctx.task_id, start, num_pages
         );
-        ctx.send_progress(task_type.clone(), len as u64, 0).await?;
+        ctx.send_progress(task_type.clone(), num_pages as u64, 0)
+            .await?;
 
         for page in start..=end {
             let posts_sum = page_backup_fn(page).await.map_err(|e| {
@@ -135,7 +135,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 "fetched {posts_sum} posts in {}th page ({}/{})",
                 page,
                 page - start + 1,
-                len
+                num_pages
             );
 
             ctx.send_progress(task_type.clone(), 0, 1).await?;
@@ -154,17 +154,15 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     pub(super) async fn backup_user(
         &self,
         ctx: Arc<TaskContext>,
-        options: BUOptions,
+        options: BackupUserPostsOptions,
     ) -> Result<()> {
-        let count = ctx.config.sdk_config.status_count as u32;
         let uid = options.uid;
-        let range = options.range.into_inner();
         info!(
-            "Start backing up user {uid} posts, from {} to {}",
-            range.0, range.1
+            "Start backing up user {uid} posts, from 1 to {}",
+            options.num_pages
         );
 
-        self.backup_procedure(ctx.clone(), range, count, TaskType::BackUser, |page| {
+        self.backup_procedure(ctx.clone(), options.num_pages, TaskType::BackUser, |page| {
             self.backup_one_page(ctx.clone(), uid, page)
         })
         .await?;
@@ -189,13 +187,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     pub(super) async fn backup_favorites(
         &self,
         ctx: Arc<TaskContext>,
-        options: BFOptions,
+        options: BackupFavoritesOptions,
     ) -> Result<()> {
-        let count = ctx.config.sdk_config.fav_count as u32;
-        let range = options.range.into_inner();
-        info!("Start backing up favorites from {} to {}", range.0, range.1);
+        info!("Start backing up favorites from 1 to {}", options.num_pages);
 
-        self.backup_procedure(ctx.clone(), range, count, TaskType::BackFav, |page| {
+        self.backup_procedure(ctx.clone(), options.num_pages, TaskType::BackFav, |page| {
             self.backup_one_fav_page(ctx.clone(), page)
         })
         .await?;
@@ -285,7 +281,7 @@ mod local_tests {
     use super::*;
     use crate::{
         api::{FavoritesApi, ProfileStatusesApi},
-        core::task::{BUOptions, ExportOutputConfig},
+        core::task::{BackupUserPostsOptions, ExportOutputConfig},
         mock::MockApi,
         mock::{
             exporter::MockExporter, media_downloader::MockMediaDownloader, storage::MockStorage,
@@ -334,9 +330,9 @@ mod local_tests {
         ids.sort();
         ids.reverse();
 
-        let options = BUOptions {
+        let options = BackupUserPostsOptions {
             uid: 1786055427,
-            range: 1..=1,
+            num_pages: 1,
         };
         let (msg_sender, _recv) = mpsc::channel(100);
         let dummy_context = Arc::new(TaskContext {
@@ -387,7 +383,7 @@ mod local_tests {
         ids.dedup();
         ids.reverse();
 
-        let options = BFOptions { range: 1..=1 };
+        let options = BackupFavoritesOptions { num_pages: 1 };
         let (msg_sender, _recv) = mpsc::channel(100);
         let dummy_context = Arc::new(TaskContext {
             task_id: 0,

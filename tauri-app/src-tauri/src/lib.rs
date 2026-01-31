@@ -1,6 +1,5 @@
 mod error;
 
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use log::{error, info};
@@ -10,8 +9,8 @@ use tokio::sync::mpsc;
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
-    BFOptions, BUOptions, Core, ExportJobOptions, PaginatedPosts, PostQuery, TaskRequest,
-    task_manager::TaskManger,
+    BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PaginatedPosts,
+    PostQuery, TaskRequest, task_manager::TaskManger,
 };
 use weiback::message::{ErrMsg, Message, TaskProgress};
 
@@ -31,35 +30,36 @@ fn set_config_command(config: Config) -> std::result::Result<(), String> {
 }
 
 #[tauri::command]
-async fn backup_self(core: State<'_, Arc<Core>>, range: RangeInclusive<u32>) -> Result<()> {
-    info!("backup_self called with range: {:?}", range);
+async fn backup_self(core: State<'_, Arc<Core>>, num_pages: u32) -> Result<()> {
+    info!("backup_self called with pages num: {:?}", num_pages);
     let uid = core.get_my_uid()?;
-    backup_user(core, uid, range).await
+    backup_user(core, uid, num_pages).await
 }
 
 #[tauri::command]
-async fn backup_user(
-    core: State<'_, Arc<Core>>,
-    uid: String,
-    range: RangeInclusive<u32>,
-) -> Result<()> {
-    info!("backup_user called with uid: {}, range: {:?}", uid, range);
+async fn backup_user(core: State<'_, Arc<Core>>, uid: String, num_pages: u32) -> Result<()> {
+    info!(
+        "backup_user called with uid: {}, pages num: {:?}",
+        uid, num_pages
+    );
     Ok(core
-        .backup_user(TaskRequest::BackupUser(BUOptions {
+        .backup_user(TaskRequest::BackupUser(BackupUserPostsOptions {
             uid: uid.parse().map_err(|err| {
                 error!("Failed to parse uid: {}", err);
                 err
             })?,
-            range,
+            num_pages,
         }))
         .await?)
 }
 
 #[tauri::command]
-async fn backup_favorites(core: State<'_, Arc<Core>>, range: RangeInclusive<u32>) -> Result<()> {
-    info!("backup_favorites called with range: {:?}", range);
+async fn backup_favorites(core: State<'_, Arc<Core>>, num_pages: u32) -> Result<()> {
+    info!("backup_favorites called with pages num: {:?}", num_pages);
     Ok(core
-        .backup_favorites(TaskRequest::BackupFavorites(BFOptions { range }))
+        .backup_favorites(TaskRequest::BackupFavorites(BackupFavoritesOptions {
+            num_pages,
+        }))
         .await?)
 }
 

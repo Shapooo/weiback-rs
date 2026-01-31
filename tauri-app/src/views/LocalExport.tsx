@@ -15,7 +15,7 @@ const LocalExportPage: React.FC = () => {
     }
     enqueueSnackbar('正在开始导出，请稍候...', { variant: 'info' });
     try {
-      await invoke('export_from_local', { range: [startPage, endPage] });
+      await invoke('export_from_local', { num_pages: endPage });
       enqueueSnackbar('本地导出任务已成功启动', { variant: 'success' });
     } catch (e) {
       enqueueSnackbar(`导出失败: ${e}`, { variant: 'error' });

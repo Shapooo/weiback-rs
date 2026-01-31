@@ -24,8 +24,8 @@ use crate::message::{ErrType, Message};
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
-    BFOptions, BUOptions, ExportJobOptions, PaginatedPosts, PostQuery, Task, TaskContext,
-    TaskRequest, UserPostFilter,
+    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPosts, PostQuery,
+    Task, TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
 use task_manager::TaskManger;
