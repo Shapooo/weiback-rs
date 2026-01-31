@@ -51,8 +51,8 @@ pub trait Storage: Send + Sync + Clone + 'static {
         picture: &Picture,
     ) -> impl Future<Output = Result<()>> + Send;
     async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>>;
-    async fn get_attachment_paths(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
-    async fn get_avatar_path(&self, user_id: i64) -> Result<Option<PictureInfo>>;
+    async fn get_attachment_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
+    async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>>;
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
     async fn get_picture_blob(
         &self,
@@ -241,11 +241,11 @@ impl Storage for StorageImpl {
         picture::get_picture_path(&self.db_pool, url).await
     }
 
-    async fn get_attachment_paths(&self, post_id: i64) -> Result<Vec<PictureInfo>> {
+    async fn get_attachment_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>> {
         picture::get_pictures_by_post_id(&self.db_pool, post_id).await
     }
 
-    async fn get_avatar_path(&self, user_id: i64) -> Result<Option<PictureInfo>> {
+    async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>> {
         picture::get_avatar_by_user_id(&self.db_pool, user_id).await
     }
 

@@ -24,7 +24,7 @@ use crate::message::{ErrType, Message};
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
-    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPosts, PostQuery,
+    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
     Task, TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
@@ -76,8 +76,9 @@ impl Core {
         self.task_handler.export_posts(ctx, options).await
     }
 
-    pub async fn query_local_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
-        self.task_handler.query_local_posts(query).await
+    pub async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPostInfo> {
+        let ctx = self.create_task_context().await?;
+        self.task_handler.query_posts(ctx, query).await
     }
 
     pub async fn get_username_by_id(&self, uid: i64) -> Result<Option<String>> {

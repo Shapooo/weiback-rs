@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use futures::stream::{self, StreamExt, TryStreamExt};
 use log::{debug, error, info};
 use tokio::time::sleep;
 
@@ -10,7 +11,7 @@ use super::post_processer::PostProcesser;
 use super::task::TaskContext;
 use crate::api::ApiClient;
 use crate::core::task::{
-    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPosts, PostQuery,
+    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
 };
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
@@ -271,9 +272,23 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    pub async fn query_local_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
+    pub async fn query_posts(
+        &self,
+        ctx: Arc<TaskContext>,
+        query: PostQuery,
+    ) -> Result<PaginatedPostInfo> {
         info!("Querying local posts with query: {:?}", query);
-        self.storage.query_posts(query).await
+        let paginated_posts = self.storage.query_posts(query).await?;
+        let posts_info = stream::iter(paginated_posts.posts)
+            .map(|post| self.processer.build_post_info(ctx.clone(), post))
+            .buffered(5)
+            .try_collect()
+            .await?;
+
+        Ok(PaginatedPostInfo {
+            posts: posts_info,
+            total_items: paginated_posts.total_items,
+        })
     }
 }
 

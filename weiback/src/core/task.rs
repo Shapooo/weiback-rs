@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -6,6 +7,7 @@ use tokio::sync::mpsc;
 use crate::{
     config::Config,
     message::{ErrMsg, ErrType, Message, TaskProgress, TaskType},
+    models::Post,
 };
 
 pub struct Task {
@@ -121,6 +123,20 @@ pub struct PostQuery {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaginatedPosts {
-    pub posts: Vec<crate::models::Post>,
+    pub posts: Vec<Post>,
+    pub total_items: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostInfo {
+    pub post: Post,
+    pub avatar_id: Option<String>,
+    pub emoji_map: HashMap<String, String>,
+    pub attachment_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaginatedPostInfo {
+    pub posts: Vec<PostInfo>,
     pub total_items: u64,
 }

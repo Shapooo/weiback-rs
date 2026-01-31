@@ -9,8 +9,8 @@ use tokio::sync::mpsc;
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
-    BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PaginatedPosts,
-    PostQuery, TaskRequest, task_manager::TaskManger,
+    BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PostQuery, TaskRequest,
+    task::PaginatedPostInfo, task_manager::TaskManger,
 };
 use weiback::message::{ErrMsg, Message, TaskProgress};
 
@@ -66,9 +66,12 @@ async fn export_posts(core: State<'_, Arc<Core>>, options: ExportJobOptions) -> 
 }
 
 #[tauri::command]
-async fn query_local_posts(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<PaginatedPosts> {
+async fn query_local_posts(
+    core: State<'_, Arc<Core>>,
+    query: PostQuery,
+) -> Result<PaginatedPostInfo> {
     info!("query_local_posts called with query: {query:?}");
-    Ok(core.query_local_posts(query).await?)
+    Ok(core.query_posts(query).await?)
 }
 
 #[tauri::command]

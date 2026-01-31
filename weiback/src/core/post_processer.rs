@@ -9,12 +9,15 @@ use url::Url;
 
 use super::task::TaskContext;
 use crate::api::ApiClient;
+use crate::core::task::PostInfo;
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::media_downloader::MediaDownloader;
 use crate::models::{PicInfoType, Picture, PictureDefinition, PictureMeta, Post, VideoMeta};
 use crate::storage::Storage;
-use crate::utils::extract_all_pic_metas;
+use crate::utils::{
+    extract_all_pic_metas, extract_emojis_from_text, extract_in_post_pic_metas, pic_url_to_id,
+};
 
 #[derive(Debug, Clone)]
 pub struct PostProcesser<A: ApiClient, S: Storage, D: MediaDownloader> {
@@ -31,6 +34,51 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             storage,
             downloader,
             emoji_map,
+        })
+    }
+
+    pub async fn build_post_info(&self, ctx: Arc<TaskContext>, post: Post) -> Result<PostInfo> {
+        let avatar_id = if let Some(user) = &post.user {
+            self.storage
+                .get_avatar_info(user.id)
+                .await?
+                .map(|info| pic_url_to_id(info.meta.url()))
+                .transpose()?
+        } else {
+            None
+        };
+
+        let pic_metas = extract_in_post_pic_metas(&post, ctx.config.picture_definition);
+        let attachment_ids = pic_metas
+            .iter()
+            .map(|meta| pic_url_to_id(meta.url()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut emoji_map = HashMap::new();
+        if let Ok(all_emoji_map) = self.emoji_map.get_or_try_init().await {
+            for emoji_text in extract_emojis_from_text(&post.text) {
+                if let Some(url) = all_emoji_map.get(emoji_text)
+                    && let Ok(_id) = pic_url_to_id(url)
+                {
+                    emoji_map.insert(emoji_text.to_owned(), url.to_string());
+                }
+            }
+            if let Some(retweet) = &post.retweeted_status {
+                for emoji_text in extract_emojis_from_text(&retweet.text) {
+                    if let Some(url) = all_emoji_map.get(emoji_text)
+                        && let Ok(id) = pic_url_to_id(url)
+                    {
+                        emoji_map.insert(emoji_text.to_owned(), id);
+                    }
+                }
+            }
+        }
+
+        Ok(PostInfo {
+            post,
+            avatar_id,
+            emoji_map,
+            attachment_ids,
         })
     }
 

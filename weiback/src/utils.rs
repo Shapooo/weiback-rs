@@ -190,6 +190,10 @@ fn extract_emoji_urls<'a>(
         .collect()
 }
 
+pub fn extract_emojis_from_text(text: &str) -> impl Iterator<Item = &str> {
+    EMOJI_EXPR.find_iter(text).map(|m| m.as_str())
+}
+
 fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
     let mut res = Vec::new();
     if let Some(user) = post.user.as_ref()
@@ -210,7 +214,7 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
     res
 }
 
-fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
+pub fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
     process_in_post_pics(post, move |pic_info_item| {
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
