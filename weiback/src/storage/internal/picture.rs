@@ -122,3 +122,13 @@ pub async fn get_pictures_by_ids(db: &SqlitePool, ids: &[String]) -> Result<Vec<
 
     records.into_iter().map(PictureInfo::try_from).collect()
 }
+
+pub async fn get_pictures_by_id(db: &SqlitePool, id: &str) -> Result<Vec<PictureInfo>> {
+    let records = sqlx::query_as::<_, PictureDbRecord>(
+        "SELECT * FROM picture WHERE id = ? AND path IS NOT NULL",
+    )
+    .bind(id)
+    .fetch_all(db)
+    .await?;
+    records.into_iter().map(PictureInfo::try_from).collect()
+}

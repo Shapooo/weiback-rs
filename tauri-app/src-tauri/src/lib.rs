@@ -15,6 +15,24 @@ use weiback::core::{
 use weiback::message::{ErrMsg, Message, TaskProgress};
 
 use error::Result;
+use tauri::ipc::Response;
+
+#[tauri::command(async)]
+async fn get_picture_blob(
+    core: State<'_, Arc<Core>>,
+    id: String,
+) -> std::result::Result<Response, String> {
+    info!("get_picture_blob called, id: {id}");
+    core.get_picture_blob(id)
+        .await
+        .map(|maybe_blob| {
+            Response::new(
+                maybe_blob.map(|b| b.to_vec()).unwrap_or_default(),
+            )
+        })
+        .map_err(|e| e.to_string())
+}
+
 
 #[tauri::command]
 fn get_config_command() -> std::result::Result<Config, String> {
@@ -123,7 +141,8 @@ pub fn run() -> Result<()> {
             login_state,
             get_config_command,
             set_config_command,
-            get_username_by_id
+            get_username_by_id,
+            get_picture_blob
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

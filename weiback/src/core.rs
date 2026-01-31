@@ -3,6 +3,7 @@ pub mod task;
 pub mod task_handler;
 pub mod task_manager;
 
+use bytes::Bytes;
 use log::{debug, error, info, warn};
 use serde_json::Value;
 use std::sync::{
@@ -79,6 +80,11 @@ impl Core {
     pub async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPostInfo> {
         let ctx = self.create_task_context().await?;
         self.task_handler.query_posts(ctx, query).await
+    }
+
+    pub async fn get_picture_blob(&self, id: String) -> Result<Option<Bytes>> {
+        let ctx = self.create_task_context().await?;
+        self.task_handler.get_picture_blob(ctx, &id).await
     }
 
     pub async fn get_username_by_id(&self, uid: i64) -> Result<Option<String>> {
