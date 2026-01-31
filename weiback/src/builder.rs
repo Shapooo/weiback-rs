@@ -11,8 +11,9 @@ use crate::{
     exporter::ExporterImpl,
     media_downloader::create_downloader,
     message::Message,
-    storage::StorageImpl,
+    storage::{StorageImpl, database},
 };
+use tokio::runtime::Runtime;
 
 #[cfg(not(feature = "dev-mode"))]
 use crate::api::DefaultApiClient;
@@ -37,7 +38,8 @@ impl CoreBuilder {
         let (msg_sender, msg_receiver) = mpsc::channel(MESSAGE_BUFFER_SIZE);
         info!("MPSC channel created");
 
-        let storage = StorageImpl::new()?;
+        let db_pool = Runtime::new()?.block_on(database::create_db_pool())?;
+        let storage = StorageImpl::new(db_pool);
         info!("Storage initialized");
 
         let exporter = ExporterImpl::new();

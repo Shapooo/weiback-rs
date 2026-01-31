@@ -18,7 +18,6 @@ use itertools::Itertools;
 use log::{debug, error, info, warn};
 use picture_storage::FileSystemPictureStorage;
 use sqlx::SqlitePool;
-use tokio::runtime::Runtime;
 use url::Url;
 
 use crate::core::task::{PaginatedPosts, PostQuery, TaskContext};
@@ -82,21 +81,13 @@ pub struct StorageImpl {
 }
 
 impl StorageImpl {
-    pub fn new() -> Result<Self> {
-        info!("Initializing storage...");
-        let db_pool = Runtime::new()?
-            .block_on(database::create_db_pool())
-            .map_err(|e| {
-                error!("Failed to create database pool: {e}");
-                e
-            })?;
-
+    pub fn new(db_pool: SqlitePool) -> Self {
         info!("Storage initialized successfully.");
-        Ok(StorageImpl {
+        StorageImpl {
             db_pool,
             pic_storage: Default::default(),
             video_storage: Default::default(),
-        })
+        }
     }
 
     fn _save_post(&self, post: Post) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
