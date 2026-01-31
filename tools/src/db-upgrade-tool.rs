@@ -9,7 +9,7 @@ use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 use tokio::fs;
 
 use upgrader::Upgrader;
-use weiback::config;
+use weiback::config::{self, get_config};
 
 #[tokio::main]
 async fn main() {
@@ -76,11 +76,7 @@ async fn start() -> Result<()> {
     config::init()?;
     info!("Config initialized.");
 
-    let final_db_path = weiback::config::get_config()
-        .read()
-        .unwrap()
-        .db_path
-        .clone();
+    let final_db_path = get_config().read().unwrap().db_path.clone();
     let timestamp = chrono::Local::now().format("%Y%m%d").to_string();
     let temp_db_filename = format!(
         "{}-{}.db",
@@ -96,7 +92,8 @@ async fn start() -> Result<()> {
     let new_db_pool = create_temp_db_pool(&temp_db_path).await?;
     info!("New database pool created and migrations run.");
 
-    let mut upgrader = Upgrader::new(old_db_pool.clone(), new_db_pool.clone()).await?;
+    let pic_path = get_config().read().unwrap().picture_path.clone();
+    let mut upgrader = Upgrader::new(old_db_pool.clone(), new_db_pool.clone(), pic_path).await?;
 
     match user_version {
         0..=2 => {

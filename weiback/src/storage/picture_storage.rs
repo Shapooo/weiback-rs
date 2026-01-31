@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::PathBuf;
+use std::path::Path;
 
 use bytes::Bytes;
 use log::debug;
@@ -7,38 +7,30 @@ use sqlx::SqlitePool;
 use url::Url;
 
 use super::internal::picture;
-use crate::config::get_config;
 use crate::error::{Error, Result};
 use crate::models::Picture;
 use crate::utils::url_to_path;
 
-#[derive(Debug, Clone)]
-pub struct FileSystemPictureStorage {
-    picture_path: PathBuf,
-}
+#[derive(Debug, Clone, Default)]
+pub struct FileSystemPictureStorage;
 
 impl FileSystemPictureStorage {
-    pub fn new() -> Result<Self> {
-        let config = get_config();
-        let config_read = config.read()?;
-        let picture_path = config_read.picture_path.clone();
-        drop(config_read);
-
-        Ok(FileSystemPictureStorage { picture_path })
-    }
-
-    #[cfg(test)]
-    pub fn from_picture_path(picture_path: PathBuf) -> Self {
-        Self { picture_path }
+    pub fn new() -> Self {
+        Self
     }
 }
 
 impl FileSystemPictureStorage {
-    pub async fn get_picture_blob(&self, db: &SqlitePool, url: &Url) -> Result<Option<Bytes>> {
-        let Some(path) = picture::get_picture_path(db, url).await? else {
+    pub async fn get_picture_blob(
+        &self,
+        picture_path: &Path,
+        db: &SqlitePool,
+        url: &Url,
+    ) -> Result<Option<Bytes>> {
+        let Some(relative_path) = picture::get_picture_path(db, url).await? else {
             return Ok(None);
         };
-        let path = self.picture_path.join(path);
+        let path = picture_path.join(relative_path);
         match tokio::fs::read(&path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -46,10 +38,15 @@ impl FileSystemPictureStorage {
         }
     }
 
-    pub async fn save_picture(&self, db: &SqlitePool, picture: &Picture) -> Result<()> {
+    pub async fn save_picture(
+        &self,
+        picture_path: &Path,
+        db: &SqlitePool,
+        picture: &Picture,
+    ) -> Result<()> {
         let url = picture.meta.url();
         let relative_path = url_to_path(url);
-        let absolute_path = self.picture_path.join(relative_path.as_path());
+        let absolute_path = picture_path.join(relative_path.as_path());
         create_dir_all(
             absolute_path
                 .parent()
@@ -70,19 +67,22 @@ impl FileSystemPictureStorage {
         Ok(())
     }
 
-    pub async fn picture_saved(&self, db: &SqlitePool, url: &Url) -> Result<bool> {
+    pub async fn picture_saved(
+        &self,
+        picture_path: &Path,
+        db: &SqlitePool,
+        url: &Url,
+    ) -> Result<bool> {
         let Some(relative_path) = picture::get_picture_path(db, url).await? else {
             return Ok(false);
         };
-        let absolute_path = self.picture_path.join(relative_path);
+        let absolute_path = picture_path.join(relative_path);
         Ok(absolute_path.exists())
     }
 }
 
 #[cfg(test)]
 mod local_tests {
-    use std::path::Path;
-
     use tempfile::tempdir;
 
     use super::*;
@@ -92,12 +92,6 @@ mod local_tests {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
         sqlx::migrate!().run(&pool).await.unwrap();
         pool
-    }
-
-    fn create_test_storage(temp_dir: &Path) -> FileSystemPictureStorage {
-        FileSystemPictureStorage {
-            picture_path: temp_dir.to_path_buf(),
-        }
     }
 
     fn create_test_picture(url: &str) -> Picture {
@@ -110,11 +104,11 @@ mod local_tests {
     #[tokio::test]
     async fn test_save_picture() {
         let temp_dir = tempdir().unwrap();
-        let storage = create_test_storage(temp_dir.path());
+        let storage = FileSystemPictureStorage;
         let picture = create_test_picture("http://example.com/original/test.jpg");
 
         let db = setup_db().await;
-        let result = storage.save_picture(&db, &picture).await;
+        let result = storage.save_picture(temp_dir.path(), &db, &picture).await;
         assert!(result.is_ok());
 
         let expected_path = temp_dir.path().join("example.com/original/test.jpg");
@@ -126,14 +120,21 @@ mod local_tests {
     #[tokio::test]
     async fn test_get_picture_blob() {
         let temp_dir = tempdir().unwrap();
-        let storage = create_test_storage(temp_dir.path());
+        let storage = FileSystemPictureStorage;
         let picture = create_test_picture("http://example.com/test.jpg");
 
         let db = setup_db().await;
-        storage.save_picture(&db, &picture).await.unwrap();
+        storage
+            .save_picture(temp_dir.path(), &db, &picture)
+            .await
+            .unwrap();
 
         let blob = storage
-            .get_picture_blob(&db, &Url::parse("http://example.com/test.jpg").unwrap())
+            .get_picture_blob(
+                temp_dir.path(),
+                &db,
+                &Url::parse("http://example.com/test.jpg").unwrap(),
+            )
             .await
             .unwrap();
         assert!(blob.is_some());
@@ -143,11 +144,12 @@ mod local_tests {
     #[tokio::test]
     async fn test_get_non_existent_picture_blob() {
         let temp_dir = tempdir().unwrap();
-        let storage = create_test_storage(temp_dir.path());
+        let storage = FileSystemPictureStorage;
 
         let db = setup_db().await;
         let blob = storage
             .get_picture_blob(
+                temp_dir.path(),
                 &db,
                 &Url::parse("http://example.com/non-existent.jpg").unwrap(),
             )

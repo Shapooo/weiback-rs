@@ -3,6 +3,7 @@ pub mod old_post;
 pub mod old_user;
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use bytes::Bytes;
@@ -21,16 +22,15 @@ use weiback::{
 pub struct Upgrader {
     old_db: SqlitePool,
     new_db: SqlitePool,
-    pic_storage: FileSystemPictureStorage,
+    pic_path: PathBuf,
 }
 
 impl Upgrader {
-    pub async fn new(old_db: SqlitePool, new_db: SqlitePool) -> Result<Self> {
-        let pic_storage = FileSystemPictureStorage::new()?;
+    pub async fn new(old_db: SqlitePool, new_db: SqlitePool, pic_path: PathBuf) -> Result<Self> {
         Ok(Self {
             old_db,
             new_db,
-            pic_storage,
+            pic_path,
         })
     }
 
@@ -111,6 +111,7 @@ impl Upgrader {
     }
 
     async fn migrate_pictures(&self, old_version: i64) -> Result<()> {
+        let pic_storage = FileSystemPictureStorage;
         let mut pic_ids = HashSet::new();
 
         let limit = 500;
@@ -137,7 +138,9 @@ impl Upgrader {
                             meta: PictureMeta::in_post(&pic_blob.url, post_id)?,
                             blob: Bytes::from(pic_blob.blob),
                         };
-                        self.pic_storage.save_picture(&self.new_db, &pic).await?;
+                        pic_storage
+                            .save_picture(&self.pic_path, &self.new_db, &pic)
+                            .await?;
                     }
                 }
             }
@@ -161,7 +164,9 @@ impl Upgrader {
                         meta: PictureMeta::avatar(&pic_blob.url, user_id)?,
                         blob: Bytes::from(pic_blob.blob),
                     };
-                    self.pic_storage.save_picture(&self.new_db, &pic).await?;
+                    pic_storage
+                        .save_picture(&self.pic_path, &self.new_db, &pic)
+                        .await?;
                 }
             }
         }
