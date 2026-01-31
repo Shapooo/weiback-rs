@@ -373,18 +373,26 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod local_tests {
-    use super::*;
     use std::path::PathBuf;
 
     use weibosdk_rs::mock::MockClient;
 
-    use crate::api::{FavoritesApi, ProfileStatusesApi};
-    use crate::mock::{MockApi, MockMediaDownloader, MockStorage};
+    use super::*;
+    use crate::{
+        api::{FavoritesApi, ProfileStatusesApi},
+        mock::{MockApi, MockMediaDownloader},
+        storage::{StorageImpl, database},
+    };
 
     fn create_test_tera() -> Tera {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("templates");
         create_tera(&path).unwrap()
+    }
+
+    async fn create_test_storage() -> StorageImpl {
+        let db_pool = database::create_db_pool_with_url(":memory:").await.unwrap();
+        StorageImpl::new(db_pool)
     }
 
     fn create_mock_client() -> MockClient {
@@ -418,9 +426,11 @@ mod local_tests {
         MockApi::new(client.clone())
     }
 
-    fn create_generator(api: &MockApi) -> HTMLGenerator<MockApi, MockStorage, MockMediaDownloader> {
+    async fn create_generator(
+        api: &MockApi,
+    ) -> HTMLGenerator<MockApi, StorageImpl, MockMediaDownloader> {
         let tera = create_test_tera();
-        let storage = MockStorage::new();
+        let storage = create_test_storage().await;
         let downloader = MockMediaDownloader::new(true);
         let emoji_map = EmojiMap::new(api.clone());
         HTMLGenerator::new(emoji_map, storage, downloader, tera)
@@ -437,7 +447,7 @@ mod local_tests {
         let client = create_mock_client();
         let api = create_mock_api(&client);
         let posts = create_posts(&api).await;
-        let generator = create_generator(&api);
+        let generator = create_generator(&api).await;
         let emoji_map = api.emoji_update().await.unwrap();
 
         for post in posts {
@@ -452,7 +462,7 @@ mod local_tests {
         let client = create_mock_client();
         let api = create_mock_api(&client);
         let posts = create_posts(&api).await;
-        let generator = create_generator(&api);
+        let generator = create_generator(&api).await;
         for post in posts {
             generator.generate_post(post, "test", None).unwrap();
         }
@@ -463,7 +473,7 @@ mod local_tests {
         let client = create_mock_client();
         let api = create_mock_api(&client);
         let posts = create_posts(&api).await;
-        let generator = create_generator(&api);
+        let generator = create_generator(&api).await;
         generator.generate_page(posts, "test_page").await.unwrap();
     }
 }

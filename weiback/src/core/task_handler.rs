@@ -289,11 +289,15 @@ mod local_tests {
         api::{FavoritesApi, ProfileStatusesApi},
         core::task::{BackupUserPostsOptions, ExportOutputConfig},
         mock::MockApi,
-        mock::{
-            exporter::MockExporter, media_downloader::MockMediaDownloader, storage::MockStorage,
-        },
+        mock::{exporter::MockExporter, media_downloader::MockMediaDownloader},
         models::Post,
+        storage::{StorageImpl, database},
     };
+
+    async fn create_test_storage() -> StorageImpl {
+        let db_pool = database::create_db_pool_with_url(":memory:").await.unwrap();
+        StorageImpl::new(db_pool)
+    }
 
     async fn create_posts(client: &MockClient, api: &MockApi) -> Vec<Post> {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -316,7 +320,7 @@ mod local_tests {
     async fn test_backup_user() {
         let client = MockClient::new();
         let api_client = MockApi::new(client.clone());
-        let storage = MockStorage::new();
+        let storage = create_test_storage().await;
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
         let task_handler =
@@ -375,7 +379,7 @@ mod local_tests {
     async fn test_backup_favorites() {
         let client = MockClient::new();
         let api_client = MockApi::new(client.clone());
-        let storage = MockStorage::new();
+        let storage = create_test_storage().await;
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
         let task_handler =
@@ -424,7 +428,7 @@ mod local_tests {
     async fn test_export_from_local() {
         let client = MockClient::new();
         let api_client = MockApi::new(client.clone());
-        let storage = MockStorage::new();
+        let storage = create_test_storage().await;
         let exporter = MockExporter::new();
         let downloader = MockMediaDownloader::new(true);
         let task_handler = TaskHandler::new(api_client, storage, exporter, downloader).unwrap();
