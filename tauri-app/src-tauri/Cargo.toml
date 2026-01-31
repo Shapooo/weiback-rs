@@ -15,6 +15,7 @@ env_logger = { workspace = true }
 log = { workspace = true }
 serde_json = { workspace = true }
 tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tokio = { workspace = true }
 weiback-rs = { path = "../../weiback" }
