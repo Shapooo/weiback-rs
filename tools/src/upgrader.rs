@@ -9,15 +9,30 @@ use anyhow::Result;
 use bytes::Bytes;
 use log::{info, warn};
 use sqlx::SqlitePool;
+use url::Url;
 
 use old_picture::{extract_avatar_id, extract_in_post_pic_ids, get_pic_blob};
 use old_post::{convert_old_to_internal_post, get_old_posts_paged};
 use old_user::{get_old_users_paged, get_users};
 use weiback::{
     internals::storage_internal::{post::save_post, user::save_user},
-    models::{Picture, PictureMeta},
+    models::{Picture, PictureDefinition, PictureMeta},
     storage::picture_storage::FileSystemPictureStorage,
 };
+
+fn get_definition_from_url(url_str: &str) -> Option<PictureDefinition> {
+    let url = Url::parse(url_str).ok()?;
+    let first_segment = url.path_segments()?.next()?;
+    match first_segment {
+        "wap180" => Some(PictureDefinition::Thumbnail),
+        "wap360" => Some(PictureDefinition::Bmiddle),
+        "orj960" => Some(PictureDefinition::Large),
+        "orj1080" => Some(PictureDefinition::Original),
+        "mw2000" => Some(PictureDefinition::Mw2000),
+        "large" => Some(PictureDefinition::Largest),
+        _ => None,
+    }
+}
 
 pub struct Upgrader {
     old_db: SqlitePool,
@@ -134,13 +149,20 @@ impl Upgrader {
             for (id, post_id) in page_pic_ids {
                 if let Ok(pic_blobs) = get_pic_blob(&self.old_db, &id).await {
                     for pic_blob in pic_blobs {
-                        let pic = Picture {
-                            meta: PictureMeta::in_post(&pic_blob.url, post_id)?,
-                            blob: Bytes::from(pic_blob.blob),
-                        };
-                        pic_storage
-                            .save_picture(&self.pic_path, &self.new_db, &pic)
-                            .await?;
+                        if let Some(definition) = get_definition_from_url(&pic_blob.url) {
+                            let pic = Picture {
+                                meta: PictureMeta::in_post(&pic_blob.url, definition, post_id)?,
+                                blob: Bytes::from(pic_blob.blob),
+                            };
+                            pic_storage
+                                .save_picture(&self.pic_path, &self.new_db, &pic)
+                                .await?;
+                        } else {
+                            warn!(
+                                "Unknown picture definition for url: {}, post_id: {}. Skipping.",
+                                pic_blob.url, post_id
+                            );
+                        }
                     }
                 }
             }

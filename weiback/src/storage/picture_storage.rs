@@ -86,7 +86,7 @@ mod local_tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::models::{Picture, PictureMeta};
+    use crate::models::{Picture, PictureDefinition, PictureMeta};
 
     async fn setup_db() -> SqlitePool {
         let pool = SqlitePool::connect(":memory:").await.unwrap();
@@ -96,7 +96,7 @@ mod local_tests {
 
     fn create_test_picture(url: &str) -> Picture {
         Picture {
-            meta: PictureMeta::in_post(url, 42).unwrap(),
+            meta: PictureMeta::in_post(url, PictureDefinition::Largest, 42).unwrap(),
             blob: Bytes::from_static(b"test picture data"),
         }
     }

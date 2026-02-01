@@ -4,7 +4,7 @@ use sqlx::{Sqlite, SqlitePool};
 use url::Url;
 
 use crate::error::{Error, Result};
-use crate::models::PictureMeta;
+use crate::models::{PictureDefinition, PictureMeta};
 use crate::storage::PictureInfo;
 use crate::utils::{pic_url_to_id, url_to_db_key};
 
@@ -14,6 +14,7 @@ struct PictureDbRecord {
     path: Option<String>,
     post_id: Option<i64>,
     user_id: Option<i64>,
+    definition: Option<String>,
 }
 
 impl TryFrom<PictureDbRecord> for PictureInfo {
@@ -33,6 +34,10 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
             PictureMeta::InPost {
                 url: url_obj,
                 post_id,
+                definition: record
+                    .definition
+                    .map(|s| PictureDefinition::from(s.as_str()))
+                    .unwrap_or_default(),
             }
         } else {
             PictureMeta::Other { url: url_obj }
@@ -49,10 +54,14 @@ pub async fn save_picture_meta(
     picture_meta: &PictureMeta,
     path: Option<&Path>,
 ) -> Result<()> {
-    let (url, post_id, user_id) = match picture_meta {
-        PictureMeta::Avatar { url, user_id } => (url, None, Some(user_id)),
-        PictureMeta::InPost { url, post_id } => (url, Some(post_id), None),
-        PictureMeta::Other { url } => (url, None, None),
+    let (url, post_id, user_id, definition) = match picture_meta {
+        PictureMeta::InPost {
+            url,
+            definition,
+            post_id,
+        } => (url, Some(*post_id), None, Some(definition)),
+        PictureMeta::Avatar { url, user_id } => (url, None, Some(*user_id), None),
+        PictureMeta::Other { url } => (url, None, None, None),
     };
     let url_str = url_to_db_key(url).to_string();
     sqlx::query(
@@ -61,16 +70,18 @@ pub async fn save_picture_meta(
     path,
     post_id,
     url,
-    user_id
+    user_id,
+    definition
 )
 VALUES
-    (?, ?, ?, ?, ?);"#,
+    (?, ?, ?, ?, ?, ?);"#,
     )
     .bind(pic_url_to_id(picture_meta.url()).unwrap_or_default())
     .bind(path.map(|p| p.to_str()))
     .bind(post_id)
     .bind(url_str)
     .bind(user_id)
+    .bind(definition.map(<&str>::from))
     .execute(db)
     .await?;
     Ok(())

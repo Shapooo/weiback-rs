@@ -171,7 +171,7 @@ fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Ve
         .filter_map(|i| i.pic_infos.as_ref())
         .filter_map(|p| {
             let url = def_to_url_struct_detail(p, definition).url.as_str();
-            PictureMeta::in_post(url, post.id)
+            PictureMeta::in_post(url, definition, post.id)
                 .map_err(|e| error!("cannot parse {url} {e}"))
                 .ok()
         })
@@ -219,7 +219,7 @@ pub fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> 
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
-        PictureMeta::in_post(url, post.id)
+        PictureMeta::in_post(url, definition, post.id)
             .map_err(|e| error!("cannot parse {url} {e}"))
             .ok()
     })

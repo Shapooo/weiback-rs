@@ -45,6 +45,7 @@ CREATE TABLE
 CREATE TABLE
     picture (
         id TEXT,
+        definition TEXT,
         path TEXT,
         post_id TEXT,
         url TEXT PRIMARY KEY,
