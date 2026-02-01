@@ -1,18 +1,20 @@
+use std::hash::Hash;
+
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::error::Result;
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PictureDefinition {
     Thumbnail,
     Bmiddle,
     Large,
     Original,
+    Mw2000,
     #[default]
     Largest,
-    Mw2000,
 }
 
 impl From<&str> for PictureDefinition {
@@ -22,9 +24,9 @@ impl From<&str> for PictureDefinition {
             "bmiddle" => PictureDefinition::Bmiddle,
             "large" => PictureDefinition::Large,
             "original" => PictureDefinition::Original,
-            "largest" => PictureDefinition::Largest,
             "mw2000" => PictureDefinition::Mw2000,
-            _ => PictureDefinition::Original, // Default case
+            "largest" => PictureDefinition::Largest,
+            _ => Self::default(), // Default case
         }
     }
 }
@@ -36,33 +38,48 @@ impl From<&PictureDefinition> for &str {
             PictureDefinition::Bmiddle => "bmiddle",
             PictureDefinition::Large => "large",
             PictureDefinition::Original => "original",
-            PictureDefinition::Largest => "largest",
             PictureDefinition::Mw2000 => "mw2000",
+            PictureDefinition::Largest => "largest",
         }
     }
 }
 
-impl From<u8> for PictureDefinition {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => PictureDefinition::Thumbnail,
-            1 => PictureDefinition::Large,
-            2.. => PictureDefinition::Original,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub enum PictureMeta {
-    InPost { url: Url, post_id: i64 },
-    Avatar { url: Url, user_id: i64 },
-    Other { url: Url },
+    InPost {
+        url: Url,
+        definition: PictureDefinition,
+        post_id: i64,
+    },
+    Avatar {
+        url: Url,
+        user_id: i64,
+    },
+    Other {
+        url: Url,
+    },
+}
+
+impl Hash for PictureMeta {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.url().hash(state);
+    }
+}
+
+impl PartialEq for PictureMeta {
+    fn eq(&self, other: &Self) -> bool {
+        self.url() == other.url()
+    }
 }
 
 impl PictureMeta {
-    pub fn in_post(url: &str, post_id: i64) -> Result<Self> {
+    pub fn in_post(url: &str, definition: PictureDefinition, post_id: i64) -> Result<Self> {
         let url = Url::parse(url)?;
-        Ok(PictureMeta::InPost { url, post_id })
+        Ok(PictureMeta::InPost {
+            url,
+            definition,
+            post_id,
+        })
     }
 
     pub fn avatar(url: &str, user_id: i64) -> Result<Self> {
