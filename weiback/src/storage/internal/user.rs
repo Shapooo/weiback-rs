@@ -1,4 +1,4 @@
-use sqlx::{FromRow, Sqlite, SqlitePool};
+use sqlx::{Executor, FromRow, Sqlite};
 use url::Url;
 
 use crate::error::{Error, Result};
@@ -50,15 +50,21 @@ impl TryFrom<UserInternal> for User {
     }
 }
 
-pub async fn get_user(db: &SqlitePool, id: i64) -> Result<Option<User>> {
+pub async fn get_user<'e, E>(executor: E, id: i64) -> Result<Option<User>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let user = sqlx::query_as::<Sqlite, UserInternal>("SELECT * FROM users WHERE id = ?;")
         .bind(id)
-        .fetch_optional(db)
+        .fetch_optional(executor)
         .await?;
     user.map(|u| u.try_into()).transpose()
 }
 
-pub async fn save_user(db: &SqlitePool, user: &User) -> Result<()> {
+pub async fn save_user<'e, E>(executor: E, user: &User) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let _ = sqlx::query(
         r#"INSERT
 OR REPLACE INTO users (
@@ -82,7 +88,7 @@ VALUES
     .bind(user.id)
     .bind(user.profile_image_url.as_str())
     .bind(&user.screen_name)
-    .execute(db)
+    .execute(executor)
     .await?;
     Ok(())
 }

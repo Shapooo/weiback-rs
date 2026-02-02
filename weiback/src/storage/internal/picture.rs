@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use sqlx::{Sqlite, SqlitePool};
+use sqlx::{Executor, Sqlite};
 use url::Url;
 
 use crate::error::{Error, Result};
@@ -49,11 +49,14 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
     }
 }
 
-pub async fn save_picture_meta(
-    db: &SqlitePool,
+pub async fn save_picture_meta<'e, E>(
+    executor: E,
     picture_meta: &PictureMeta,
     path: Option<&Path>,
-) -> Result<()> {
+) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let (url, post_id, user_id, definition) = match picture_meta {
         PictureMeta::InPost {
             url,
@@ -82,40 +85,52 @@ VALUES
     .bind(url_str)
     .bind(user_id)
     .bind(definition.map(<&str>::from))
-    .execute(db)
+    .execute(executor)
     .await?;
     Ok(())
 }
 
-pub async fn get_picture_path(db: &SqlitePool, url: &Url) -> Result<Option<PathBuf>> {
+pub async fn get_picture_path<'e, E>(executor: E, url: &Url) -> Result<Option<PathBuf>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let raw_res =
         sqlx::query_scalar::<Sqlite, String>(r#"SELECT path FROM picture WHERE url = ?;"#)
             .bind(url.as_str())
-            .fetch_optional(db)
+            .fetch_optional(executor)
             .await?;
     Ok(raw_res.map(PathBuf::from))
 }
 
-pub async fn get_pictures_by_post_id(db: &SqlitePool, post_id: i64) -> Result<Vec<PictureInfo>> {
+pub async fn get_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result<Vec<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let records: Vec<PictureDbRecord> =
         sqlx::query_as("SELECT * FROM picture WHERE post_id = ? AND path IS NOT NULL")
             .bind(post_id)
-            .fetch_all(db)
+            .fetch_all(executor)
             .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
-pub async fn get_avatar_by_user_id(db: &SqlitePool, user_id: i64) -> Result<Option<PictureInfo>> {
+pub async fn get_avatar_by_user_id<'e, E>(executor: E, user_id: i64) -> Result<Option<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let record: Option<PictureDbRecord> = sqlx::query_as(
         "SELECT * FROM picture WHERE user_id = ? AND post_id IS NULL AND path IS NOT NULL",
     )
     .bind(user_id)
-    .fetch_optional(db)
+    .fetch_optional(executor)
     .await?;
     record.map(PictureInfo::try_from).transpose()
 }
 
-pub async fn get_pictures_by_ids(db: &SqlitePool, ids: &[String]) -> Result<Vec<PictureInfo>> {
+pub async fn get_pictures_by_ids<'e, E>(executor: E, ids: &[String]) -> Result<Vec<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -129,17 +144,20 @@ pub async fn get_pictures_by_ids(db: &SqlitePool, ids: &[String]) -> Result<Vec<
     for id in ids {
         query = query.bind(id);
     }
-    let records = query.fetch_all(db).await?;
+    let records = query.fetch_all(executor).await?;
 
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
-pub async fn get_pictures_by_id(db: &SqlitePool, id: &str) -> Result<Vec<PictureInfo>> {
+pub async fn get_pictures_by_id<'e, E>(executor: E, id: &str) -> Result<Vec<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let records = sqlx::query_as::<_, PictureDbRecord>(
         "SELECT * FROM picture WHERE id = ? AND path IS NOT NULL",
     )
     .bind(id)
-    .fetch_all(db)
+    .fetch_all(executor)
     .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
