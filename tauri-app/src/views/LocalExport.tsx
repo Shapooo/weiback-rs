@@ -80,6 +80,10 @@ const avatarCache = new LRUCache<string, string>(100, (_key: string, value: stri
     URL.revokeObjectURL(value);
 });
 
+const attachmentCache = new LRUCache<string, string>(200, (_key: string, value: string) => {
+    URL.revokeObjectURL(value);
+});
+
 const AvatarImage: React.FC<{ avatarId: string | null }> = ({ avatarId }) => {
     const [imageUrl, setImageUrl] = useState<string>('');
 
@@ -122,6 +126,94 @@ const AvatarImage: React.FC<{ avatarId: string | null }> = ({ avatarId }) => {
     }, [avatarId]);
 
     return <Avatar src={imageUrl} />;
+};
+
+const THUMBNAIL_SIZE = 70; // Define a consistent size for thumbnails
+
+const AttachmentImage: React.FC<{ imageId: string; size: number }> = ({ imageId, size }) => {
+    const [imageUrl, setImageUrl] = useState<string>('');
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        const fetchAndCacheImage = async () => {
+            const cachedUrl = attachmentCache.get(imageId); // Use attachmentCache
+            if (cachedUrl) {
+                setImageUrl(cachedUrl);
+                return;
+            }
+
+            try {
+                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
+                if (!isCancelled && blob.byteLength > 0) {
+                    const imageBlob = new Blob([blob]);
+                    const objectUrl = URL.createObjectURL(imageBlob);
+                    attachmentCache.set(imageId, objectUrl); // Use attachmentCache
+                    setImageUrl(objectUrl);
+                } else {
+                    setImageUrl('');
+                }
+            } catch (error) {
+                console.error('Failed to fetch attachment image:', error);
+                setImageUrl('');
+            }
+        };
+
+        fetchAndCacheImage();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [imageId]);
+
+    return (
+        <Box
+            sx={{
+                width: size,
+                height: size,
+                backgroundImage: `url(${imageUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                borderRadius: 1,
+                flexShrink: 0,
+            }}
+        />
+    );
+};
+
+const AttachmentImages: React.FC<{ attachmentIds: string[] }> = ({ attachmentIds }) => {
+    if (!attachmentIds || attachmentIds.length === 0) {
+        return null;
+    }
+
+    const displayedImages = attachmentIds.slice(0, 3);
+    const remainingCount = attachmentIds.length - displayedImages.length;
+
+    return (
+        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+            {displayedImages.map(id => (
+                <AttachmentImage key={id} imageId={id} size={THUMBNAIL_SIZE} />
+            ))}
+            {remainingCount > 0 && (
+                <Box
+                    sx={{
+                        width: THUMBNAIL_SIZE,
+                        height: THUMBNAIL_SIZE,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        borderRadius: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                    }}
+                >
+                    <Typography variant="body2" color="white">
+                        +{remainingCount}
+                    </Typography>
+                </Box>
+            )}
+        </Stack>
+    );
 };
 
 // --- Main Component ---
@@ -344,6 +436,8 @@ const LocalExportPage: React.FC = () => {
                                                         </Typography>
                                                     </Box>
                                                 )}
+                                                {/* New: Attachment Images */}
+                                                <AttachmentImages attachmentIds={postInfo.attachment_ids} />
                                             </CardContent>
                                         </Card>
                                     </Grid>
