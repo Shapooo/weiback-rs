@@ -60,6 +60,7 @@ impl Upgrader {
     }
 
     async fn migrate_users(&mut self, _old_version: i64) -> Result<()> {
+        let mut tx = self.new_db.begin().await?;
         let limit = 500;
         let mut offset = 0;
         loop {
@@ -71,7 +72,7 @@ impl Upgrader {
             for old_user in old_users {
                 match old_user.try_into() {
                     Ok(user) => {
-                        if let Err(e) = save_user(&self.new_db, &user).await {
+                        if let Err(e) = save_user(&mut *tx, &user).await {
                             warn!("Failed to save user {}: {}", user.id, e);
                         }
                     }
@@ -84,11 +85,13 @@ impl Upgrader {
             offset += limit;
             info!("Processed {offset} users...");
         }
+        tx.commit().await?;
         info!("Users migration finished.");
         Ok(())
     }
 
     async fn migrate_posts_and_favorites(&mut self, old_version: i64) -> Result<()> {
+        let mut tx = self.new_db.begin().await?;
         let mut incompat_post_urls = Vec::new();
         let limit = 500;
         let mut offset = 0;
@@ -101,7 +104,7 @@ impl Upgrader {
             for post in old_posts {
                 match convert_old_to_internal_post(post, &mut incompat_post_urls) {
                     Ok(internal_post) => {
-                        if let Err(e) = save_post(&self.new_db, &internal_post, true).await {
+                        if let Err(e) = save_post(&mut *tx, &internal_post, true).await {
                             warn!("Failed to save post {}: {:?}", internal_post.id, e);
                         }
                     }
@@ -113,6 +116,7 @@ impl Upgrader {
             offset += limit;
             info!("Processed {offset} posts...");
         }
+        tx.commit().await?;
 
         warn!(
             "Some posts are INCOMPATIBLE for the conversion, we STRONGLY recommand you to RE-BACKUP:"
@@ -126,6 +130,7 @@ impl Upgrader {
     }
 
     async fn migrate_pictures(&self, old_version: i64) -> Result<()> {
+        let mut tx = self.new_db.begin().await?;
         let pic_storage = FileSystemPictureStorage;
         let mut pic_ids = HashSet::new();
 
@@ -155,7 +160,7 @@ impl Upgrader {
                                 blob: Bytes::from(pic_blob.blob),
                             };
                             pic_storage
-                                .save_picture(&self.pic_path, &self.new_db, &pic)
+                                .save_picture(&self.pic_path, &mut *tx, &pic)
                                 .await?;
                         } else {
                             warn!(
@@ -168,6 +173,7 @@ impl Upgrader {
             }
 
             offset += limit;
+            info!("Processed {offset} in post picture");
         }
 
         let users = get_users(&self.old_db).await?;
@@ -179,6 +185,7 @@ impl Upgrader {
                 page_pic_ids.push((id, user.id));
             }
         }
+        info!("start to insert user avatar");
         for (id, user_id) in page_pic_ids {
             if let Ok(pic_blobs) = get_pic_blob(&self.old_db, &id).await {
                 for pic_blob in pic_blobs {
@@ -187,11 +194,12 @@ impl Upgrader {
                         blob: Bytes::from(pic_blob.blob),
                     };
                     pic_storage
-                        .save_picture(&self.pic_path, &self.new_db, &pic)
+                        .save_picture(&self.pic_path, &mut *tx, &pic)
                         .await?;
                 }
             }
         }
+        tx.commit().await?;
 
         info!("Pictures migration finished");
         Ok(())
