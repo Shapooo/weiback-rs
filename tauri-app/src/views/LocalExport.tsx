@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSnackbar } from 'notistack';
@@ -225,6 +225,41 @@ const AttachmentImages: React.FC<{ attachmentIds: string[]; onImageClick: (id: s
 const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
     const [imageUrl, setImageUrl] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [transform, setTransform] = useState({
+        scale: 1,
+        originX: '50%',
+        originY: '50%',
+    });
+    const imgRef = useRef<HTMLImageElement>(null);
+
+    const handleWheel = (e: React.WheelEvent<HTMLImageElement>) => {
+        e.preventDefault();
+
+        // Determine zoom direction
+        const zoomFactor = 1.1;
+        const newScale = e.deltaY < 0 ? transform.scale * zoomFactor : transform.scale / zoomFactor;
+
+        // Clamp scale value
+        const clampedScale = Math.min(Math.max(1, newScale), 10); // Min scale 1x, max 10x
+
+        if (imgRef.current) {
+            const rect = imgRef.current.getBoundingClientRect();
+            const newOriginX = `${((e.clientX - rect.left) / rect.width) * 100}%`;
+            const newOriginY = `${((e.clientY - rect.top) / rect.height) * 100}%`;
+
+            setTransform({
+                scale: clampedScale,
+                originX: newOriginX,
+                originY: newOriginY,
+            });
+        }
+    };
+
+    // Reset transform when image changes
+    useEffect(() => {
+        setTransform({ scale: 1, originX: '50%', originY: '50%' });
+    }, [imageId]);
+
 
     useEffect(() => {
         let isCancelled = false;
@@ -262,9 +297,19 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
 
     return (
         <img
+            ref={imgRef}
             src={imageUrl}
             alt="Lightbox"
-            style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: '4px' }}
+            onWheel={handleWheel}
+            style={{
+                maxHeight: '90vh',
+                maxWidth: '90vw',
+                borderRadius: '4px',
+                transform: `scale(${transform.scale})`,
+                transformOrigin: `${transform.originX} ${transform.originY}`,
+                transition: 'transform 0.1s ease-out',
+                cursor: 'zoom-in',
+            }}
         />
     );
 };
