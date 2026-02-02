@@ -21,6 +21,7 @@ import {
     FormControlLabel,
     Checkbox,
     IconButton,
+    Modal,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -133,7 +134,7 @@ const AvatarImage: React.FC<{ avatarId: string | null }> = ({ avatarId }) => {
 
 const THUMBNAIL_SIZE = 70; // Define a consistent size for thumbnails
 
-const AttachmentImage: React.FC<{ imageId: string; size: number }> = ({ imageId, size }) => {
+const AttachmentImage: React.FC<{ imageId: string; size: number; onClick: (id: string) => void; }> = ({ imageId, size, onClick }) => {
     const [imageUrl, setImageUrl] = useState<string>('');
 
     useEffect(() => {
@@ -171,6 +172,7 @@ const AttachmentImage: React.FC<{ imageId: string; size: number }> = ({ imageId,
 
     return (
         <Box
+            onClick={() => onClick(imageId)}
             sx={{
                 width: size,
                 height: size,
@@ -179,12 +181,13 @@ const AttachmentImage: React.FC<{ imageId: string; size: number }> = ({ imageId,
                 backgroundPosition: 'center',
                 borderRadius: 1,
                 flexShrink: 0,
+                cursor: 'pointer',
             }}
         />
     );
 };
 
-const AttachmentImages: React.FC<{ attachmentIds: string[] }> = ({ attachmentIds }) => {
+const AttachmentImages: React.FC<{ attachmentIds: string[]; onImageClick: (id: string) => void; }> = ({ attachmentIds, onImageClick }) => {
     if (!attachmentIds || attachmentIds.length === 0) {
         return null;
     }
@@ -195,7 +198,7 @@ const AttachmentImages: React.FC<{ attachmentIds: string[] }> = ({ attachmentIds
     return (
         <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
             {displayedImages.map(id => (
-                <AttachmentImage key={id} imageId={id} size={THUMBNAIL_SIZE} />
+                <AttachmentImage key={id} imageId={id} size={THUMBNAIL_SIZE} onClick={onImageClick} />
             ))}
             {remainingCount > 0 && (
                 <Box
@@ -219,6 +222,53 @@ const AttachmentImages: React.FC<{ attachmentIds: string[] }> = ({ attachmentIds
     );
 };
 
+const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
+    const [imageUrl, setImageUrl] = useState<string>('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isCancelled = false;
+        setLoading(true);
+
+        const fetchAndCacheImage = async () => {
+            const cachedUrl = attachmentCache.get(imageId);
+            if (cachedUrl) {
+                setImageUrl(cachedUrl);
+                setLoading(false);
+                return;
+            }
+            try {
+                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
+                if (!isCancelled && blob.byteLength > 0) {
+                    const imageBlob = new Blob([blob]);
+                    const objectUrl = URL.createObjectURL(imageBlob);
+                    attachmentCache.set(imageId, objectUrl);
+                    setImageUrl(objectUrl);
+                }
+            } catch (error) {
+                console.error('Failed to fetch full-size image:', error);
+            } finally {
+                if (!isCancelled) setLoading(false);
+            }
+        };
+
+        fetchAndCacheImage();
+        return () => { isCancelled = true; };
+    }, [imageId]);
+
+    if (loading) {
+        return <CircularProgress sx={{ color: 'white' }} />;
+    }
+
+    return (
+        <img
+            src={imageUrl}
+            alt="Lightbox"
+            style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: '4px' }}
+        />
+    );
+};
+
 // --- Main Component ---
 
 const LocalExportPage: React.FC = () => {
@@ -238,10 +288,21 @@ const LocalExportPage: React.FC = () => {
     const [postInfos, setPostInfos] = useState<PostInfo[]>([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
+    const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
+
 
     // State for loading indicators
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
+
+    const handleOpenLightbox = (imageId: string) => {
+        setLightboxImageId(imageId);
+    };
+
+    const handleCloseLightbox = () => {
+        setLightboxImageId(null);
+    };
+
 
     const fetchPosts = useCallback(async (currentPage: number, currentFilters: typeof filters) => {
         setLoading(true);
@@ -457,7 +518,7 @@ const LocalExportPage: React.FC = () => {
                                                         </Box>
                                                     )}
                                                     {/* New: Attachment Images */}
-                                                    <AttachmentImages attachmentIds={postInfo.attachment_ids} />
+                                                    <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={handleOpenLightbox} />
                                                 </CardContent>
                                             </Card>
                                         </Box>
@@ -480,6 +541,18 @@ const LocalExportPage: React.FC = () => {
                         </>
                     )}
                 </Box>
+
+                <Modal
+                    open={!!lightboxImageId}
+                    onClose={handleCloseLightbox}
+                    aria-labelledby="lightbox-image"
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                    <Box onClick={handleCloseLightbox} sx={{ outline: 'none' }}>
+                        {lightboxImageId && <FullSizeImage imageId={lightboxImageId} />}
+                    </Box>
+                </Modal>
+
             </Box>
         </LocalizationProvider>
     );
