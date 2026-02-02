@@ -414,55 +414,59 @@ const LocalExportPage: React.FC = () => {
                         </Box>
                     ) : (
                         <>
-                            <Grid container spacing={3}>
-                                {postInfos.length > 0 ? postInfos.map(postInfo => (
-                                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={postInfo.post.id}>
-                                        <Card>
-                                            <CardHeader
-                                                avatar={
-                                                    <AvatarImage avatarId={postInfo.avatar_id} />
-                                                }
-                                                title={postInfo.post.user?.screen_name || '未知用户'}
-                                                subheader={new Date(postInfo.post.created_at).toLocaleString()}
-                                                action={
-                                                    postInfo.post.user?.id && postInfo.post.id ? (
-                                                        <IconButton
-                                                            aria-label="open original post"
-                                                            onClick={() => {
-                                                                const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
-                                                                openUrl(url).catch(e => console.error('Failed to open URL:', e));
-                                                            }}
-                                                        >
-                                                            <OpenInNewIcon />
-                                                        </IconButton>
-                                                    ) : null
-                                                }
-                                            />
-                                            <CardContent>
-                                                <Typography variant="body2">
-                                                    {postInfo.post.text}
-                                                </Typography>
-                                                {postInfo.post.retweeted_status && (
-                                                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
-                                                        <Typography variant="subtitle2" color="text.secondary">
-                                                            @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
-                                                        </Typography>
-                                                        <Typography variant="body2" sx={{ mt: 1 }}>
-                                                            {postInfo.post.retweeted_status.text}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                                {/* New: Attachment Images */}
-                                                <AttachmentImages attachmentIds={postInfo.attachment_ids} />
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                )) : (
-                                    <Grid size={{ xs: 12 }}>
-                                        <Typography sx={{ textAlign: 'center', p: 5 }}>没有找到符合条件的帖子。</Typography>
-                                    </Grid>
-                                )}
-                            </Grid>
+                            {postInfos.length > 0 ? (
+                                <Box sx={{
+                                    columnCount: { xs: 1, sm: 2, md: 3 },
+                                    columnGap: '24px', // From spacing={3}
+                                }}>
+                                    {postInfos.map(postInfo => (
+                                        <Box key={postInfo.post.id} sx={{ breakInside: 'avoid-column', mb: 3 }}>
+                                            <Card>
+                                                <CardHeader
+                                                    avatar={
+                                                        <AvatarImage avatarId={postInfo.avatar_id} />
+                                                    }
+                                                    title={postInfo.post.user?.screen_name || '未知用户'}
+                                                    subheader={new Date(postInfo.post.created_at).toLocaleString()}
+                                                    action={
+                                                        postInfo.post.user?.id && postInfo.post.id ? (
+                                                            <IconButton
+                                                                aria-label="open original post"
+                                                                onClick={() => {
+                                                                    const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
+                                                                    openUrl(url).catch(e => console.error('Failed to open URL:', e));
+                                                                }}
+                                                            >
+                                                                <OpenInNewIcon />
+                                                            </IconButton>
+                                                        ) : null
+                                                    }
+                                                />
+                                                <CardContent>
+                                                    <Typography variant="body2">
+                                                        {postInfo.post.text}
+                                                    </Typography>
+                                                    {postInfo.post.retweeted_status && (
+                                                        <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
+                                                            <Typography variant="subtitle2" color="text.secondary">
+                                                                @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
+                                                            </Typography>
+                                                            <Typography variant="body2" sx={{ mt: 1 }}>
+                                                                {postInfo.post.retweeted_status.text}
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                    {/* New: Attachment Images */}
+                                                    <AttachmentImages attachmentIds={postInfo.attachment_ids} />
+                                                </CardContent>
+                                            </Card>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            ) : (
+                                <Typography sx={{ textAlign: 'center', p: 5 }}>没有找到符合条件的帖子。</Typography>
+                            )}
+
                             {totalPages > 0 && (
                                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
                                     <Pagination
