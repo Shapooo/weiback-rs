@@ -1,7 +1,7 @@
 use chrono::DateTime;
 use log::debug;
 use serde_json::{Value, from_value, to_value};
-use sqlx::{FromRow, Sqlite, SqlitePool};
+use sqlx::{Acquire, Executor, FromRow, Sqlite};
 
 use crate::core::task::PostQuery;
 use crate::error::{Error, Result};
@@ -100,25 +100,35 @@ impl TryInto<Post> for PostInternal {
 }
 
 #[allow(unused)]
-async fn check_unfavorited(db: &SqlitePool, id: i64) -> Result<Option<bool>> {
+async fn check_unfavorited<'e, E>(executor: E, id: i64) -> Result<Option<bool>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     Ok(sqlx::query_scalar::<Sqlite, (bool)>(
         "SELECT unfavorited FROM favorited_posts WHERE id = ?;",
     )
     .bind(id)
-    .fetch_optional(db)
+    .fetch_optional(executor)
     .await?)
 }
 
-pub async fn get_post(db: &SqlitePool, id: i64) -> Result<Option<PostInternal>> {
+pub async fn get_post<'e, E>(executor: E, id: i64) -> Result<Option<PostInternal>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     Ok(
         sqlx::query_as::<Sqlite, PostInternal>("SELECT * FROM posts WHERE id = ?")
             .bind(id)
-            .fetch_optional(db)
+            .fetch_optional(executor)
             .await?,
     )
 }
 
-pub async fn save_post(db: &SqlitePool, post: &PostInternal, overwrite: bool) -> Result<()> {
+pub async fn save_post<'c, A>(acquirer: A, post: &PostInternal, overwrite: bool) -> Result<()>
+where
+    A: Acquire<'c, Database = Sqlite>,
+{
+    let mut conn = acquirer.acquire().await?;
     sqlx::query(
         format!(
             r#"INSERT
@@ -182,24 +192,30 @@ VALUES
     .bind(&post.text)
     .bind(post.uid)
     .bind(&post.url_struct)
-    .execute(db)
+    .execute(&mut *conn)
     .await?;
     if post.favorited {
-        mark_post_favorited(db, post.id).await?;
+        mark_post_favorited(&mut *conn, post.id).await?;
     }
     Ok(())
 }
 
-pub async fn mark_post_unfavorited(db: &SqlitePool, id: i64) -> Result<()> {
+pub async fn mark_post_unfavorited<'e, E>(executor: E, id: i64) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     debug!("unfav post {id} in db");
     sqlx::query("UPDATE favorited_posts SET unfavorited = true WHERE id = ?;")
         .bind(id)
-        .execute(db)
+        .execute(executor)
         .await?;
     Ok(())
 }
 
-pub async fn mark_post_favorited(db: &SqlitePool, id: i64) -> Result<()> {
+pub async fn mark_post_favorited<'e, E>(executor: E, id: i64) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     debug!("mark favorited post {id} in db");
     sqlx::query(
         r#"INSERT
@@ -209,23 +225,29 @@ VALUES
     )
     .bind(id)
     .bind(false)
-    .execute(db)
+    .execute(executor)
     .await?;
     Ok(())
 }
 
-pub async fn get_posts_id_to_unfavorite(db: &SqlitePool) -> Result<Vec<i64>> {
+pub async fn get_posts_id_to_unfavorite<'e, E>(executor: E) -> Result<Vec<i64>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     debug!("query all posts to unfavorite");
     Ok(sqlx::query_scalar::<Sqlite, i64>(
         "SELECT id FROM favorited_posts WHERE unfavorited == false;",
     )
-    .fetch_all(db)
+    .fetch_all(executor)
     .await?
     .into_iter()
     .collect())
 }
 
-pub async fn query_posts(db: &SqlitePool, query: PostQuery) -> Result<(Vec<PostInternal>, u64)> {
+pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<PostInternal>, u64)>
+where
+    A: Acquire<'c, Database = Sqlite>,
+{
     let mut where_conditions = Vec::new();
     if query.user_id.is_some() {
         where_conditions.push("uid = ?");
@@ -272,12 +294,16 @@ pub async fn query_posts(db: &SqlitePool, query: PostQuery) -> Result<(Vec<PostI
         count_query = count_query.bind(dt.clone());
         posts_query = posts_query.bind(dt);
     }
-
-    let total_items = count_query.fetch_one(db).await?;
+    let mut conn = acquirer.acquire().await?;
+    let total_items = count_query.fetch_one(&mut *conn).await?;
 
     let limit = query.posts_per_page;
     let offset = query.page.saturating_sub(1) * limit;
-    let posts = posts_query.bind(limit).bind(offset).fetch_all(db).await?;
+    let posts = posts_query
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&mut *conn)
+        .await?;
 
     Ok((posts, total_items))
 }
