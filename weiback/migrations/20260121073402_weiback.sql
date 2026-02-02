@@ -47,10 +47,10 @@ CREATE TABLE
         id TEXT,
         definition TEXT,
         path TEXT,
-        post_id TEXT,
+        post_id INTEGER,
         url TEXT PRIMARY KEY,
-        user_id TEXT
+        user_id INTEGER
     );
 
 CREATE TABLE
-    video (url TEXT PRIMARY KEY, path TEXT, post_id TEXT);
+    video (url TEXT PRIMARY KEY, path TEXT, post_id INTEGER);
