@@ -84,7 +84,3 @@ OFFSET
     .fetch_all(db)
     .await?)
 }
-
-pub async fn get_users(db: &SqlitePool) -> Result<Vec<OldUser>> {
-    Ok(sqlx::query_as("SELECT * FROM USERS").fetch_all(db).await?)
-}
