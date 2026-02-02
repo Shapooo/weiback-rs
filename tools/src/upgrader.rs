@@ -2,7 +2,6 @@ pub mod old_picture;
 pub mod old_post;
 pub mod old_user;
 
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -11,9 +10,9 @@ use log::{info, warn};
 use sqlx::SqlitePool;
 use url::Url;
 
-use old_picture::{extract_avatar_id, extract_in_post_pic_ids, get_pic_blob};
+use old_picture::get_old_pictures_paged;
 use old_post::{convert_old_to_internal_post, get_old_posts_paged};
-use old_user::{get_old_users_paged, get_users};
+use old_user::get_old_users_paged;
 use weiback::{
     internals::storage_internal::{post::save_post, user::save_user},
     models::{Picture, PictureDefinition, PictureMeta},
@@ -129,75 +128,44 @@ impl Upgrader {
         Ok(())
     }
 
-    async fn migrate_pictures(&self, old_version: i64) -> Result<()> {
+    async fn migrate_pictures(&self, _old_version: i64) -> Result<()> {
         let mut tx = self.new_db.begin().await?;
         let pic_storage = FileSystemPictureStorage;
-        let mut pic_ids = HashSet::new();
-
         let limit = 500;
         let mut offset = 0;
         loop {
-            let old_posts = get_old_posts_paged(&self.old_db, old_version, limit, offset).await?;
-            if old_posts.is_empty() {
+            let old_pictures = get_old_pictures_paged(&self.old_db, limit, offset).await?;
+            if old_pictures.is_empty() {
                 break;
             }
-            let mut page_pic_ids = Vec::new();
-            for post in old_posts {
-                let ids = extract_in_post_pic_ids(&post)?;
-                for id in ids {
-                    if pic_ids.insert(id.clone()) {
-                        page_pic_ids.push((id, post.id));
-                    }
-                }
-            }
 
-            for (id, post_id) in page_pic_ids {
-                if let Ok(pic_blobs) = get_pic_blob(&self.old_db, &id).await {
-                    for pic_blob in pic_blobs {
-                        if let Some(definition) = get_definition_from_url(&pic_blob.url) {
-                            let pic = Picture {
-                                meta: PictureMeta::in_post(&pic_blob.url, definition, post_id)?,
-                                blob: Bytes::from(pic_blob.blob),
-                            };
-                            pic_storage
-                                .save_picture(&self.pic_path, &mut *tx, &pic)
-                                .await?;
-                        } else {
-                            warn!(
-                                "Unknown picture definition for url: {}, post_id: {}. Skipping.",
-                                pic_blob.url, post_id
-                            );
-                        }
-                    }
-                }
+            for record in old_pictures {
+                let url_str = record.url;
+                let blob = record.blob;
+
+                let meta = if let Some(user_id) = record.uid {
+                    PictureMeta::avatar(&url_str, user_id)?
+                } else if let Some(post_id) = record.post_id {
+                    let definition = get_definition_from_url(&url_str).unwrap_or_else(|| {
+                        warn!("cannot parse definition {url_str}");
+                        PictureDefinition::Largest
+                    });
+                    PictureMeta::in_post(&url_str, definition, post_id)?
+                } else {
+                    PictureMeta::other(&url_str)?
+                };
+
+                let pic = Picture {
+                    meta,
+                    blob: Bytes::from(blob),
+                };
+                pic_storage
+                    .save_picture(&self.pic_path, &mut *tx, &pic)
+                    .await?;
             }
 
             offset += limit;
-            info!("Processed {offset} in post picture");
-        }
-
-        let users = get_users(&self.old_db).await?;
-        let mut page_pic_ids = Vec::new();
-        for user in users {
-            if let Some(id) = extract_avatar_id(&user)
-                && pic_ids.insert(id.clone())
-            {
-                page_pic_ids.push((id, user.id));
-            }
-        }
-        info!("start to insert user avatar");
-        for (id, user_id) in page_pic_ids {
-            if let Ok(pic_blobs) = get_pic_blob(&self.old_db, &id).await {
-                for pic_blob in pic_blobs {
-                    let pic = Picture {
-                        meta: PictureMeta::avatar(&pic_blob.url, user_id)?,
-                        blob: Bytes::from(pic_blob.blob),
-                    };
-                    pic_storage
-                        .save_picture(&self.pic_path, &mut *tx, &pic)
-                        .await?;
-                }
-            }
+            info!("Processed {offset} pictures...");
         }
         tx.commit().await?;
 
