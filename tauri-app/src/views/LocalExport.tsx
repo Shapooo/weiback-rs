@@ -20,10 +20,13 @@ import {
     CircularProgress,
     FormControlLabel,
     Checkbox,
+    IconButton,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { LRUCache } from '../LRU';
 
 // --- Type Definitions based on Rust structs ---
@@ -421,6 +424,19 @@ const LocalExportPage: React.FC = () => {
                                                 }
                                                 title={postInfo.post.user?.screen_name || '未知用户'}
                                                 subheader={new Date(postInfo.post.created_at).toLocaleString()}
+                                                action={
+                                                    postInfo.post.user?.id && postInfo.post.id ? (
+                                                        <IconButton
+                                                            aria-label="open original post"
+                                                            onClick={() => {
+                                                                const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
+                                                                openUrl(url).catch(e => console.error('Failed to open URL:', e));
+                                                            }}
+                                                        >
+                                                            <OpenInNewIcon />
+                                                        </IconButton>
+                                                    ) : null
+                                                }
                                             />
                                             <CardContent>
                                                 <Typography variant="body2">
