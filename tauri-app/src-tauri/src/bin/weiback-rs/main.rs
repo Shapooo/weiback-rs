@@ -31,9 +31,9 @@ fn init_logger() -> Result<()> {
         .filter_level(LevelFilter::Debug)
         .parse_default_env()
         .filter_module("sqlx", LevelFilter::Error)
-        .filter_module("zbus", LevelFilter::Warn)
-        .filter_module("tracing", LevelFilter::Warn)
-        .filter_module("winit", LevelFilter::Warn)
+        .filter_module("h2", LevelFilter::Warn)
+        .filter_module("hyper_util", LevelFilter::Warn)
+        .filter_module("reqwest", LevelFilter::Warn)
         .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
     Ok(())
