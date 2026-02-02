@@ -3,10 +3,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSnackbar } from 'notistack';
 import {
+    Avatar,
     Box,
     Typography,
     Card,
     CardContent,
+    CardHeader,
     Grid,
     Pagination,
     Accordion,
@@ -22,6 +24,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LRUCache } from '../LRU';
 
 // --- Type Definitions based on Rust structs ---
 
@@ -39,8 +42,15 @@ interface Post {
     retweeted_status?: Post | null;
 }
 
-interface PaginatedPosts {
-    posts: Post[];
+interface PostInfo {
+    post: Post;
+    avatar_id: string | null;
+    emoji_ids: Record<string, string>;
+    attachment_ids: string[];
+}
+
+interface PaginatedPostInfo {
+    posts: PostInfo[];
     total_items: number;
 }
 
@@ -66,6 +76,54 @@ interface ExportJobOptions {
 
 const POSTS_PER_PAGE = 12;
 
+const avatarCache = new LRUCache<string, string>(100, (_key: string, value: string) => {
+    URL.revokeObjectURL(value);
+});
+
+const AvatarImage: React.FC<{ avatarId: string | null }> = ({ avatarId }) => {
+    const [imageUrl, setImageUrl] = useState<string>('');
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        const fetchAndCacheAvatar = async () => {
+            if (!avatarId) {
+                setImageUrl('');
+                return;
+            }
+
+            const cachedUrl = avatarCache.get(avatarId);
+            if (cachedUrl) {
+                setImageUrl(cachedUrl);
+                return;
+            }
+
+            try {
+                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: avatarId });
+                if (!isCancelled && blob.byteLength > 0) {
+                    const imageBlob = new Blob([blob]);
+                    const objectUrl = URL.createObjectURL(imageBlob);
+                    avatarCache.set(avatarId, objectUrl);
+                    setImageUrl(objectUrl);
+                } else {
+                    setImageUrl(''); // Handle case where blob is empty
+                }
+            } catch (error) {
+                console.error('Failed to fetch avatar:', error);
+                setImageUrl(''); // Handle fetch error
+            }
+        };
+
+        fetchAndCacheAvatar();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [avatarId]);
+
+    return <Avatar src={imageUrl} />;
+};
+
 // --- Main Component ---
 
 const LocalExportPage: React.FC = () => {
@@ -82,7 +140,7 @@ const LocalExportPage: React.FC = () => {
     const [appliedFilters, setAppliedFilters] = useState(filters);
 
     // State for data and pagination
-    const [posts, setPosts] = useState<Post[]>([]);
+    const [postInfos, setPostInfos] = useState<PostInfo[]>([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
 
@@ -103,12 +161,12 @@ const LocalExportPage: React.FC = () => {
                 end_date: currentFilters.endDate ? Math.floor(currentFilters.endDate.getTime() / 1000) : undefined,
             };
 
-            const result: PaginatedPosts = await invoke('query_local_posts', { query });
-            setPosts(result.posts);
+            const result: PaginatedPostInfo = await invoke('query_local_posts', { query });
+            setPostInfos(result.posts);
             setTotalPages(Math.ceil(result.total_items / POSTS_PER_PAGE));
         } catch (e) {
             enqueueSnackbar(`查询帖子失败: ${e}`, { variant: 'error' });
-            setPosts([]);
+            setPostInfos([]);
             setTotalPages(0);
         } finally {
             setLoading(false);
@@ -262,23 +320,27 @@ const LocalExportPage: React.FC = () => {
                     ) : (
                         <>
                             <Grid container spacing={3}>
-                                {posts.length > 0 ? posts.map(post => (
-                                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={post.id}>
+                                {postInfos.length > 0 ? postInfos.map(postInfo => (
+                                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={postInfo.post.id}>
                                         <Card>
+                                            <CardHeader
+                                                avatar={
+                                                    <AvatarImage avatarId={postInfo.avatar_id} />
+                                                }
+                                                title={postInfo.post.user?.screen_name || '未知用户'}
+                                                subheader={new Date(postInfo.post.created_at).toLocaleString()}
+                                            />
                                             <CardContent>
-                                                <Typography variant="subtitle2" color="text.secondary">
-                                                    {post.user?.screen_name || '未知用户'}
+                                                <Typography variant="body2">
+                                                    {postInfo.post.text}
                                                 </Typography>
-                                                <Typography variant="body2" sx={{ mt: 1 }}>
-                                                    {post.text}
-                                                </Typography>
-                                                {post.retweeted_status && (
+                                                {postInfo.post.retweeted_status && (
                                                     <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
                                                         <Typography variant="subtitle2" color="text.secondary">
-                                                            @{post.retweeted_status.user?.screen_name || '未知用户'}
+                                                            @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                                                         </Typography>
                                                         <Typography variant="body2" sx={{ mt: 1 }}>
-                                                            {post.retweeted_status.text}
+                                                            {postInfo.post.retweeted_status.text}
                                                         </Typography>
                                                     </Box>
                                                 )}
