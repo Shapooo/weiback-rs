@@ -58,9 +58,9 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         if let Ok(all_emoji_map) = self.emoji_map.get_or_try_init().await {
             for emoji_text in extract_emojis_from_text(&post.text) {
                 if let Some(url) = all_emoji_map.get(emoji_text)
-                    && let Ok(_id) = pic_url_to_id(url)
+                    && let Ok(id) = pic_url_to_id(url)
                 {
-                    emoji_map.insert(emoji_text.to_owned(), url.to_string());
+                    emoji_map.insert(emoji_text.to_owned(), id);
                 }
             }
             if let Some(retweet) = &post.retweeted_status {
