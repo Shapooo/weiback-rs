@@ -194,18 +194,22 @@ const AttachmentImages: React.FC<AttachmentImagesProps> = ({ attachmentIds, onIm
 interface TextWithEmojisProps {
     text: string;
     emoji_map: Record<string, string>;
+    maxLines?: number;
 }
 
-const TextWithEmojis: React.FC<TextWithEmojisProps> = ({ text, emoji_map }) => {
+const TextWithEmojis: React.FC<TextWithEmojisProps> = ({ text, emoji_map, maxLines }) => {
     // If no emoji map is provided, just return the plain text
     if (!emoji_map) {
         return <>{text}</>;
     }
 
+    const inPreviewMode = maxLines !== undefined;
+    const processedText = inPreviewMode ? text.replace(/\n/g, ' ') : text;
+
     // Regex to find emoji text like [like] or [哈哈]
     const emojiRegex = /\[.*?\]/g;
-    const parts = text.split(emojiRegex);
-    const matches = text.match(emojiRegex) || [];
+    const parts = processedText.split(emojiRegex);
+    const matches = processedText.match(emojiRegex) || [];
 
     const content = parts.reduce<React.ReactNode[]>((acc, part, i) => {
         if (part) {
@@ -222,7 +226,19 @@ const TextWithEmojis: React.FC<TextWithEmojisProps> = ({ text, emoji_map }) => {
         return acc;
     }, []);
 
-    return <>{content}</>;
+    const previewStyles = inPreviewMode ? {
+        display: '-webkit-box',
+        WebkitLineClamp: maxLines,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    } : {};
+
+    return (
+        <Typography variant="body2" component="div" sx={{ ...previewStyles, wordBreak: 'break-word', lineHeight: '1.8' }}>
+            {content}
+        </Typography>
+    );
 };
 
 interface PostDisplayProps {
@@ -230,9 +246,10 @@ interface PostDisplayProps {
     onImageClick: (id: string) => void;
     maxAttachmentImages?: number; // Prop to limit displayed attachments
     onClick?: (postInfo: PostInfo) => void;
+    maxLines?: number; // New prop for text truncation
 }
 
-const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, onClick }) => {
+const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, onClick, maxLines }) => {
     return (
         <Card
             onClick={() => onClick?.(postInfo)}
@@ -259,17 +276,13 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                 }
             />
             <CardContent>
-                <Typography variant="body2" component="div" sx={{ wordBreak: 'break-word', lineHeight: '1.8' }}>
-                    <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} />
-                </Typography>
+                <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
                 {postInfo.post.retweeted_status && (
                     <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
                         <Typography variant="subtitle2" color="text.secondary">
                             @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                         </Typography>
-                        <Typography variant="body2" component="div" sx={{ mt: 1, wordBreak: 'break-word', lineHeight: '1.8' }}>
-                            <TextWithEmojis text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} />
-                        </Typography>
+                        <TextWithEmojis text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
                     </Box>
                 )}
                 <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={onImageClick} maxImages={maxAttachmentImages} />

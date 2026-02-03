@@ -289,6 +289,7 @@ const LocalExportPage: React.FC = () => {
                                                 onImageClick={handleOpenLightbox}
                                                 maxAttachmentImages={3}
                                                 onClick={handlePostClick}
+                                                maxLines={3}
                                             />
                                         </Box>
                                     ))}
