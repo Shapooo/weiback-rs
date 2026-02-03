@@ -1,14 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSnackbar } from 'notistack';
 import {
-    Avatar,
     Box,
     Typography,
-    Card,
-    CardContent,
-    CardHeader,
     Grid,
     Pagination,
     Accordion,
@@ -20,40 +16,15 @@ import {
     CircularProgress,
     FormControlLabel,
     Checkbox,
-    IconButton,
     Modal,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import FullSizeImage from '../components/FullSizeImage';
-import { avatarCache, attachmentCache } from '../cache';
+import PostDisplay, { PostInfo } from '../components/PostDisplay';
 
 // --- Type Definitions based on Rust structs ---
-
-interface User {
-    id: number;
-    screen_name: string;
-}
-
-interface Post {
-    id: number;
-    text: string;
-    favorited: boolean;
-    created_at: string;
-    user: User | null;
-    retweeted_status?: Post | null;
-}
-
-interface PostInfo {
-    post: Post;
-    avatar_id: string | null;
-    emoji_ids: Record<string, string>;
-    attachment_ids: string[];
-}
-
 interface PaginatedPostInfo {
     posts: PostInfo[];
     total_items: number;
@@ -85,139 +56,7 @@ const POSTS_PER_PAGE = 12;
 interface ExportOutputConfig {
     task_name: string;
     export_dir: string;
-}const AvatarImage: React.FC<{ avatarId: string | null }> = ({ avatarId }) => {
-    const [imageUrl, setImageUrl] = useState<string>('');
-
-    useEffect(() => {
-        let isCancelled = false;
-
-        const fetchAndCacheAvatar = async () => {
-            if (!avatarId) {
-                setImageUrl('');
-                return;
-            }
-
-            const cachedUrl = avatarCache.get(avatarId);
-            if (cachedUrl) {
-                setImageUrl(cachedUrl);
-                return;
-            }
-
-            try {
-                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: avatarId });
-                if (!isCancelled && blob.byteLength > 0) {
-                    const imageBlob = new Blob([blob]);
-                    const objectUrl = URL.createObjectURL(imageBlob);
-                    avatarCache.set(avatarId, objectUrl);
-                    setImageUrl(objectUrl);
-                } else {
-                    setImageUrl(''); // Handle case where blob is empty
-                }
-            } catch (error) {
-                console.error('Failed to fetch avatar:', error);
-                setImageUrl(''); // Handle fetch error
-            }
-        };
-
-        fetchAndCacheAvatar();
-
-        return () => {
-            isCancelled = true;
-        };
-    }, [avatarId]);
-
-    return <Avatar src={imageUrl} />;
-};
-
-const THUMBNAIL_SIZE = 70; // Define a consistent size for thumbnails
-
-const AttachmentImage: React.FC<{ imageId: string; size: number; onClick: (id: string) => void; }> = ({ imageId, size, onClick }) => {
-    const [imageUrl, setImageUrl] = useState<string>('');
-
-    useEffect(() => {
-        let isCancelled = false;
-
-        const fetchAndCacheImage = async () => {
-            const cachedUrl = attachmentCache.get(imageId); // Use attachmentCache
-            if (cachedUrl) {
-                setImageUrl(cachedUrl);
-                return;
-            }
-
-            try {
-                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
-                if (!isCancelled && blob.byteLength > 0) {
-                    const imageBlob = new Blob([blob]);
-                    const objectUrl = URL.createObjectURL(imageBlob);
-                    attachmentCache.set(imageId, objectUrl); // Use attachmentCache
-                    setImageUrl(objectUrl);
-                } else {
-                    setImageUrl('');
-                }
-            } catch (error) {
-                console.error('Failed to fetch attachment image:', error);
-                setImageUrl('');
-            }
-        };
-
-        fetchAndCacheImage();
-
-        return () => {
-            isCancelled = true;
-        };
-    }, [imageId]);
-
-    return (
-        <Box
-            onClick={() => onClick(imageId)}
-            sx={{
-                width: size,
-                height: size,
-                backgroundImage: `url(${imageUrl})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                borderRadius: 1,
-                flexShrink: 0,
-                cursor: 'pointer',
-            }}
-        />
-    );
-};
-
-const AttachmentImages: React.FC<{ attachmentIds: string[]; onImageClick: (id: string) => void; }> = ({ attachmentIds, onImageClick }) => {
-    if (!attachmentIds || attachmentIds.length === 0) {
-        return null;
-    }
-
-    const displayedImages = attachmentIds.slice(0, 3);
-    const remainingCount = attachmentIds.length - displayedImages.length;
-
-    return (
-        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-            {displayedImages.map(id => (
-                <AttachmentImage key={id} imageId={id} size={THUMBNAIL_SIZE} onClick={onImageClick} />
-            ))}
-            {remainingCount > 0 && (
-                <Box
-                    sx={{
-                        width: THUMBNAIL_SIZE,
-                        height: THUMBNAIL_SIZE,
-                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                        borderRadius: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                    }}
-                >
-                    <Typography variant="body2" color="white">
-                        +{remainingCount}
-                    </Typography>
-                </Box>
-            )}
-        </Stack>
-    );
-};
+}
 
 // --- Main Component ---
 
@@ -432,45 +271,11 @@ const LocalExportPage: React.FC = () => {
                                 }}>
                                     {postInfos.map(postInfo => (
                                         <Box key={postInfo.post.id} sx={{ breakInside: 'avoid-column', mb: 3 }}>
-                                            <Card>
-                                                <CardHeader
-                                                    avatar={
-                                                        <AvatarImage avatarId={postInfo.avatar_id} />
-                                                    }
-                                                    title={postInfo.post.user?.screen_name || '未知用户'}
-                                                    subheader={new Date(postInfo.post.created_at).toLocaleString()}
-                                                    action={
-                                                        postInfo.post.user?.id && postInfo.post.id ? (
-                                                            <IconButton
-                                                                aria-label="open original post"
-                                                                onClick={() => {
-                                                                    const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
-                                                                    openUrl(url).catch(e => console.error('Failed to open URL:', e));
-                                                                }}
-                                                            >
-                                                                <OpenInNewIcon />
-                                                            </IconButton>
-                                                        ) : null
-                                                    }
-                                                />
-                                                <CardContent>
-                                                    <Typography variant="body2">
-                                                        {postInfo.post.text}
-                                                    </Typography>
-                                                    {postInfo.post.retweeted_status && (
-                                                        <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
-                                                            <Typography variant="subtitle2" color="text.secondary">
-                                                                @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
-                                                            </Typography>
-                                                            <Typography variant="body2" sx={{ mt: 1 }}>
-                                                                {postInfo.post.retweeted_status.text}
-                                                            </Typography>
-                                                        </Box>
-                                                    )}
-                                                    {/* New: Attachment Images */}
-                                                    <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={handleOpenLightbox} />
-                                                </CardContent>
-                                            </Card>
+                                            <PostDisplay
+                                                postInfo={postInfo}
+                                                onImageClick={handleOpenLightbox}
+                                                maxAttachmentImages={3}
+                                            />
                                         </Box>
                                     ))}
                                 </Box>
