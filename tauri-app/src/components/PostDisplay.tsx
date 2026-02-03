@@ -131,7 +131,10 @@ const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClic
 
     return (
         <Box
-            onClick={() => onClick(imageId)}
+            onClick={(e) => {
+                e.stopPropagation(); // Stop the click from bubbling up to the Card
+                onClick(imageId);
+            }}
             sx={{
                 width: size,
                 height: size,
@@ -192,9 +195,10 @@ interface PostDisplayProps {
     onImageClick: (id: string) => void;
     maxAttachmentImages?: number; // Prop to limit displayed attachments
     textLimit?: number; // Prop to limit the text length
+    onClick?: (postInfo: PostInfo) => void;
 }
 
-const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, textLimit }) => {
+const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, textLimit, onClick }) => {
     const postText = textLimit !== undefined && postInfo.post.text.length > textLimit
         ? postInfo.post.text.substring(0, textLimit) + '...'
         : postInfo.post.text;
@@ -204,7 +208,10 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
         : postInfo.post.retweeted_status?.text;
 
     return (
-        <Card>
+        <Card
+            onClick={() => onClick?.(postInfo)}
+            sx={{ cursor: onClick ? 'pointer' : 'default' }}
+        >
             <CardHeader
                 avatar={
                     <AvatarImage avatarId={postInfo.avatar_id} />

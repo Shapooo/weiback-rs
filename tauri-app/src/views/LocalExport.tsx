@@ -23,6 +23,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import FullSizeImage from '../components/FullSizeImage';
 import PostDisplay, { PostInfo } from '../components/PostDisplay';
+import PostPreviewModal from '../components/PostPreviewModal';
 
 // --- Type Definitions based on Rust structs ---
 interface PaginatedPostInfo {
@@ -78,6 +79,8 @@ const LocalExportPage: React.FC = () => {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
+    const [hoveredPostInfo, setHoveredPostInfo] = useState<PostInfo | null>(null);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
 
 
     // State for loading indicators
@@ -91,6 +94,16 @@ const LocalExportPage: React.FC = () => {
     const handleCloseLightbox = () => {
         setLightboxImageId(null);
     };
+
+    const handlePostClick = useCallback((postInfo: PostInfo) => {
+        setHoveredPostInfo(postInfo);
+        setShowPreviewModal(true);
+    }, []);
+
+    const handleClosePreviewModal = useCallback(() => {
+        setShowPreviewModal(false);
+        setHoveredPostInfo(null);
+    }, []);
 
 
     const fetchPosts = useCallback(async (currentPage: number, currentFilters: typeof filters) => {
@@ -275,6 +288,7 @@ const LocalExportPage: React.FC = () => {
                                                 postInfo={postInfo}
                                                 onImageClick={handleOpenLightbox}
                                                 maxAttachmentImages={3}
+                                                onClick={handlePostClick}
                                             />
                                         </Box>
                                     ))}
@@ -307,6 +321,13 @@ const LocalExportPage: React.FC = () => {
                         {lightboxImageId && <FullSizeImage imageId={lightboxImageId} />}
                     </Box>
                 </Modal>
+
+                <PostPreviewModal
+                    postInfo={hoveredPostInfo}
+                    open={showPreviewModal}
+                    onClose={handleClosePreviewModal}
+                    onImageClick={handleOpenLightbox}
+                />
 
             </Box>
         </LocalizationProvider>
