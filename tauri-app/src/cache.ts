@@ -7,3 +7,7 @@ export const avatarCache = new LRUCache<string, string>(100, (_key: string, valu
 export const attachmentCache = new LRUCache<string, string>(200, (_key: string, value: string) => {
     URL.revokeObjectURL(value);
 });
+
+export const emojiCache = new LRUCache<string, string>(20, (_key: string, value: string) => {
+    URL.revokeObjectURL(value);
+});

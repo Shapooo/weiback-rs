@@ -13,6 +13,7 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachmentCache } from '../cache';
+import Emoji from './Emoji';
 
 // --- Type Definitions based on Rust structs ---
 
@@ -33,7 +34,7 @@ interface Post {
 export interface PostInfo {
     post: Post;
     avatar_id: string | null;
-    emoji_ids: Record<string, string>;
+    emoji_map: Record<string, string>;
     attachment_ids: string[];
 }
 
@@ -190,23 +191,48 @@ const AttachmentImages: React.FC<AttachmentImagesProps> = ({ attachmentIds, onIm
     );
 };
 
+interface TextWithEmojisProps {
+    text: string;
+    emoji_map: Record<string, string>;
+}
+
+const TextWithEmojis: React.FC<TextWithEmojisProps> = ({ text, emoji_map }) => {
+    // If no emoji map is provided, just return the plain text
+    if (!emoji_map) {
+        return <>{text}</>;
+    }
+
+    // Regex to find emoji text like [like] or [哈哈]
+    const emojiRegex = /\[.*?\]/g;
+    const parts = text.split(emojiRegex);
+    const matches = text.match(emojiRegex) || [];
+
+    const content = parts.reduce<React.ReactNode[]>((acc, part, i) => {
+        if (part) {
+            acc.push(part);
+        }
+        if (matches[i]) {
+            const emojiKey = matches[i];
+            const imageId = emoji_map[emojiKey];
+            if (imageId) {
+                acc.push(<Emoji key={`${imageId}-${i}`} imageId={imageId} emojiText={emojiKey} />);
+            }
+            // If imageId is not found, the emojiKey is ignored and not added to acc
+        }
+        return acc;
+    }, []);
+
+    return <>{content}</>;
+};
+
 interface PostDisplayProps {
     postInfo: PostInfo;
     onImageClick: (id: string) => void;
     maxAttachmentImages?: number; // Prop to limit displayed attachments
-    textLimit?: number; // Prop to limit the text length
     onClick?: (postInfo: PostInfo) => void;
 }
 
-const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, textLimit, onClick }) => {
-    const postText = textLimit !== undefined && postInfo.post.text.length > textLimit
-        ? postInfo.post.text.substring(0, textLimit) + '...'
-        : postInfo.post.text;
-
-    const retweetedText = postInfo.post.retweeted_status && textLimit !== undefined && postInfo.post.retweeted_status.text.length > textLimit
-        ? postInfo.post.retweeted_status.text.substring(0, textLimit) + '...'
-        : postInfo.post.retweeted_status?.text;
-
+const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, onClick }) => {
     return (
         <Card
             onClick={() => onClick?.(postInfo)}
@@ -233,16 +259,16 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                 }
             />
             <CardContent>
-                <Typography variant="body2">
-                    {postText}
+                <Typography variant="body2" component="div" sx={{ wordBreak: 'break-word', lineHeight: '1.8' }}>
+                    <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} />
                 </Typography>
                 {postInfo.post.retweeted_status && (
                     <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
                         <Typography variant="subtitle2" color="text.secondary">
                             @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                         </Typography>
-                        <Typography variant="body2" sx={{ mt: 1 }}>
-                            {retweetedText}
+                        <Typography variant="body2" component="div" sx={{ mt: 1, wordBreak: 'break-word', lineHeight: '1.8' }}>
+                            <TextWithEmojis text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} />
                         </Typography>
                     </Box>
                 )}
