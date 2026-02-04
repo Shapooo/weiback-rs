@@ -3,6 +3,7 @@ mod error;
 use std::sync::Arc;
 
 use log::{error, info};
+use serde;
 use serde_json::Value;
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
@@ -17,22 +18,25 @@ use weiback::message::{ErrMsg, Message, TaskProgress};
 use error::Result;
 use tauri::ipc::Response;
 
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "kind", content = "message")]
+pub enum PictureError {
+    NotFound,
+    Internal(String),
+}
+
 #[tauri::command(async)]
 async fn get_picture_blob(
     core: State<'_, Arc<Core>>,
     id: String,
-) -> std::result::Result<Response, String> {
+) -> std::result::Result<Response, PictureError> {
     info!("get_picture_blob called, id: {id}");
-    core.get_picture_blob(id)
-        .await
-        .map(|maybe_blob| {
-            Response::new(
-                maybe_blob.map(|b| b.to_vec()).unwrap_or_default(),
-            )
-        })
-        .map_err(|e| e.to_string())
+    match core.get_picture_blob(id).await {
+        Ok(Some(blob)) => Ok(Response::new(blob.to_vec())),
+        Ok(None) => Err(PictureError::NotFound),
+        Err(e) => Err(PictureError::Internal(e.to_string())),
+    }
 }
-
 
 #[tauri::command]
 fn get_config_command() -> std::result::Result<Config, String> {

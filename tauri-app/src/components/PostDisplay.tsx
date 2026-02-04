@@ -9,8 +9,10 @@ import {
     CardHeader,
     IconButton,
     Stack,
+    CircularProgress,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachmentCache } from '../cache';
 import Emoji from './Emoji';
@@ -62,17 +64,17 @@ const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
 
             try {
                 const blob: ArrayBuffer = await invoke('get_picture_blob', { id: avatarId });
-                if (!isCancelled && blob.byteLength > 0) {
+                if (!isCancelled) {
                     const imageBlob = new Blob([blob]);
                     const objectUrl = URL.createObjectURL(imageBlob);
                     avatarCache.set(avatarId, objectUrl);
                     setImageUrl(objectUrl);
-                } else {
-                    setImageUrl(''); // Handle case where blob is empty
                 }
             } catch (error) {
-                console.error('Failed to fetch avatar:', error);
-                setImageUrl(''); // Handle fetch error
+                if (!isCancelled) {
+                    // Any error (NotFound, Internal) results in showing the default Avatar placeholder
+                    setImageUrl('');
+                }
             }
         };
 
@@ -95,31 +97,40 @@ interface AttachmentImageProps {
 }
 
 const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClick }) => {
+    type Status = 'loading' | 'loaded' | 'not-found' | 'error';
+    const [status, setStatus] = useState<Status>('loading');
     const [imageUrl, setImageUrl] = useState<string>('');
 
     useEffect(() => {
         let isCancelled = false;
 
         const fetchAndCacheImage = async () => {
-            const cachedUrl = attachmentCache.get(imageId); // Use attachmentCache
+            setStatus('loading');
+            const cachedUrl = attachmentCache.get(imageId);
             if (cachedUrl) {
                 setImageUrl(cachedUrl);
+                setStatus('loaded');
                 return;
             }
 
             try {
                 const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
-                if (!isCancelled && blob.byteLength > 0) {
-                    const imageBlob = new Blob([blob]);
-                    const objectUrl = URL.createObjectURL(imageBlob);
-                    attachmentCache.set(imageId, objectUrl); // Use attachmentCache
-                    setImageUrl(objectUrl);
-                } else {
-                    setImageUrl('');
-                }
+                if (isCancelled) return;
+
+                const imageBlob = new Blob([blob]);
+                const objectUrl = URL.createObjectURL(imageBlob);
+                attachmentCache.set(imageId, objectUrl);
+                setImageUrl(objectUrl);
+                setStatus('loaded');
             } catch (error) {
-                console.error('Failed to fetch attachment image:', error);
-                setImageUrl('');
+                if (isCancelled) return;
+
+                if (error && typeof error === 'object' && 'kind' in error && (error as any).kind === 'NotFound') {
+                    setStatus('not-found');
+                } else {
+                    console.error('Failed to fetch attachment image:', error);
+                    setStatus('error');
+                }
             }
         };
 
@@ -130,20 +141,44 @@ const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClic
         };
     }, [imageId]);
 
+    const commonSx = {
+        width: size,
+        height: size,
+        borderRadius: 1,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    };
+
+    if (status === 'loading') {
+        return (
+            <Box sx={commonSx}>
+                <CircularProgress size={20} />
+            </Box>
+        );
+    }
+
+    if (status === 'not-found' || status === 'error') {
+        return (
+            <Box sx={{ ...commonSx, bgcolor: 'grey.200' }}>
+                <BrokenImageIcon color="action" />
+            </Box>
+        );
+    }
+
+    // status === 'loaded'
     return (
         <Box
             onClick={(e) => {
-                e.stopPropagation(); // Stop the click from bubbling up to the Card
+                e.stopPropagation();
                 onClick(imageId);
             }}
             sx={{
-                width: size,
-                height: size,
+                ...commonSx,
                 backgroundImage: `url(${imageUrl})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                borderRadius: 1,
-                flexShrink: 0,
                 cursor: 'pointer',
             }}
         />
