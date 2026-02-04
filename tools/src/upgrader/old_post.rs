@@ -101,12 +101,14 @@ impl TryFrom<OldPicInfoItem> for PicInfoItem {
 }
 
 fn deserialize_pic_infos(value: Value, post_id: i64) -> Result<HashMap<String, PicInfoItem>> {
+    // 尝试直接通过比较标准的方式进行转换
     let modern_format: Result<HashMap<String, PicInfoItem>, _> =
         serde_json::from_value(value.clone());
     if let Ok(pic_infos) = modern_format {
         return Ok(pic_infos);
     }
 
+    // 转换失败，尝试通过 OldPicInfoItem 取关键信息进行重建，会丢失部分不重要的信息
     let legacy_pic_infos: HashMap<String, OldPicInfoItem> = serde_json::from_value(value)?;
     let pic_infos = legacy_pic_infos
         .into_iter()
@@ -239,7 +241,17 @@ pub fn convert_old_to_internal_post(
     let page_info = old
         .page_info
         .map(|v| {
-            let internal: PageInfoInternal = serde_json::from_value(v)
+            let mut v_clone = v.clone();
+            if let Ok(internal) = serde_json::from_value::<PageInfoInternal>(v) {
+                let model: PageInfo = internal.into();
+                return serde_json::to_value(model)
+                    .with_context(|| format!("post {id}, serializing PageInfo"));
+            }
+            // 通过移动web端获取的 page_info 中这两个字段值是反的...尝试交换两者的值以成功转换
+            let obj_type = v_clone["object_type"].clone();
+            v_clone["object_type"] = v_clone["type"].clone();
+            v_clone["type"] = obj_type;
+            let internal = serde_json::from_value::<PageInfoInternal>(v_clone)
                 .with_context(|| format!("post {id}, deserializing PageInfoInternal"))?;
             let model: PageInfo = internal.into();
             serde_json::to_value(model).with_context(|| format!("post {id}, serializing PageInfo"))
