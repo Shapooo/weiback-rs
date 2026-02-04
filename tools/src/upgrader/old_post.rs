@@ -100,40 +100,25 @@ impl TryFrom<OldPicInfoItem> for PicInfoItem {
     }
 }
 
-fn deserialize_pic_infos(
-    value: Value,
-    post_id: i64,
-) -> Result<Option<HashMap<String, PicInfoItem>>> {
+fn deserialize_pic_infos(value: Value, post_id: i64) -> Result<HashMap<String, PicInfoItem>> {
     let modern_format: Result<HashMap<String, PicInfoItem>, _> =
         serde_json::from_value(value.clone());
     if let Ok(pic_infos) = modern_format {
-        return Ok(Some(pic_infos));
+        return Ok(pic_infos);
     }
 
-    let legacy_format: Result<HashMap<String, OldPicInfoItem>, _> = serde_json::from_value(value);
-    match legacy_format {
-        Ok(legacy_pic_infos) => {
-            let pic_infos = legacy_pic_infos
-                .into_iter()
-                .filter_map(|(id, old_item)| match old_item.try_into() {
-                    Ok(item) => Some((id, item)),
-                    Err(e) => {
-                        log::warn!(
-                            "post {post_id}, failed to convert OldPicInfoItem for id {id}: {e}"
-                        );
-                        None
-                    }
-                })
-                .collect();
-            Ok(Some(pic_infos))
-        }
-        Err(e) => {
-            log::warn!(
-                "post {post_id}, can't parse pic_infos as modern or legacy format, err: {e}"
-            );
-            Ok(None)
-        }
-    }
+    let legacy_pic_infos: HashMap<String, OldPicInfoItem> = serde_json::from_value(value)?;
+    let pic_infos = legacy_pic_infos
+        .into_iter()
+        .filter_map(|(id, old_item)| match old_item.try_into() {
+            Ok(item) => Some((id, item)),
+            Err(e) => {
+                log::warn!("post {post_id}, failed to convert OldPicInfoItem for id {id}: {e}");
+                None
+            }
+        })
+        .collect();
+    Ok(pic_infos)
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -248,7 +233,7 @@ pub fn convert_old_to_internal_post(
             .with_context(|| format!("post {id}, converting timestamp"))?
             .to_rfc3339()
     } else {
-        return Err(anyhow!("Post {} has no creation date", id));
+        return Err(anyhow!("Post {id} has no creation date"));
     };
 
     let page_info = old
@@ -264,7 +249,7 @@ pub fn convert_old_to_internal_post(
             if let Some(uid) = uid {
                 incompat_post_url.push(generate_weibo_url(id, uid));
             }
-            warn!("post {id} convert page_info failed: {e}");
+            warn!("post {id} convert page_info failed: {e:?}");
             None
         });
 
@@ -283,7 +268,7 @@ pub fn convert_old_to_internal_post(
             if let Some(uid) = uid {
                 incompat_post_url.push(generate_weibo_url(id, uid));
             }
-            warn!("post {id} convert url_struct failed: {e}");
+            warn!("post {id} convert url_struct failed: {e:?}");
             None
         });
 
@@ -291,11 +276,8 @@ pub fn convert_old_to_internal_post(
         .pic_infos
         .map(|v| {
             deserialize_pic_infos(v, id).and_then(|op| {
-                op.map(|v| {
-                    serde_json::to_value(v)
-                        .with_context(|| format!("post {id}, serializing PicInfoItem"))
-                })
-                .transpose()
+                serde_json::to_value(op)
+                    .with_context(|| format!("post {id}, serializing PicInfoItem"))
             })
         })
         .transpose()
@@ -303,10 +285,9 @@ pub fn convert_old_to_internal_post(
             if let Some(uid) = uid {
                 incompat_post_url.push(generate_weibo_url(id, uid));
             }
-            warn!("post {id} convert pic_infos failed: {e}");
+            warn!("post {id} convert pic_infos failed: {e:?}");
             None
-        })
-        .flatten();
+        });
 
     let mix_media_info_model = old
         .mix_media_info
@@ -320,7 +301,7 @@ pub fn convert_old_to_internal_post(
             if let Some(uid) = uid {
                 incompat_post_url.push(generate_weibo_url(id, uid));
             }
-            warn!("post {id} convert mix_media_info failed: {e}");
+            warn!("post {id} convert mix_media_info failed: {e:?}");
             None
         });
 
