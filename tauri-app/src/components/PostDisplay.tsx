@@ -10,6 +10,7 @@ import {
     IconButton,
     Stack,
     CircularProgress,
+    Tooltip,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
@@ -298,18 +299,24 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                 subheader={new Date(postInfo.post.created_at).toLocaleString()}
                 action={
                     postInfo.post.user?.id && postInfo.post.id ? (
-                        <IconButton
-                            aria-label="open original post"
-                            onClick={() => {
-                                const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
-                                openUrl(url).catch(e => console.error('Failed to open URL:', e));
-                            }}
+                        <Tooltip
+                            title={`https://weibo.com/${postInfo.post.user.id}/${postInfo.post.id}`}
+                            enterDelay={500}
+                            arrow
                         >
-                            <OpenInNewIcon />
-                        </IconButton>
+                            <IconButton
+                                aria-label="open original post"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
+                                    openUrl(url).catch(e => console.error('Failed to open URL:', e));
+                                }}
+                            >
+                                <OpenInNewIcon />
+                            </IconButton>
+                        </Tooltip>
                     ) : null
-                }
-            />
+                } />
             <CardContent>
                 <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
                 {postInfo.post.retweeted_status && (
