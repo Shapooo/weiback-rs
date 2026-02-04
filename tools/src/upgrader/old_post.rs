@@ -284,6 +284,19 @@ pub fn convert_old_to_internal_post(
             None
         });
 
+    let pic_ids = old
+        .pic_ids
+        .map(|ids| {
+            let ids = serde_json::from_value::<Vec<String>>(ids)?;
+            if ids.is_empty() {
+                Ok(None)
+            } else {
+                Some(serde_json::to_value(ids)).transpose()
+            }
+        })
+        .transpose()?
+        .flatten();
+
     let pic_infos = old
         .pic_infos
         .map(|v| {
@@ -352,7 +365,7 @@ pub fn convert_old_to_internal_post(
         geo: old.geo,
         mix_media_info,
         page_info,
-        pic_ids: old.pic_ids,
+        pic_ids,
         pic_infos,
         pic_num: old.pic_num,
         region_name: old.region_name,
