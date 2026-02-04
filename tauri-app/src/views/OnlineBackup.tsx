@@ -50,7 +50,7 @@ const UserBackupSection: React.FC = () => {
         }
         enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
-            await invoke('backup_user', { uid: backupId, num_pages: numPages });
+            await invoke('backup_user', { uid: backupId, numPages });
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -112,7 +112,7 @@ const FavoritesBackupSection: React.FC = () => {
         }
         enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
-            await invoke('backup_favorites', { num_pages: numPages });
+            await invoke('backup_favorites', { numPages });
             enqueueSnackbar('收藏备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });

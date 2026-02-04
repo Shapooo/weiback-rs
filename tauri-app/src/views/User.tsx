@@ -49,7 +49,7 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      await invoke('get_sms_code', { phone_number: phone });
+      await invoke('get_sms_code', { phoneNumber: phone });
       setLoginState(LoginState.CodeSent);
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
       inputRefs.current[0]?.focus();
@@ -65,7 +65,7 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      const res: UserInfo | null = await invoke('login', { sms_code: code });
+      const res: UserInfo | null = await invoke('login', { smsCode: code });
       if (res) {
         setUserInfo(res);
         setLoginState(LoginState.LoggedIn);
