@@ -134,14 +134,20 @@ async fn start() -> Result<()> {
 }
 
 fn init_logger() -> Result<()> {
-    let log_path = std::env::current_exe()?;
-    let log_path = log_path
+    let exe_path = std::env::current_exe()?;
+    let log_file_name = exe_path
+        .file_stem()
+        .and_then(|f| f.to_str())
+        .unwrap_or("db-upgrade-tool")
+        .to_string()
+        + ".log";
+    let log_path = exe_path
         .parent()
         .ok_or(anyhow::anyhow!(
             "the executable: {:?} should have parent, maybe bugs in there",
             std::env::current_exe()
         ))?
-        .join("upgrade-db-tool.log");
+        .join(log_file_name);
     let log_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
