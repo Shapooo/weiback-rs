@@ -17,6 +17,6 @@ pub use mix_media_info::{MixMediaInfo, MixMediaInfoItem};
 pub use pic_infos::{FocusPoint, PicInfoItem, PicInfoType};
 pub use picture::{Picture, PictureDefinition, PictureMeta};
 pub use post::Post;
-pub use url_struct::{PicInfosForStatusItem, UrlStruct, UrlStructItem};
+pub use url_struct::{UrlStruct, UrlStructItem};
 pub use user::User;
 pub use video::{Video, VideoMeta};

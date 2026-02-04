@@ -13,9 +13,12 @@ pub struct PicInfoItem {
     pub largest: PicInfoDetail,
     pub mw2000: PicInfoDetail,
     pub original: PicInfoDetail,
-    pub object_id: String,
+    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    pub object_id: Option<String>,
+    #[serde(default)]
     pub photo_tag: i32,
     pub pic_id: String,
+    #[serde(default)]
     pub pic_status: i32,
     pub r#type: PicInfoType,
     pub thumbnail: PicInfoDetail,

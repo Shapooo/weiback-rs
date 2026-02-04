@@ -81,7 +81,7 @@ impl TryFrom<OldPicInfoItem> for PicInfoItem {
 
         Ok(Self {
             pic_id: id.clone(),
-            object_id: id.clone(),
+            object_id: None,
             r#type: old.r#type,
             bmiddle: create_pic_info_detail(&id, &host, "bmiddle", &ext),
             large: create_pic_info_detail(&id, &host, "large", &ext),

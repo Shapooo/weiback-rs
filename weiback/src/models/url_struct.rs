@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
-use super::PicInfoDetail;
+use crate::models::PicInfoItem;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UrlStruct(pub Vec<UrlStructItem>);
@@ -33,16 +33,8 @@ pub struct UrlStructItem {
     pub url_type: UrlType,
     pub url_type_pic: Option<Url>,
     pub pic_ids: Option<String>,
-    pub pic_infos: Option<PicInfosForStatusItem>,
+    pub pic_infos: Option<PicInfoItem>,
     pub vip_gif: Option<Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct PicInfosForStatusItem {
-    pub bmiddle: PicInfoDetail,
-    pub large: PicInfoDetail,
-    pub thumbnail: PicInfoDetail,
-    pub woriginal: PicInfoDetail,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]

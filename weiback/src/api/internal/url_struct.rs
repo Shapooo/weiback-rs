@@ -2,13 +2,15 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::result::Result;
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_aux::prelude::*;
 use serde_json::Value;
 use url::Url;
 
 use crate::error::Error;
-use crate::models::{PicInfosForStatusItem, UrlStruct, UrlStructItem, url_struct::UrlType};
+use crate::models::{PicInfoDetail, UrlStruct, UrlStructItem, url_struct::UrlType};
+use crate::models::{PicInfoItem, PicInfoType};
+use crate::utils::pic_url_to_id;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UrlStructInternal(pub Vec<UrlStructItemInternal>);
@@ -28,6 +30,65 @@ impl PartialEq for UrlStructInternal {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct PicInfosForStatusItem {
+    pub bmiddle: PicInfoDetail,
+    pub large: PicInfoDetail,
+    pub thumbnail: PicInfoDetail,
+    pub woriginal: PicInfoDetail,
+}
+
+impl From<PicInfosForStatusItem> for PicInfoItem {
+    fn from(value: PicInfosForStatusItem) -> Self {
+        let mut url = value.bmiddle.url.clone();
+        let large_path = url.path().replace("wap360", "large");
+        let r#type = if large_path.ends_with("gif") {
+            PicInfoType::Gif
+        } else {
+            PicInfoType::Pic
+        };
+        url.set_path(&large_path);
+        let pic_id = pic_url_to_id(&url).unwrap_or_default();
+        let largest = PicInfoDetail {
+            height: 0,
+            width: 0,
+            url: url.clone(),
+        };
+        let mw2000_path = large_path.replace("large", "mw2000");
+        url.set_path(&mw2000_path);
+        let mw2000 = PicInfoDetail {
+            height: 0,
+            width: 0,
+            url: url.clone(),
+        };
+        let original_path = large_path.replace("large", "orj1080");
+        url.set_path(&original_path);
+        let original = PicInfoDetail {
+            height: 0,
+            width: 0,
+            url,
+        };
+        Self {
+            bmiddle: value.bmiddle,
+            large: value.large,
+            fid: None,
+            focus_point: None,
+            largest,
+            mw2000,
+            original,
+            object_id: None,
+            photo_tag: 0,
+            pic_id: pic_id,
+            pic_status: 1,
+            r#type,
+            thumbnail: value.thumbnail,
+            video: None,
+            video_object_id: None,
+            video_hd: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UrlStructItemInternal {
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
@@ -43,7 +104,7 @@ pub struct UrlStructItemInternal {
     #[serde(default, deserialize_with = "deserialize_pic_ids")]
     pub pic_ids: Option<String>,
     #[serde(default, deserialize_with = "deserialize_pic_infos")]
-    pub pic_infos: Option<PicInfosForStatusItem>,
+    pub pic_infos: Option<PicInfoItem>,
     pub vip_gif: Option<Value>,
 }
 
@@ -162,7 +223,7 @@ where
     Ok(res)
 }
 
-fn deserialize_pic_infos<'de, D>(deserializer: D) -> Result<Option<PicInfosForStatusItem>, D::Error>
+fn deserialize_pic_infos<'de, D>(deserializer: D) -> Result<Option<PicInfoItem>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -171,11 +232,19 @@ where
     #[serde(untagged)]
     enum MapOrItem {
         M(HashMap<String, PicInfosForStatusItem>),
+        M2(HashMap<String, PicInfoItem>),
         I(PicInfosForStatusItem),
     }
     let res = Option::<MapOrItem>::deserialize(deserializer)?.and_then(|mi| match mi {
-        MapOrItem::I(i) => Some(i),
+        MapOrItem::I(i) => Some(i.into()),
         MapOrItem::M(m) => {
+            if m.is_empty() {
+                None
+            } else {
+                m.into_values().next().map(|i| i.into())
+            }
+        }
+        MapOrItem::M2(m) => {
             if m.is_empty() {
                 None
             } else {

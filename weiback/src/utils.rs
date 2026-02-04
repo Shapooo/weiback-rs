@@ -8,8 +8,7 @@ use url::Url;
 
 use crate::error::{Error, Result};
 use crate::models::{
-    MixMediaInfoItem, PicInfoDetail, PicInfoItem, PicInfosForStatusItem, PictureDefinition,
-    PictureMeta, Post,
+    MixMediaInfoItem, PicInfoDetail, PicInfoItem, PictureDefinition, PictureMeta, Post,
 };
 
 #[allow(unused_macros)]
@@ -147,20 +146,6 @@ pub fn def_to_pic_info_detail(
     }
 }
 
-fn def_to_url_struct_detail(
-    pic_info_item: &PicInfosForStatusItem,
-    definition: PictureDefinition,
-) -> &PicInfoDetail {
-    match definition {
-        PictureDefinition::Thumbnail => &pic_info_item.thumbnail,
-        PictureDefinition::Bmiddle => &pic_info_item.bmiddle,
-        PictureDefinition::Large => &pic_info_item.large,
-        PictureDefinition::Original => &pic_info_item.woriginal,
-        PictureDefinition::Largest => &pic_info_item.woriginal,
-        PictureDefinition::Mw2000 => &pic_info_item.woriginal,
-    }
-}
-
 fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
     let Some(url_struct) = post.url_struct.as_ref() else {
         return Default::default();
@@ -170,7 +155,7 @@ fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Ve
         .iter()
         .filter_map(|i| i.pic_infos.as_ref())
         .filter_map(|p| {
-            let url = def_to_url_struct_detail(p, definition).url.as_str();
+            let url = def_to_pic_info_detail(p, definition).url.as_str();
             PictureMeta::in_post(url, definition, post.id)
                 .map_err(|e| error!("cannot parse {url} {e}"))
                 .ok()
