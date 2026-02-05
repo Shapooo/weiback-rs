@@ -195,19 +195,47 @@ mod local_tests {
     }
 
     #[tokio::test]
-    async fn test_export_to_existing_file_path_fails() {
+    async fn test_export_overwrites_existing_html_file() {
         let temp_dir = tempdir().unwrap();
         let export_dir = temp_dir.path();
-        let page_name = "wont_work".to_string();
-        let html_path = export_dir.join(make_html_file_name(&page_name));
-        fs::write(&html_path, "hello").unwrap();
+        let page_name = "overwrite_test".to_string();
+        let html_file_name = make_html_file_name(&page_name);
+        let html_path = export_dir.join(&html_file_name);
+
+        // Create a file that will be overwritten
+        fs::write(&html_path, "initial content").unwrap();
 
         let exporter = ExporterImpl::new();
 
-        let page = create_test_page("test", 0);
+        let new_html_content = "<html><body>overwritten content</body></html>";
+        let page = create_test_page(new_html_content, 0);
         exporter
-            .export_page(page, &page_name, export_dir)
+            .export_page(page.clone(), &page_name, export_dir)
             .await
             .unwrap();
+
+        // Verify the file was overwritten
+        let final_content = fs::read_to_string(&html_path).unwrap();
+        assert_eq!(final_content, new_html_content);
+    }
+
+    #[tokio::test]
+    async fn test_export_to_path_that_is_a_file_fails() {
+        let temp_dir = tempdir().unwrap();
+        let file_path = temp_dir.path().join("i_am_a_file_not_a_dir");
+        fs::write(&file_path, "hello").unwrap(); // Make it a file
+
+        let exporter = ExporterImpl::new();
+        let page = create_test_page("test", 0);
+        let result = exporter.export_page(page, "any_name", &file_path).await;
+
+        assert!(result.is_err());
+
+        // Optional: Check the specific error type
+        if let Err(Error::Io(e)) = result {
+            assert_eq!(e.kind(), ErrorKind::AlreadyExists);
+        } else {
+            panic!("Expected Io error, but got {:?}", result);
+        }
     }
 }
