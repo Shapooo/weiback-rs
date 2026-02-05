@@ -1,7 +1,6 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use futures::future::try_join_all;
@@ -16,7 +15,6 @@ use crate::core::task::TaskContext;
 use crate::emoji_map::EmojiMap;
 use crate::error::{Error, Result};
 use crate::exporter::{HTMLPage, HTMLPicture};
-use crate::media_downloader::MediaDownloader;
 use crate::models::{Picture, PictureDefinition, PictureMeta, Post, UrlStruct};
 use crate::storage::Storage;
 use crate::utils::{
@@ -39,18 +37,16 @@ pub fn create_tera(template_path: &Path) -> Result<Tera> {
 }
 
 #[derive(Debug, Clone)]
-pub struct HTMLGenerator<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> {
+pub struct HTMLGenerator<E: EmojiUpdateApi, S: Storage> {
     storage: S,
-    downloader: D,
     templates: Tera,
     emoji_map: EmojiMap<E>,
 }
 
-impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
-    pub fn new(emoji_map: EmojiMap<E>, storage: S, downloader: D, engine: Tera) -> Self {
+impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
+    pub fn new(emoji_map: EmojiMap<E>, storage: S, engine: Tera) -> Self {
         Self {
             storage,
-            downloader,
             templates: engine,
             emoji_map,
         }
@@ -131,64 +127,6 @@ impl<E: EmojiUpdateApi, S: Storage, D: MediaDownloader> HTMLGenerator<E, S, D> {
                 meta: pic_meta,
                 blob,
             }))
-    }
-
-    #[allow(unused)]
-    async fn load_picture_from_local_or_server(
-        &self,
-        ctx: Arc<TaskContext>,
-        pic_meta: PictureMeta,
-    ) -> Result<Picture> {
-        if let Some(blob) = self
-            .storage
-            .get_picture_blob(ctx.clone(), pic_meta.url())
-            .await?
-        {
-            Ok(Picture {
-                meta: pic_meta,
-                blob,
-            })
-        } else {
-            let storage = self.storage.clone();
-            let url = pic_meta.url().to_owned();
-            let (sender, result) = tokio::sync::oneshot::channel();
-            let callback = Box::new(
-                move |ctx, blob| -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
-                    Box::pin(async move {
-                        let pic = Picture {
-                            meta: pic_meta,
-                            blob,
-                        };
-                        storage.save_picture(ctx, &pic).await?;
-                        sender.send(pic).map_err(|pic| {
-                            Error::Tokio(format!("pic {} send failed", pic.meta.url()))
-                        })?;
-                        Ok(())
-                    })
-                },
-            );
-            self.downloader.download_media(ctx, &url, callback).await?;
-            Ok(result.await?)
-        }
-    }
-
-    #[allow(unused)]
-    async fn get_pictures(
-        &self,
-        ctx: Arc<TaskContext>,
-        posts: &[Post],
-        definition: PictureDefinition,
-        emoji_map: Option<&HashMap<String, Url>>,
-    ) -> Result<Vec<Picture>> {
-        let pic_metas = extract_all_pic_metas(posts, definition, emoji_map);
-        let mut pics = Vec::new();
-        for metas in pic_metas {
-            pics.push(
-                self.load_picture_from_local_or_server(ctx.clone(), metas)
-                    .await?,
-            );
-        }
-        Ok(pics)
     }
 }
 
@@ -380,7 +318,7 @@ mod local_tests {
     use super::*;
     use crate::{
         api::{FavoritesApi, ProfileStatusesApi},
-        mock::{MockApi, MockMediaDownloader},
+        mock::MockApi,
         storage::{StorageImpl, database},
     };
 
@@ -426,14 +364,11 @@ mod local_tests {
         MockApi::new(client.clone())
     }
 
-    async fn create_generator(
-        api: &MockApi,
-    ) -> HTMLGenerator<MockApi, StorageImpl, MockMediaDownloader> {
+    async fn create_generator(api: &MockApi) -> HTMLGenerator<MockApi, StorageImpl> {
         let tera = create_test_tera();
         let storage = create_test_storage().await;
-        let downloader = MockMediaDownloader::new(true);
         let emoji_map = EmojiMap::new(api.clone());
-        HTMLGenerator::new(emoji_map, storage, downloader, tera)
+        HTMLGenerator::new(emoji_map, storage, tera)
     }
 
     async fn create_posts(api: &MockApi) -> Vec<Post> {

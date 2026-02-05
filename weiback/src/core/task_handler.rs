@@ -30,7 +30,7 @@ pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader
     exporter: E,
     downloader: D,
     processer: PostProcesser<A, S, D>,
-    html_generator: HTMLGenerator<A, S, D>,
+    html_generator: HTMLGenerator<A, S>,
 }
 
 impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S, E, D> {
@@ -40,8 +40,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let processer = PostProcesser::new(storage.clone(), downloader.clone(), emoji_map.clone())?;
 
         let tera = create_tera(crate::config::get_config().read()?.templates_path.as_path())?;
-        let html_generator =
-            HTMLGenerator::new(emoji_map, storage.clone(), downloader.clone(), tera);
+        let html_generator = HTMLGenerator::new(emoji_map, storage.clone(), tera);
 
         Ok(TaskHandler {
             api_client,
