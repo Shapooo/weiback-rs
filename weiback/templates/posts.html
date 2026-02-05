@@ -3,14 +3,14 @@
     <div class="bk-post">
         {% if post.user is object and post.user.id is defined %}
         <div class="bk-poster">
-            <img class="bk-poster-avatar" alt="头像" src="{{post.poster_avatar}}">
+            <img class="bk-poster-avatar" alt="头像" src="{{post.avatar_path}}">
             <a class="bk-poster-name"
-                href="{{'https://weibo.com' ~ post.user.profile_url}}">{{post.user.screen_name}}</a>
+                href="{{'https://weibo.com/u/' ~ post.user.id}}">{{post.user.screen_name}}</a>
             <p class="bk-create-detail">&nbsp&nbsp{{post.created_at}}{% if post.region_name is defined and
                 post.region_name is string %}&nbsp&nbsp{{post.region_name}}{% endif %}</p>
         </div>
         {% endif %}
-        <div class="bk-post-text bk-content">{{post.text_raw}}</div>
+        <div class="bk-post-text bk-content">{{post.text}}</div>
         {% if post.pics is defined %}
         <div class="bk-post-media bk-content">{% for pic in post.pics %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{%
             endfor %}</div>
@@ -23,12 +23,12 @@
     <div class="bk-retweet">
         {% if post.retweeted_status.user is object and post.retweeted_status.user.id is defined %}
         <div class="bk-retweeter"><img class="bk-retweeter-avatar" alt="头像"
-                src="{{post.retweeted_status.poster_avatar}}"><a class="bk-retweeter-name"
-                href="{{'https://weibo.com' ~ post.retweeted_status.user.profile_url}}">{{post.retweeted_status.user.screen_name}}</a>
+                src="{{post.retweeted_status.avatar_path}}"><a class="bk-retweeter-name"
+                href="{{'https://weibo.com/u/' ~ post.retweeted_status.user.id}}">{{post.retweeted_status.user.screen_name}}</a>
             <p class="bk-create-detail">&nbsp&nbsp{{post.retweeted_status.created_at}}{% if
                 post.retweeted_status.region_name is defined and post.retweeted_status.region_name is string
                 %}&nbsp&nbsp{{post.retweeted_status.region_name}}{% endif %}</p>
-        </div>{% endif %}<div class="bk-retweet-text bk-content">{{post.retweeted_status.text_raw}}​​​</div>{% if
+        </div>{% endif %}<div class="bk-retweet-text bk-content">{{post.retweeted_status.text}}​​​</div>{% if
         post.retweet_status.pics is defined %}<div class="bk-retweet-media bk-content">{% for pic in
             post.retweeted_status.pics %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{% endfor %}</div>
         {% endif %}
