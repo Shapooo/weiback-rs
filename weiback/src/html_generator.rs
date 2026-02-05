@@ -3,21 +3,20 @@ pub mod view_model;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use futures::future::try_join_all;
+use futures::stream::{self, StreamExt};
 use lazy_static::lazy_static;
 use log::{debug, info};
 use tera::{Context, Tera};
 use url::Url;
 
 use crate::api::EmojiUpdateApi;
-use crate::config::get_config;
 use crate::core::task::TaskContext;
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
-use crate::exporter::{HTMLPage, HTMLPicture};
-use crate::models::{Picture, PictureMeta, Post};
+use crate::exporter::{HTMLPage, PictureExport};
+use crate::models::{PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
-use crate::utils::{extract_all_pic_metas, make_resource_dir_name};
+use crate::utils::{extract_all_pic_metas, make_resource_dir_name, url_to_filename};
 use view_model::PostView;
 
 lazy_static! {
@@ -50,22 +49,27 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         post: Post,
         page_name: &str,
         emoji_map: Option<&HashMap<String, Url>>,
+        definition: PictureDefinition,
     ) -> Result<String> {
         let pic_folder = make_resource_dir_name(page_name);
-        let pic_quality = get_config().read()?.picture_definition;
-        let post_view = PostView::from_post(post, &pic_folder, pic_quality, emoji_map)?;
+        let post_view = PostView::from_post(post, &pic_folder, definition, emoji_map)?;
 
         let context = Context::from_serialize(post_view)?;
         let html = TEMPLATES.render("post.html", &context)?;
         Ok(html)
     }
 
-    async fn generate_page(&self, posts: Vec<Post>, page_name: &str) -> Result<String> {
+    async fn generate_page(
+        &self,
+        posts: Vec<Post>,
+        page_name: &str,
+        pic_quality: PictureDefinition,
+    ) -> Result<String> {
         let emoji_map = self.emoji_map.get_or_try_init().await.ok();
         info!("Generating page for {} posts", posts.len());
         let posts_html = posts
             .into_iter()
-            .map(|p| self.generate_post(p, page_name, emoji_map))
+            .map(|p| self.generate_post(p, page_name, emoji_map, pic_quality))
             .collect::<Result<Vec<_>>>()?;
         let posts_html = posts_html.join("");
         let mut context = Context::new();
@@ -82,7 +86,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         page_name: &str,
     ) -> Result<HTMLPage> {
         info!("Generating HTML for {} posts.", posts.len());
-        let pic_quality = get_config().read()?.picture_definition;
+        let pic_quality = ctx.config.picture_definition;
         let emoji_map = self.emoji_map.get_or_try_init().await.ok();
         debug!("Using picture quality: {pic_quality:?}");
         let pic_metas = extract_all_pic_metas(&posts, pic_quality, emoji_map);
@@ -92,34 +96,48 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         );
         let pic_futures = pic_metas
             .into_iter()
-            .map(|m| self.load_picture_from_local(ctx.clone(), m));
-        let pics = try_join_all(pic_futures).await?;
-        let pics = pics
-            .into_iter()
-            .filter_map(|p| p.map(TryInto::<HTMLPicture>::try_into))
-            .collect::<Result<Vec<_>>>()?;
-        debug!("Loaded {} pictures from local storage.", pics.len());
-        let content = self.generate_page(posts, page_name).await?;
+            .map(|m| self.get_picture_export_info(m));
+        let pictures_to_export: Vec<PictureExport> = stream::iter(pic_futures)
+            .buffer_unordered(8)
+            .filter_map(|result| async move {
+                match result {
+                    Ok(Some(info)) => Some(info),
+                    Ok(None) => None,
+                    Err(e) => {
+                        log::warn!("Failed to get picture export info: {}", e);
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
+        debug!(
+            "Found {} pictures to export from local storage.",
+            pictures_to_export.len()
+        );
+        let content = self.generate_page(posts, page_name, pic_quality).await?;
         info!("HTML content generated successfully.");
         Ok(HTMLPage {
             html: content,
-            pics,
+            pictures_to_export,
         })
     }
 
-    async fn load_picture_from_local(
+    async fn get_picture_export_info(
         &self,
-        ctx: Arc<TaskContext>,
         pic_meta: PictureMeta,
-    ) -> Result<Option<Picture>> {
-        Ok(self
-            .storage
-            .get_picture_blob(ctx, pic_meta.url())
-            .await?
-            .map(|blob| Picture {
-                meta: pic_meta,
-                blob,
+    ) -> Result<Option<PictureExport>> {
+        let url = pic_meta.url();
+        if let Some(source_path) = self.storage.get_picture_path(url).await? {
+            let target_file_name = url_to_filename(url)?;
+            Ok(Some(PictureExport {
+                source_path,
+                target_file_name,
             }))
+        } else {
+            log::warn!("Picture path not found in storage for url: {}", url);
+            Ok(None)
+        }
     }
 }
 
@@ -191,10 +209,11 @@ mod local_tests {
         let posts = create_posts(&api).await;
         let generator = create_generator(&api).await;
         let emoji_map = api.emoji_update().await.unwrap();
+        let definition = PictureDefinition::Original;
 
         for post in posts {
             generator
-                .generate_post(post, "test", Some(&emoji_map))
+                .generate_post(post, "test", Some(&emoji_map), definition)
                 .unwrap();
         }
     }
@@ -204,9 +223,12 @@ mod local_tests {
         let client = create_mock_client();
         let api = create_mock_api(&client);
         let posts = create_posts(&api).await;
+        let definition = PictureDefinition::Original;
         let generator = create_generator(&api).await;
         for post in posts {
-            generator.generate_post(post, "test", None).unwrap();
+            generator
+                .generate_post(post, "test", None, definition)
+                .unwrap();
         }
     }
 
@@ -216,6 +238,10 @@ mod local_tests {
         let api = create_mock_api(&client);
         let posts = create_posts(&api).await;
         let generator = create_generator(&api).await;
-        generator.generate_page(posts, "test_page").await.unwrap();
+        let definition = PictureDefinition::Original;
+        generator
+            .generate_page(posts, "test_page", definition)
+            .await
+            .unwrap();
     }
 }
