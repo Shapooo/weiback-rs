@@ -52,28 +52,25 @@ where {
             .into());
         }
         let html_file_name = make_html_file_name(page_name);
-
-        let mut operating_path = export_dir.to_owned();
-        debug!("Writing HTML to file: {operating_path:?}");
-        operating_path.push(html_file_name);
-        let mut html_file = File::create(operating_path.as_path()).await?;
+        let html_file_path = export_dir.join(html_file_name);
+        debug!("Writing HTML to file: {html_file_path:?}");
+        let mut html_file = File::create(&html_file_path).await?;
         html_file.write_all(page.html.as_bytes()).await?;
-        debug!("Successfully wrote HTML to {operating_path:?}");
+        debug!("Successfully wrote HTML to {html_file_path:?}");
 
-        operating_path.pop();
         let resources_dir_name = make_resource_dir_name(page_name);
-        operating_path.push(resources_dir_name.clone());
-        if !operating_path.exists() && !page.pics.is_empty() {
-            dir_builder.create(operating_path.as_path()).await?;
+        let resources_dir_path = export_dir.join(resources_dir_name);
+        if !resources_dir_path.exists() && !page.pics.is_empty() {
+            dir_builder.create(&resources_dir_path).await?;
         }
-        let operating_path = operating_path.as_path();
+        let pic_output_dir = resources_dir_path.as_path();
         debug!(
             "Saving {} picture files to {:?}",
             page.pics.len(),
-            operating_path
+            pic_output_dir
         );
         let pic_futures = page.pics.into_iter().map(|pic| async move {
-            let pic_path = operating_path.join(pic.file_name.clone());
+            let pic_path = pic_output_dir.join(pic.file_name.clone());
             let mut pic_file = File::create(&pic_path).await.map_err(|e| {
                 error!("Failed to create picture file {pic_path:?}: {e}");
                 e
