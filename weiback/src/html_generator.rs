@@ -96,7 +96,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         );
         let pic_futures = pic_metas
             .into_iter()
-            .map(|m| self.get_picture_export_info(m));
+            .map(|m| self.get_picture_export_info(ctx.clone(), m));
         let pictures_to_export: Vec<PictureExport> = stream::iter(pic_futures)
             .buffer_unordered(8)
             .filter_map(|result| async move {
@@ -125,10 +125,11 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
 
     async fn get_picture_export_info(
         &self,
+        ctx: Arc<TaskContext>,
         pic_meta: PictureMeta,
     ) -> Result<Option<PictureExport>> {
         let url = pic_meta.url();
-        if let Some(source_path) = self.storage.get_picture_path(url).await? {
+        if let Some(source_path) = self.storage.get_picture_path(ctx, url).await? {
             let target_file_name = url_to_filename(url)?;
             Ok(Some(PictureExport {
                 source_path,

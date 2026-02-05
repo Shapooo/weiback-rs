@@ -50,7 +50,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
         ctx: Arc<TaskContext>,
         picture: &Picture,
     ) -> impl Future<Output = Result<()>> + Send;
-    async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>>;
+    async fn get_picture_path(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<PathBuf>>;
     async fn get_attachment_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
     async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>>;
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
@@ -238,8 +238,9 @@ impl Storage for StorageImpl {
             .await
     }
 
-    async fn get_picture_path(&self, url: &Url) -> Result<Option<PathBuf>> {
-        picture::get_picture_path(&self.db_pool, url).await
+    async fn get_picture_path(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<PathBuf>> {
+        let path = picture::get_picture_path(&self.db_pool, url).await?;
+        Ok(path.map(|p| ctx.config.picture_path.join(p)))
     }
 
     async fn get_attachment_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>> {
