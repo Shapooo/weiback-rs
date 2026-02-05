@@ -16,7 +16,7 @@
             endfor %}</div>
         {% endif %}
         {% if post.user is object and post.user.id is defined %}
-        <a href="{{'https://weibo.com/'~post.user.id~'/'~post.mblogid}}" class="bk-link bk-content">[原贴链接]</a>
+        <a href="{{'https://weibo.com/'~post.user.id~'/'~post.id}}" class="bk-link bk-content">[原贴链接]</a>
         {% endif %}
     </div>
     {% if post.retweeted_status is defined and post.retweeted_status is object %}
@@ -33,7 +33,7 @@
             post.retweeted_status.pics %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{% endfor %}</div>
         {% endif %}
         {% if post.retweeted_status.user is object and post.retweeted_status.user.id is defined %}<a
-            href="{{'https://weibo.com/'~post.retweeted_status.user.id~'/'~post.retweeted_status.mblogid}}"
+            href="{{'https://weibo.com/'~post.retweeted_status.user.id~'/'~post.retweeted_status.id}}"
             class="bk-link bk-content">[原贴链接]</a>{% endif %}
     </div>
     {% endif %}
