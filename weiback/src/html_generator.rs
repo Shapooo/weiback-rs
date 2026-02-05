@@ -1,12 +1,11 @@
-use std::borrow::Cow::{self, Borrowed, Owned};
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
+pub mod view_model;
+
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures::future::try_join_all;
 use lazy_static::lazy_static;
 use log::{debug, info};
-use serde_json::{Value, to_value};
 use tera::{Context, Tera};
 use url::Url;
 
@@ -14,14 +13,12 @@ use crate::api::EmojiUpdateApi;
 use crate::config::get_config;
 use crate::core::task::TaskContext;
 use crate::emoji_map::EmojiMap;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::exporter::{HTMLPage, HTMLPicture};
-use crate::models::{Picture, PictureDefinition, PictureMeta, Post, UrlStruct};
+use crate::models::{Picture, PictureMeta, Post};
 use crate::storage::Storage;
-use crate::utils::{
-    AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, extract_all_pic_metas,
-    extract_in_post_pic_paths, make_resource_dir_name, url_to_filename,
-};
+use crate::utils::{extract_all_pic_metas, make_resource_dir_name};
+use view_model::PostView;
 
 lazy_static! {
     pub static ref TEMPLATES: Tera = {
@@ -56,9 +53,9 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
     ) -> Result<String> {
         let pic_folder = make_resource_dir_name(page_name);
         let pic_quality = get_config().read()?.picture_definition;
-        let post = post_to_tera_value(post, &pic_folder, pic_quality, emoji_map)?;
+        let post_view = PostView::from_post(post, &pic_folder, pic_quality, emoji_map)?;
 
-        let context = Context::from_value(post)?;
+        let context = Context::from_serialize(post_view)?;
         let html = TEMPLATES.render("post.html", &context)?;
         Ok(html)
     }
@@ -124,185 +121,6 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
                 blob,
             }))
     }
-}
-
-fn post_to_tera_value(
-    mut post: Post,
-    pic_folder: &str,
-    pic_quality: PictureDefinition,
-    emoji_map: Option<&HashMap<String, Url>>,
-) -> Result<Value> {
-    let pic_folder = Path::new(pic_folder);
-    post.text = trans_text(&post, Path::new(pic_folder), emoji_map)?;
-    let ret_resource = if let Some(retweet) = post.retweeted_status.as_mut() {
-        retweet.text = trans_text(retweet, pic_folder, emoji_map)?;
-        Some((
-            extract_in_post_pic_paths(retweet, pic_folder, pic_quality),
-            extract_avatar_path(retweet, pic_folder),
-        ))
-    } else {
-        None
-    };
-
-    let in_post_pic_paths = extract_in_post_pic_paths(&post, pic_folder, pic_quality);
-    let avatar_path = extract_avatar_path(&post, pic_folder);
-    let mut post = to_value(post)?;
-    post["avatar_path"] = to_value(avatar_path)?;
-    post["pic_paths"] = to_value(in_post_pic_paths)?;
-    if let Some((pic_paths, avatar_path)) = ret_resource {
-        post["retweeted_status"]["avatar_path"] = to_value(avatar_path)?;
-        post["retweeted_status"]["pic_paths"] = to_value(pic_paths)?;
-    }
-    Ok(post)
-}
-
-fn trans_text(
-    post: &Post,
-    pic_folder: &Path,
-    emoji_map: Option<&HashMap<String, Url>>,
-) -> Result<String> {
-    // find all email suffixes
-    let emails_suffixes = EMAIL_EXPR
-        .find_iter(&post.text)
-        .filter_map(|m| AT_EXPR.find(m.as_str()).map(|m| m.as_str()))
-        .collect::<HashSet<_>>();
-
-    // convert all '\n' to '<br />' newline tag
-    let text = NEWLINE_EXPR.replace_all(&post.text, "<br />");
-
-    // convert all url to hyperlink
-    let text = {
-        let res = URL_EXPR
-            .find_iter(&text)
-            .fold((Borrowed(""), 0), |(acc, i), m| {
-                (
-                    acc + &text[i..m.start()] + trans_url(post.url_struct.as_ref(), m.as_str()),
-                    m.end(),
-                )
-            });
-        res.0 + Borrowed(&text[res.1..])
-    };
-
-    // convert all @ to hyperlink, except email suffixes
-    let text = {
-        let res = AT_EXPR
-            .find_iter(&text)
-            .filter(|m| !emails_suffixes.contains(m.as_str()))
-            .fold((Borrowed(""), 0), |(acc, i), m| {
-                (
-                    acc + Borrowed(&text[i..m.start()]) + trans_user(&text[m.start()..m.end()]),
-                    m.end(),
-                )
-            });
-        res.0 + Borrowed(&text[res.1..])
-    };
-
-    // convert all topic to hyperlink
-    let text = {
-        let res = TOPIC_EXPR
-            .find_iter(&text)
-            .fold((Borrowed(""), 0), |(acc, i), m| {
-                (
-                    acc + &text[i..m.start()] + trans_topic(&text[m.start()..m.end()]),
-                    m.end(),
-                )
-            });
-        res.0 + Borrowed(&text[res.1..])
-    };
-
-    // convert all emoji mark to emoji pic
-    let text = {
-        let res = EMOJI_EXPR
-            .find_iter(&text)
-            .fold((Borrowed(""), 0), |(acc, i), m| {
-                (
-                    acc + &text[i..m.start()]
-                        + trans_emoji(&text[m.start()..m.end()], pic_folder, emoji_map),
-                    m.end(),
-                )
-            });
-        res.0 + Borrowed(&text[res.1..])
-    };
-    Ok(text.to_string())
-}
-
-fn trans_emoji<'a>(
-    s: &'a str,
-    pic_folder: &'a Path,
-    emoji_map: Option<&HashMap<String, Url>>,
-) -> Cow<'a, str> {
-    let Some(emoji_url) = emoji_map.and_then(|m| m.get(s)) else {
-        return s.into();
-    };
-    let Ok(pic_name) = url_to_filename(emoji_url) else {
-        return s.into();
-    };
-    let pic_path = pic_folder.join(pic_name);
-    let Some(pic_path) = pic_path.to_str() else {
-        return s.into();
-    };
-    Borrowed(r#"<img class="bk-emoji" alt=""#)
-        + s
-        + r#"" title=""#
-        + s
-        + r#"" src=""#
-        + Owned(pic_path.to_owned())
-        + r#"" />"#
-}
-
-fn trans_user(s: &str) -> Cow<'_, str> {
-    Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#) + &s[1..] + "\">" + s + "</a>"
-}
-
-fn trans_topic(s: &str) -> Cow<'_, str> {
-    Borrowed(r#"<a class ="bk-link" href="https://s.weibo.com/weibo?q="#)
-        + s
-        + r#"" target="_blank">"#
-        + s
-        + "</a>"
-}
-
-fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, url: &'a str) -> Cow<'a, str> {
-    let this_struct = url_struct.and_then(|p| p.0.iter().find(|u| u.short_url.as_str() == url));
-    let url_title = this_struct
-        .map(|u| u.url_title.as_str())
-        .unwrap_or("网页链接");
-    let url = if let Some(long_url) = this_struct.and_then(|u| u.long_url.as_ref())
-        && Url::parse(long_url).is_ok()
-    {
-        long_url.as_str()
-    } else {
-        url
-    };
-
-    Borrowed(r#"<a class="bk-link" target="_blank" href=""#)
-        + url
-        + "\"><img class=\"bk-icon-link\" src=\"https://h5.sinaimg.cn/upload/2015/09/25/3/\
-               timeline_card_small_web_default.png\"/>"
-        + url_title
-        + "</a>"
-}
-
-fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
-    post.user
-        .as_ref()
-        .map(|u| {
-            url_to_filename(&u.avatar_hd).and_then(|name| {
-                pic_folder
-                    .join(&name)
-                    .to_str()
-                    .ok_or(Error::FormatError(format!(
-                        "invalid path {pic_folder:?}/{name}"
-                    )))
-                    .map(ToString::to_string)
-                    .map_err(|e| {
-                        log::info!("{e}");
-                        e
-                    })
-            })
-        })
-        .transpose()
-        .unwrap_or_default()
 }
 
 #[cfg(test)]
