@@ -16,7 +16,7 @@ use crate::core::task::{
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
-use crate::html_generator::{HTMLGenerator, create_tera};
+use crate::html_generator::HTMLGenerator;
 use crate::media_downloader::MediaDownloader;
 use crate::message::TaskType;
 use crate::models::{Picture, PictureMeta, User};
@@ -39,8 +39,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         let processer = PostProcesser::new(storage.clone(), downloader.clone(), emoji_map.clone())?;
 
-        let tera = create_tera(crate::config::get_config().read()?.templates_path.as_path())?;
-        let html_generator = HTMLGenerator::new(emoji_map, storage.clone(), tera);
+        let html_generator = HTMLGenerator::new(emoji_map, storage.clone());
 
         Ok(TaskHandler {
             api_client,

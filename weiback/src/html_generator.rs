@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use futures::future::try_join_all;
+use lazy_static::lazy_static;
 use log::{debug, info};
 use serde_json::{Value, to_value};
 use tera::{Context, Tera};
@@ -22,34 +23,29 @@ use crate::utils::{
     extract_in_post_pic_paths, make_resource_dir_name, url_to_filename,
 };
 
-pub fn create_tera(template_path: &Path) -> Result<Tera> {
-    let mut path = template_path
-        .to_str()
-        .ok_or(Error::ConfigError(format!(
-            "template path in config cannot convert to str: {template_path:?}"
-        )))?
-        .to_owned();
-    path.push_str("/*.html");
-    debug!("init tera from template: {path}");
-    let mut templates = Tera::new(&path)?;
-    templates.autoescape_on(Vec::new());
-    Ok(templates)
+lazy_static! {
+    pub static ref TEMPLATES: Tera = {
+        let mut tera = Tera::default();
+        tera.add_raw_template("page.html", include_str!("../templates/page.html"))
+            .unwrap();
+        tera.add_raw_template("post.html", include_str!("../templates/post.html"))
+            .unwrap();
+        tera.add_raw_template("posts.html", include_str!("../templates/posts.html"))
+            .unwrap();
+        tera.autoescape_on(Vec::new());
+        tera
+    };
 }
 
 #[derive(Debug, Clone)]
 pub struct HTMLGenerator<E: EmojiUpdateApi, S: Storage> {
     storage: S,
-    templates: Tera,
     emoji_map: EmojiMap<E>,
 }
 
 impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
-    pub fn new(emoji_map: EmojiMap<E>, storage: S, engine: Tera) -> Self {
-        Self {
-            storage,
-            templates: engine,
-            emoji_map,
-        }
+    pub fn new(emoji_map: EmojiMap<E>, storage: S) -> Self {
+        Self { storage, emoji_map }
     }
 
     fn generate_post(
@@ -63,7 +59,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         let post = post_to_tera_value(post, &pic_folder, pic_quality, emoji_map)?;
 
         let context = Context::from_value(post)?;
-        let html = self.templates.render("post.html", &context)?;
+        let html = TEMPLATES.render("post.html", &context)?;
         Ok(html)
     }
 
@@ -77,7 +73,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         let posts_html = posts_html.join("");
         let mut context = Context::new();
         context.insert("html", &posts_html);
-        let html = self.templates.render("page.html", &context)?;
+        let html = TEMPLATES.render("page.html", &context)?;
         info!("Successfully generated page");
         Ok(html)
     }
@@ -311,7 +307,7 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod local_tests {
-    use std::path::PathBuf;
+    use std::path::Path;
 
     use weibosdk_rs::mock::MockClient;
 
@@ -321,12 +317,6 @@ mod local_tests {
         mock::MockApi,
         storage::{StorageImpl, database},
     };
-
-    fn create_test_tera() -> Tera {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("templates");
-        create_tera(&path).unwrap()
-    }
 
     async fn create_test_storage() -> StorageImpl {
         let db_pool = database::create_db_pool_with_url(":memory:").await.unwrap();
@@ -365,10 +355,9 @@ mod local_tests {
     }
 
     async fn create_generator(api: &MockApi) -> HTMLGenerator<MockApi, StorageImpl> {
-        let tera = create_test_tera();
         let storage = create_test_storage().await;
         let emoji_map = EmojiMap::new(api.clone());
-        HTMLGenerator::new(emoji_map, storage, tera)
+        HTMLGenerator::new(emoji_map, storage)
     }
 
     async fn create_posts(api: &MockApi) -> Vec<Post> {
