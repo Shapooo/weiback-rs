@@ -307,6 +307,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     pub async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         self.storage.delete_post(ctx, id).await
     }
+
+    pub async fn rebackup_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
+        let post = self.api_client.statuses_show(id).await?;
+        self.processer.process(ctx, vec![post]).await
+    }
 }
 
 #[cfg(test)]

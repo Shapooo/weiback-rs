@@ -125,6 +125,16 @@ async fn delete_post(core: State<'_, Arc<Core>>, id: String) -> Result<()> {
 }
 
 #[tauri::command]
+async fn rebackup_post(core: State<'_, Arc<Core>>, id: String) -> Result<()> {
+    info!("rebackup_post called with id: {id}");
+    let id = id.parse::<i64>().map_err(|err| {
+        error!("Failed to parse id: {err}");
+        err
+    })?;
+    Ok(core.rebackup_post(id).await?)
+}
+
+#[tauri::command]
 async fn get_username_by_id(
     core: State<'_, Arc<Core>>,
     uid: String,
@@ -157,7 +167,8 @@ pub fn run() -> Result<()> {
             set_config_command,
             get_username_by_id,
             get_picture_blob,
-            delete_post
+            delete_post,
+            rebackup_post
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")
