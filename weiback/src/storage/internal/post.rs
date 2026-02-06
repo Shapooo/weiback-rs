@@ -244,6 +244,33 @@ where
     .collect())
 }
 
+pub async fn get_retweeted_posts_id<'e, E>(executor: E, id: i64) -> Result<Vec<i64>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query_scalar("SELECT id FROM posts WHERE retweeted_id = ?")
+        .bind(id)
+        .fetch_all(executor)
+        .await
+        .map_err(Into::into)
+}
+
+pub async fn delete_post<'c, A>(acquirer: A, id: i64) -> Result<()>
+where
+    A: Acquire<'c, Database = Sqlite>,
+{
+    let mut conn = acquirer.acquire().await?;
+    sqlx::query("DELETE FROM posts WHERE id = ?")
+        .bind(id)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("DELETE FROM favorited_posts WHERE id = ?")
+        .bind(id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
 pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<PostInternal>, u64)>
 where
     A: Acquire<'c, Database = Sqlite>,

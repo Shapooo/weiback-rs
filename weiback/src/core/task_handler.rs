@@ -303,6 +303,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             total_items: paginated_posts.total_items,
         })
     }
+
+    pub async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
+        self.storage.delete_post(ctx, id).await
+    }
 }
 
 #[cfg(test)]

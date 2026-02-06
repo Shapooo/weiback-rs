@@ -5,6 +5,22 @@ use url::Url;
 
 use crate::{error::Result, utils::url_to_db_key};
 
+pub async fn get_video_paths_by_post_id(db: &SqlitePool, post_id: i64) -> Result<Vec<PathBuf>> {
+    let paths: Vec<String> = sqlx::query_scalar("SELECT path FROM video WHERE post_id = ?")
+        .bind(post_id)
+        .fetch_all(db)
+        .await?;
+    Ok(paths.into_iter().map(PathBuf::from).collect())
+}
+
+pub async fn delete_videos_by_post_id(db: &SqlitePool, post_id: i64) -> Result<()> {
+    sqlx::query("DELETE FROM video WHERE post_id = ?")
+        .bind(post_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 pub async fn save_video_meta(db: &SqlitePool, url: &Url, post_id: i64, path: &Path) -> Result<()> {
     sqlx::query::<Sqlite>(
         r#"INSERT OR IGNORE INTO video (

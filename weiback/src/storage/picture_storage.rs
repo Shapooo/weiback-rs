@@ -88,6 +88,30 @@ impl FileSystemPictureStorage {
         let absolute_path = picture_path.join(relative_path);
         Ok(absolute_path.exists())
     }
+
+    pub async fn delete_pictures_of_post(
+        &self,
+        picture_path: &Path,
+        db: &sqlx::SqlitePool,
+        post_id: i64,
+    ) -> Result<()> {
+        let pic_infos = picture::get_pictures_by_post_id(db, post_id).await?;
+        picture::delete_pictures_by_post_id(db, post_id).await?;
+
+        for info in pic_infos {
+            let pic_path = picture_path.join(info.path);
+            if pic_path.exists()
+                && let Err(e) = tokio::fs::remove_file(&pic_path).await
+            {
+                log::error!(
+                    "Failed to delete picture file {}: {}",
+                    pic_path.display(),
+                    e
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -45,6 +45,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
+    async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()>;
     fn save_picture(
         &self,
         ctx: Arc<TaskContext>,
@@ -165,6 +166,32 @@ impl StorageImpl {
         }
         posts
     }
+
+    fn delete_post_recursive(
+        &self,
+        ctx: Arc<TaskContext>,
+        id: i64,
+    ) -> impl Future<Output = Result<()>> {
+        Box::pin(async move {
+            let picture_path = ctx.config.picture_path.clone();
+            let video_path = ctx.config.video_path.clone();
+            let retweeted_posts_ids = post::get_retweeted_posts_id(&self.db_pool, id).await?;
+            for post_id in retweeted_posts_ids {
+                self.delete_post_recursive(ctx.clone(), post_id).await?;
+            }
+
+            self.pic_storage
+                .delete_pictures_of_post(&picture_path, &self.db_pool, id)
+                .await?;
+            self.video_storage
+                .delete_videos_of_post(&video_path, &self.db_pool, id)
+                .await?;
+
+            post::delete_post(&self.db_pool, id).await?;
+
+            Ok(())
+        })
+    }
 }
 
 impl Storage for StorageImpl {
@@ -257,6 +284,10 @@ impl Storage for StorageImpl {
 
     async fn get_pictures_by_id(&self, id: &str) -> Result<Vec<PictureInfo>> {
         picture::get_pictures_by_id(&self.db_pool, id).await
+    }
+
+    async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
+        self.delete_post_recursive(ctx, id).await
     }
 }
 

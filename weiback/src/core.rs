@@ -82,6 +82,11 @@ impl Core {
         self.task_handler.query_posts(ctx, query).await
     }
 
+    pub async fn delete_post(&self, id: i64) -> Result<()> {
+        let ctx = self.create_task_context().await?;
+        self.task_handler.delete_post(ctx, id).await
+    }
+
     pub async fn get_picture_blob(&self, id: String) -> Result<Option<Bytes>> {
         let ctx = self.create_task_context().await?;
         self.task_handler.get_picture_blob(ctx, &id).await

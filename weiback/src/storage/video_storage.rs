@@ -70,6 +70,30 @@ impl FileSystemVideoStorage {
         let absolute_path = video_path.join(relative_path);
         Ok(absolute_path.exists())
     }
+
+    pub async fn delete_videos_of_post(
+        &self,
+        video_path: &Path,
+        db: &SqlitePool,
+        post_id: i64,
+    ) -> Result<()> {
+        let video_paths = video::get_video_paths_by_post_id(db, post_id).await?;
+        video::delete_videos_by_post_id(db, post_id).await?;
+
+        for path in video_paths {
+            let absolute_path = video_path.join(path);
+            if absolute_path.exists()
+                && let Err(e) = tokio::fs::remove_file(&absolute_path).await
+            {
+                log::error!(
+                    "Failed to delete video file {}: {}",
+                    absolute_path.display(),
+                    e
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

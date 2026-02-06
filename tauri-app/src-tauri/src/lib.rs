@@ -3,7 +3,7 @@ mod error;
 use std::sync::Arc;
 
 use log::{error, info};
-use serde;
+use serde::Serialize;
 use serde_json::Value;
 use tauri::{self, App, AppHandle, Emitter, Manager, State};
 use tokio::sync::mpsc;
@@ -18,7 +18,7 @@ use weiback::message::{ErrMsg, Message, TaskProgress};
 use error::Result;
 use tauri::ipc::Response;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum PictureError {
     NotFound,
@@ -115,6 +115,16 @@ async fn login_state(core: State<'_, Arc<Core>>) -> Result<Option<Value>> {
 }
 
 #[tauri::command]
+async fn delete_post(core: State<'_, Arc<Core>>, id: String) -> Result<()> {
+    info!("delete_post called with id: {id}");
+    let id = id.parse::<i64>().map_err(|err| {
+        error!("Failed to parse id: {err}");
+        err
+    })?;
+    Ok(core.delete_post(id).await?)
+}
+
+#[tauri::command]
 async fn get_username_by_id(
     core: State<'_, Arc<Core>>,
     uid: String,
@@ -146,7 +156,8 @@ pub fn run() -> Result<()> {
             get_config_command,
             set_config_command,
             get_username_by_id,
-            get_picture_blob
+            get_picture_blob,
+            delete_post
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

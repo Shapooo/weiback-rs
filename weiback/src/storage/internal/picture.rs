@@ -161,3 +161,14 @@ where
     .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
+
+pub async fn delete_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query("DELETE FROM picture WHERE post_id = ?")
+        .bind(post_id)
+        .execute(executor)
+        .await?;
+    Ok(())
+}
