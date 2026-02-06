@@ -131,6 +131,10 @@ const LocalExportPage: React.FC = () => {
         }
     }, [enqueueSnackbar]);
 
+    const handlePostDeleted = useCallback(() => {
+        fetchPosts(page, appliedFilters);
+    }, [fetchPosts, page, appliedFilters]);
+
     // Fetch posts when page or applied filters change
     useEffect(() => {
         fetchPosts(page, appliedFilters);
@@ -290,6 +294,7 @@ const LocalExportPage: React.FC = () => {
                                                 maxAttachmentImages={3}
                                                 onClick={handlePostClick}
                                                 maxLines={3}
+                                                onPostDeleted={handlePostDeleted}
                                             />
                                         </Box>
                                     ))}

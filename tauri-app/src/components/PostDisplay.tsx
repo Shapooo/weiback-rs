@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useSnackbar } from 'notistack';
 import {
     Avatar,
     Box,
@@ -11,8 +12,15 @@ import {
     Stack,
     CircularProgress,
     Tooltip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Button,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import DeleteIcon from '@mui/icons-material/Delete';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachmentCache } from '../cache';
@@ -283,53 +291,116 @@ interface PostDisplayProps {
     maxAttachmentImages?: number; // Prop to limit displayed attachments
     onClick?: (postInfo: PostInfo) => void;
     maxLines?: number; // New prop for text truncation
+    onPostDeleted?: () => void;
 }
 
-const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, onClick, maxLines }) => {
+const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, onClick, maxLines, onPostDeleted }) => {
+    const { enqueueSnackbar } = useSnackbar();
+    const [dialogOpen, setDialogOpen] = useState(false);
+
+    const handleDeleteClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setDialogOpen(true);
+    };
+
+    const handleDialogClose = () => {
+        setDialogOpen(false);
+    };
+
+    const handleDeleteConfirm = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            await invoke('delete_post', { id: postInfo.post.id.toString() });
+            enqueueSnackbar('帖子已删除', { variant: 'success' });
+            onPostDeleted?.();
+        } catch (error) {
+            console.error('Failed to delete post:', error);
+            enqueueSnackbar(`删除失败: ${error}`, { variant: 'error' });
+        } finally {
+            setDialogOpen(false);
+        }
+    };
+
     return (
-        <Card
-            onClick={() => onClick?.(postInfo)}
-            sx={{ cursor: onClick ? 'pointer' : 'default' }}
-        >
-            <CardHeader
-                avatar={
-                    <AvatarImage avatarId={postInfo.avatar_id} />
-                }
-                title={postInfo.post.user?.screen_name || '未知用户'}
-                subheader={new Date(postInfo.post.created_at).toLocaleString()}
-                action={
-                    postInfo.post.user?.id && postInfo.post.id ? (
-                        <Tooltip
-                            title={`https://weibo.com/${postInfo.post.user.id}/${postInfo.post.id}`}
-                            enterDelay={500}
-                            arrow
-                        >
-                            <IconButton
-                                aria-label="open original post"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
-                                    openUrl(url).catch(e => console.error('Failed to open URL:', e));
-                                }}
-                            >
-                                <OpenInNewIcon />
-                            </IconButton>
-                        </Tooltip>
-                    ) : null
-                } />
-            <CardContent>
-                <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
-                {postInfo.post.retweeted_status && (
-                    <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
-                        </Typography>
-                        <TextWithEmojis text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
-                    </Box>
-                )}
-                <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={onImageClick} maxImages={maxAttachmentImages} />
-            </CardContent>
-        </Card>
+        <>
+            <Card
+                onClick={() => onClick?.(postInfo)}
+                sx={{ cursor: onClick ? 'pointer' : 'default' }}
+            >
+                <CardHeader
+                    avatar={
+                        <AvatarImage avatarId={postInfo.avatar_id} />
+                    }
+                    title={postInfo.post.user?.screen_name || '未知用户'}
+                    subheader={new Date(postInfo.post.created_at).toLocaleString()}
+                    action={
+                        <Stack direction="row" alignItems="center">
+                            {postInfo.post.user?.id && postInfo.post.id ? (
+                                <Tooltip
+                                    title={`https://weibo.com/${postInfo.post.user.id}/${postInfo.post.id}`}
+                                    enterDelay={500}
+                                    arrow
+                                >
+                                    <IconButton
+                                        aria-label="open original post"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`;
+                                            openUrl(url).catch(e => console.error('Failed to open URL:', e));
+                                        }}
+                                    >
+                                        <OpenInNewIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
+                            {postInfo.post.id ? (
+                                <Tooltip title="删除" enterDelay={500} arrow>
+                                    <IconButton
+                                        aria-label="delete post"
+                                        onClick={handleDeleteClick}
+                                    >
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
+                        </Stack>
+                    } />
+                <CardContent>
+                    <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
+                    {postInfo.post.retweeted_status && (
+                        <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
+                            </Typography>
+                            <TextWithEmojis text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
+                        </Box>
+                    )}
+                    <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={onImageClick} maxImages={maxAttachmentImages} />
+                </CardContent>
+            </Card>
+            <Dialog
+                open={dialogOpen}
+                onClose={handleDialogClose}
+                onClick={(e) => e.stopPropagation()}
+                aria-labelledby="alert-dialog-title"
+                aria-describedby="alert-dialog-description"
+            >
+                <DialogTitle id="alert-dialog-title">
+                    {"确认删除"}
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="alert-dialog-description">
+                        删除会删除该post及该post的所有转发以及图片等资源，且无法撤回。你确定要删除吗？
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleDialogClose}>取消</Button>
+                    <Button onClick={handleDeleteConfirm} color="error" autoFocus>
+                        确认
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
     );
 };
 
