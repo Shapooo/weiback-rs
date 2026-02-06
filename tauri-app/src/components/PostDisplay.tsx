@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SyncIcon from '@mui/icons-material/Sync';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachmentCache } from '../cache';
@@ -321,6 +322,17 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
         }
     };
 
+    const handleRebackupClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            await invoke('rebackup_post', { id: postInfo.post.id.toString() });
+            enqueueSnackbar('已加入重新备份队列', { variant: 'info' });
+        } catch (error) {
+            console.error('Failed to re-backup post:', error);
+            enqueueSnackbar(`重新备份失败: ${error}`, { variant: 'error' });
+        }
+    };
+
     return (
         <>
             <Card
@@ -335,6 +347,16 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                     subheader={new Date(postInfo.post.created_at).toLocaleString()}
                     action={
                         <Stack direction="row" alignItems="center">
+                            {postInfo.post.id ? (
+                                <Tooltip title="重新备份" enterDelay={500} arrow>
+                                    <IconButton
+                                        aria-label="re-backup post"
+                                        onClick={handleRebackupClick}
+                                    >
+                                        <SyncIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
                             {postInfo.post.user?.id && postInfo.post.id ? (
                                 <Tooltip
                                     title={`https://weibo.com/${postInfo.post.user.id}/${postInfo.post.id}`}
