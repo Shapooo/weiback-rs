@@ -70,6 +70,7 @@ const LocalExportPage: React.FC = () => {
         startDate: null as Date | null,
         endDate: null as Date | null,
         isFavorited: false,
+        reverseOrder: false,
     });
     // State to hold the filters that are actually applied
     const [appliedFilters, setAppliedFilters] = useState(filters);
@@ -113,7 +114,7 @@ const LocalExportPage: React.FC = () => {
                 page: currentPage,
                 posts_per_page: POSTS_PER_PAGE,
                 is_favorited: currentFilters.isFavorited,
-                reverse_order: false, // Show newest first
+                reverse_order: currentFilters.reverseOrder, // Use new state
                 user_id: currentFilters.userId ? parseInt(currentFilters.userId, 10) : undefined,
                 start_date: currentFilters.startDate ? Math.floor(currentFilters.startDate.getTime() / 1000) : undefined,
                 end_date: currentFilters.endDate ? Math.floor(currentFilters.endDate.getTime() / 1000) : undefined,
@@ -151,6 +152,7 @@ const LocalExportPage: React.FC = () => {
             startDate: null,
             endDate: null,
             isFavorited: false,
+            reverseOrder: false,
         };
         setFilters(clearedFilters);
         if (JSON.stringify(appliedFilters) !== JSON.stringify(clearedFilters)) {
@@ -183,7 +185,7 @@ const LocalExportPage: React.FC = () => {
                 page: 1, // Export should start from page 1
                 posts_per_page: 1_000_000, // A large number to signify "all"
                 is_favorited: appliedFilters.isFavorited,
-                reverse_order: true,
+                reverse_order: appliedFilters.reverseOrder, // Use new state
                 user_id: appliedFilters.userId ? parseInt(appliedFilters.userId, 10) : undefined,
                 start_date: appliedFilters.startDate ? Math.floor(appliedFilters.startDate.getTime() / 1000) : undefined,
                 end_date: appliedFilters.endDate ? Math.floor(appliedFilters.endDate.getTime() / 1000) : undefined,
@@ -220,6 +222,37 @@ const LocalExportPage: React.FC = () => {
                     <AccordionDetails>
                         <Stack spacing={2}>
                             <Grid container spacing={2}>
+                                {/* First Line: Checkboxes and User ID */}
+                                <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                checked={filters.isFavorited}
+                                                onChange={(e) => setFilters(f => ({ ...f, isFavorited: e.target.checked }))}
+                                            />
+                                        }
+                                        label="收藏"
+                                    />
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                checked={filters.reverseOrder}
+                                                onChange={(e) => setFilters(f => ({ ...f, reverseOrder: e.target.checked }))}
+                                            />
+                                        }
+                                        label="逆序"
+                                    />
+                                </Grid>
+                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                                    <TextField
+                                        fullWidth
+                                        label="用户ID"
+                                        value={filters.userId}
+                                        onChange={(e) => setFilters(f => ({ ...f, userId: e.target.value }))}
+                                        type="number"
+                                    />
+                                </Grid>
+                                {/* Second Line: Date Pickers */}
                                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                                     <DatePicker
                                         label="起始日期"
@@ -232,26 +265,6 @@ const LocalExportPage: React.FC = () => {
                                         label="结束日期"
                                         value={filters.endDate}
                                         onChange={(date) => setFilters(f => ({ ...f, endDate: date }))}
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                                    <TextField
-                                        fullWidth
-                                        label="用户ID"
-                                        value={filters.userId}
-                                        onChange={(e) => setFilters(f => ({ ...f, userId: e.target.value }))}
-                                        type="number"
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                checked={filters.isFavorited}
-                                                onChange={(e) => setFilters(f => ({ ...f, isFavorited: e.target.checked }))}
-                                            />
-                                        }
-                                        label="只看收藏"
                                     />
                                 </Grid>
                             </Grid>
