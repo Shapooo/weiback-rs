@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
-import { Card, CardContent, Typography, TextField, Button, Box, Stack } from '@mui/material';
+import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 
 interface UserInfo {
     id: number;
@@ -12,7 +12,9 @@ const UserBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [userId, setUserId] = useState('');
     const [userName, setUserName] = useState<string | null>(null);
-    const [numPages, setNumPages] = useState(10);
+    const [numPages, setNumPages] = useState(1);
+    const [backupType, setBackupType] = useState('Normal');
+
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -50,7 +52,7 @@ const UserBackupSection: React.FC = () => {
         }
         enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
-            await invoke('backup_user', { uid: backupId, numPages });
+            await invoke('backup_user', { uid: backupId, numPages, backupType });
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -83,6 +85,22 @@ const UserBackupSection: React.FC = () => {
                                 用户名: {userName}
                             </Typography>
                         )}
+                        <FormControl fullWidth>
+                            <InputLabel id="backup-type-select-label">备份类型</InputLabel>
+                            <Select
+                                labelId="backup-type-select-label"
+                                id="backup-type-select"
+                                value={backupType}
+                                label="备份类型"
+                                onChange={(e) => setBackupType(e.target.value)}
+                            >
+                                <MenuItem value={'Normal'}>全部</MenuItem>
+                                <MenuItem value={'Original'}>原创</MenuItem>
+                                <MenuItem value={'Picture'}>图片</MenuItem>
+                                <MenuItem value={'Video'}>视频</MenuItem>
+                                <MenuItem value={'Article'}>文章</MenuItem>
+                            </Select>
+                        </FormControl>
                         <TextField
                             fullWidth
                             label="备份页数"
@@ -103,7 +121,7 @@ const UserBackupSection: React.FC = () => {
 
 const FavoritesBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
-    const [numPages, setNumPages] = useState(10);
+    const [numPages, setNumPages] = useState(1);
 
     const handleBackup = async () => {
         if (numPages <= 0) {
