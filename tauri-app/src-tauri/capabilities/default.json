@@ -3,5 +3,10 @@
   "identifier": "main-capability",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": ["opener:allow-default-urls", "opener:allow-open-url"]
+  "permissions": [
+    "opener:allow-default-urls",
+    "opener:allow-open-url",
+    "dialog:default",
+    "dialog:allow-open"
+  ]
 }
