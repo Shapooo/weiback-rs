@@ -3,10 +3,10 @@ use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use log::{debug, error, info};
 use serde::Deserialize;
-use weibosdk_rs::{
-    http_client::{HttpClient, HttpResponse},
-    profile_statuses::ContainerType,
-};
+use weibosdk_rs::http_client::{HttpClient, HttpResponse};
+
+// re-export
+pub use weibosdk_rs::profile_statuses::ContainerType;
 
 use super::{ApiClientImpl, internal::post::PostInternal};
 use crate::{
@@ -35,25 +35,29 @@ pub struct ProfileStatusesSucc {
 }
 
 pub trait ProfileStatusesApi {
-    async fn profile_statuses(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-    async fn profile_statuses_original(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-    async fn profile_statuses_picture(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-    async fn profile_statuses_video(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-    async fn profile_statuses_article(&self, uid: i64, page: u32) -> Result<Vec<Post>>;
-}
-
-impl<C: HttpClient> ApiClientImpl<C> {
-    async fn do_profile_statuses(
+    async fn profile_statuses(
         &self,
         uid: i64,
         page: u32,
-        r#type: ContainerType,
+        container_type: ContainerType,
+    ) -> Result<Vec<Post>>;
+}
+
+impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
+    async fn profile_statuses(
+        &self,
+        uid: i64,
+        page: u32,
+        containter_type: ContainerType,
     ) -> Result<Vec<Post>> {
         info!(
             "getting profile statuses, uid: {uid}, page: {page}, type: {:?}",
-            r#type
+            containter_type
         );
-        let response = self.client.profile_statuses(uid, page, r#type).await?;
+        let response = self
+            .client
+            .profile_statuses(uid, page, containter_type)
+            .await?;
         let response = response.json::<ProfileStatusesResponse>().await?;
         match response {
             ProfileStatusesResponse::Succ(ProfileStatusesSucc { cards }) => {
@@ -76,33 +80,6 @@ impl<C: HttpClient> ApiClientImpl<C> {
                 Err(Error::ApiError(err))
             }
         }
-    }
-}
-
-impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
-    async fn profile_statuses(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        let r#type = ContainerType::Normal;
-        self.do_profile_statuses(uid, page, r#type).await
-    }
-
-    async fn profile_statuses_original(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        let r#type = ContainerType::Original;
-        self.do_profile_statuses(uid, page, r#type).await
-    }
-
-    async fn profile_statuses_picture(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        let r#type = ContainerType::Picture;
-        self.do_profile_statuses(uid, page, r#type).await
-    }
-
-    async fn profile_statuses_video(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        let r#type = ContainerType::Video;
-        self.do_profile_statuses(uid, page, r#type).await
-    }
-
-    async fn profile_statuses_article(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        let r#type = ContainerType::Article;
-        self.do_profile_statuses(uid, page, r#type).await
     }
 }
 
@@ -131,7 +108,10 @@ mod local_tests {
             .set_profile_statuses_response_from_file(&testcase_path)
             .unwrap();
 
-        weibo_api.profile_statuses_original(12345, 1).await.unwrap();
+        weibo_api
+            .profile_statuses(12345, 1, Default::default())
+            .await
+            .unwrap();
     }
 }
 
@@ -146,7 +126,10 @@ mod real_tests {
         if let Ok(session) = Session::load(session_file) {
             let client = http_client::Client::new().unwrap();
             let weibo_api = ApiClientImpl::new(SdkApiClient::from_session(client, session));
-            let posts = weibo_api.profile_statuses(1401527553, 1).await.unwrap();
+            let posts = weibo_api
+                .profile_statuses(1401527553, 1, Default::default())
+                .await
+                .unwrap();
             assert!(!posts.is_empty());
         }
     }

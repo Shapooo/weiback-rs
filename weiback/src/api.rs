@@ -13,7 +13,7 @@ use internal::post::PostInternal;
 
 pub use emoji::EmojiUpdateApi;
 pub use favorites::FavoritesApi;
-pub use profile_statuses::ProfileStatusesApi;
+pub use profile_statuses::{ContainerType, ProfileStatusesApi};
 pub use statuses_show::StatusesShowApi;
 
 pub trait ApiClient:

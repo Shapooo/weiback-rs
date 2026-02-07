@@ -5,7 +5,8 @@ use weibosdk_rs::{api_client::ApiClient as SdkApiClient, mock::MockClient};
 
 use crate::{
     api::{
-        ApiClient, ApiClientImpl, EmojiUpdateApi, FavoritesApi, ProfileStatusesApi, StatusesShowApi,
+        ApiClient, ApiClientImpl, ContainerType, EmojiUpdateApi, FavoritesApi, ProfileStatusesApi,
+        StatusesShowApi,
     },
     error::Result,
     models::post::Post,
@@ -47,24 +48,15 @@ impl StatusesShowApi for MockApi {
 }
 
 impl ProfileStatusesApi for MockApi {
-    async fn profile_statuses(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        self.client.profile_statuses(uid, page).await
-    }
-
-    async fn profile_statuses_original(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        self.client.profile_statuses_original(uid, page).await
-    }
-
-    async fn profile_statuses_picture(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        self.client.profile_statuses_picture(uid, page).await
-    }
-
-    async fn profile_statuses_video(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        self.client.profile_statuses_video(uid, page).await
-    }
-
-    async fn profile_statuses_article(&self, uid: i64, page: u32) -> Result<Vec<Post>> {
-        self.client.profile_statuses_article(uid, page).await
+    async fn profile_statuses(
+        &self,
+        uid: i64,
+        page: u32,
+        container_type: ContainerType,
+    ) -> Result<Vec<Post>> {
+        self.client
+            .profile_statuses(uid, page, container_type)
+            .await
     }
 }
 
@@ -132,7 +124,10 @@ mod local_tests {
         mock_client
             .set_profile_statuses_response_from_file(&get_test_data_path("profile_statuses.json"))
             .unwrap();
-        let result = api.profile_statuses(1786055427, 1).await.unwrap();
+        let result = api
+            .profile_statuses(1786055427, 1, Default::default())
+            .await
+            .unwrap();
         assert!(!result.is_empty());
     }
 }
