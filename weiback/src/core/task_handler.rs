@@ -9,7 +9,7 @@ use tokio::time::sleep;
 
 use super::post_processer::PostProcesser;
 use super::task::TaskContext;
-use crate::api::ApiClient;
+use crate::api::{ApiClient, ContainerType};
 use crate::core::task::{
     BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
 };
@@ -173,13 +173,14 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         options: BackupUserPostsOptions,
     ) -> Result<()> {
         let uid = options.uid;
+        let container_type = options.backup_type.into();
         info!(
-            "Start backing up user {uid} posts, from 1 to {}",
-            options.num_pages
+            "Start backing up user {uid} posts, type: {:?}, from 1 to {}",
+            options.backup_type, options.num_pages
         );
 
         self.backup_procedure(ctx.clone(), options.num_pages, TaskType::BackUser, |page| {
-            self.backup_one_page(ctx.clone(), uid, page)
+            self.backup_one_page(ctx.clone(), uid, page, container_type)
         })
         .await?;
 
@@ -188,12 +189,21 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     // backup one page of posts of the user
-    async fn backup_one_page(&self, ctx: Arc<TaskContext>, uid: i64, page: u32) -> Result<usize> {
+    async fn backup_one_page(
+        &self,
+        ctx: Arc<TaskContext>,
+        uid: i64,
+        page: u32,
+        container_type: ContainerType,
+    ) -> Result<usize> {
         debug!(
             "Backing up page {page} for user {uid}, task {}",
             ctx.task_id
         );
-        let posts = self.api_client.profile_statuses(uid, page).await?;
+        let posts = self
+            .api_client
+            .profile_statuses(uid, page, container_type)
+            .await?;
         let result = posts.len();
         self.processer.process(ctx, posts).await?;
         Ok(result)
@@ -349,7 +359,11 @@ mod local_tests {
             .set_statuses_show_response_from_file(&statuses_show_path)
             .unwrap();
         let mut posts = api.favorites(0).await.unwrap();
-        posts.extend(api.profile_statuses(1786055427, 0).await.unwrap());
+        posts.extend(
+            api.profile_statuses(1786055427, 0, Default::default())
+                .await
+                .unwrap(),
+        );
         posts
     }
 
@@ -380,6 +394,7 @@ mod local_tests {
         let options = BackupUserPostsOptions {
             uid: 1786055427,
             num_pages: 1,
+            backup_type: Default::default(),
         };
         let (msg_sender, _recv) = mpsc::channel(100);
         let dummy_context = Arc::new(TaskContext {

@@ -11,7 +11,8 @@ use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
     BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PostQuery, TaskRequest,
-    task::PaginatedPostInfo, task_manager::TaskManger,
+    task::{BackupType, PaginatedPostInfo},
+    task_manager::TaskManger,
 };
 use weiback::message::{ErrMsg, Message, TaskProgress};
 
@@ -52,8 +53,15 @@ fn set_config_command(config: Config) -> std::result::Result<(), String> {
 }
 
 #[tauri::command]
-async fn backup_user(core: State<'_, Arc<Core>>, uid: String, num_pages: u32) -> Result<()> {
-    info!("backup_user called with uid: {uid}, pages num: {num_pages}");
+async fn backup_user(
+    core: State<'_, Arc<Core>>,
+    uid: String,
+    num_pages: u32,
+    backup_type: BackupType,
+) -> Result<()> {
+    info!(
+        "backup_user called with uid: {uid}, pages num: {num_pages}, backup_type: {backup_type:?}"
+    );
     Ok(core
         .backup_user(TaskRequest::BackupUser(BackupUserPostsOptions {
             uid: uid.parse().map_err(|err| {
@@ -61,6 +69,7 @@ async fn backup_user(core: State<'_, Arc<Core>>, uid: String, num_pages: u32) ->
                 err
             })?,
             num_pages,
+            backup_type,
         }))
         .await?)
 }

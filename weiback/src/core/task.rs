@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::{
+    api::ContainerType,
     config::Config,
     message::{ErrMsg, ErrType, Message, TaskProgress, TaskType},
     models::Post,
@@ -86,6 +87,30 @@ pub struct BackupFavoritesOptions {
 pub struct BackupUserPostsOptions {
     pub num_pages: u32,
     pub uid: i64,
+    #[serde(default)]
+    pub backup_type: BackupType,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum BackupType {
+    #[default]
+    Normal,
+    Original,
+    Picture,
+    Video,
+    Article,
+}
+
+impl From<BackupType> for ContainerType {
+    fn from(value: BackupType) -> Self {
+        match value {
+            BackupType::Normal => ContainerType::Normal,
+            BackupType::Original => ContainerType::Original,
+            BackupType::Picture => ContainerType::Picture,
+            BackupType::Video => ContainerType::Video,
+            BackupType::Article => ContainerType::Article,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
