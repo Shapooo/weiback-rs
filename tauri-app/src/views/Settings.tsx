@@ -23,9 +23,19 @@ enum PictureDefinition {
     Thumbnail = "Thumbnail",
     Bmiddle = "Bmiddle",
     Large = "Large",
-    Largest = "Largest",
     Original = "Original",
+    Mw2000 = "Mw2000",
+    Largest = "Largest",
 }
+
+const pictureDefinitionMap = [
+    { value: PictureDefinition.Largest, label: '原始尺寸' },
+    { value: PictureDefinition.Mw2000, label: '超高清' },
+    { value: PictureDefinition.Original, label: '高清' },
+    { value: PictureDefinition.Large, label: '中等' },
+    { value: PictureDefinition.Bmiddle, label: '标清' },
+    { value: PictureDefinition.Thumbnail, label: '缩略图' },
+];
 
 interface Config {
     db_path: string;
@@ -129,9 +139,12 @@ const SettingsPage: React.FC = () => {
                                     value={config.picture_definition}
                                     label="图片清晰度"
                                     onChange={(e) => handleChange('picture_definition', e.target.value)}
+                                    renderValue={(selectedValue) =>
+                                        pictureDefinitionMap.find(item => item.value === selectedValue)?.label ?? selectedValue
+                                    }
                                 >
-                                    {Object.values(PictureDefinition).map((def) => (
-                                        <MenuItem key={def} value={def}>{def}</MenuItem>
+                                    {pictureDefinitionMap.map((item) => (
+                                        <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>
