@@ -110,14 +110,24 @@ const LocalExportPage: React.FC = () => {
     const fetchPosts = useCallback(async (currentPage: number, currentFilters: typeof filters) => {
         setLoading(true);
         try {
+            const startDate = currentFilters.startDate ? new Date(currentFilters.startDate) : null;
+            if (startDate) {
+                startDate.setHours(0, 0, 0, 0);
+            }
+
+            const endDate = currentFilters.endDate ? new Date(currentFilters.endDate) : null;
+            if (endDate) {
+                endDate.setHours(23, 59, 59, 999);
+            }
+
             const query: PostQuery = {
                 page: currentPage,
                 posts_per_page: POSTS_PER_PAGE,
                 is_favorited: currentFilters.isFavorited,
-                reverse_order: currentFilters.reverseOrder, // Use new state
+                reverse_order: currentFilters.reverseOrder,
                 user_id: currentFilters.userId ? parseInt(currentFilters.userId, 10) : undefined,
-                start_date: currentFilters.startDate ? Math.floor(currentFilters.startDate.getTime() / 1000) : undefined,
-                end_date: currentFilters.endDate ? Math.floor(currentFilters.endDate.getTime() / 1000) : undefined,
+                start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
+                end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
             };
 
             const result: PaginatedPostInfo = await invoke('query_local_posts', { query });
@@ -181,14 +191,24 @@ const LocalExportPage: React.FC = () => {
         enqueueSnackbar('正在准备导出...', { variant: 'info' });
 
         try {
+            const startDate = appliedFilters.startDate ? new Date(appliedFilters.startDate) : null;
+            if (startDate) {
+                startDate.setHours(0, 0, 0, 0);
+            }
+
+            const endDate = appliedFilters.endDate ? new Date(appliedFilters.endDate) : null;
+            if (endDate) {
+                endDate.setHours(23, 59, 59, 999);
+            }
+
             const query: PostQuery = {
                 page: 1, // Export should start from page 1
                 posts_per_page: 1_000_000, // A large number to signify "all"
                 is_favorited: appliedFilters.isFavorited,
-                reverse_order: appliedFilters.reverseOrder, // Use new state
+                reverse_order: appliedFilters.reverseOrder,
                 user_id: appliedFilters.userId ? parseInt(appliedFilters.userId, 10) : undefined,
-                start_date: appliedFilters.startDate ? Math.floor(appliedFilters.startDate.getTime() / 1000) : undefined,
-                end_date: appliedFilters.endDate ? Math.floor(appliedFilters.endDate.getTime() / 1000) : undefined,
+                start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
+                end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
             };
 
             const options: ExportJobOptions = {
