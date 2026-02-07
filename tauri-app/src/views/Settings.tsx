@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useThemeContext } from '../ThemeContext';
 import {
     Card, CardContent, Typography, FormControlLabel, Switch, Box, TextField,
-    Select, MenuItem, InputLabel, FormControl, Grid
+    Select, MenuItem, InputLabel, FormControl, InputAdornment
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useTheme } from '@mui/material/styles';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from "@mui/material";
 
 // Mirror of the Rust Config struct
@@ -67,6 +69,17 @@ const SettingsPage: React.FC = () => {
     const handleReset = () => {
         setConfig(initialConfig);
     }
+
+    const handleSelectPath = async (field: 'picture_path' | 'video_path') => {
+        const selected = await open({
+            directory: true,
+            multiple: false,
+            title: `选择${field === 'picture_path' ? '图片' : '视频'}保存路径`,
+        });
+        if (typeof selected === 'string' && config) {
+            handleChange(field, selected);
+        }
+    };
 
     const handleChange = (field: keyof Config, value: any) => {
         if (config) {
@@ -190,10 +203,31 @@ const SettingsPage: React.FC = () => {
                             <Typography variant="h6" sx={{ mt: 2 }}>路径</Typography>
                         </Grid>
                         <Grid size={{ xs: 12 }}>
-                            <TextField fullWidth label="图片保存路径" value={config.picture_path} slotProps={{ htmlInput: { readOnly: true } }} />
+                            <TextField fullWidth label="图片保存路径" value={config.picture_path}
+                                InputProps={{
+                                    readOnly: true,
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <Button onClick={() => handleSelectPath('picture_path')}>
+                                                选择
+                                            </Button>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
                         </Grid>
                         <Grid size={{ xs: 12 }}>
-                            <TextField fullWidth label="视频保存路径" value={config.video_path} slotProps={{ htmlInput: { readOnly: true } }} />
+                            <TextField fullWidth label="视频保存路径" value={config.video_path}
+                                InputProps={{
+                                    readOnly: true,
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <Button onClick={() => handleSelectPath('video_path')}>
+                                                选择
+                                            </Button>
+                                        </InputAdornment>
+                                    ),
+                                }} />
                         </Grid>
                         {config.dev_mode_out_dir &&
                             <Grid size={{ xs: 12 }}>
