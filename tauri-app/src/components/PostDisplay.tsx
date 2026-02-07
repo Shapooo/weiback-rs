@@ -18,6 +18,7 @@ import {
     DialogContentText,
     DialogTitle,
     Button,
+    Link,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -236,40 +237,78 @@ const AttachmentImages: React.FC<AttachmentImagesProps> = ({ attachmentIds, onIm
     );
 };
 
-interface TextWithEmojisProps {
+interface ProcessedTextProps {
     text: string;
     emoji_map: Record<string, string>;
     maxLines?: number;
 }
 
-const TextWithEmojis: React.FC<TextWithEmojisProps> = ({ text, emoji_map, maxLines }) => {
-    // If no emoji map is provided, just return the plain text
-    if (!emoji_map) {
-        return <>{text}</>;
-    }
+const URL_REGEX = /https?:\/\/[a-zA-Z0-9$%&~_#./\-:=,?]{5,280}/g;
+const AT_REGEX = /@[\u4e00-\u9fa5\uE7C7-\uE7F3\w_\-·]+/gu;
+const TOPIC_REGEX = /#[^#]+#/g;
+const EMAIL_REGEX = /[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}/g;
+const EMOJI_REGEX = /\[.*?\]/g;
 
+const COMBINED_REGEX = new RegExp(`(${URL_REGEX.source})|(${AT_REGEX.source})|(${TOPIC_REGEX.source})|(${EMOJI_REGEX.source})`, 'gu');
+
+
+const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, maxLines }) => {
     const inPreviewMode = maxLines !== undefined;
     const processedText = inPreviewMode ? text.replace(/\n/g, ' ') : text;
 
-    // Regex to find emoji text like [like] or [哈哈]
-    const emojiRegex = /\[.*?\]/g;
-    const parts = processedText.split(emojiRegex);
-    const matches = processedText.match(emojiRegex) || [];
+    const emailSuffixes = new Set<string>();
+    for (const match of processedText.matchAll(EMAIL_REGEX)) {
+        const email = match[0];
+        const atMatch = email.match(AT_REGEX);
+        if (atMatch) {
+            emailSuffixes.add(atMatch[0]);
+        }
+    }
 
-    const content = parts.reduce<React.ReactNode[]>((acc, part, i) => {
-        if (part) {
-            acc.push(part);
+    const nodes: React.ReactNode[] = [];
+    let lastIndex = 0;
+
+    for (const match of processedText.matchAll(COMBINED_REGEX)) {
+        const fullMatch = match[0];
+        const url = match[1];
+        const at = match[2];
+        const topic = match[3];
+        const emoji = match[4];
+        const matchIndex = match.index!;
+
+        if (matchIndex > lastIndex) {
+            nodes.push(processedText.substring(lastIndex, matchIndex));
         }
-        if (matches[i]) {
-            const emojiKey = matches[i];
-            const imageId = emoji_map[emojiKey];
-            if (imageId) {
-                acc.push(<Emoji key={`${imageId}-${i}`} imageId={imageId} emojiText={emojiKey} />);
+
+        if (url) {
+            nodes.push(<Link key={lastIndex} href={url} target="_blank" rel="noopener noreferrer">{url}</Link>);
+        } else if (at) {
+            if (emailSuffixes.has(at)) {
+                nodes.push(at);
+            } else {
+                const username = at.substring(1);
+                nodes.push(<Link key={lastIndex} href={`https://weibo.com/n/${username}`} target="_blank" rel="noopener noreferrer">{at}</Link>);
             }
-            // If imageId is not found, the emojiKey is ignored and not added to acc
+        } else if (topic) {
+            nodes.push(<Link key={lastIndex} href={`https://s.weibo.com/weibo?q=${encodeURIComponent(topic)}`} target="_blank" rel="noopener noreferrer">{topic}</Link>);
+        } else if (emoji) {
+            const imageId = emoji_map[emoji];
+            if (imageId) {
+                nodes.push(<Emoji key={lastIndex} imageId={imageId} emojiText={emoji} />);
+            } else {
+                nodes.push(emoji);
+            }
         }
-        return acc;
-    }, []);
+
+        lastIndex = matchIndex + fullMatch.length;
+    }
+
+    if (lastIndex < processedText.length) {
+        nodes.push(processedText.substring(lastIndex));
+    }
+
+    const content = nodes.map((node, index) => <React.Fragment key={index}>{node}</React.Fragment>);
+
 
     const previewStyles = inPreviewMode ? {
         display: '-webkit-box',
@@ -388,13 +427,13 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                         </Stack>
                     } />
                 <CardContent>
-                    <TextWithEmojis text={postInfo.post.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
+                    <ProcessedText text={postInfo.post.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
                     {postInfo.post.retweeted_status && (
                         <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
                             <Typography variant="subtitle2" color="text.secondary">
                                 @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                             </Typography>
-                            <TextWithEmojis text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
+                            <ProcessedText text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} maxLines={maxLines} />
                         </Box>
                     )}
                     <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={onImageClick} maxImages={maxAttachmentImages} />
