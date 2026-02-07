@@ -9,10 +9,7 @@ use weibosdk_rs::{ApiClient as SdkApiClient, http_client::HttpClient};
 
 use crate::error::Result;
 use crate::models::Post;
-use internal::{
-    post::PostInternal,
-    url_struct::{UrlStructInternal, UrlTypeInternal},
-};
+use internal::post::PostInternal;
 
 pub use emoji::EmojiUpdateApi;
 pub use favorites::FavoritesApi;
@@ -40,61 +37,39 @@ impl<C: HttpClient> ApiClientImpl<C> {
         ApiClientImpl { client }
     }
 
-    pub async fn process_post(&self, mut post: PostInternal) -> Result<Post> {
-        self.handle_long_text(&mut post).await?;
-
-        if post.url_struct.is_some() && post.retweeted_status.is_some() {
-            self.refine_url_struct(&mut post).await?;
-        }
-        post.try_into()
-    }
-
-    pub async fn refine_url_struct(&self, post: &mut PostInternal) -> Result<()> {
-        let text = post.text.as_str();
-        let (outter, inner): (Vec<_>, Vec<_>) = post
-            .url_struct
-            .take()
-            .unwrap()
-            .0
-            .into_iter()
-            .partition(|u| match u.url_type {
-                UrlTypeInternal::Picture | UrlTypeInternal::Link => text.contains(&u.short_url),
-                UrlTypeInternal::Location => true,
-                UrlTypeInternal::Appendix => false,
-                UrlTypeInternal::Topic => false,
-            });
-        post.url_struct = (!outter.is_empty()).then_some(UrlStructInternal(outter));
-        if let Some(ret) = post.retweeted_status.as_mut()
-            && ret.url_struct.is_none()
-            && !inner.is_empty()
-        {
-            ret.url_struct = Some(UrlStructInternal(inner));
-        }
-        Ok(())
-    }
-
-    pub async fn handle_long_text(&self, post: &mut PostInternal) -> Result<()> {
+    async fn process_post(&self, mut post: PostInternal) -> Result<Post> {
+        // If outer post is long text, fetch its full version.
         if post.is_long_text {
-            *post = self.statuses_show_internal(post.id).await?;
+            if post.long_text.is_none() {
+                post = self.statuses_show_internal(post.id).await?;
+            }
             if let Some(long_text) = post.long_text.take() {
-                post.text = long_text.content; // should be Some
+                post.text = long_text.content;
             } else {
+                // some is_long_text flag of short post without long_text is wrongly set true by weibo
+                // workaround, and warn it
                 let id = post.id;
                 warn!("post {id} is_long_text without long_text");
             }
         }
-        if let Some(ret) = post.retweeted_status.as_mut()
-            && ret.is_long_text
-        {
-            **ret = self.statuses_show_internal(ret.id).await?;
-            if let Some(long_text) = ret.long_text.take() {
-                ret.text = long_text.content; // should be Some
-            } else {
-                let id = post.id;
-                warn!("post {id} is_long_text without long_text");
+
+        // If there's a retweet, fetch its full version.
+        // This also handles the long text of the retweet.
+        if let Some(mut retweet_box) = post.retweeted_status.take() {
+            let full_retweet = self.statuses_show_internal(retweet_box.id).await?;
+            *retweet_box = full_retweet;
+
+            if let Some(long_text) = retweet_box.long_text.take() {
+                retweet_box.text = long_text.content;
+            } else if retweet_box.is_long_text {
+                // workaround wrongly set is_long_text
+                let id = retweet_box.id;
+                warn!("retweeted post {id} is_long_text without long_text");
             }
+            post.retweeted_status = Some(retweet_box);
         }
-        Ok(())
+
+        post.try_into()
     }
 }
 
