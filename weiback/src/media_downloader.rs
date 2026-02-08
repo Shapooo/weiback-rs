@@ -10,8 +10,8 @@ use tokio::sync::mpsc;
 use url::Url;
 
 use super::core::task::TaskContext;
+use super::core::task_manager::{SubTaskError, SubTaskErrorType};
 use crate::error::Result;
-use crate::message::ErrType;
 
 pub trait MediaDownloader: Clone + Send + Sync + 'static {
     async fn download_media(
@@ -104,19 +104,14 @@ impl DownloaderWorker {
         info!("Media downloader actor started.");
         while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
             debug!("Downloading media from {url}");
-            if let Err(err) = self.process_task(ctx.clone(), &url, callback).await
-                && let Err(e) = ctx
-                    .send_error(
-                        ErrType::DownMediaFail {
-                            url: url.to_string(),
-                        },
-                        ctx.task_id,
-                        err.to_string(),
-                    )
-                    .await
-            {
-                error!("message send failed, channel broke down: {e}");
-                panic!("message send failed, channel broke down: {e}");
+            if let Err(err) = self.process_task(ctx.clone(), &url, callback).await {
+                let sub_task_err = SubTaskError {
+                    error_type: SubTaskErrorType::DownloadMedia(url.to_string()),
+                    message: err.to_string(),
+                };
+                if let Err(e) = ctx.task_manager.add_sub_task_error(sub_task_err) {
+                    error!("Failed to add sub-task error: {}", e);
+                }
             }
         }
         info!("Media downloader actor finished.");
@@ -158,8 +153,8 @@ mod local_tests {
     use tokio::sync::Notify;
 
     use super::*;
+    use crate::core::task_manager::TaskManager;
     use crate::error::Error;
-    use crate::message::{ErrMsg, Message};
 
     #[tokio::test]
     async fn test_download_media_success() {
@@ -195,11 +190,10 @@ mod local_tests {
 
         tokio::spawn(worker.run());
 
-        let (msg_sender, _) = mpsc::channel(20);
         let dummy_context = Arc::new(TaskContext {
-            task_id: 1,
+            task_id: Some(1),
             config: Default::default(),
-            msg_sender,
+            task_manager: Arc::new(TaskManager::new()),
         });
         handle
             .download_media(dummy_context, &Url::parse(&url).unwrap(), callback)
@@ -233,28 +227,26 @@ mod local_tests {
 
         tokio::spawn(worker.run());
 
-        let (msg_sender, mut msg_receiver) = mpsc::channel(20);
+        let task_manager = Arc::new(TaskManager::new());
         let dummy_context = Arc::new(TaskContext {
-            task_id: 1,
+            task_id: Some(1),
             config: Default::default(),
-            msg_sender,
+            task_manager: task_manager.clone(),
         });
         handle
             .download_media(dummy_context, &url, callback)
             .await
             .unwrap();
 
-        let received_msg = msg_receiver.recv().await.unwrap();
-        match received_msg {
-            Message::Err(ErrMsg {
-                r#type: ErrType::DownMediaFail { url: err_url },
-                task_id,
-                ..
-            }) => {
+        // Allow some time for the worker to process the task
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        assert_eq!(errors.len(), 1);
+        match &errors[0].error_type {
+            SubTaskErrorType::DownloadMedia(err_url) => {
                 assert_eq!(err_url, url.as_str());
-                assert_eq!(task_id, 1);
             }
-            _ => panic!("Expected an error message"),
         }
         mock.assert_async().await;
     }
@@ -288,29 +280,26 @@ mod local_tests {
 
         tokio::spawn(worker.run());
 
-        let (msg_sender, mut msg_receiver) = mpsc::channel(20);
+        let task_manager = Arc::new(TaskManager::new());
         let dummy_context = Arc::new(TaskContext {
-            task_id: 1,
+            task_id: Some(1),
             config: Default::default(),
-            msg_sender,
+            task_manager: task_manager.clone(),
         });
         handle
             .download_media(dummy_context, &Url::parse(&url).unwrap(), callback)
             .await
             .unwrap();
 
-        let received_msg = msg_receiver.recv().await.unwrap();
-        match received_msg {
-            Message::Err(ErrMsg {
-                r#type: ErrType::DownMediaFail { url: err_url },
-                task_id,
-                err,
-            }) => {
-                assert_eq!(Url::parse(&err_url), Url::parse(&url));
-                assert_eq!(task_id, 1);
-                assert_eq!(err, "I/O error: permission denied");
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        assert_eq!(errors.len(), 1);
+        match &errors[0].error_type {
+            SubTaskErrorType::DownloadMedia(err_url) => {
+                assert_eq!(Url::parse(err_url), Url::parse(&url));
+                assert_eq!(errors[0].message, "I/O error: permission denied");
             }
-            _ => panic!("Expected an error message"),
         }
         mock.assert_async().await;
     }

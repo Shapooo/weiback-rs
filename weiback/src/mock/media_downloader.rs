@@ -7,11 +7,13 @@ use std::{
 };
 
 use bytes::Bytes;
-use tokio::sync::mpsc;
 use url::Url;
 
 use crate::{
-    core::task::TaskContext,
+    core::{
+        task::TaskContext,
+        task_manager::{SubTaskError, SubTaskErrorType, TaskManager},
+    },
     error::{Error, Result},
     media_downloader::{AsyncDownloadCallback, MediaDownloader},
 };
@@ -48,21 +50,27 @@ impl MediaDownloader for MockMediaDownloader {
         callback: AsyncDownloadCallback,
     ) -> Result<()> {
         let response = self.inner.lock().unwrap().responses.remove(url);
-        match response {
-            Some(Ok(data)) => {
-                (callback)(ctx, data).await?;
-                Ok(())
-            }
+        let result = match response {
+            Some(Ok(data)) => (callback)(ctx.clone(), data).await,
             Some(Err(e)) => Err(e),
             None => {
                 if self.default_succ {
-                    (callback)(ctx, Bytes::from("default media")).await?;
-                    Ok(())
+                    (callback)(ctx.clone(), Bytes::from("default media")).await
                 } else {
                     Err(Error::InconsistentTask(format!("URL not mocked: {}", url)))
                 }
             }
+        };
+
+        if let Err(err) = result {
+            let sub_task_err = SubTaskError {
+                error_type: SubTaskErrorType::DownloadMedia(url.to_string()),
+                message: err.to_string(),
+            };
+            ctx.task_manager.add_sub_task_error(sub_task_err)?;
         }
+
+        Ok(())
     }
 }
 
@@ -89,11 +97,11 @@ mod local_tests {
             },
         );
 
-        let (msg_sender, _msg_recver) = mpsc::channel(20);
+        let task_manager = Arc::new(TaskManager::new());
         let dummy_context = Arc::new(TaskContext {
-            task_id: 0,
+            task_id: Some(0),
             config: Default::default(),
-            msg_sender,
+            task_manager,
         });
         let result = mock_downloader
             .download_media(dummy_context, &url, callback)
@@ -115,19 +123,24 @@ mod local_tests {
             },
         );
 
-        let (msg_sender, _msg_recver) = mpsc::channel(20);
+        let task_manager = Arc::new(TaskManager::new());
         let dummy_context = Arc::new(TaskContext {
-            task_id: 0,
+            task_id: Some(0),
             config: Default::default(),
-            msg_sender,
+            task_manager: task_manager.clone(),
         });
         let result = mock_downloader
             .download_media(dummy_context, &url, callback)
             .await;
-        assert!(result.is_err());
-        match result {
-            Err(Error::Io(e)) => assert_eq!(e.kind(), io::ErrorKind::NotFound),
-            _ => panic!("unexpected error type"),
+        assert!(result.is_ok());
+
+        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        assert_eq!(errors.len(), 1);
+        match &errors[0].error_type {
+            SubTaskErrorType::DownloadMedia(err_url) => {
+                assert_eq!(*err_url, url.to_string());
+                assert!(errors[0].message.contains("not found"));
+            }
         }
     }
 
@@ -142,19 +155,24 @@ mod local_tests {
             },
         );
 
-        let (msg_sender, _msg_recver) = mpsc::channel(20);
+        let task_manager = Arc::new(TaskManager::new());
         let dummy_context = Arc::new(TaskContext {
-            task_id: 0,
+            task_id: Some(0),
             config: Default::default(),
-            msg_sender,
+            task_manager: task_manager.clone(),
         });
         let result = mock_downloader
             .download_media(dummy_context, &url, callback)
             .await;
-        assert!(result.is_err());
-        match result {
-            Err(Error::InconsistentTask(msg)) => assert!(msg.contains("URL not mocked")),
-            _ => panic!("unexpected error type"),
+        assert!(result.is_ok());
+
+        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        assert_eq!(errors.len(), 1);
+        match &errors[0].error_type {
+            SubTaskErrorType::DownloadMedia(err_url) => {
+                assert_eq!(*err_url, url.to_string());
+                assert!(errors[0].message.contains("URL not mocked"));
+            }
         }
     }
 }
