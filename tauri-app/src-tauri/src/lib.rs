@@ -5,16 +5,14 @@ use std::sync::Arc;
 use log::{error, info};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{self, App, AppHandle, Emitter, Manager, State};
-use tokio::sync::mpsc;
+use tauri::{self, App, Manager, State};
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
     BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PostQuery, TaskRequest,
     task::{BackupType, PaginatedPostInfo},
-    task_manager::TaskManger,
+    task_manager::Task,
 };
-use weiback::message::{ErrMsg, Message, TaskProgress};
 
 use error::Result;
 use tauri::ipc::Response;
@@ -24,6 +22,13 @@ use tauri::ipc::Response;
 pub enum PictureError {
     NotFound,
     Internal(String),
+}
+
+#[tauri::command(async)]
+async fn get_current_task_status(
+    core: State<'_, Arc<Core>>,
+) -> std::result::Result<Option<Task>, String> {
+    core.get_current_task().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
@@ -93,7 +98,7 @@ async fn unfavorite_posts(core: State<'_, Arc<Core>>) -> Result<()> {
 #[tauri::command]
 async fn export_posts(core: State<'_, Arc<Core>>, options: ExportJobOptions) -> Result<()> {
     info!("export_from_local called with options: {options:?}");
-    Ok(core.export_posts(options).await?)
+    Ok(core.export_posts(TaskRequest::Export(options)).await?)
 }
 
 #[tauri::command]
@@ -178,7 +183,8 @@ pub fn run() -> Result<()> {
             get_username_by_id,
             get_picture_blob,
             delete_post,
-            rebackup_post
+            rebackup_post,
+            get_current_task_status
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")
@@ -197,14 +203,8 @@ pub fn run() -> Result<()> {
 }
 
 fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let (core, msg_receiver) = CoreBuilder::new().build()?;
-
+    let core = CoreBuilder::new().build()?;
     info!("Setting up Tauri application");
-    tauri::async_runtime::spawn(msg_loop(
-        app.handle().clone(),
-        core.task_manager(),
-        msg_receiver,
-    ));
 
     let core_clone = core.clone();
     tauri::async_runtime::spawn(async move { core_clone.login_with_session().await });
@@ -212,69 +212,5 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     app.manage(core);
 
     info!("Tauri setup complete");
-    Ok(())
-}
-
-async fn msg_loop(
-    app: AppHandle,
-    task_manager: Arc<TaskManger>,
-    mut msg_receiver: mpsc::Receiver<Message>,
-) {
-    info!("Message loop started");
-    loop {
-        tokio::select! {
-            Some(msg) = msg_receiver.recv() => {
-                if let Err(e) = handle_task_responses(&app, &task_manager, msg).await {
-                    error!("Error handling task response: {:?}", e);
-                }
-            }
-            else => {
-                info!("Message channel closed, exiting message loop.");
-                break;
-            }
-        }
-    }
-}
-
-async fn handle_task_responses(
-    app: &AppHandle,
-    task_manager: &TaskManger,
-    msg: Message,
-) -> Result<()> {
-    match msg {
-        Message::TaskProgress(TaskProgress {
-            r#type,
-            task_id,
-            total_increment,
-            progress_increment,
-        }) => {
-            let (progress_new, total_new) =
-                task_manager.update_progress(task_id, progress_increment, total_increment)?;
-
-            app.emit(
-                "task-progress",
-                serde_json::json!({
-                    "type":r#type,
-                    "total":total_new,
-                    "progress":progress_new
-                }),
-            )?;
-        }
-        Message::Err(ErrMsg {
-            task_id,
-            err,
-            r#type,
-        }) => {
-            error!("Handling ErrMsg for task_id: {task_id}, type: {type:?}, error: {err}");
-            app.emit(
-                "error",
-                serde_json::json!({
-                    "type": r#type,
-                    "task_id":task_id,
-                    "err": err.to_string(),
-                }),
-            )?
-        }
-    }
     Ok(())
 }

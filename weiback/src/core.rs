@@ -10,26 +10,25 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use tokio::{spawn, sync::mpsc};
+use tokio::spawn;
 use weibosdk_rs::{ApiClient as SdkApiClient, api_client::LoginState, session::Session};
 
 #[cfg(not(feature = "dev-mode"))]
 use crate::api::DefaultApiClient;
 #[cfg(feature = "dev-mode")]
 use crate::api::DevApiClient;
-use crate::config::get_config;
+use crate::config::{Config, get_config};
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderHandle;
-use crate::message::{ErrType, Message};
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
     BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
-    Task, TaskContext, TaskRequest, UserPostFilter,
+    TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
-use task_manager::TaskManger;
+use task_manager::{Task, TaskManager, TaskType};
 
 #[cfg(not(feature = "dev-mode"))]
 type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
@@ -44,57 +43,26 @@ type CurrentSdkApiClient = SdkApiClient<weibosdk_rs::Client>;
 pub struct Core {
     next_task_id: AtomicU64,
     task_handler: Arc<TH>,
-    task_manager: Arc<TaskManger>,
+    task_manager: Arc<TaskManager>,
     sdk_api_client: Arc<CurrentSdkApiClient>,
-    msg_sender: mpsc::Sender<Message>,
 }
 
 impl Core {
-    pub(crate) fn new(
-        task_handler: TH,
-        sdk_api_client: Arc<CurrentSdkApiClient>,
-        msg_sender: mpsc::Sender<Message>,
-    ) -> Result<Self> {
+    pub(crate) fn new(task_handler: TH, sdk_api_client: Arc<CurrentSdkApiClient>) -> Result<Self> {
         Ok(Self {
             next_task_id: AtomicU64::new(1),
             task_handler: Arc::new(task_handler),
-            task_manager: Arc::new(TaskManger::new()),
+            task_manager: Arc::new(TaskManager::new()),
             sdk_api_client,
-            msg_sender,
         })
     }
 
-    pub fn task_manager(&self) -> Arc<TaskManger> {
-        self.task_manager.clone()
+    pub async fn get_current_task(&self) -> Result<Option<Task>> {
+        self.task_manager.get_current()
     }
 
     pub fn get_my_uid(&self) -> Result<String> {
         Ok(self.sdk_api_client.session()?.uid.clone())
-    }
-
-    pub async fn export_posts(&self, options: ExportJobOptions) -> Result<()> {
-        let ctx = self.create_task_context().await?;
-        self.task_handler.export_posts(ctx, options).await
-    }
-
-    pub async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPostInfo> {
-        let ctx = self.create_task_context().await?;
-        self.task_handler.query_posts(ctx, query).await
-    }
-
-    pub async fn delete_post(&self, id: i64) -> Result<()> {
-        let ctx = self.create_task_context().await?;
-        self.task_handler.delete_post(ctx, id).await
-    }
-
-    pub async fn rebackup_post(&self, id: i64) -> Result<()> {
-        let ctx = self.create_task_context().await?;
-        self.task_handler.rebackup_post(ctx, id).await
-    }
-
-    pub async fn get_picture_blob(&self, id: String) -> Result<Option<Bytes>> {
-        let ctx = self.create_task_context().await?;
-        self.task_handler.get_picture_blob(ctx, &id).await
     }
 
     pub async fn get_username_by_id(&self, uid: i64) -> Result<Option<String>> {
@@ -103,6 +71,8 @@ impl Core {
             .await
             .map(|opt| opt.map(|u| u.screen_name))
     }
+
+    // ========================= login stuff =========================
 
     pub async fn get_sms_code(&self, phone_number: String) -> Result<()> {
         info!(
@@ -141,7 +111,7 @@ impl Core {
                 let user_id = user.id;
 
                 let th = self.task_handler.clone();
-                let ctx = self.create_task_context().await?;
+                let ctx = self.create_short_task_context();
                 spawn(async move {
                     if let Err(e) = th.save_user_info(ctx, &user).await {
                         error!("Save user info failed: {e}");
@@ -191,23 +161,56 @@ impl Core {
         Ok(())
     }
 
+    // ========================= short tasks =========================
+
+    pub async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPostInfo> {
+        let ctx = self.create_short_task_context();
+        self.task_handler.query_posts(ctx, query).await
+    }
+
+    pub async fn delete_post(&self, id: i64) -> Result<()> {
+        let ctx = self.create_short_task_context();
+        self.task_handler.delete_post(ctx, id).await
+    }
+
+    pub async fn rebackup_post(&self, id: i64) -> Result<()> {
+        let ctx = self.create_short_task_context();
+        self.task_handler.rebackup_post(ctx, id).await
+    }
+
+    pub async fn get_picture_blob(&self, id: String) -> Result<Option<Bytes>> {
+        let ctx = self.create_short_task_context();
+        self.task_handler.get_picture_blob(ctx, &id).await
+    }
+
+    // ========================= long tasks =========================
+
     pub async fn backup_user(&self, request: TaskRequest) -> Result<()> {
-        let ctx = self.create_task_context().await?;
-        self.record_task(&ctx, request.clone()).await?;
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = request.total() as u64;
+        self.task_manager
+            .start_task(id, TaskType::BackupUser, "备份用户微博".into(), total)?;
         spawn(handle_task_request(self.task_handler.clone(), ctx, request));
         Ok(())
     }
 
     pub async fn backup_favorites(&self, request: TaskRequest) -> Result<()> {
-        let ctx = self.create_task_context().await?;
-        self.record_task(&ctx, request.clone()).await?;
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = request.total() as u64;
+        self.task_manager
+            .start_task(id, TaskType::BackupFavorites, "备份收藏".into(), total)?;
         spawn(handle_task_request(self.task_handler.clone(), ctx, request));
         Ok(())
     }
 
     pub async fn unfavorite_posts(&self) -> Result<()> {
-        let ctx = self.create_task_context().await?;
-        self.record_task(&ctx, TaskRequest::UnfavoritePosts).await?;
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0; // Will be updated later in task_handler
+        self.task_manager
+            .start_task(id, TaskType::UnfavoritePosts, "取消收藏".into(), total)?;
         spawn(handle_task_request(
             self.task_handler.clone(),
             ctx,
@@ -216,61 +219,59 @@ impl Core {
         Ok(())
     }
 
-    async fn create_task_context(&self) -> Result<Arc<TaskContext>> {
-        let id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
-        let ctx = Arc::new(TaskContext {
-            task_id: id,
-            config: get_config().read()?.clone(),
-            msg_sender: self.msg_sender.clone(),
-        });
-        Ok(ctx)
+    pub async fn export_posts(&self, request: TaskRequest) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = request.total() as u64;
+        self.task_manager
+            .start_task(id, TaskType::Export, "导出微博".into(), total)?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
+        Ok(())
     }
 
-    async fn record_task(&self, ctx: &TaskContext, request: TaskRequest) -> Result<()> {
-        info!(
-            "Recording new task with id: {}, request: {:?}",
-            ctx.task_id, request
-        );
-        let total = request.total() as u64;
-        let task = Task {
-            id: ctx.task_id,
-            total,
-            progress: 0,
-            request,
-        };
-        self.task_manager.new_task(task.id, task)?;
-        debug!("Task {} recorded successfully", ctx.task_id);
-        Ok(())
+    // ========================= context creators =========================
+
+    fn create_long_task_context(&self) -> Arc<TaskContext> {
+        let id = self.next_task_id.fetch_add(1, Ordering::Relaxed);
+        Arc::new(TaskContext {
+            task_id: Some(id),
+            config: get_config().read().unwrap().clone(),
+            task_manager: self.task_manager.clone(),
+        })
+    }
+
+    fn create_short_task_context(&self) -> Arc<TaskContext> {
+        Arc::new(TaskContext {
+            task_id: None,
+            config: get_config().read().unwrap().clone(),
+            task_manager: self.task_manager.clone(),
+        })
     }
 }
 
 async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, request: TaskRequest) {
-    info!("Handling task request for task_id: {}", ctx.task_id);
+    let task_id = ctx.task_id.unwrap();
+    info!("Handling task request for task_id: {}", task_id);
     debug!("Task request details: {:?}", request);
+
     let res = match request {
         TaskRequest::BackupUser(options) => task_handler.backup_user(ctx.clone(), options).await,
         TaskRequest::UnfavoritePosts => task_handler.unfavorite_posts(ctx.clone()).await,
         TaskRequest::BackupFavorites(options) => {
             task_handler.backup_favorites(ctx.clone(), options).await
         }
+        TaskRequest::Export(options) => task_handler.export_posts(ctx.clone(), options).await,
     };
+
     if let Err(err) = res {
-        error!("Task {} failed: {}", ctx.task_id, err);
-        ctx.send_error(
-            ErrType::LongTaskFail {
-                task_id: ctx.task_id,
-            },
-            ctx.task_id,
-            err.to_string(),
-        )
-        .await
-        .unwrap_or_else(|e| {
-            error!(
-                "Failed to send error message for task {}: {}",
-                ctx.task_id, e
-            )
-        });
+        error!("Task {} failed: {}", task_id, err);
+        if let Err(e) = ctx.task_manager.fail(err.to_string()) {
+            error!("Failed to set task {} as failed: {}", task_id, e);
+        }
     } else {
-        info!("Task {} completed successfully", ctx.task_id);
+        info!("Task {} completed successfully", task_id);
+        if let Err(e) = ctx.task_manager.finish() {
+            error!("Failed to set task {} as finished: {}", task_id, e);
+        }
     }
 }

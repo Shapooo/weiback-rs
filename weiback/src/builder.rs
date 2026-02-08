@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use log::info;
-use tokio::sync::mpsc;
 use weibosdk_rs::{ApiClient as SdkApiClient, Client as HttpClient};
 
 use crate::{
@@ -10,7 +9,6 @@ use crate::{
     error::Result,
     exporter::ExporterImpl,
     media_downloader::create_downloader,
-    message::Message,
     storage::{StorageImpl, database},
 };
 use tokio::runtime::Runtime;
@@ -21,7 +19,6 @@ use crate::api::DefaultApiClient;
 use crate::{api::DevApiClient, dev_client::DevClient};
 
 const DOWNLOADER_BUFFER_SIZE: usize = 100;
-const MESSAGE_BUFFER_SIZE: usize = 100;
 
 pub struct CoreBuilder;
 
@@ -30,13 +27,10 @@ impl CoreBuilder {
         Self
     }
 
-    pub fn build(self) -> Result<(Arc<Core>, mpsc::Receiver<Message>)> {
+    pub fn build(self) -> Result<Arc<Core>> {
         info!("CoreBuilder: Building Core service...");
         let main_config = get_config();
         let main_config_read_guard = main_config.read()?;
-
-        let (msg_sender, msg_receiver) = mpsc::channel(MESSAGE_BUFFER_SIZE);
-        info!("MPSC channel created");
 
         let db_pool = Runtime::new()?.block_on(database::create_db_pool())?;
         let storage = StorageImpl::new(db_pool);
@@ -84,10 +78,10 @@ impl CoreBuilder {
         let task_handler = TaskHandler::new(api_client, storage, exporter, handle)?;
         info!("TaskHandler initialized");
 
-        let core = Arc::new(Core::new(task_handler, sdk_api_client, msg_sender)?);
+        let core = Arc::new(Core::new(task_handler, sdk_api_client)?);
         info!("Core service built successfully.");
 
-        Ok((core, msg_receiver))
+        Ok(core)
     }
 }
 
