@@ -138,3 +138,127 @@ impl TaskManager {
         Ok(self.current_task.lock()?.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_start_new_task() {
+        let manager = TaskManager::new();
+        assert!(manager.get_current().unwrap().is_none());
+
+        manager
+            .start_task(1, TaskType::BackupUser, "Test task".into(), 10)
+            .unwrap();
+
+        let task = manager.get_current().unwrap().unwrap();
+        assert_eq!(task.id, 1);
+        assert_eq!(task.description, "Test task");
+        assert_eq!(task.status, TaskStatus::InProgress);
+        assert_eq!(task.progress, 0);
+        assert_eq!(task.total, 10);
+        assert!(task.error.is_none());
+    }
+
+    #[test]
+    fn test_prevent_starting_task_when_in_progress() {
+        let manager = TaskManager::new();
+        manager
+            .start_task(1, TaskType::BackupUser, "First task".into(), 10)
+            .unwrap();
+        let result = manager.start_task(2, TaskType::BackupFavorites, "Second task".into(), 5);
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InconsistentTask(msg) => {
+                assert!(msg.contains("Another task is already in progress."));
+            }
+            _ => panic!("Expected InconsistentTask error"),
+        }
+    }
+
+    #[test]
+    fn test_update_progress() {
+        let manager = TaskManager::new();
+        manager
+            .start_task(1, TaskType::BackupUser, "Test task".into(), 10)
+            .unwrap();
+
+        manager.update_progress(5, 5).unwrap();
+        let task = manager.get_current().unwrap().unwrap();
+        assert_eq!(task.progress, 5);
+        assert_eq!(task.total, 15);
+
+        manager.update_progress(1, 0).unwrap();
+        let task = manager.get_current().unwrap().unwrap();
+        assert_eq!(task.progress, 6);
+        assert_eq!(task.total, 15);
+    }
+
+    #[test]
+    fn test_finish_task() {
+        let manager = TaskManager::new();
+        manager
+            .start_task(1, TaskType::BackupUser, "Test task".into(), 10)
+            .unwrap();
+        manager.finish().unwrap();
+        let task = manager.get_current().unwrap().unwrap();
+        assert_eq!(task.status, TaskStatus::Completed);
+    }
+
+    #[test]
+    fn test_fail_task() {
+        let manager = TaskManager::new();
+        manager
+            .start_task(1, TaskType::BackupUser, "Test task".into(), 10)
+            .unwrap();
+        let error_msg = "Something went wrong".to_string();
+        manager.fail(error_msg.clone()).unwrap();
+        let task = manager.get_current().unwrap().unwrap();
+        assert_eq!(task.status, TaskStatus::Failed);
+        assert_eq!(task.error, Some(error_msg));
+    }
+
+    #[test]
+    fn test_sub_task_error_handling() {
+        let manager = TaskManager::new();
+        assert!(manager.get_and_clear_sub_task_errors().unwrap().is_empty());
+
+        let error1 = SubTaskError {
+            error_type: SubTaskErrorType::DownloadMedia("url1".into()),
+            message: "404 Not Found".into(),
+        };
+        let error2 = SubTaskError {
+            error_type: SubTaskErrorType::DownloadMedia("url2".into()),
+            message: "Timeout".into(),
+        };
+
+        manager.add_sub_task_error(error1.clone()).unwrap();
+        manager.add_sub_task_error(error2.clone()).unwrap();
+
+        let errors = manager.get_and_clear_sub_task_errors().unwrap();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].message, "404 Not Found");
+        assert_eq!(errors[1].message, "Timeout");
+
+        // Verify that the error list is cleared
+        assert!(manager.get_and_clear_sub_task_errors().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_start_new_task_after_completion() {
+        let manager = TaskManager::new();
+        manager
+            .start_task(1, TaskType::BackupUser, "First task".into(), 10)
+            .unwrap();
+        manager.finish().unwrap();
+
+        // Should be able to start a new task
+        let result = manager.start_task(2, TaskType::BackupFavorites, "Second task".into(), 5);
+        assert!(result.is_ok());
+        let task = manager.get_current().unwrap().unwrap();
+        assert_eq!(task.id, 2);
+        assert_eq!(task.status, TaskStatus::InProgress);
+    }
+}
