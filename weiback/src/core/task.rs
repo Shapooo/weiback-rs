@@ -1,61 +1,17 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
 
-use crate::{
-    api::ContainerType,
-    config::Config,
-    message::{ErrMsg, ErrType, Message, TaskProgress, TaskType},
-    models::Post,
-};
-
-pub struct Task {
-    pub id: u64,
-    pub total: u64,
-    pub progress: u64,
-    pub request: TaskRequest,
-}
+use super::task_manager::TaskManager;
+use crate::{api::ContainerType, config::Config, models::Post};
 
 #[derive(Debug)]
 pub struct TaskContext {
-    pub task_id: u64,
+    pub task_id: Option<u64>,
     pub config: Config,
-    pub msg_sender: mpsc::Sender<Message>,
-}
-
-impl TaskContext {
-    pub async fn send_progress(
-        &self,
-        r#type: TaskType,
-        total_increment: u64,
-        progress_increment: u64,
-    ) -> Result<(), mpsc::error::SendError<Message>> {
-        self.msg_sender
-            .send(Message::TaskProgress(TaskProgress {
-                r#type,
-                task_id: self.task_id,
-                total_increment,
-                progress_increment,
-            }))
-            .await
-    }
-
-    pub async fn send_error(
-        &self,
-        r#type: ErrType,
-        task_id: u64,
-        err: String,
-    ) -> Result<(), mpsc::error::SendError<Message>> {
-        self.msg_sender
-            .send(Message::Err(ErrMsg {
-                r#type,
-                task_id,
-                err,
-            }))
-            .await
-    }
+    pub task_manager: Arc<TaskManager>,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +22,7 @@ pub enum TaskRequest {
     UnfavoritePosts,
     // to backup user (id, with pic, image definition level)
     BackupUser(BackupUserPostsOptions),
+    Export(ExportJobOptions),
 }
 
 impl TaskRequest {
@@ -74,6 +31,7 @@ impl TaskRequest {
             TaskRequest::BackupFavorites(options) => options.num_pages,
             TaskRequest::BackupUser(options) => options.num_pages,
             TaskRequest::UnfavoritePosts => 1,
+            TaskRequest::Export(_) => 1,
         }
     }
 }

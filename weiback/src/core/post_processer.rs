@@ -83,7 +83,11 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
     }
 
     pub async fn process(&self, ctx: Arc<TaskContext>, posts: Vec<Post>) -> Result<()> {
-        info!("Processing {} posts for task {}.", posts.len(), ctx.task_id);
+        info!(
+            "Processing {} posts for task {:?}.",
+            posts.len(),
+            ctx.task_id
+        );
         let pic_quality = ctx.config.picture_definition;
         debug!("Picture definition set to: {pic_quality:?}");
 
@@ -105,7 +109,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             })
             .await?;
 
-        info!("Finished processing posts for task {}.", ctx.task_id);
+        info!("Finished processing posts for task {:?}.", ctx.task_id);
         Ok(())
     }
 
