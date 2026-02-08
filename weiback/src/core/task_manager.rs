@@ -29,15 +29,28 @@ pub struct Task {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub enum SubTaskErrorType {
+    DownloadMedia(String), // URL
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SubTaskError {
+    pub error_type: SubTaskErrorType,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TaskManager {
     current_task: Arc<Mutex<Option<Task>>>,
+    sub_task_errors: Arc<Mutex<Vec<SubTaskError>>>,
 }
 
 impl TaskManager {
     pub fn new() -> Self {
         Self {
             current_task: Arc::new(Mutex::new(None)),
+            sub_task_errors: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -49,12 +62,12 @@ impl TaskManager {
         total: u64,
     ) -> Result<()> {
         let mut task_guard = self.current_task.lock()?;
-        if let Some(existing_task) = task_guard.as_ref() {
-            if existing_task.status == TaskStatus::InProgress {
-                return Err(Error::InconsistentTask(
-                    "Another task is already in progress.".to_string(),
-                ));
-            }
+        if let Some(existing_task) = task_guard.as_ref()
+            && existing_task.status == TaskStatus::InProgress
+        {
+            return Err(Error::InconsistentTask(
+                "Another task is already in progress.".to_string(),
+            ));
         }
 
         let new_task = Task {
@@ -108,6 +121,17 @@ impl TaskManager {
                 "Cannot fail task: no task is in progress.".to_string(),
             ))
         }
+    }
+
+    pub fn add_sub_task_error(&self, error: SubTaskError) -> Result<()> {
+        self.sub_task_errors.lock()?.push(error);
+        Ok(())
+    }
+
+    pub fn get_and_clear_sub_task_errors(&self) -> Result<Vec<SubTaskError>> {
+        let mut errors = self.sub_task_errors.lock()?;
+        let ret = errors.drain(..).collect();
+        Ok(ret)
     }
 
     pub fn get_current(&self) -> Result<Option<Task>> {

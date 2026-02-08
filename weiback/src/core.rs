@@ -17,7 +17,7 @@ use weibosdk_rs::{ApiClient as SdkApiClient, api_client::LoginState, session::Se
 use crate::api::DefaultApiClient;
 #[cfg(feature = "dev-mode")]
 use crate::api::DevApiClient;
-use crate::config::{Config, get_config};
+use crate::config::get_config;
 use crate::error::Result;
 use crate::exporter::ExporterImpl;
 use crate::media_downloader::MediaDownloaderHandle;
@@ -28,7 +28,7 @@ pub use task::{
     TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
-use task_manager::{Task, TaskManager, TaskType};
+use task_manager::{SubTaskError, Task, TaskManager, TaskType};
 
 #[cfg(not(feature = "dev-mode"))]
 type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
@@ -59,6 +59,10 @@ impl Core {
 
     pub async fn get_current_task(&self) -> Result<Option<Task>> {
         self.task_manager.get_current()
+    }
+
+    pub fn get_and_clear_sub_task_errors(&self) -> Result<Vec<SubTaskError>> {
+        self.task_manager.get_and_clear_sub_task_errors()
     }
 
     pub fn get_my_uid(&self) -> Result<String> {

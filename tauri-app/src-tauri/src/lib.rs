@@ -11,7 +11,7 @@ use weiback::config::{Config, get_config};
 use weiback::core::{
     BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PostQuery, TaskRequest,
     task::{BackupType, PaginatedPostInfo},
-    task_manager::Task,
+    task_manager::{SubTaskError, Task},
 };
 
 use error::Result;
@@ -29,6 +29,14 @@ async fn get_current_task_status(
     core: State<'_, Arc<Core>>,
 ) -> std::result::Result<Option<Task>, String> {
     core.get_current_task().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command(async)]
+async fn get_and_clear_sub_task_errors(
+    core: State<'_, Arc<Core>>,
+) -> std::result::Result<Vec<SubTaskError>, String> {
+    core.get_and_clear_sub_task_errors()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
@@ -184,7 +192,8 @@ pub fn run() -> Result<()> {
             get_picture_blob,
             delete_post,
             rebackup_post,
-            get_current_task_status
+            get_current_task_status,
+            get_and_clear_sub_task_errors
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")
