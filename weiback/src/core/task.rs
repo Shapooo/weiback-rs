@@ -115,7 +115,8 @@ pub struct PostInfo {
     pub post: Post,
     pub avatar_id: Option<String>,
     pub emoji_map: HashMap<String, String>,
-    pub attachment_ids: Vec<String>,
+    pub standalone_ids: Vec<String>,
+    pub inline_map: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

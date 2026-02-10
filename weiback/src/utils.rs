@@ -129,6 +129,7 @@ pub fn extract_all_pic_metas(
     pic_metas.extend(emoji_metas);
     pic_metas.extend(avatar_metas);
     pic_metas.extend(hyperlink_pic_metas);
+    pic_metas.extend(extract_inline_pic_metas(posts, definition));
     pic_metas
 }
 
@@ -161,6 +162,23 @@ fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Ve
                 .ok()
         })
         .collect()
+}
+
+fn extract_inline_pic_metas(posts: &[Post], definition: PictureDefinition) -> Vec<PictureMeta> {
+    let mut metas = Vec::new();
+    for post in posts.iter() {
+        if let Some(url_struct) = post.url_struct.as_ref() {
+            for item in url_struct.0.iter() {
+                if let Some(pic_info) = item.pic_infos.as_ref() {
+                    let url = def_to_pic_info_detail(pic_info, definition).url.as_str();
+                    if let Ok(meta) = PictureMeta::attached(url, post.id, Some(definition)) {
+                        metas.push(meta);
+                    }
+                }
+            }
+        }
+    }
+    metas
 }
 
 fn extract_emoji_urls<'a>(

@@ -49,10 +49,19 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         };
 
         let pic_metas = extract_attached_pic_metas(&post, ctx.config.picture_definition);
-        let attached_ids = pic_metas
+        let standalone_ids = pic_metas
             .iter()
             .map(|meta| pic_url_to_id(meta.url()))
             .collect::<Result<Vec<_>>>()?;
+
+        let mut inline_map = HashMap::new();
+        if let Some(url_struct) = &post.url_struct {
+            for item in url_struct.0.iter() {
+                if let Some(pic_info) = item.pic_infos.as_ref() {
+                    inline_map.insert(item.short_url.clone(), pic_info.pic_id.clone());
+                }
+            }
+        }
 
         let mut emoji_map = HashMap::new();
         if let Ok(all_emoji_map) = self.emoji_map.get_or_try_init().await {
@@ -78,7 +87,8 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             post,
             avatar_id,
             emoji_map,
-            attached_ids,
+            standalone_ids,
+            inline_map,
         })
     }
 
