@@ -131,7 +131,7 @@ mod local_tests {
 
     fn create_test_picture(url: &str) -> Picture {
         Picture {
-            meta: PictureMeta::in_post(url, PictureDefinition::Largest, 42).unwrap(),
+            meta: PictureMeta::attached(url, 42, Some(PictureDefinition::Largest)).unwrap(),
             blob: Bytes::from_static(b"test picture data"),
         }
     }

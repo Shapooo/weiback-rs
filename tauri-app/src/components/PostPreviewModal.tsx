@@ -84,7 +84,7 @@ const PostPreviewModal: React.FC<PostPreviewModalProps> = ({ postInfo, open, onC
                 <PostDisplay
                     postInfo={postInfo}
                     onImageClick={handleLightboxOpen} // Internal lightbox for full images
-                    maxAttachmentImages={undefined} // Show all images in preview
+                    maxAttachedImages={undefined} // Show all images in preview
                     textLimit={undefined} // Show full text in preview
                 />
 

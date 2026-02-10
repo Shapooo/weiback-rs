@@ -146,11 +146,7 @@ impl Upgrader {
                 let meta = if let Some(user_id) = record.uid {
                     PictureMeta::avatar(&url_str, user_id)?
                 } else if let Some(post_id) = record.post_id {
-                    let definition = get_definition_from_url(&url_str).unwrap_or_else(|| {
-                        warn!("cannot parse definition {url_str}");
-                        PictureDefinition::Largest
-                    });
-                    PictureMeta::in_post(&url_str, definition, post_id)?
+                    PictureMeta::attached(&url_str, post_id, get_definition_from_url(&url_str))?
                 } else {
                     PictureMeta::other(&url_str)?
                 };

@@ -31,13 +31,12 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
                 user_id,
             }
         } else if let Some(post_id) = record.post_id {
-            PictureMeta::InPost {
+            PictureMeta::Attached {
                 url: url_obj,
                 post_id,
                 definition: record
                     .definition
-                    .map(|s| PictureDefinition::from(s.as_str()))
-                    .unwrap_or_default(),
+                    .map(|s| PictureDefinition::from(s.as_str())),
             }
         } else {
             PictureMeta::Other { url: url_obj }
@@ -58,11 +57,11 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     let (url, post_id, user_id, definition) = match picture_meta {
-        PictureMeta::InPost {
+        PictureMeta::Attached {
             url,
             definition,
             post_id,
-        } => (url, Some(*post_id), None, Some(definition)),
+        } => (url, Some(*post_id), None, definition.as_ref()),
         PictureMeta::Avatar { url, user_id } => (url, None, Some(*user_id), None),
         PictureMeta::Other { url } => (url, None, None, None),
     };

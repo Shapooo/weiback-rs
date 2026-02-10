@@ -8,8 +8,8 @@ use url::Url;
 use crate::error::{Error, Result};
 use crate::models::{PictureDefinition, Post, UrlStruct, User};
 use crate::utils::{
-    AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR, extract_in_post_pic_paths,
-    url_to_filename,
+    AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR,
+    extract_attached_pic_paths, url_to_filename,
 };
 
 #[derive(Debug, Serialize)]
@@ -57,7 +57,7 @@ impl PostView {
         let created_at = post.created_at.to_rfc3339();
 
         let avatar_path = extract_avatar_path(&post, pic_folder_path);
-        let pic_paths = extract_in_post_pic_paths(&post, pic_folder_path, pic_quality);
+        let pic_paths = extract_attached_pic_paths(&post, pic_folder_path, pic_quality);
         let text = trans_text(&post, pic_folder_path, emoji_map)?;
 
         Ok(PostView {

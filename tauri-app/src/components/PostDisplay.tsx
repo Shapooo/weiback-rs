@@ -26,7 +26,7 @@ import SyncIcon from '@mui/icons-material/Sync';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import LinkIcon from '@mui/icons-material/Link';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { avatarCache, attachmentCache } from '../cache';
+import { avatarCache, attachedCache } from '../cache';
 import Emoji from './Emoji';
 
 // --- Type Definitions based on Rust structs ---
@@ -56,7 +56,7 @@ export interface PostInfo {
     post: Post;
     avatar_id: string | null;
     emoji_map: Record<string, string>;
-    attachment_ids: string[];
+    attached_ids: string[];
 }
 
 interface AvatarImageProps {
@@ -109,13 +109,13 @@ const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
 
 const THUMBNAIL_SIZE = 70; // Define a consistent size for thumbnails
 
-interface AttachmentImageProps {
+interface AttachedImageProps {
     imageId: string;
     size: number;
     onClick: (id: string) => void;
 }
 
-const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClick }) => {
+const AttachedImage: React.FC<AttachedImageProps> = ({ imageId, size, onClick }) => {
     type Status = 'loading' | 'loaded' | 'not-found' | 'error';
     const [status, setStatus] = useState<Status>('loading');
     const [imageUrl, setImageUrl] = useState<string>('');
@@ -125,7 +125,7 @@ const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClic
 
         const fetchAndCacheImage = async () => {
             setStatus('loading');
-            const cachedUrl = attachmentCache.get(imageId);
+            const cachedUrl = attachedCache.get(imageId);
             if (cachedUrl) {
                 setImageUrl(cachedUrl);
                 setStatus('loaded');
@@ -138,7 +138,7 @@ const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClic
 
                 const imageBlob = new Blob([blob]);
                 const objectUrl = URL.createObjectURL(imageBlob);
-                attachmentCache.set(imageId, objectUrl);
+                attachedCache.set(imageId, objectUrl);
                 setImageUrl(objectUrl);
                 setStatus('loaded');
             } catch (error) {
@@ -147,7 +147,7 @@ const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClic
                 if (error && typeof error === 'object' && 'kind' in error && (error as any).kind === 'NotFound') {
                     setStatus('not-found');
                 } else {
-                    console.error('Failed to fetch attachment image:', error);
+                    console.error('Failed to fetch attached image:', error);
                     setStatus('error');
                 }
             }
@@ -204,24 +204,24 @@ const AttachmentImage: React.FC<AttachmentImageProps> = ({ imageId, size, onClic
     );
 };
 
-interface AttachmentImagesProps {
-    attachmentIds: string[];
+interface AttachedImagesProps {
+    attachedIds: string[];
     onImageClick: (id: string) => void;
     maxImages?: number; // New prop to control the number of displayed images
 }
 
-const AttachmentImages: React.FC<AttachmentImagesProps> = ({ attachmentIds, onImageClick, maxImages }) => {
-    if (!attachmentIds || attachmentIds.length === 0) {
+const AttachedImages: React.FC<AttachedImagesProps> = ({ attachedIds, onImageClick, maxImages }) => {
+    if (!attachedIds || attachedIds.length === 0) {
         return null;
     }
 
-    const displayedImages = maxImages !== undefined ? attachmentIds.slice(0, maxImages) : attachmentIds;
-    const remainingCount = attachmentIds.length - displayedImages.length;
+    const displayedImages = maxImages !== undefined ? attachedIds.slice(0, maxImages) : attachedIds;
+    const remainingCount = attachedIds.length - displayedImages.length;
 
     return (
         <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
             {displayedImages.map(id => (
-                <AttachmentImage key={id} imageId={id} size={THUMBNAIL_SIZE} onClick={onImageClick} />
+                <AttachedImage key={id} imageId={id} size={THUMBNAIL_SIZE} onClick={onImageClick} />
             ))}
             {remainingCount > 0 && (
                 <Box
@@ -356,13 +356,13 @@ const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_stru
 interface PostDisplayProps {
     postInfo: PostInfo;
     onImageClick: (id: string) => void;
-    maxAttachmentImages?: number; // Prop to limit displayed attachments
+    maxAttachedImages?: number; // Prop to limit displayed attached images
     onClick?: (postInfo: PostInfo) => void;
     maxLines?: number; // New prop for text truncation
     onPostDeleted?: () => void;
 }
 
-const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachmentImages, onClick, maxLines, onPostDeleted }) => {
+const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAttachedImages, onClick, maxLines, onPostDeleted }) => {
     const { enqueueSnackbar } = useSnackbar();
     const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -464,7 +464,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                             <ProcessedText text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} url_struct={postInfo.post.retweeted_status.url_struct} maxLines={maxLines} />
                         </Box>
                     )}
-                    <AttachmentImages attachmentIds={postInfo.attachment_ids} onImageClick={onImageClick} maxImages={maxAttachmentImages} />
+                    <AttachedImages attachedIds={postInfo.attached_ids} onImageClick={onImageClick} maxImages={maxAttachedImages} />
                 </CardContent>
             </Card>
             <Dialog

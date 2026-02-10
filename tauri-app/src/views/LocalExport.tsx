@@ -324,7 +324,7 @@ const LocalExportPage: React.FC = () => {
                                             <PostDisplay
                                                 postInfo={postInfo}
                                                 onImageClick={handleOpenLightbox}
-                                                maxAttachmentImages={3}
+                                                maxAttachedImages={3}
                                                 onClick={handlePostClick}
                                                 maxLines={3}
                                                 onPostDeleted={handlePostDeleted}

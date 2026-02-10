@@ -46,10 +46,10 @@ impl From<&PictureDefinition> for &str {
 
 #[derive(Debug, Clone, Eq)]
 pub enum PictureMeta {
-    InPost {
+    Attached {
         url: Url,
-        definition: PictureDefinition,
         post_id: i64,
+        definition: Option<PictureDefinition>,
     },
     Avatar {
         url: Url,
@@ -73,9 +73,13 @@ impl PartialEq for PictureMeta {
 }
 
 impl PictureMeta {
-    pub fn in_post(url: &str, definition: PictureDefinition, post_id: i64) -> Result<Self> {
+    pub fn attached(
+        url: &str,
+        post_id: i64,
+        definition: Option<PictureDefinition>,
+    ) -> Result<Self> {
         let url = Url::parse(url)?;
-        Ok(PictureMeta::InPost {
+        Ok(PictureMeta::Attached {
             url,
             definition,
             post_id,
@@ -94,7 +98,7 @@ impl PictureMeta {
 
     pub fn url(&self) -> &Url {
         match self {
-            PictureMeta::InPost { url, .. } => url,
+            PictureMeta::Attached { url, .. } => url,
             PictureMeta::Avatar { url, .. } => url,
             PictureMeta::Other { url } => url,
         }

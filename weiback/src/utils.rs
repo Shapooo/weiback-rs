@@ -107,7 +107,7 @@ pub fn extract_all_pic_metas(
 ) -> HashSet<PictureMeta> {
     let mut pic_metas: HashSet<PictureMeta> = posts
         .iter()
-        .flat_map(|post| extract_in_post_pic_metas(post, definition))
+        .flat_map(|post| extract_attached_pic_metas(post, definition))
         .collect();
     let emoji_metas = posts.iter().flat_map(|post| {
         extract_emoji_urls(&post.text, emoji_map)
@@ -156,7 +156,7 @@ fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Ve
         .filter_map(|i| i.pic_infos.as_ref())
         .filter_map(|p| {
             let url = def_to_pic_info_detail(p, definition).url.as_str();
-            PictureMeta::in_post(url, definition, post.id)
+            PictureMeta::attached(url, post.id, Some(definition))
                 .map_err(|e| error!("cannot parse {url} {e}"))
                 .ok()
         })
@@ -199,23 +199,23 @@ fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
     res
 }
 
-pub fn extract_in_post_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    process_in_post_pics(post, move |pic_info_item| {
+pub fn extract_attached_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
+    process_attached_pics(post, move |pic_info_item| {
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
-        PictureMeta::in_post(url, definition, post.id)
+        PictureMeta::attached(url, post.id, Some(definition))
             .map_err(|e| error!("cannot parse {url} {e}"))
             .ok()
     })
 }
 
-pub fn extract_in_post_pic_paths(
+pub fn extract_attached_pic_paths(
     post: &Post,
     pic_folder: &Path,
     definition: PictureDefinition,
 ) -> Vec<String> {
-    process_in_post_pics(post, |pic_info_item| {
+    process_attached_pics(post, |pic_info_item| {
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
@@ -227,12 +227,12 @@ pub fn extract_in_post_pic_paths(
     })
 }
 
-fn process_in_post_pics<T, F>(post: &Post, f: F) -> Vec<T>
+fn process_attached_pics<T, F>(post: &Post, f: F) -> Vec<T>
 where
     F: Fn(&PicInfoItem) -> Option<T> + Copy,
 {
     if let Some(retweeted_post) = &post.retweeted_status {
-        return process_in_post_pics(retweeted_post, f);
+        return process_attached_pics(retweeted_post, f);
     }
 
     if let Some(pic_ids) = post.pic_ids.as_ref() {
@@ -394,9 +394,9 @@ mod local_tests {
             "No picture metadata was extracted, check test data files."
         );
 
-        let has_in_post = metas
+        let has_attached = metas
             .iter()
-            .any(|m| matches!(m, PictureMeta::InPost { .. }));
+            .any(|m| matches!(m, PictureMeta::Attached { .. }));
         let has_avatar = metas
             .iter()
             .any(|m| matches!(m, PictureMeta::Avatar { .. }));
@@ -404,7 +404,7 @@ mod local_tests {
             .iter()
             .any(|m| m.url().as_str().contains("face.t.sinajs.cn"));
 
-        assert!(has_in_post, "Should extract in-post pictures");
+        assert!(has_attached, "Should extract in-post pictures");
         assert!(has_avatar, "Should extract user avatars");
         assert!(has_emoji, "Should extract emoji pictures");
     }

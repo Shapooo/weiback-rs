@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { CircularProgress } from '@mui/material';
-import { attachmentCache } from '../cache';
+import { attachedCache } from '../cache';
 
 const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
     const [imageUrl, setImageUrl] = useState<string>('');
@@ -47,7 +47,7 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
         setLoading(true);
 
         const fetchAndCacheImage = async () => {
-            const cachedUrl = attachmentCache.get(imageId);
+            const cachedUrl = attachedCache.get(imageId);
             if (cachedUrl) {
                 setImageUrl(cachedUrl);
                 setLoading(false);
@@ -58,7 +58,7 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
                 if (!isCancelled && blob.byteLength > 0) {
                     const imageBlob = new Blob([blob]);
                     const objectUrl = URL.createObjectURL(imageBlob);
-                    attachmentCache.set(imageId, objectUrl);
+                    attachedCache.set(imageId, objectUrl);
                     setImageUrl(objectUrl);
                 }
             } catch (error) {

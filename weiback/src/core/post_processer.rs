@@ -16,7 +16,7 @@ use crate::media_downloader::MediaDownloader;
 use crate::models::{PicInfoType, Picture, PictureDefinition, PictureMeta, Post, VideoMeta};
 use crate::storage::Storage;
 use crate::utils::{
-    extract_all_pic_metas, extract_emojis_from_text, extract_in_post_pic_metas, pic_url_to_id,
+    extract_all_pic_metas, extract_attached_pic_metas, extract_emojis_from_text, pic_url_to_id,
 };
 
 #[derive(Debug, Clone)]
@@ -48,8 +48,8 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             None
         };
 
-        let pic_metas = extract_in_post_pic_metas(&post, ctx.config.picture_definition);
-        let attachment_ids = pic_metas
+        let pic_metas = extract_attached_pic_metas(&post, ctx.config.picture_definition);
+        let attached_ids = pic_metas
             .iter()
             .map(|meta| pic_url_to_id(meta.url()))
             .collect::<Result<Vec<_>>>()?;
@@ -78,7 +78,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             post,
             avatar_id,
             emoji_map,
-            attachment_ids,
+            attached_ids,
         })
     }
 
