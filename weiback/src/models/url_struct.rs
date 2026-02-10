@@ -38,17 +38,16 @@ pub struct UrlStructItem {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum UrlType {
-    #[serde(rename = "link")]
-    Link,
-    #[serde(rename = "pic")]
-    Picture,
-    #[serde(rename = "loc")]
-    Location,
-    #[serde(rename = "appendix")]
-    Appendix,
-    #[serde(rename = "topic")]
-    Topic,
+    Num(i32),
+    Str(String),
+}
+
+impl Default for UrlType {
+    fn default() -> Self {
+        Self::Num(39)
+    }
 }
 
 #[cfg(test)]

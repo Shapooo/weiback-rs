@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::result::Result;
 
@@ -78,7 +77,7 @@ impl From<PicInfosForStatusItem> for PicInfoItem {
             original,
             object_id: None,
             photo_tag: 0,
-            pic_id: pic_id,
+            pic_id,
             pic_status: 1,
             r#type,
             thumbnail: value.thumbnail,
@@ -98,7 +97,8 @@ pub struct UrlStructItemInternal {
     pub page_id: Option<String>,
     pub short_url: String,
     pub url_title: String,
-    pub url_type: UrlTypeInternal,
+    #[serde(default)]
+    pub url_type: UrlType,
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub url_type_pic: Option<Url>,
     #[serde(default, deserialize_with = "deserialize_pic_ids")]
@@ -106,64 +106,6 @@ pub struct UrlStructItemInternal {
     #[serde(default, deserialize_with = "deserialize_pic_infos")]
     pub pic_infos: Option<PicInfoItem>,
     pub vip_gif: Option<Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub enum UrlTypeInternal {
-    Link,
-    Picture,
-    Location,
-    Appendix,
-    #[default]
-    Topic,
-}
-
-impl<'de> Deserialize<'de> for UrlTypeInternal {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum StrNum<'a> {
-            Num(u8),
-            Str(Cow<'a, str>),
-        }
-        let Ok(deser_res) = StrNum::deserialize(deserializer) else {
-            return Ok(Default::default());
-        };
-        match deser_res {
-            StrNum::Num(0) => Ok(Self::Link),
-            StrNum::Num(1) => Ok(Self::Picture),
-            StrNum::Num(36) => Ok(Self::Location),
-            StrNum::Num(39) => Ok(Self::Appendix),
-            StrNum::Num(n) => {
-                log::warn!("unknown url_struct type number {n}");
-                Ok(Self::Link)
-            }
-            StrNum::Str(c) => {
-                if c.is_empty() {
-                    Ok(Self::Topic)
-                } else {
-                    Err(serde::de::Error::custom(format!(
-                        "unknown url_type str: {c}"
-                    )))
-                }
-            }
-        }
-    }
-}
-
-impl From<UrlTypeInternal> for UrlType {
-    fn from(value: UrlTypeInternal) -> Self {
-        match value {
-            UrlTypeInternal::Link => Self::Link,
-            UrlTypeInternal::Picture => Self::Picture,
-            UrlTypeInternal::Location => Self::Location,
-            UrlTypeInternal::Appendix => Self::Appendix,
-            UrlTypeInternal::Topic => Self::Topic,
-        }
-    }
 }
 
 impl TryFrom<UrlStructItemInternal> for UrlStructItem {
@@ -176,7 +118,7 @@ impl TryFrom<UrlStructItemInternal> for UrlStructItem {
             page_id: value.page_id,
             short_url: value.short_url,
             url_title: value.url_title,
-            url_type: value.url_type.into(),
+            url_type: value.url_type,
             url_type_pic: value.url_type_pic,
             pic_ids: value.pic_ids,
             pic_infos: value.pic_infos,
