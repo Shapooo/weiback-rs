@@ -144,18 +144,34 @@ fn extract_inline_pic_metas(
     post: &Post,
     definition: PictureDefinition,
 ) -> impl Iterator<Item = PictureMeta> + '_ {
+    let outer_id = post.id;
+    let outer_text = post.text.as_str();
+
+    let retweet = post.retweeted_status.as_ref();
+    let inner_id = retweet.map(|r| r.id);
+    let inner_text = retweet.map(|r| r.text.as_str());
+
     post.url_struct
         .as_ref()
         .into_iter()
         .flat_map(move |url_struct| {
-            url_struct
-                .0
-                .iter()
-                .filter_map(|i| i.pic_infos.as_ref())
-                .filter_map(move |pic_info| {
-                    let url = def_to_pic_info_detail(pic_info, definition).url.as_str();
-                    PictureMeta::attached(url, post.id, Some(definition)).ok()
-                })
+            url_struct.0.iter().filter_map(move |item| {
+                let pic_info = item.pic_infos.as_ref()?;
+                let short_url = item.short_url.as_str();
+
+                let target_id = if outer_text.contains(short_url) {
+                    outer_id
+                } else if let Some(in_t) = inner_text
+                    && in_t.contains(short_url)
+                {
+                    inner_id.unwrap() // promised to be Some(_)
+                } else {
+                    return None;
+                };
+
+                let url = def_to_pic_info_detail(pic_info, definition).url.as_str();
+                PictureMeta::attached(url, target_id, Some(definition)).ok()
+            })
         })
 }
 
