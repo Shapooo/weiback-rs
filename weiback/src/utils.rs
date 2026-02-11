@@ -107,29 +107,22 @@ pub fn extract_all_pic_metas(
 ) -> HashSet<PictureMeta> {
     let mut pic_metas: HashSet<PictureMeta> = posts
         .iter()
-        .flat_map(|post| extract_attached_pic_metas(post, definition))
+        .flat_map(|post| extract_standalone_pic_metas(post, definition))
         .collect();
     let emoji_metas = posts.iter().flat_map(|post| {
-        extract_emoji_urls(&post.text, emoji_map)
-            .into_iter()
-            .filter_map(|url| {
-                PictureMeta::other(url)
-                    .map_err(|e| error!("cannot parse {url} {e}"))
-                    .ok()
-            })
+        extract_emoji_urls(&post.text, emoji_map).filter_map(|url| {
+            PictureMeta::other(url)
+                .map_err(|e| error!("cannot parse {url} {e}"))
+                .ok()
+        })
     });
-    let avatar_metas = posts
+    let avatar_metas = posts.iter().flat_map(extract_avatar_metas);
+    let inline_pic_metas = posts
         .iter()
-        .flat_map(extract_avatar_metas)
-        .collect::<Vec<_>>();
-    let hyperlink_pic_metas = posts
-        .iter()
-        .flat_map(|post| extract_hyperlink_pic_metas(post, definition))
-        .collect::<Vec<_>>();
+        .flat_map(|post| extract_inline_pic_metas(post, definition));
     pic_metas.extend(emoji_metas);
     pic_metas.extend(avatar_metas);
-    pic_metas.extend(hyperlink_pic_metas);
-    pic_metas.extend(extract_inline_pic_metas(posts, definition));
+    pic_metas.extend(inline_pic_metas);
     pic_metas
 }
 
@@ -147,78 +140,70 @@ pub fn def_to_pic_info_detail(
     }
 }
 
-fn extract_hyperlink_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    let Some(url_struct) = post.url_struct.as_ref() else {
-        return Default::default();
-    };
-    url_struct
-        .0
-        .iter()
-        .filter_map(|i| i.pic_infos.as_ref())
-        .filter_map(|p| {
-            let url = def_to_pic_info_detail(p, definition).url.as_str();
-            PictureMeta::attached(url, post.id, Some(definition))
-                .map_err(|e| error!("cannot parse {url} {e}"))
-                .ok()
-        })
-        .collect()
-}
-
-fn extract_inline_pic_metas(posts: &[Post], definition: PictureDefinition) -> Vec<PictureMeta> {
-    let mut metas = Vec::new();
-    for post in posts.iter() {
-        if let Some(url_struct) = post.url_struct.as_ref() {
-            for item in url_struct.0.iter() {
-                if let Some(pic_info) = item.pic_infos.as_ref() {
+fn extract_inline_pic_metas(
+    post: &Post,
+    definition: PictureDefinition,
+) -> impl Iterator<Item = PictureMeta> + '_ {
+    post.url_struct
+        .as_ref()
+        .into_iter()
+        .flat_map(move |url_struct| {
+            url_struct
+                .0
+                .iter()
+                .filter_map(|i| i.pic_infos.as_ref())
+                .filter_map(move |pic_info| {
                     let url = def_to_pic_info_detail(pic_info, definition).url.as_str();
-                    if let Ok(meta) = PictureMeta::attached(url, post.id, Some(definition)) {
-                        metas.push(meta);
-                    }
-                }
-            }
-        }
-    }
-    metas
+                    PictureMeta::attached(url, post.id, Some(definition)).ok()
+                })
+        })
 }
 
 fn extract_emoji_urls<'a>(
     text: &'a str,
     emoji_map: Option<&'a HashMap<String, Url>>,
-) -> Vec<&'a str> {
+) -> impl Iterator<Item = &'a str> {
     EMOJI_EXPR
         .find_iter(text)
         .map(|e| e.as_str())
-        .flat_map(|e| emoji_map.map(|m| m.get(e)))
+        .flat_map(move |e| emoji_map.map(|m| m.get(e)))
         .filter_map(|i| i.map(|s| s.as_str()))
-        .collect()
 }
 
 pub fn extract_emojis_from_text(text: &str) -> impl Iterator<Item = &str> {
     EMOJI_EXPR.find_iter(text).map(|m| m.as_str())
 }
 
-fn extract_avatar_metas(post: &Post) -> Vec<PictureMeta> {
-    let mut res = Vec::new();
-    if let Some(user) = post.user.as_ref()
-        && let Ok(meta) = PictureMeta::avatar(user.avatar_hd.as_str(), user.id)
-            .map_err(|e| error!("cannot parse {} {e}", user.avatar_hd.as_str()))
-    {
-        res.push(meta)
-    }
-    if let Some(u) = post
+fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
+    let current_user_iter = post
+        .user
+        .as_ref()
+        .and_then(|user| {
+            PictureMeta::avatar(user.avatar_hd.as_str(), user.id)
+                .map_err(|e| error!("cannot parse {} {e}", user.avatar_hd.as_str()))
+                .ok()
+        })
+        .into_iter();
+
+    let retweet_user_iter = post
         .retweeted_status
         .as_ref()
         .and_then(|re| re.user.as_ref())
-        && let Ok(meta) = PictureMeta::avatar(u.avatar_hd.as_str(), u.id)
-            .map_err(|e| error!("cannot parse {} {e}", u.avatar_hd.as_str()))
-    {
-        res.push(meta);
-    }
-    res
+        .and_then(|u| {
+            PictureMeta::avatar(u.avatar_hd.as_str(), u.id)
+                .map_err(|e| error!("cannot parse {} {e}", u.avatar_hd.as_str()))
+                .ok()
+        })
+        .into_iter();
+
+    current_user_iter.chain(retweet_user_iter)
 }
 
-pub fn extract_attached_pic_metas(post: &Post, definition: PictureDefinition) -> Vec<PictureMeta> {
-    process_attached_pics(post, move |pic_info_item| {
+pub fn extract_standalone_pic_metas(
+    post: &Post,
+    definition: PictureDefinition,
+) -> impl Iterator<Item = PictureMeta> {
+    process_standalone_pics(post, move |pic_info_item| {
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
@@ -228,12 +213,12 @@ pub fn extract_attached_pic_metas(post: &Post, definition: PictureDefinition) ->
     })
 }
 
-pub fn extract_attached_pic_paths(
-    post: &Post,
-    pic_folder: &Path,
+pub fn generate_standalone_pic_output_paths<'a>(
+    post: &'a Post,
+    pic_folder: &'a Path,
     definition: PictureDefinition,
-) -> Vec<String> {
-    process_attached_pics(post, |pic_info_item| {
+) -> impl Iterator<Item = String> + 'a {
+    process_standalone_pics(post, move |pic_info_item| {
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
@@ -245,43 +230,46 @@ pub fn extract_attached_pic_paths(
     })
 }
 
-fn process_attached_pics<T, F>(post: &Post, f: F) -> Vec<T>
+fn extract_current_post_pics<'a, T, F>(post: &'a Post, f: F) -> impl Iterator<Item = T> + 'a
 where
-    F: Fn(&PicInfoItem) -> Option<T> + Copy,
+    T: 'a,
+    F: Fn(&'a PicInfoItem) -> Option<T> + Copy + 'a,
 {
-    if let Some(retweeted_post) = &post.retweeted_status {
-        return process_attached_pics(retweeted_post, f);
-    }
+    let pic_ids = post.pic_ids.as_ref();
+    let pic_infos = post.pic_infos.as_ref();
+    let mix_media = post.mix_media_info.as_ref();
 
-    if let Some(pic_ids) = post.pic_ids.as_ref() {
-        if let Some(pic_infos) = post.pic_infos.as_ref() {
-            pic_ids
-                .iter()
-                .filter_map(|id| pic_infos.get(id).and_then(f))
-                .collect()
-        } else if let Some(mix_media_info) = post.mix_media_info.as_ref() {
-            let map = mix_media_info
-                .items
-                .iter()
-                .filter_map(|i| match i {
-                    MixMediaInfoItem::Pic { id, data } => Some((id, data)),
-                    _ => None,
-                })
-                .collect::<HashMap<&String, &Box<PicInfoItem>>>();
-            pic_ids
-                .iter()
-                .filter_map(|id| map.get(id).and_then(|item| f(item.as_ref())))
-                .collect()
-        } else {
-            error!(
-                "Missing pic_infos while pic_ids exists for post {}",
-                post.id
-            );
-            Default::default()
-        }
-    } else {
-        Default::default()
-    }
+    // 将 pic_ids 转为迭代器，如果没有则返回空迭代器
+    pic_ids.into_iter().flat_map(move |ids| {
+        ids.iter().filter_map(move |id| {
+            if let Some(infos) = pic_infos {
+                // 情况 A: 从 pic_infos 查找
+                infos.get(id).and_then(f)
+            } else if let Some(mix) = mix_media {
+                // 情况 B: 从 mix_media_info 查找
+                mix.items
+                    .iter()
+                    .find_map(|item| match item {
+                        MixMediaInfoItem::Pic { id: i_id, data } if i_id == id => Some(data),
+                        _ => None,
+                    })
+                    .and_then(|item| f(item.as_ref()))
+            } else {
+                None
+            }
+        })
+    })
+}
+
+fn process_standalone_pics<'a, T, F>(post: &'a Post, f: F) -> impl Iterator<Item = T> + 'a
+where
+    T: 'a,
+    F: Fn(&'a PicInfoItem) -> Option<T> + Copy + 'a,
+{
+    // 当存在 retweeted_status 时，附件图片只会存在于 retweeted_status
+    let source = post.retweeted_status.as_deref().unwrap_or(post);
+
+    extract_current_post_pics(source, f)
 }
 
 #[cfg(test)]
