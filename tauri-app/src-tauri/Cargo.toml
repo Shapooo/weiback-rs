@@ -11,6 +11,7 @@ path = "src/bin/weiback-rs/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+dirs = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }

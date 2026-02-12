@@ -1,4 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+use std::fs;
+
 use anyhow::Result;
 use env_logger::Builder;
 use log::{LevelFilter, info};
@@ -14,14 +16,11 @@ fn main() -> Result<()> {
 }
 
 fn init_logger() -> Result<()> {
-    let log_path = std::env::current_exe()?;
-    let log_path = log_path
-        .parent()
-        .ok_or(anyhow::anyhow!(
-            "the executable: {:?} should have parent, maybe bugs in there",
-            std::env::current_exe()
-        ))?
+    let log_path = dirs::data_dir()
+        .unwrap_or_default()
+        .join("weiback")
         .join("weiback.log");
+    fs::create_dir_all(log_path.parent().unwrap())?;
     let log_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
