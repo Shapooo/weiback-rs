@@ -36,7 +36,8 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
                 post_id,
                 definition: record
                     .definition
-                    .map(|s| PictureDefinition::from(s.as_str())),
+                    .map(|s| PictureDefinition::from(s.as_str()))
+                    .unwrap_or_default(),
             }
         } else {
             PictureMeta::Other { url: url_obj }
@@ -61,7 +62,7 @@ where
             url,
             definition,
             post_id,
-        } => (url, Some(*post_id), None, definition.as_ref()),
+        } => (url, Some(*post_id), None, Some(definition)),
         PictureMeta::Avatar { url, user_id } => (url, None, Some(*user_id), None),
         PictureMeta::Other { url } => (url, None, None, None),
     };

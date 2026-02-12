@@ -49,7 +49,7 @@ pub enum PictureMeta {
     Attached {
         url: Url,
         post_id: i64,
-        definition: Option<PictureDefinition>,
+        definition: PictureDefinition,
     },
     Avatar {
         url: Url,
@@ -73,11 +73,7 @@ impl PartialEq for PictureMeta {
 }
 
 impl PictureMeta {
-    pub fn attached(
-        url: &str,
-        post_id: i64,
-        definition: Option<PictureDefinition>,
-    ) -> Result<Self> {
+    pub fn attached(url: &str, post_id: i64, definition: PictureDefinition) -> Result<Self> {
         let url = Url::parse(url)?;
         Ok(PictureMeta::Attached {
             url,

@@ -175,7 +175,7 @@ fn extract_inline_pic_metas(
                 };
 
                 let url = def_to_pic_info_detail(pic_info, definition).url.as_str();
-                PictureMeta::attached(url, target_id, Some(definition)).ok()
+                PictureMeta::attached(url, target_id, definition).ok()
             })
         })
 }
@@ -228,7 +228,7 @@ pub fn extract_standalone_pic_metas(
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
-        PictureMeta::attached(url, post.id, Some(definition))
+        PictureMeta::attached(url, post.id, definition)
             .map_err(|e| error!("cannot parse {url} {e}"))
             .ok()
     })
