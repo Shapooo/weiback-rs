@@ -63,6 +63,7 @@ where
             definition,
             post_id,
         } => (url, Some(*post_id), None, Some(definition)),
+        PictureMeta::Cover { url, post_id } => (url, Some(*post_id), None, None),
         PictureMeta::Avatar { url, user_id } => (url, None, Some(*user_id), None),
         PictureMeta::Other { url } => (url, None, None, None),
     };

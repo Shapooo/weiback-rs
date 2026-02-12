@@ -51,6 +51,10 @@ pub enum PictureMeta {
         post_id: i64,
         definition: PictureDefinition,
     },
+    Cover {
+        url: Url,
+        post_id: i64,
+    },
     Avatar {
         url: Url,
         user_id: i64,
@@ -82,6 +86,11 @@ impl PictureMeta {
         })
     }
 
+    pub fn cover(url: &str, post_id: i64) -> Result<Self> {
+        let url = Url::parse(url)?;
+        Ok(PictureMeta::Cover { url, post_id })
+    }
+
     pub fn avatar(url: &str, user_id: i64) -> Result<Self> {
         let url = Url::parse(url)?;
         Ok(PictureMeta::Avatar { url, user_id })
@@ -95,6 +104,7 @@ impl PictureMeta {
     pub fn url(&self) -> &Url {
         match self {
             PictureMeta::Attached { url, .. } => url,
+            PictureMeta::Cover { url, .. } => url,
             PictureMeta::Avatar { url, .. } => url,
             PictureMeta::Other { url } => url,
         }
