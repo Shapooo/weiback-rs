@@ -60,3 +60,14 @@ where
             .await?;
     Ok(raw_res.map(PathBuf::from))
 }
+
+pub async fn delete_video_by_url<'e, E>(executor: E, url: &Url) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query("DELETE FROM video WHERE url = ?")
+        .bind(url.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}

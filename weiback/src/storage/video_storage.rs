@@ -2,8 +2,8 @@ use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
-use log::debug;
-use sqlx::SqlitePool;
+use log::{debug, warn};
+use sqlx::{Acquire, Executor, Sqlite};
 use url::Url;
 
 use super::internal::video;
@@ -37,7 +37,14 @@ impl FileSystemVideoStorage {
         let absolute_path = video_path.join(relative_path);
         match tokio::fs::read(&absolute_path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                warn!(
+                    "video file not found at {:?}, deleting db entry",
+                    absolute_path
+                );
+                video::delete_video_by_url(&mut *conn, url).await?;
+                Ok(None)
+            }
             Err(e) => Err(e.into()),
         }
     }
@@ -84,7 +91,16 @@ impl FileSystemVideoStorage {
             return Ok(false);
         };
         let absolute_path = video_path.join(relative_path);
-        Ok(absolute_path.exists())
+        if absolute_path.exists() {
+            Ok(true)
+        } else {
+            warn!(
+                "video file not found at {:?}, deleting db entry",
+                absolute_path
+            );
+            video::delete_video_by_url(&mut *conn, url).await?;
+            Ok(false)
+        }
     }
 
     pub async fn delete_videos_of_post<'c, A>(
