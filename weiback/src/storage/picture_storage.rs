@@ -2,8 +2,8 @@ use std::fs::create_dir_all;
 use std::path::Path;
 
 use bytes::Bytes;
-use log::debug;
-use sqlx::{Executor, Sqlite};
+use log::{debug, warn};
+use sqlx::{Acquire, Executor, Sqlite};
 use url::Url;
 
 use super::internal::picture;
@@ -21,22 +21,27 @@ impl FileSystemPictureStorage {
 }
 
 impl FileSystemPictureStorage {
-    pub async fn get_picture_blob<'e, E>(
+    pub async fn get_picture_blob<'c, A>(
         &self,
         picture_path: &Path,
-        executor: E,
+        acquirer: A,
         url: &Url,
     ) -> Result<Option<Bytes>>
     where
-        E: Executor<'e, Database = Sqlite>,
+        A: Acquire<'c, Database = Sqlite>,
     {
-        let Some(relative_path) = picture::get_picture_path(executor, url).await? else {
+        let mut conn = acquirer.acquire().await?;
+        let Some(relative_path) = picture::get_picture_path(&mut *conn, url).await? else {
             return Ok(None);
         };
-        let path = picture_path.join(relative_path);
+        let path = picture_path.join(&relative_path);
         match tokio::fs::read(&path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                warn!("picture file not found at {:?}, deleting db entry", path);
+                picture::delete_picture_by_url(&mut *conn, url).await?;
+                Ok(None)
+            }
             Err(e) => Err(e.into()),
         }
     }
@@ -73,20 +78,30 @@ impl FileSystemPictureStorage {
         Ok(())
     }
 
-    pub async fn picture_saved<'e, E>(
+    pub async fn picture_saved<'c, A>(
         &self,
         picture_path: &Path,
-        executor: E,
+        acquirer: A,
         url: &Url,
     ) -> Result<bool>
     where
-        E: Executor<'e, Database = Sqlite>,
+        A: Acquire<'c, Database = Sqlite>,
     {
-        let Some(relative_path) = picture::get_picture_path(executor, url).await? else {
+        let mut conn = acquirer.acquire().await?;
+        let Some(relative_path) = picture::get_picture_path(&mut *conn, url).await? else {
             return Ok(false);
         };
         let absolute_path = picture_path.join(relative_path);
-        Ok(absolute_path.exists())
+        if absolute_path.exists() {
+            Ok(true)
+        } else {
+            warn!(
+                "picture file not found at {:?}, deleting db entry",
+                absolute_path
+            );
+            picture::delete_picture_by_url(&mut *conn, url).await?;
+            Ok(false)
+        }
     }
 
     pub async fn delete_pictures_of_post(
@@ -131,7 +146,7 @@ mod local_tests {
 
     fn create_test_picture(url: &str) -> Picture {
         Picture {
-            meta: PictureMeta::attached(url, 42, Some(PictureDefinition::Largest)).unwrap(),
+            meta: PictureMeta::attached(url, 42, PictureDefinition::Largest).unwrap(),
             blob: Bytes::from_static(b"test picture data"),
         }
     }

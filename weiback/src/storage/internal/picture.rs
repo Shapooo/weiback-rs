@@ -171,3 +171,14 @@ where
         .await?;
     Ok(())
 }
+
+pub async fn delete_picture_by_url<'e, E>(executor: E, url: &Url) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    sqlx::query("DELETE FROM picture WHERE url = ?")
+        .bind(url.as_str())
+        .execute(executor)
+        .await?;
+    Ok(())
+}
