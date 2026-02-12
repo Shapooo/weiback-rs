@@ -2,7 +2,7 @@ mod error;
 
 use std::sync::Arc;
 
-use log::{error, info};
+use log::{debug, error, info, warn};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{self, App, Manager, State};
@@ -44,11 +44,19 @@ async fn get_picture_blob(
     core: State<'_, Arc<Core>>,
     id: String,
 ) -> std::result::Result<Response, PictureError> {
-    info!("get_picture_blob called, id: {id}");
-    match core.get_picture_blob(id).await {
-        Ok(Some(blob)) => Ok(Response::new(blob.to_vec())),
-        Ok(None) => Err(PictureError::NotFound),
-        Err(e) => Err(PictureError::Internal(e.to_string())),
+    match core.get_picture_blob(&id).await {
+        Ok(Some(blob)) => {
+            debug!("get_picture_blob called, id: {id}");
+            Ok(Response::new(blob.to_vec()))
+        }
+        Ok(None) => {
+            warn!("get_picture_blob called: {id} not found");
+            Err(PictureError::NotFound)
+        }
+        Err(e) => {
+            error!("get_picture_blob called: {e:?}");
+            Err(PictureError::Internal(e.to_string()))
+        }
     }
 }
 

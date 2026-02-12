@@ -182,9 +182,9 @@ impl Core {
         self.task_handler.rebackup_post(ctx, id).await
     }
 
-    pub async fn get_picture_blob(&self, id: String) -> Result<Option<Bytes>> {
+    pub async fn get_picture_blob(&self, id: &str) -> Result<Option<Bytes>> {
         let ctx = self.create_short_task_context();
-        self.task_handler.get_picture_blob(ctx, &id).await
+        self.task_handler.get_picture_blob(ctx, id).await
     }
 
     // ========================= long tasks =========================
