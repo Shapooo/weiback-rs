@@ -39,7 +39,6 @@ const pictureDefinitionMap = [
 
 interface Config {
     db_path: string;
-    templates_path: string;
     session_path: string;
     download_pictures: boolean;
     picture_definition: PictureDefinition;

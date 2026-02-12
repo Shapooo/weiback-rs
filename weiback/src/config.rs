@@ -41,7 +41,6 @@ mod duration_as_secs {
 #[serde(default)]
 pub struct Config {
     pub db_path: PathBuf,
-    pub templates_path: PathBuf,
     pub session_path: PathBuf,
     pub download_pictures: bool,
     pub picture_definition: PictureDefinition,
@@ -63,7 +62,6 @@ impl Default for Config {
         let data_dir = dirs::data_dir().unwrap_or_default().join("weiback");
         Self {
             db_path: data_dir.join("weiback.db"),
-            templates_path: data_dir.join("templates"),
             session_path: config_dir.join("session.json"),
             download_pictures: true,
             picture_definition: Default::default(),
