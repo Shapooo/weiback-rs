@@ -1,5 +1,5 @@
 use std::fs::create_dir_all;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
 use log::debug;
@@ -9,7 +9,7 @@ use url::Url;
 use super::internal::video;
 use crate::error::{Error, Result};
 use crate::models::Video;
-use crate::utils::url_to_path;
+use crate::utils::url_to_path_str;
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemVideoStorage;
@@ -45,8 +45,8 @@ impl FileSystemVideoStorage {
         video: &Video,
     ) -> Result<()> {
         let url = video.meta.url();
-        let relative_path = url_to_path(url);
-        let absolute_path = video_path.join(relative_path.as_path());
+        let relative_path = PathBuf::from(url_to_path_str(url));
+        let absolute_path = video_path.join(&relative_path);
         create_dir_all(
             absolute_path
                 .parent()

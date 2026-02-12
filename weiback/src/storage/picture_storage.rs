@@ -9,7 +9,7 @@ use url::Url;
 use super::internal::picture;
 use crate::error::{Error, Result};
 use crate::models::Picture;
-use crate::utils::url_to_path;
+use crate::utils::url_to_path_str;
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemPictureStorage;
@@ -51,8 +51,8 @@ impl FileSystemPictureStorage {
         E: Executor<'e, Database = Sqlite>,
     {
         let url = picture.meta.url();
-        let relative_path = url_to_path(url);
-        let absolute_path = picture_path.join(relative_path.as_path());
+        let relative_path = url_to_path_str(url);
+        let absolute_path = picture_path.join(&relative_path);
         create_dir_all(
             absolute_path
                 .parent()
@@ -64,7 +64,7 @@ impl FileSystemPictureStorage {
             tokio::fs::create_dir_all(parent).await?;
         }
         tokio::fs::write(&absolute_path, &picture.blob).await?;
-        picture::save_picture_meta(executor, &picture.meta, Some(relative_path.as_path())).await?;
+        picture::save_picture_meta(executor, &picture.meta, Some(relative_path.as_str())).await?;
         debug!(
             "picture {} saved to {:?}",
             picture.meta.url(),

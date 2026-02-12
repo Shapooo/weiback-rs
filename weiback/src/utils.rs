@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use log::error;
 use once_cell::sync::Lazy;
@@ -52,12 +52,17 @@ pub fn url_to_db_key(url: &Url) -> Url {
     url
 }
 
-pub fn url_to_path(url: &Url) -> PathBuf {
-    Path::new(url.host_str().expect("host cannot be none")).join(
-        url.path()
-            .strip_prefix("/")
-            .expect("url path start with `/'"),
-    )
+pub fn url_to_path_str(url: &Url) -> String {
+    let host = url.host_str().expect("host cannot be none");
+    let path = url
+        .path()
+        .strip_prefix("/")
+        .expect("url path start with `/'");
+    if path.is_empty() {
+        host.to_string()
+    } else {
+        format!("{}/{}", host, path)
+    }
 }
 
 pub fn url_to_filename(url: &Url) -> Result<String> {
@@ -74,8 +79,8 @@ pub fn url_to_filename(url: &Url) -> Result<String> {
 }
 
 pub fn pic_url_to_id(url: &Url) -> Result<String> {
-    let file_path = url_to_path(url);
-    file_path
+    let file_path_str = url_to_path_str(url);
+    Path::new(&file_path_str)
         .file_stem()
         .and_then(|stem| stem.to_str())
         .and_then(|s| {
@@ -332,16 +337,16 @@ mod local_tests {
     #[test]
     fn test_url_to_path() {
         assert_eq!(
-            url_to_path(&Url::parse("http://example.com/path/to/file.txt").unwrap()),
-            Path::new("example.com/path/to/file.txt")
+            url_to_path_str(&Url::parse("http://example.com/path/to/file.txt").unwrap()),
+            "example.com/path/to/file.txt".to_string()
         );
         assert_eq!(
-            url_to_path(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()),
-            Path::new("example.com/path/to/file.txt")
+            url_to_path_str(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()),
+            "example.com/path/to/file.txt".to_string()
         );
         assert_eq!(
-            url_to_path(&Url::parse("http://example.com").unwrap()),
-            Path::new("example.com")
+            url_to_path_str(&Url::parse("http://example.com").unwrap()),
+            "example.com".to_string()
         );
     }
 

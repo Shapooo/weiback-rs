@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use sqlx::{Executor, Sqlite};
 use url::Url;
@@ -51,7 +51,7 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
 pub async fn save_picture_meta<'e, E>(
     executor: E,
     picture_meta: &PictureMeta,
-    path: Option<&Path>,
+    relative_path_str: Option<&str>,
 ) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -79,7 +79,7 @@ VALUES
     (?, ?, ?, ?, ?, ?);"#,
     )
     .bind(pic_url_to_id(picture_meta.url()).unwrap_or_default())
-    .bind(path.map(|p| p.to_str()))
+    .bind(relative_path_str)
     .bind(post_id)
     .bind(url_str)
     .bind(user_id)
