@@ -56,7 +56,8 @@ export interface PostInfo {
     post: Post;
     avatar_id: string | null;
     emoji_map: Record<string, string>;
-    attached_ids: string[];
+    standalone_ids: string[];
+    inline_map: Record<string, string>,
 }
 
 interface AvatarImageProps {
@@ -464,7 +465,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                             <ProcessedText text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} url_struct={postInfo.post.retweeted_status.url_struct} maxLines={maxLines} />
                         </Box>
                     )}
-                    <AttachedImages attachedIds={postInfo.attached_ids} onImageClick={onImageClick} maxImages={maxAttachedImages} />
+                    <AttachedImages attachedIds={postInfo.standalone_ids} onImageClick={onImageClick} maxImages={maxAttachedImages} />
                 </CardContent>
             </Card>
             <Dialog
