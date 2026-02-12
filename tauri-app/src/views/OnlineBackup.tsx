@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { useTaskStore } from '../stores/taskStore';
 
 interface UserInfo {
     id: number;
@@ -14,6 +15,7 @@ const UserBackupSection: React.FC = () => {
     const [userName, setUserName] = useState<string | null>(null);
     const [numPages, setNumPages] = useState(1);
     const [backupType, setBackupType] = useState('Normal');
+    const isTaskRunning = useTaskStore(state => !!state.currentTask);
 
 
     useEffect(() => {
@@ -50,7 +52,6 @@ const UserBackupSection: React.FC = () => {
             enqueueSnackbar('备份页数必须为正数', { variant: 'error' });
             return;
         }
-        enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
             await invoke('backup_user', { uid: backupId, numPages, backupType });
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
@@ -109,8 +110,8 @@ const UserBackupSection: React.FC = () => {
                             onChange={(e) => setNumPages(parseInt(e.target.value, 10) || 1)}
                             slotProps={{ htmlInput: { min: 1 } }}
                         />
-                        <Button variant="contained" onClick={handleBackup}>
-                            开始备份
+                        <Button variant="contained" onClick={handleBackup} disabled={isTaskRunning}>
+                            {isTaskRunning ? '任务进行中...' : '开始备份'}
                         </Button>
                     </Stack>
                 </Box>
@@ -122,13 +123,13 @@ const UserBackupSection: React.FC = () => {
 const FavoritesBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [numPages, setNumPages] = useState(1);
+    const isTaskRunning = useTaskStore(state => !!state.currentTask);
 
     const handleBackup = async () => {
         if (numPages <= 0) {
             enqueueSnackbar('备份页数必须为正数', { variant: 'error' });
             return;
         }
-        enqueueSnackbar('正在开始备份，请稍候...', { variant: 'info' });
         try {
             await invoke('backup_favorites', { numPages });
             enqueueSnackbar('收藏备份任务已成功启动', { variant: 'success' });
@@ -162,11 +163,11 @@ const FavoritesBackupSection: React.FC = () => {
                             onChange={(e) => setNumPages(parseInt(e.target.value, 10) || 1)}
                             slotProps={{ htmlInput: { min: 1 } }}
                         />
-                        <Button variant="contained" onClick={handleBackup}>
-                            开始备份
+                        <Button variant="contained" onClick={handleBackup} disabled={isTaskRunning}>
+                            {isTaskRunning ? '任务进行中...' : '开始备份'}
                         </Button>
-                        <Button variant="contained" onClick={handleUnfavorite}>
-                            取消已备份收藏
+                        <Button variant="contained" onClick={handleUnfavorite} disabled={isTaskRunning}>
+                            {isTaskRunning ? '任务进行中...' : '取消已备份收藏'}
                         </Button>
                     </Stack>
                 </Box>

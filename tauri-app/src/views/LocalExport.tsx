@@ -24,6 +24,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import FullSizeImage from '../components/FullSizeImage';
 import PostDisplay, { PostInfo } from '../components/PostDisplay';
 import PostPreviewModal from '../components/PostPreviewModal';
+import { useTaskStore } from '../stores/taskStore';
 
 // --- Type Definitions based on Rust structs ---
 interface PaginatedPostInfo {
@@ -53,16 +54,11 @@ interface ExportJobOptions {
 
 const POSTS_PER_PAGE = 12;
 
-
-interface ExportOutputConfig {
-    task_name: string;
-    export_dir: string;
-}
-
 // --- Main Component ---
 
 const LocalExportPage: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
+    const isTaskRunning = useTaskStore(state => !!state.currentTask);
 
     // State for UI controls
     const [filters, setFilters] = useState({
@@ -86,7 +82,6 @@ const LocalExportPage: React.FC = () => {
 
     // State for loading indicators
     const [loading, setLoading] = useState(false);
-    const [exporting, setExporting] = useState(false);
 
     const handleOpenLightbox = (imageId: string) => {
         setLightboxImageId(imageId);
@@ -187,9 +182,6 @@ const LocalExportPage: React.FC = () => {
             return;
         }
 
-        setExporting(true);
-        enqueueSnackbar('正在准备导出...', { variant: 'info' });
-
         try {
             const startDate = appliedFilters.startDate ? new Date(appliedFilters.startDate) : null;
             if (startDate) {
@@ -222,9 +214,7 @@ const LocalExportPage: React.FC = () => {
             await invoke('export_posts', { options });
             enqueueSnackbar('导出任务已成功启动', { variant: 'success' });
         } catch (e) {
-            enqueueSnackbar(`导出失败: ${e}`, { variant: 'error' });
-        } finally {
-            setExporting(false);
+            enqueueSnackbar(`启动导出任务失败: ${e}`, { variant: 'error' });
         }
     };
 
@@ -297,10 +287,9 @@ const LocalExportPage: React.FC = () => {
                                     variant="contained"
                                     color="secondary"
                                     onClick={handleExport}
-                                    disabled={exporting}
-                                    startIcon={exporting ? <CircularProgress size={20} /> : null}
+                                    disabled={isTaskRunning}
                                 >
-                                    导出筛选结果
+                                    {isTaskRunning ? '任务进行中...' : '导出筛选结果'}
                                 </Button>
                             </Stack>
                         </Stack>
