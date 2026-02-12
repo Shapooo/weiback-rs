@@ -21,13 +21,17 @@ impl FileSystemVideoStorage {
 }
 
 impl FileSystemVideoStorage {
-    pub async fn get_video_blob(
+    pub async fn get_video_blob<'c, A>(
         &self,
         video_path: &Path,
-        db: &SqlitePool,
+        acquirer: A,
         url: &Url,
-    ) -> Result<Option<Bytes>> {
-        let Some(relative_path) = video::get_video_path(db, url).await? else {
+    ) -> Result<Option<Bytes>>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
+        let mut conn = acquirer.acquire().await?;
+        let Some(relative_path) = video::get_video_path(&mut *conn, url).await? else {
             return Ok(None);
         };
         let absolute_path = video_path.join(relative_path);
@@ -38,12 +42,15 @@ impl FileSystemVideoStorage {
         }
     }
 
-    pub async fn save_video(
+    pub async fn save_video<'e, E>(
         &self,
         video_path: &Path,
-        db: &SqlitePool,
+        executor: E,
         video: &Video,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
         let url = video.meta.url();
         let relative_path = PathBuf::from(url_to_path_str(url));
         let absolute_path = video_path.join(&relative_path);
@@ -58,27 +65,40 @@ impl FileSystemVideoStorage {
             tokio::fs::create_dir_all(parent).await?;
         }
         tokio::fs::write(&absolute_path, &video.blob).await?;
-        video::save_video_meta(db, url, video.meta.post_id, relative_path.as_path()).await?;
+        video::save_video_meta(executor, url, video.meta.post_id, relative_path.as_path()).await?;
         debug!("video {} saved to {:?}", video.meta.url(), absolute_path);
         Ok(())
     }
 
-    pub async fn video_saved(&self, video_path: &Path, db: &SqlitePool, url: &Url) -> Result<bool> {
-        let Some(relative_path) = video::get_video_path(db, url).await? else {
+    pub async fn video_saved<'c, A>(
+        &self,
+        video_path: &Path,
+        acquirer: A,
+        url: &Url,
+    ) -> Result<bool>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
+        let mut conn = acquirer.acquire().await?;
+        let Some(relative_path) = video::get_video_path(&mut *conn, url).await? else {
             return Ok(false);
         };
         let absolute_path = video_path.join(relative_path);
         Ok(absolute_path.exists())
     }
 
-    pub async fn delete_videos_of_post(
+    pub async fn delete_videos_of_post<'c, A>(
         &self,
         video_path: &Path,
-        db: &SqlitePool,
+        acquirer: A,
         post_id: i64,
-    ) -> Result<()> {
-        let video_paths = video::get_video_paths_by_post_id(db, post_id).await?;
-        video::delete_videos_by_post_id(db, post_id).await?;
+    ) -> Result<()>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
+        let mut conn = acquirer.acquire().await?;
+        let video_paths = video::get_video_paths_by_post_id(&mut *conn, post_id).await?;
+        video::delete_videos_by_post_id(&mut *conn, post_id).await?;
 
         for path in video_paths {
             let absolute_path = video_path.join(path);
@@ -98,6 +118,7 @@ impl FileSystemVideoStorage {
 
 #[cfg(test)]
 mod local_tests {
+    use sqlx::SqlitePool;
     use tempfile::tempdir;
 
     use super::*;
