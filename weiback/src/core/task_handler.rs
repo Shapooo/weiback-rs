@@ -54,6 +54,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         self.storage.get_user(uid).await
     }
 
+    pub async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>> {
+        self.storage
+            .search_users_by_screen_name_prefix(prefix)
+            .await
+    }
+
     pub async fn get_picture_blob(&self, ctx: Arc<TaskContext>, id: &str) -> Result<Option<Bytes>> {
         let infos = self.storage.get_pictures_by_id(id).await?;
         if let Some(info) = self.choose_best_picture(infos) {

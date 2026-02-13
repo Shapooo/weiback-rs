@@ -93,6 +93,22 @@ VALUES
     Ok(())
 }
 
+pub async fn search_users_by_screen_name_prefix<'e, E>(
+    executor: E,
+    prefix: &str,
+) -> Result<Vec<User>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let users = sqlx::query_as::<Sqlite, UserInternal>(
+        "SELECT * FROM users WHERE screen_name LIKE ? LIMIT 20;",
+    )
+    .bind(format!("{}%", prefix))
+    .fetch_all(executor)
+    .await?;
+    users.into_iter().map(|u| u.try_into()).collect()
+}
+
 #[cfg(test)]
 mod local_tests {
     use std::fs::read_to_string;

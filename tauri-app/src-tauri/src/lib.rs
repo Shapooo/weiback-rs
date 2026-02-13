@@ -13,6 +13,7 @@ use weiback::core::{
     task::{BackupType, PaginatedPostInfo},
     task_manager::{SubTaskError, Task},
 };
+use weiback::models::User;
 
 use error::Result;
 use tauri::ipc::Response;
@@ -177,6 +178,17 @@ async fn get_username_by_id(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command(async)]
+async fn search_id_by_username_prefix(
+    core: State<'_, Arc<Core>>,
+    prefix: String,
+) -> std::result::Result<Vec<User>, String> {
+    info!("search_id_by_username_prefix called with prefix: {prefix}");
+    core.search_users_by_screen_name_prefix(&prefix)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub fn run() -> Result<()> {
     info!("Starting application");
     weiback::config::init()?;
@@ -197,6 +209,7 @@ pub fn run() -> Result<()> {
             get_config_command,
             set_config_command,
             get_username_by_id,
+            search_id_by_username_prefix,
             get_picture_blob,
             delete_post,
             rebackup_post,

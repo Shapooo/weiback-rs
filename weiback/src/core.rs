@@ -76,6 +76,12 @@ impl Core {
             .map(|opt| opt.map(|u| u.screen_name))
     }
 
+    pub async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>> {
+        self.task_handler
+            .search_users_by_screen_name_prefix(prefix)
+            .await
+    }
+
     // ========================= login stuff =========================
 
     pub async fn get_sms_code(&self, phone_number: String) -> Result<()> {

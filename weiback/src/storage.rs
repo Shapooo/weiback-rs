@@ -39,6 +39,7 @@ pub struct PictureInfo {
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
+    async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn get_post(&self, id: i64) -> Result<Option<Post>>;
     async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts>;
@@ -197,6 +198,10 @@ impl StorageImpl {
 impl Storage for StorageImpl {
     async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         user::get_user(&self.db_pool, uid).await
+    }
+
+    async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>> {
+        user::search_users_by_screen_name_prefix(&self.db_pool, prefix).await
     }
 
     async fn save_post(&self, post: &Post) -> Result<()> {
