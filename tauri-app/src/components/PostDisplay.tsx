@@ -348,7 +348,16 @@ const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_stru
     } : {};
 
     return (
-        <Typography variant="body2" component="div" sx={{ ...previewStyles, wordBreak: 'break-word', lineHeight: '1.8' }}>
+        <Typography
+            variant="body2"
+            component="div"
+            sx={{
+                ...previewStyles,
+                wordBreak: 'break-word',
+                lineHeight: '1.8',
+                ...(inPreviewMode ? {} : { whiteSpace: 'pre-wrap' }),
+            }}
+        >
             {content}
         </Typography>
     );
