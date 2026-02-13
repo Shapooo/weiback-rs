@@ -334,8 +334,8 @@ const LocalExportPage: React.FC = () => {
                     aria-labelledby="lightbox-image"
                     sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                    <Box onClick={handleCloseLightbox} sx={{ outline: 'none' }}>
-                        {lightboxImageId && <FullSizeImage imageId={lightboxImageId} />}
+                    <Box sx={{ outline: 'none' }}>
+                        {lightboxImageId && <FullSizeImage imageId={lightboxImageId} onClose={handleCloseLightbox} />}
                     </Box>
                 </Modal>
 

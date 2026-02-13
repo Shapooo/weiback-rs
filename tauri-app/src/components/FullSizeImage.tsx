@@ -3,7 +3,12 @@ import { CircularProgress } from '@mui/material';
 import { attachedCache } from '../cache';
 import { getPictureBlob } from '../lib/api';
 
-const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
+interface FullSizeImageProps {
+    imageId: string;
+    onClose: () => void;
+}
+
+const FullSizeImage: React.FC<FullSizeImageProps> = ({ imageId, onClose }) => {
     const [imageUrl, setImageUrl] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [transform, setTransform] = useState({
@@ -11,23 +16,27 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
         originX: '50%',
         originY: '50%',
     });
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+    const didDragRef = useRef(false);
     const imgRef = useRef<HTMLImageElement>(null);
 
     const handleWheel = (e: React.WheelEvent<HTMLImageElement>) => {
         e.preventDefault();
 
-        // Determine zoom direction
         const zoomFactor = 1.1;
         const newScale = e.deltaY < 0 ? transform.scale * zoomFactor : transform.scale / zoomFactor;
+        const clampedScale = Math.min(Math.max(1, newScale), 10);
 
-        // Clamp scale value
-        const clampedScale = Math.min(Math.max(1, newScale), 10); // Min scale 1x, max 10x
-
-        if (imgRef.current) {
+        if (clampedScale === 1) {
+            // Reset position and origin when zoomed back to original size
+            setPosition({ x: 0, y: 0 });
+            setTransform({ scale: 1, originX: '50%', originY: '50%' });
+        } else if (imgRef.current) {
             const rect = imgRef.current.getBoundingClientRect();
             const newOriginX = `${((e.clientX - rect.left) / rect.width) * 100}%`;
             const newOriginY = `${((e.clientY - rect.top) / rect.height) * 100}%`;
-
             setTransform({
                 scale: clampedScale,
                 originX: newOriginX,
@@ -36,9 +45,47 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
         }
     };
 
+    const handleMouseDown = (e: React.MouseEvent<HTMLImageElement>) => {
+        didDragRef.current = false;
+        if (transform.scale <= 1) return;
+        e.preventDefault();
+        setIsDragging(true);
+        dragStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            initialX: position.x,
+            initialY: position.y,
+        };
+    };
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
+        if (!isDragging) return;
+        didDragRef.current = true;
+        e.preventDefault();
+        const dx = e.clientX - dragStartRef.current.startX;
+        const dy = e.clientY - dragStartRef.current.startY;
+        setPosition({
+            x: dragStartRef.current.initialX + dx,
+            y: dragStartRef.current.initialY + dy,
+        });
+    };
+
+    const handleMouseUpOrLeave = () => {
+        setIsDragging(false);
+    };
+
+    const handleClick = (e: React.MouseEvent<HTMLImageElement>) => {
+        if (didDragRef.current) {
+            e.preventDefault();
+            return;
+        }
+        onClose();
+    };
+
     // Reset transform when image changes
     useEffect(() => {
         setTransform({ scale: 1, originX: '50%', originY: '50%' });
+        setPosition({ x: 0, y: 0 });
     }, [imageId]);
 
 
@@ -81,15 +128,20 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
             ref={imgRef}
             src={imageUrl}
             alt="Lightbox"
+            onClick={handleClick}
             onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUpOrLeave}
+            onMouseLeave={handleMouseUpOrLeave}
             style={{
                 maxHeight: '90vh',
                 maxWidth: '90vw',
                 borderRadius: '4px',
-                transform: `scale(${transform.scale})`,
+                transform: `translate(${position.x}px, ${position.y}px) scale(${transform.scale})`,
                 transformOrigin: `${transform.originX} ${transform.originY}`,
-                transition: 'transform 0.1s ease-out',
-                cursor: 'zoom-in',
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                cursor: transform.scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
             }}
         />
     );
