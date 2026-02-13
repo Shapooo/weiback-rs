@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::error::{Error, Result};
 use crate::models::{
-    MixMediaInfoItem, PicInfoDetail, PicInfoItem, PictureDefinition, PictureMeta, Post,
+    HugeInfo, MixMediaInfoItem, PicInfoDetail, PicInfoItem, PictureDefinition, PictureMeta, Post,
 };
 
 #[allow(unused_macros)]
@@ -220,77 +220,78 @@ fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
     current_user_iter.chain(retweet_user_iter)
 }
 
-pub fn extract_standalone_pic_metas(
-    post: &Post,
-    definition: PictureDefinition,
-) -> impl Iterator<Item = PictureMeta> {
-    process_standalone_pics(post, move |pic_info_item| {
-        let url = def_to_pic_info_detail(pic_info_item, definition)
-            .url
-            .as_str();
-        PictureMeta::attached(url, post.id, definition)
-            .map_err(|e| error!("cannot parse {url} {e}"))
-            .ok()
-    })
-}
-
 pub fn generate_standalone_pic_output_paths<'a>(
     post: &'a Post,
     pic_folder: &'a Path,
     definition: PictureDefinition,
 ) -> impl Iterator<Item = String> + 'a {
-    process_standalone_pics(post, move |pic_info_item| {
+    extract_standalone_pic_metas(post, definition).map(|meta| {
+        url_to_filename(meta.url())
+            .ok()
+            .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
+            .unwrap()
+    })
+}
+
+fn extract_current_standalone_pic_metas(
+    post: &Post,
+    definition: PictureDefinition,
+) -> impl Iterator<Item = PictureMeta> {
+    let post_id = post.id;
+    let pic_ids = post.pic_ids.as_ref();
+    let pic_infos = post.pic_infos.as_ref();
+    let mix_media_info = post.mix_media_info.as_ref();
+    let page_info = post.page_info.as_ref();
+
+    let pic_info_handler = move |pic_info_item: &PicInfoItem| {
         let url = def_to_pic_info_detail(pic_info_item, definition)
             .url
             .as_str();
-        url_to_filename(
-            &Url::parse(url).unwrap(), // TODO
-        )
-        .ok()
-        .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
-    })
-}
+        PictureMeta::attached(url, post_id, definition)
+            .map_err(|e| error!("cannot parse {url} {e}"))
+            .ok()
+    };
+    let huge_info_handler = move |huge_info: &HugeInfo| {
+        let url = huge_info.page_pic.as_str();
+        PictureMeta::cover(url, post_id)
+            .map_err(|e| error!("cannot parse {url} {e}"))
+            .ok()
+    };
 
-fn extract_current_post_pics<'a, T, F>(post: &'a Post, f: F) -> impl Iterator<Item = T> + 'a
-where
-    T: 'a,
-    F: Fn(&'a PicInfoItem) -> Option<T> + Copy + 'a,
-{
-    let pic_ids = post.pic_ids.as_ref();
-    let pic_infos = post.pic_infos.as_ref();
-    let mix_media = post.mix_media_info.as_ref();
-
-    // 将 pic_ids 转为迭代器，如果没有则返回空迭代器
-    pic_ids.into_iter().flat_map(move |ids| {
+    let pic_infos_iter = pic_ids.into_iter().flat_map(move |ids| {
         ids.iter().filter_map(move |id| {
-            if let Some(infos) = pic_infos {
-                // 情况 A: 从 pic_infos 查找
-                infos.get(id).and_then(f)
-            } else if let Some(mix) = mix_media {
-                // 情况 B: 从 mix_media_info 查找
-                mix.items
-                    .iter()
-                    .find_map(|item| match item {
-                        MixMediaInfoItem::Pic { id: i_id, data } if i_id == id => Some(data),
-                        _ => None,
-                    })
-                    .and_then(|item| f(item.as_ref()))
-            } else {
-                None
-            }
+            pic_infos.and_then(|infos| infos.get(id).and_then(pic_info_handler))
         })
-    })
+    });
+
+    let mix_media_iter = mix_media_info.into_iter().flat_map(move |mmi| {
+        mmi.items.iter().filter_map(move |item| match item {
+            MixMediaInfoItem::Pic { data, .. } => pic_info_handler(data),
+            MixMediaInfoItem::Video { data, .. } => huge_info_handler(data),
+        })
+    });
+
+    let page_info_iter = page_info
+        .into_iter()
+        .flat_map(|p| p.pic_info.as_ref())
+        .filter_map(move |p| {
+            let url = p.pic_big.url.as_str();
+            PictureMeta::cover(url, post_id)
+                .map_err(|e| error!("cannot parse {url} {e}"))
+                .ok()
+        });
+
+    pic_infos_iter.chain(mix_media_iter).chain(page_info_iter)
 }
 
-fn process_standalone_pics<'a, T, F>(post: &'a Post, f: F) -> impl Iterator<Item = T> + 'a
-where
-    T: 'a,
-    F: Fn(&'a PicInfoItem) -> Option<T> + Copy + 'a,
-{
-    // 当存在 retweeted_status 时，附件图片只会存在于 retweeted_status
+pub fn extract_standalone_pic_metas(
+    post: &Post,
+    definition: PictureDefinition,
+) -> impl Iterator<Item = PictureMeta> {
+    // 当存在 retweeted_status 时，只处理 retweeted_status
     let source = post.retweeted_status.as_deref().unwrap_or(post);
 
-    extract_current_post_pics(source, f)
+    extract_current_standalone_pic_metas(source, definition)
 }
 
 #[cfg(test)]
