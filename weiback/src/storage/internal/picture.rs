@@ -25,22 +25,31 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
             Error::DbError(format!("Picture path is NULL for URL {}", record.url))
         })?;
         let url_obj = Url::parse(&record.url)?;
-        let meta = if let Some(user_id) = record.user_id {
-            PictureMeta::Avatar {
-                url: url_obj,
-                user_id,
-            }
-        } else if let Some(post_id) = record.post_id {
-            PictureMeta::Attached {
+        let meta = match record {
+            PictureDbRecord {
+                post_id: Some(post_id),
+                definition: Some(definition),
+                ..
+            } => PictureMeta::Attached {
                 url: url_obj,
                 post_id,
-                definition: record
-                    .definition
-                    .map(|s| PictureDefinition::from(s.as_str()))
-                    .unwrap_or_default(),
-            }
-        } else {
-            PictureMeta::Other { url: url_obj }
+                definition: PictureDefinition::from(definition.as_str()),
+            },
+            PictureDbRecord {
+                post_id: Some(post_id),
+                ..
+            } => PictureMeta::Cover {
+                url: url_obj,
+                post_id,
+            },
+            PictureDbRecord {
+                user_id: Some(user_id),
+                ..
+            } => PictureMeta::Avatar {
+                url: url_obj,
+                user_id,
+            },
+            _ => unreachable!(),
         };
         Ok(PictureInfo {
             meta,
