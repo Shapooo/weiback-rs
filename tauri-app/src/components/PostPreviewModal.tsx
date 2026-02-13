@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
     Modal,
     Box,
 } from '@mui/material';
 import PostDisplay from './PostDisplay';
-import FullSizeImage from './FullSizeImage';
 import { PostInfo } from '../types';
 
 interface PostPreviewModalProps {
@@ -15,43 +14,23 @@ interface PostPreviewModalProps {
 }
 
 const PostPreviewModal: React.FC<PostPreviewModalProps> = ({ postInfo, open, onClose, onImageClick }) => {
-    const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
 
     const handleCloseInternal = useCallback(() => {
-        setLightboxImageId(null);
         onClose();
     }, [onClose]);
-
-    const handleLightboxOpen = useCallback((id: string) => {
-        setLightboxImageId(id);
-    }, []);
-
-    const handleLightboxClose = useCallback(() => {
-        setLightboxImageId(null);
-    }, []);
-
-    useEffect(() => {
-        if (!open) {
-            setLightboxImageId(null);
-        }
-    }, [open]);
 
     // Handle ESC key to close
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                if (lightboxImageId) {
-                    handleLightboxClose();
-                } else {
-                    handleCloseInternal();
-                }
+                handleCloseInternal();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [handleCloseInternal, handleLightboxClose, lightboxImageId]);
+    }, [handleCloseInternal]);
 
     if (!postInfo) {
         return null;
@@ -84,19 +63,8 @@ const PostPreviewModal: React.FC<PostPreviewModalProps> = ({ postInfo, open, onC
             >
                 <PostDisplay
                     postInfo={postInfo}
-                    onImageClick={handleLightboxOpen} // Internal lightbox for full images
+                    onImageClick={onImageClick} // Use the onImageClick prop passed from the parent
                 />
-
-                <Modal
-                    open={!!lightboxImageId}
-                    onClose={handleLightboxClose}
-                    aria-labelledby="lightbox-image"
-                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                    <Box onClick={handleLightboxClose} sx={{ outline: 'none' }}>
-                        {lightboxImageId && <FullSizeImage imageId={lightboxImageId} />}
-                    </Box>
-                </Modal>
             </Box>
         </Modal>
     );
