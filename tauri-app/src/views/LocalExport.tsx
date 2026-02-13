@@ -10,7 +10,6 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
-    TextField,
     Button,
     Stack,
     CircularProgress,
@@ -22,9 +21,12 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import FullSizeImage from '../components/FullSizeImage';
-import PostDisplay, { PostInfo } from '../components/PostDisplay';
+import PostDisplay from '../components/PostDisplay';
+import { PostInfo } from '../types';
 import PostPreviewModal from '../components/PostPreviewModal';
 import { useTaskStore } from '../stores/taskStore';
+import UserSelector from '../components/UserSelector';
+import { User } from '../types';
 
 // --- Type Definitions based on Rust structs ---
 interface PaginatedPostInfo {
@@ -61,15 +63,15 @@ const LocalExportPage: React.FC = () => {
     const isTaskRunning = useTaskStore(state => !!state.currentTask);
 
     // State for UI controls
+    const [userInput, setUserInput] = useState<User | string | null>(null);
     const [filters, setFilters] = useState({
-        userId: '',
         startDate: null as Date | null,
         endDate: null as Date | null,
         isFavorited: false,
         reverseOrder: false,
     });
     // State to hold the filters that are actually applied
-    const [appliedFilters, setAppliedFilters] = useState(filters);
+    const [appliedFilters, setAppliedFilters] = useState({ ...filters, userInput });
 
     // State for data and pagination
     const [postInfos, setPostInfos] = useState<PostInfo[]>([]);
@@ -101,8 +103,19 @@ const LocalExportPage: React.FC = () => {
         setHoveredPostInfo(null);
     }, []);
 
+    const getUserId = (input: User | string | null): number | undefined => {
+        if (!input) return undefined;
+        if (typeof input === 'object' && input.id) {
+            return input.id;
+        }
+        if (typeof input === 'string' && /^\d+$/.test(input)) {
+            return parseInt(input, 10);
+        }
+        return undefined;
+    }
 
-    const fetchPosts = useCallback(async (currentPage: number, currentFilters: typeof filters) => {
+
+    const fetchPosts = useCallback(async (currentPage: number, currentFilters: typeof appliedFilters) => {
         setLoading(true);
         try {
             const startDate = currentFilters.startDate ? new Date(currentFilters.startDate) : null;
@@ -114,13 +127,14 @@ const LocalExportPage: React.FC = () => {
             if (endDate) {
                 endDate.setHours(23, 59, 59, 999);
             }
+            const userId = getUserId(currentFilters.userInput);
 
             const query: PostQuery = {
                 page: currentPage,
                 posts_per_page: POSTS_PER_PAGE,
                 is_favorited: currentFilters.isFavorited,
                 reverse_order: currentFilters.reverseOrder,
-                user_id: currentFilters.userId ? parseInt(currentFilters.userId, 10) : undefined,
+                user_id: userId,
                 start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
             };
@@ -148,21 +162,24 @@ const LocalExportPage: React.FC = () => {
 
     const handleSearch = () => {
         setPage(1); // Reset to first page on new search
-        setAppliedFilters(filters);
+        setAppliedFilters({ ...filters, userInput });
     };
 
     const handleClearFilters = () => {
         const clearedFilters = {
-            userId: '',
             startDate: null,
             endDate: null,
             isFavorited: false,
             reverseOrder: false,
         };
+        const clearedUserInput = null;
+
+        setUserInput(clearedUserInput);
         setFilters(clearedFilters);
-        if (JSON.stringify(appliedFilters) !== JSON.stringify(clearedFilters)) {
+
+        if (JSON.stringify(appliedFilters) !== JSON.stringify({ ...clearedFilters, userInput: clearedUserInput })) {
             setPage(1);
-            setAppliedFilters(clearedFilters);
+            setAppliedFilters({ ...clearedFilters, userInput: clearedUserInput });
         }
     };
 
@@ -193,12 +210,14 @@ const LocalExportPage: React.FC = () => {
                 endDate.setHours(23, 59, 59, 999);
             }
 
+            const userId = getUserId(appliedFilters.userInput);
+
             const query: PostQuery = {
                 page: 1, // Export should start from page 1
                 posts_per_page: 1_000_000, // A large number to signify "all"
                 is_favorited: appliedFilters.isFavorited,
                 reverse_order: appliedFilters.reverseOrder,
-                user_id: appliedFilters.userId ? parseInt(appliedFilters.userId, 10) : undefined,
+                user_id: userId,
                 start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
             };
@@ -254,12 +273,9 @@ const LocalExportPage: React.FC = () => {
                                     />
                                 </Grid>
                                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                                    <TextField
-                                        fullWidth
-                                        label="用户ID"
-                                        value={filters.userId}
-                                        onChange={(e) => setFilters(f => ({ ...f, userId: e.target.value }))}
-                                        type="number"
+                                    <UserSelector
+                                        value={userInput}
+                                        onChange={setUserInput}
                                     />
                                 </Grid>
                                 {/* Second Line: Date Pickers */}

@@ -31,3 +31,35 @@ export interface SubTaskError {
     error_type: { [key in SubTaskErrorType]?: string }; // e.g., { "DownloadMedia": "http://..." }
     message: string;
 }
+
+
+// --- Types from PostDisplay ---
+
+export interface UrlStructItem {
+    long_url: string | null;
+    short_url: string;
+    url_title: string;
+}
+
+export interface User {
+    id: number;
+    screen_name: string;
+}
+
+export interface Post {
+    id: number;
+    text: string;
+    favorited: boolean;
+    created_at: string;
+    user: User | null;
+    retweeted_status?: Post | null;
+    url_struct: UrlStructItem[] | null;
+}
+
+export interface PostInfo {
+    post: Post;
+    avatar_id: string | null;
+    emoji_map: Record<string, string>;
+    standalone_ids: string[];
+    inline_map: Record<string, string>,
+}

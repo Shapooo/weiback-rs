@@ -3,8 +3,9 @@ import {
     Modal,
     Box,
 } from '@mui/material';
-import PostDisplay, { PostInfo } from './PostDisplay';
+import PostDisplay from './PostDisplay';
 import FullSizeImage from './FullSizeImage';
+import { PostInfo } from '../types';
 
 interface PostPreviewModalProps {
     postInfo: PostInfo | null;

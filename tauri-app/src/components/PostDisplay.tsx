@@ -28,37 +28,9 @@ import LinkIcon from '@mui/icons-material/Link';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachedCache } from '../cache';
 import Emoji from './Emoji';
+import { PostInfo, UrlStructItem } from '../types';
 
-// --- Type Definitions based on Rust structs ---
-
-interface UrlStructItem {
-    long_url: string | null;
-    short_url: string;
-    url_title: string;
-}
-
-interface User {
-    id: number;
-    screen_name: string;
-}
-
-interface Post {
-    id: number;
-    text: string;
-    favorited: boolean;
-    created_at: string;
-    user: User | null;
-    retweeted_status?: Post | null;
-    url_struct: UrlStructItem[] | null;
-}
-
-export interface PostInfo {
-    post: Post;
-    avatar_id: string | null;
-    emoji_map: Record<string, string>;
-    standalone_ids: string[];
-    inline_map: Record<string, string>,
-}
+// --- Type Definitions are now in ../types.ts ---
 
 interface AvatarImageProps {
     avatarId: string | null;

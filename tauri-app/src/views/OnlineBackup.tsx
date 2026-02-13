@@ -3,15 +3,18 @@ import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import { useTaskStore } from '../stores/taskStore';
+import { User } from '../types';
+import UserSelector from '../components/UserSelector';
 
-interface UserInfo {
+
+interface LoggedInUser {
     id: number;
     screen_name: string;
 }
 
 const UserBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
-    const [userId, setUserId] = useState('');
+    const [userInput, setUserInput] = useState<User | string | null>(null);
     const [userName, setUserName] = useState<string | null>(null);
     const [numPages, setNumPages] = useState(1);
     const [backupType, setBackupType] = useState('Normal');
@@ -20,11 +23,14 @@ const UserBackupSection: React.FC = () => {
 
     useEffect(() => {
         const handler = setTimeout(() => {
-            if (userId) {
-                invoke<string | null>('get_username_by_id', { uid: userId })
+            if (userInput && typeof userInput === 'string') {
+                invoke<string | null>('get_username_by_id', { uid: userInput })
                     .then(setUserName)
                     .catch(console.error);
-            } else {
+            } else if (userInput && typeof userInput === 'object') {
+                setUserName(userInput.screen_name);
+            }
+            else {
                 setUserName(null);
             }
         }, 500); // 500ms debounce
@@ -32,18 +38,26 @@ const UserBackupSection: React.FC = () => {
         return () => {
             clearTimeout(handler);
         };
-    }, [userId]);
+    }, [userInput]);
 
 
     const handleBackup = async () => {
-        let backupId = userId;
+        let backupId: string | null = null;
+        if (userInput) {
+            if (typeof userInput === 'object') {
+                backupId = userInput.id.toString();
+            } else {
+                backupId = userInput;
+            }
+        }
+
 
         if (!backupId) {
-            const loggedInUser: UserInfo | null = await invoke('login_state');
+            const loggedInUser: LoggedInUser | null = await invoke('login_state');
             if (loggedInUser && loggedInUser.id) {
                 backupId = loggedInUser.id.toString();
             } else {
-                enqueueSnackbar('请输入用户ID', { variant: 'error' });
+                enqueueSnackbar('请输入用户ID或选择一个用户', { variant: 'error' });
                 return;
             }
         }
@@ -68,18 +82,10 @@ const UserBackupSection: React.FC = () => {
                 </Typography>
                 <Box component="form" noValidate autoComplete="off">
                     <Stack spacing={2}>
-                        <TextField
-                            fullWidth
-                            label="用户ID (不填写默认为当前登录用户)"
-                            value={userId}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === '' || /^\d+$/.test(value)) {
-                                    setUserId(value);
-                                }
-                            }}
-                            type="text" // Keep as text to allow custom validation
-                            slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }} // Use slotProps.htmlInput
+                        <UserSelector
+                            value={userInput}
+                            onChange={setUserInput}
+                            label="用户 (不填写默认为当前登录用户)"
                         />
                         {userName && (
                             <Typography variant="body2" color="text.secondary" sx={{ pl: 1, mt: 0 }}>
