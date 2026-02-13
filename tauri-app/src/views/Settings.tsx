@@ -8,25 +8,10 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Grid from '@mui/material/Grid';
 import { useTheme } from '@mui/material/styles';
-import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from "@mui/material";
-
-// Mirror of the Rust Config struct
-interface SdkConfig {
-    fav_count: number;
-    status_count: number;
-    retry_times: number;
-}
-
-enum PictureDefinition {
-    Thumbnail = "Thumbnail",
-    Bmiddle = "Bmiddle",
-    Large = "Large",
-    Original = "Original",
-    Mw2000 = "Mw2000",
-    Largest = "Largest",
-}
+import { SdkConfig, PictureDefinition, Config } from '../types/config';
+import { getConfig, setConfig } from '../lib/api';
 
 const pictureDefinitionMap = [
     { value: PictureDefinition.Largest, label: '原始尺寸' },
@@ -37,30 +22,16 @@ const pictureDefinitionMap = [
     { value: PictureDefinition.Thumbnail, label: '缩略图' },
 ];
 
-interface Config {
-    db_path: string;
-    session_path: string;
-    download_pictures: boolean;
-    picture_definition: PictureDefinition;
-    backup_task_interval: number; // it's a Duration on Rust side, but serialized as seconds
-    other_task_interval: number; // same
-    posts_per_html: number;
-    picture_path: string;
-    video_path: string;
-    sdk_config: SdkConfig;
-    dev_mode_out_dir?: string;
-}
-
 const SettingsPage: React.FC = () => {
     const { toggleColorMode } = useThemeContext();
     const theme = useTheme();
-    const [config, setConfig] = useState<Config | null>(null);
+    const [config, setConfigState] = useState<Config | null>(null);
     const [initialConfig, setInitialConfig] = useState<Config | null>(null);
 
     useEffect(() => {
-        invoke<Config>('get_config_command')
+        getConfig()
             .then(loadedConfig => {
-                setConfig(loadedConfig);
+                setConfigState(loadedConfig);
                 setInitialConfig(loadedConfig);
             })
             .catch(console.error);
@@ -68,7 +39,7 @@ const SettingsPage: React.FC = () => {
 
     const handleSave = () => {
         if (config) {
-            invoke('set_config_command', { config })
+            setConfig(config)
                 .then(() => {
                     console.log('Settings saved');
                     setInitialConfig(config);
@@ -78,7 +49,7 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleReset = () => {
-        setConfig(initialConfig);
+        setConfigState(initialConfig);
     }
 
     const handleSelectPath = async (field: 'picture_path' | 'video_path') => {
@@ -94,13 +65,13 @@ const SettingsPage: React.FC = () => {
 
     const handleChange = (field: keyof Config, value: any) => {
         if (config) {
-            setConfig({ ...config, [field]: value });
+            setConfigState({ ...config, [field]: value });
         }
     };
 
     const handleSdkChange = (field: keyof SdkConfig, value: any) => {
         if (config) {
-            setConfig({ ...config, sdk_config: { ...config.sdk_config, [field]: value } });
+            setConfigState({ ...config, sdk_config: { ...config.sdk_config, [field]: value } });
         }
     };
 

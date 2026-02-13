@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import {
   Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer, CircularProgress
 } from '@mui/material';
 import { useAuthStore } from '../stores/authStore';
-import { User } from '../types';
+import { getSmsCode, login as apiLogin } from '../lib/api';
 
 const UserPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
@@ -31,7 +30,7 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      await invoke('get_sms_code', { phoneNumber: phone });
+      await getSmsCode(phone);
       setIsCodeSent(true);
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
       inputRefs.current[0]?.focus();
@@ -47,7 +46,7 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      const res: User | null = await invoke('login', { smsCode: code });
+      const res = await apiLogin(code);
       if (res) {
         login(res);
         enqueueSnackbar('登录成功！', { variant: 'success' });

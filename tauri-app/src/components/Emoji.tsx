@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { emojiCache } from '../cache';
 import { Box } from '@mui/material';
+import { getPictureBlob } from '../lib/api';
 
 interface EmojiProps {
     imageId: string;
@@ -25,7 +25,7 @@ const Emoji: React.FC<EmojiProps> = ({ imageId, emojiText }) => {
             }
 
             try {
-                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
+                const blob = await getPictureBlob(imageId);
                 if (!isCancelled && blob.byteLength > 0) {
                     const imageBlob = new Blob([blob]);
                     const objectUrl = URL.createObjectURL(imageBlob);

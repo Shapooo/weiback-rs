@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { useTaskStore } from '../stores/taskStore';
-import { Task, SubTaskError } from '../types';
+import { getCurrentTaskStatus, getAndClearSubTaskErrors } from '../lib/api';
 
 /**
  * A custom hook that periodically polls the backend for the current task status
@@ -16,7 +15,7 @@ export function useTaskPolling(intervalMs = 2000) {
   useEffect(() => {
     const pollTaskStatus = async () => {
       try {
-        const task = await invoke<Task | null>('get_current_task_status');
+        const task = await getCurrentTaskStatus();
         setCurrentTask(task);
       } catch (error) {
         console.error('Failed to poll task status:', error);
@@ -25,7 +24,7 @@ export function useTaskPolling(intervalMs = 2000) {
 
     const pollSubTaskErrors = async () => {
         try {
-            const errors = await invoke<SubTaskError[]>('get_and_clear_sub_task_errors');
+            const errors = await getAndClearSubTaskErrors();
             errors.forEach(error => {
                 const url = error.error_type.DownloadMedia;
                 enqueueSnackbar(`媒体下载失败: ${url} - ${error.message}`, {

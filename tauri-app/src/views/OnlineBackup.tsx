@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import { useTaskStore } from '../stores/taskStore';
 import { useAuthStore } from '../stores/authStore';
-import { User } from '../types';
+import { User, BackupType } from '../types';
 import UserSelector from '../components/UserSelector';
+import { getUsernameById, backupUser, backupFavorites, unfavoritePosts } from '../lib/api';
 
 
 const UserBackupSection: React.FC = () => {
@@ -13,7 +13,7 @@ const UserBackupSection: React.FC = () => {
     const [userInput, setUserInput] = useState<User | string | null>(null);
     const [userName, setUserName] = useState<string | null>(null);
     const [numPages, setNumPages] = useState(1);
-    const [backupType, setBackupType] = useState('Normal');
+    const [backupType, setBackupType] = useState<BackupType>(BackupType.Normal);
     const isTaskRunning = useTaskStore(state => !!state.currentTask);
     const loggedInUser = useAuthStore(state => state.userInfo);
 
@@ -21,7 +21,7 @@ const UserBackupSection: React.FC = () => {
     useEffect(() => {
         const handler = setTimeout(() => {
             if (userInput && typeof userInput === 'string') {
-                invoke<string | null>('get_username_by_id', { uid: userInput })
+                getUsernameById(userInput)
                     .then(setUserName)
                     .catch(console.error);
             } else if (userInput && typeof userInput === 'object') {
@@ -63,7 +63,7 @@ const UserBackupSection: React.FC = () => {
             return;
         }
         try {
-            await invoke('backup_user', { uid: backupId, numPages, backupType });
+            await backupUser(backupId, numPages, backupType);
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -95,13 +95,13 @@ const UserBackupSection: React.FC = () => {
                                 id="backup-type-select"
                                 value={backupType}
                                 label="备份类型"
-                                onChange={(e) => setBackupType(e.target.value)}
+                                onChange={(e) => setBackupType(e.target.value as BackupType)}
                             >
-                                <MenuItem value={'Normal'}>全部</MenuItem>
-                                <MenuItem value={'Original'}>原创</MenuItem>
-                                <MenuItem value={'Picture'}>图片</MenuItem>
-                                <MenuItem value={'Video'}>视频</MenuItem>
-                                <MenuItem value={'Article'}>文章</MenuItem>
+                                <MenuItem value={BackupType.Normal}>全部</MenuItem>
+                                <MenuItem value={BackupType.Original}>原创</MenuItem>
+                                <MenuItem value={BackupType.Picture}>图片</MenuItem>
+                                <MenuItem value={BackupType.Video}>视频</MenuItem>
+                                <MenuItem value={BackupType.Article}>文章</MenuItem>
                             </Select>
                         </FormControl>
                         <TextField
@@ -133,7 +133,7 @@ const FavoritesBackupSection: React.FC = () => {
             return;
         }
         try {
-            await invoke('backup_favorites', { numPages });
+            await backupFavorites(numPages);
             enqueueSnackbar('收藏备份任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
@@ -142,7 +142,7 @@ const FavoritesBackupSection: React.FC = () => {
 
     const handleUnfavorite = async () => {
         try {
-            await invoke("unfavorite_posts");
+            await unfavoritePosts();
             enqueueSnackbar('开始取消已备份收藏', { variant: 'success' })
         } catch (e) {
             enqueueSnackbar(`取消收藏失败：${e}`, { variant: 'error' })

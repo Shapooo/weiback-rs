@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { CircularProgress } from '@mui/material';
 import { attachedCache } from '../cache';
+import { getPictureBlob } from '../lib/api';
 
 const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
     const [imageUrl, setImageUrl] = useState<string>('');
@@ -54,7 +54,7 @@ const FullSizeImage: React.FC<{ imageId: string }> = ({ imageId }) => {
                 return;
             }
             try {
-                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
+                const blob = await getPictureBlob(imageId);
                 if (!isCancelled && blob.byteLength > 0) {
                     const imageBlob = new Blob([blob]);
                     const objectUrl = URL.createObjectURL(imageBlob);

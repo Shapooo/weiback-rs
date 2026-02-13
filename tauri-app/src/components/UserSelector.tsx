@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import {
     Autocomplete,
     TextField,
@@ -12,6 +11,7 @@ import {
     SelectChangeEvent
 } from '@mui/material';
 import { User } from '../types';
+import { searchIdByUsernamePrefix } from '../lib/api';
 
 type SearchMode = 'username' | 'id';
 
@@ -58,8 +58,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
                 return;
             }
             setLoading(true);
-            // Assuming `search_id_by_username_prefix` exists on the backend.
-            invoke<User[]>('search_id_by_username_prefix', { prefix })
+            searchIdByUsernamePrefix(prefix)
                 .then((users) => {
                     setOptions(users);
                 })

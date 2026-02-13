@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSnackbar } from 'notistack';
 import {
@@ -22,37 +21,11 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import FullSizeImage from '../components/FullSizeImage';
 import PostDisplay from '../components/PostDisplay';
-import { PostInfo } from '../types';
+import { PostInfo, User, PostQuery, ExportJobOptions } from '../types';
 import PostPreviewModal from '../components/PostPreviewModal';
 import { useTaskStore } from '../stores/taskStore';
 import UserSelector from '../components/UserSelector';
-import { User } from '../types';
-
-// --- Type Definitions based on Rust structs ---
-interface PaginatedPostInfo {
-    posts: PostInfo[];
-    total_items: number;
-}
-
-interface PostQuery {
-    user_id?: number;
-    start_date?: number; // Unix timestamp
-    end_date?: number;   // Unix timestamp
-    is_favorited: boolean;
-    reverse_order: boolean;
-    page: number;
-    posts_per_page: number;
-}
-
-interface ExportOutputConfig {
-    task_name: string;
-    export_dir: string;
-}
-
-interface ExportJobOptions {
-    query: PostQuery;
-    output: ExportOutputConfig;
-}
+import { queryLocalPosts, exportPosts } from '../lib/api';
 
 const POSTS_PER_PAGE = 12;
 
@@ -139,7 +112,7 @@ const LocalExportPage: React.FC = () => {
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
             };
 
-            const result: PaginatedPostInfo = await invoke('query_local_posts', { query });
+            const result = await queryLocalPosts(query);
             setPostInfos(result.posts);
             setTotalPages(Math.ceil(result.total_items / POSTS_PER_PAGE));
         } catch (e) {
@@ -230,7 +203,7 @@ const LocalExportPage: React.FC = () => {
                 }
             };
 
-            await invoke('export_posts', { options });
+            await exportPosts(options);
             enqueueSnackbar('导出任务已成功启动', { variant: 'success' });
         } catch (e) {
             enqueueSnackbar(`启动导出任务失败: ${e}`, { variant: 'error' });

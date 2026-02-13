@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import {
     Avatar,
@@ -29,6 +28,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachedCache } from '../cache';
 import Emoji from './Emoji';
 import { PostInfo, UrlStructItem } from '../types';
+import { getPictureBlob, deletePost, rebackupPost } from '../lib/api';
 
 // --- Type Definitions are now in ../types.ts ---
 
@@ -55,7 +55,7 @@ const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
             }
 
             try {
-                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: avatarId });
+                const blob = await getPictureBlob(avatarId);
                 if (!isCancelled) {
                     const imageBlob = new Blob([blob]);
                     const objectUrl = URL.createObjectURL(imageBlob);
@@ -106,7 +106,7 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ imageId, size, onClick })
             }
 
             try {
-                const blob: ArrayBuffer = await invoke('get_picture_blob', { id: imageId });
+                const blob = await getPictureBlob(imageId);
                 if (isCancelled) return;
 
                 const imageBlob = new Blob([blob]);
@@ -360,7 +360,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
     const handleDeleteConfirm = async (e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            await invoke('delete_post', { id: postInfo.post.id.toString() });
+            await deletePost(postInfo.post.id.toString());
             enqueueSnackbar('帖子已删除', { variant: 'success' });
             onPostDeleted?.();
         } catch (error) {
@@ -374,7 +374,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
     const handleRebackupClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            await invoke('rebackup_post', { id: postInfo.post.id.toString() });
+            await rebackupPost(postInfo.post.id.toString());
             enqueueSnackbar('已加入重新备份队列', { variant: 'info' });
         } catch (error) {
             console.error('Failed to re-backup post:', error);

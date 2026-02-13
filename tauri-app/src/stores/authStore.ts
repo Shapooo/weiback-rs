@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
 import { User } from '../types';
+import { loginState } from '../lib/api';
 
 interface AuthState {
     userInfo: User | null;
@@ -19,7 +19,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     checkLoginState: async () => {
         try {
             set({ isAuthLoading: true });
-            const user: User | null = await invoke('login_state');
+            const user = await loginState();
             if (user) {
                 set({ userInfo: user, isLoggedIn: true });
             } else {
