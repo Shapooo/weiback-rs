@@ -3,14 +3,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import { useTaskStore } from '../stores/taskStore';
+import { useAuthStore } from '../stores/authStore';
 import { User } from '../types';
 import UserSelector from '../components/UserSelector';
 
-
-interface LoggedInUser {
-    id: number;
-    screen_name: string;
-}
 
 const UserBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
@@ -19,6 +15,7 @@ const UserBackupSection: React.FC = () => {
     const [numPages, setNumPages] = useState(1);
     const [backupType, setBackupType] = useState('Normal');
     const isTaskRunning = useTaskStore(state => !!state.currentTask);
+    const loggedInUser = useAuthStore(state => state.userInfo);
 
 
     useEffect(() => {
@@ -53,7 +50,6 @@ const UserBackupSection: React.FC = () => {
 
 
         if (!backupId) {
-            const loggedInUser: LoggedInUser | null = await invoke('login_state');
             if (loggedInUser && loggedInUser.id) {
                 backupId = loggedInUser.id.toString();
             } else {

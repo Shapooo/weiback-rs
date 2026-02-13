@@ -5,6 +5,7 @@ import { MainListItems } from './listItems';
 import AppRouter from './router';
 import { useTaskPolling } from './hooks/useTaskPolling';
 import { useTaskStore } from './stores/taskStore';
+import { useAuthStore } from './stores/authStore';
 import { Task } from './types';
 
 
@@ -64,6 +65,12 @@ const App: React.FC = () => {
     useTaskPolling();
     // Enable global notifications for task completion/failure
     useCompletionNotifier();
+
+    useEffect(() => {
+        // Initialize auth state on app startup
+        useAuthStore.getState().checkLoginState();
+    }, []);
+
 
     return (
         <Box sx={{ display: 'flex' }}>

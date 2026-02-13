@@ -2,46 +2,28 @@ import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSnackbar } from 'notistack';
 import {
-  Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer
+  Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer, CircularProgress
 } from '@mui/material';
-
-enum LoginState {
-  Init,
-  WaitingCode,
-  CodeSent,
-  LoggedIn
-}
-
-interface UserInfo {
-  id: number;
-  screen_name: string;
-}
+import { useAuthStore } from '../stores/authStore';
+import { User } from '../types';
 
 const UserPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
-  const [loginState, setLoginState] = useState<LoginState>(LoginState.Init);
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const { userInfo, isLoggedIn, isAuthLoading, login, logout } = useAuthStore();
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState(Array(6).fill(''));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const [isCodeSent, setIsCodeSent] = useState(false);
+
   useEffect(() => {
-    const checkLoginState = async () => {
-      try {
-        const user: UserInfo | null = await invoke('login_state');
-        if (user) {
-          setUserInfo(user);
-          setLoginState(LoginState.LoggedIn);
-        } else {
-          setLoginState(LoginState.Init);
-        }
-      } catch (e) {
-        enqueueSnackbar(`检查登录状态失败: ${e}`, { variant: 'error' });
-        setLoginState(LoginState.Init);
-      }
-    };
-    checkLoginState();
-  }, [enqueueSnackbar]);
+    // Reset local component state if the global auth state changes to logged out
+    if (!isLoggedIn) {
+      setIsCodeSent(false);
+      setPhone('');
+      setVerificationCode(Array(6).fill(''));
+    }
+  }, [isLoggedIn]);
 
   const handleGetCode = async () => {
     if (!/^1\d{10}$/.test(phone)) {
@@ -50,7 +32,7 @@ const UserPage: React.FC = () => {
     }
     try {
       await invoke('get_sms_code', { phoneNumber: phone });
-      setLoginState(LoginState.CodeSent);
+      setIsCodeSent(true);
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
       inputRefs.current[0]?.focus();
     } catch (e) {
@@ -65,28 +47,22 @@ const UserPage: React.FC = () => {
       return;
     }
     try {
-      const res: UserInfo | null = await invoke('login', { smsCode: code });
+      const res: User | null = await invoke('login', { smsCode: code });
       if (res) {
-        setUserInfo(res);
-        setLoginState(LoginState.LoggedIn);
+        login(res);
         enqueueSnackbar('登录成功！', { variant: 'success' });
+      } else {
+        // This case might happen if login returns null for some reason
+        enqueueSnackbar('登录失败，未获取到用户信息', { variant: 'error' });
       }
-      setPhone('');
-      setVerificationCode(Array(6).fill(''));
     } catch (e) {
       enqueueSnackbar(`登录失败: ${e}`, { variant: 'error' });
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      // await invoke('logout');
-      setLoginState(LoginState.Init);
-      setUserInfo(null);
-      enqueueSnackbar('已退出登录', { variant: 'info' });
-    } catch (e) {
-      enqueueSnackbar(`退出登录失败: ${e}`, { variant: 'error' });
-    }
+  const handleLogout = () => {
+    logout();
+    enqueueSnackbar('已退出登录', { variant: 'info' });
   };
 
   const handleCodeInputChange = (index: number, value: string) => {
@@ -104,14 +80,24 @@ const UserPage: React.FC = () => {
     }
   };
 
+  if (isAuthLoading) {
+    return (
+      <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
+        <CardContent sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
       <CardContent>
         <Typography variant="h5" component="div" sx={{ mb: 2 }}>
-          {loginState === LoginState.LoggedIn ? '用户信息' : '用户登录'}
+          {isLoggedIn ? '用户信息' : '用户登录'}
         </Typography>
 
-        {loginState === LoginState.LoggedIn && userInfo ? (
+        {isLoggedIn && userInfo ? (
           <Box>
             <TableContainer component={Paper}>
               <Table>
@@ -127,7 +113,7 @@ const UserPage: React.FC = () => {
           </Box>
         ) : (
           <Box component="form" noValidate autoComplete="off">
-            {loginState !== LoginState.CodeSent ? (
+            {!isCodeSent ? (
               <Stack spacing={2}>
                 <TextField
                   fullWidth
