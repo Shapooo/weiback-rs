@@ -29,6 +29,7 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
             PictureDbRecord {
                 post_id: Some(post_id),
                 definition: Some(definition),
+                user_id: None,
                 ..
             } => PictureMeta::Attached {
                 url: url_obj,
@@ -37,6 +38,8 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
             },
             PictureDbRecord {
                 post_id: Some(post_id),
+                definition: None,
+                user_id: None,
                 ..
             } => PictureMeta::Cover {
                 url: url_obj,
@@ -44,11 +47,19 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
             },
             PictureDbRecord {
                 user_id: Some(user_id),
+                post_id: None,
+                definition: None,
                 ..
             } => PictureMeta::Avatar {
                 url: url_obj,
                 user_id,
             },
+            PictureDbRecord {
+                post_id: None,
+                user_id: None,
+                definition: None,
+                ..
+            } => PictureMeta::Other { url: url_obj },
             _ => unreachable!(),
         };
         Ok(PictureInfo {
