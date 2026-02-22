@@ -3,7 +3,7 @@ import { useSnackbar } from 'notistack';
 import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import { useTaskStore } from '../stores/taskStore';
 import { useAuthStore } from '../stores/authStore';
-import { User, BackupType } from '../types';
+import { User, BackupType, TaskStatus } from '../types';
 import UserSelector from '../components/UserSelector';
 import { getUsernameById, backupUser, backupFavorites, unfavoritePosts } from '../lib/api';
 
@@ -14,7 +14,7 @@ const UserBackupSection: React.FC = () => {
     const [userName, setUserName] = useState<string | null>(null);
     const [numPages, setNumPages] = useState(1);
     const [backupType, setBackupType] = useState<BackupType>(BackupType.Normal);
-    const isTaskRunning = useTaskStore(state => !!state.currentTask);
+    const isTaskRunning = useTaskStore(state => state.currentTask?.status === TaskStatus.InProgress);
     const loggedInUser = useAuthStore(state => state.userInfo);
 
 
@@ -125,7 +125,7 @@ const UserBackupSection: React.FC = () => {
 const FavoritesBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [numPages, setNumPages] = useState(1);
-    const isTaskRunning = useTaskStore(state => !!state.currentTask);
+    const isTaskRunning = useTaskStore(state => state.currentTask?.status === TaskStatus.InProgress);
 
     const handleBackup = async () => {
         if (numPages <= 0) {
