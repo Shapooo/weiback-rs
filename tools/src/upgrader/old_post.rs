@@ -149,6 +149,7 @@ pub struct OldPost {
     pub source: Option<String>,
     pub text_raw: String,
     pub uid: Option<i64>,
+    pub unfavorited: bool,
     pub url_struct: Option<Value>,
 }
 

@@ -14,7 +14,7 @@ use old_picture::get_old_pictures_paged;
 use old_post::{convert_old_to_internal_post, get_old_posts_paged};
 use old_user::get_old_users_paged;
 use weiback::{
-    internals::storage_internal::{post::save_post, user::save_user},
+    internals::storage_internal::{post::mark_post_unfavorited, post::save_post, user::save_user},
     models::{Picture, PictureDefinition, PictureMeta},
     storage::picture_storage::FileSystemPictureStorage,
 };
@@ -101,10 +101,17 @@ impl Upgrader {
             }
 
             for post in old_posts {
+                let unfavorited = post.unfavorited;
+                let id = post.id;
                 match convert_old_to_internal_post(post, &mut incompat_post_urls) {
                     Ok(internal_post) => {
                         if let Err(e) = save_post(&mut *tx, &internal_post, true).await {
                             warn!("Failed to save post {}: {:?}", internal_post.id, e);
+                        }
+                        if unfavorited {
+                            let _ = mark_post_unfavorited(&mut *tx, id)
+                                .await
+                                .map_err(|e| warn!("Failed to unfavorite {id}: {e:?}"));
                         }
                     }
                     Err(e) => {
