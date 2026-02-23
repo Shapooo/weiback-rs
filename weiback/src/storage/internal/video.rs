@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use sqlx::{Executor, Sqlite};
 use url::Url;
 
-use crate::{error::Result, utils::url_to_db_key};
+use crate::{error::Result, utils::pic_url_to_db_key};
 
 pub async fn get_video_paths_by_post_id<'e, E>(executor: E, post_id: i64) -> Result<Vec<PathBuf>>
 where
@@ -52,7 +52,7 @@ pub async fn get_video_path<'e, E>(executor: E, url: &Url) -> Result<Option<Path
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let url = url_to_db_key(url);
+    let url = pic_url_to_db_key(url);
     let raw_res: Option<String> =
         sqlx::query_scalar::<Sqlite, String>(r#"SELECT path FROM video WHERE url = ?;"#)
             .bind(url.as_str())

@@ -6,7 +6,7 @@ use url::Url;
 use crate::error::{Error, Result};
 use crate::models::{PictureDefinition, PictureMeta};
 use crate::storage::PictureInfo;
-use crate::utils::{pic_url_to_id, url_to_db_key};
+use crate::utils::{pic_url_to_db_key, pic_url_to_id};
 
 #[derive(sqlx::FromRow, Debug)]
 struct PictureDbRecord {
@@ -87,7 +87,7 @@ where
         PictureMeta::Avatar { url, user_id } => (url, None, Some(*user_id), None),
         PictureMeta::Other { url } => (url, None, None, None),
     };
-    let url_str = url_to_db_key(url).to_string();
+    let url_str = pic_url_to_db_key(url).to_string();
     sqlx::query(
         r#"INSERT OR IGNORE INTO picture (
     id,

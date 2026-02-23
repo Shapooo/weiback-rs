@@ -9,7 +9,7 @@ use crate::error::{Error, Result};
 use crate::models::{PictureDefinition, Post, UrlStruct, User};
 use crate::utils::{
     AT_EXPR, EMAIL_EXPR, EMOJI_EXPR, NEWLINE_EXPR, TOPIC_EXPR, URL_EXPR,
-    generate_standalone_pic_output_paths, url_to_filename,
+    generate_standalone_pic_output_paths, pic_url_to_filename,
 };
 
 #[derive(Debug, Serialize)]
@@ -153,7 +153,7 @@ fn trans_emoji<'a>(
     let Some(emoji_url) = emoji_map.and_then(|m| m.get(s)) else {
         return s.into();
     };
-    let Ok(pic_name) = url_to_filename(emoji_url) else {
+    let Ok(pic_name) = pic_url_to_filename(emoji_url) else {
         return s.into();
     };
     let pic_path = pic_folder.join(pic_name);
@@ -206,7 +206,7 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
     post.user
         .as_ref()
         .map(|u| {
-            url_to_filename(&u.avatar_hd).and_then(|name| {
+            pic_url_to_filename(&u.avatar_hd).and_then(|name| {
                 pic_folder
                     .join(&name)
                     .to_str()

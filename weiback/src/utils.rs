@@ -45,14 +45,14 @@ pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 
-pub fn url_to_db_key(url: &Url) -> Url {
+pub fn pic_url_to_db_key(url: &Url) -> Url {
     let mut url = url.to_owned();
     url.set_fragment(None);
     url.set_query(None);
     url
 }
 
-pub fn url_to_path_str(url: &Url) -> String {
+pub fn pic_url_to_path_str(url: &Url) -> String {
     let host = url.host_str().expect("host cannot be none");
     let path = url
         .path()
@@ -65,7 +65,7 @@ pub fn url_to_path_str(url: &Url) -> String {
     }
 }
 
-pub fn url_to_filename(url: &Url) -> Result<String> {
+pub fn pic_url_to_filename(url: &Url) -> Result<String> {
     url.path_segments()
         .and_then(|mut segments| segments.next_back())
         .and_then(|name| {
@@ -79,7 +79,7 @@ pub fn url_to_filename(url: &Url) -> Result<String> {
 }
 
 pub fn pic_url_to_id(url: &Url) -> Result<String> {
-    let file_path_str = url_to_path_str(url);
+    let file_path_str = pic_url_to_path_str(url);
     Path::new(&file_path_str)
         .file_stem()
         .and_then(|stem| stem.to_str())
@@ -91,6 +91,23 @@ pub fn pic_url_to_id(url: &Url) -> Result<String> {
             }
         })
         .ok_or_else(|| Error::FormatError(format!("not a valid picture url: {url}")))
+}
+
+pub fn livephoto_video_url_to_path_str(url: &Url) -> Result<String> {
+    let queries = url.query_pairs().collect::<HashMap<_, _>>();
+    let url = queries
+        .get("livephoto")
+        .ok_or_else(|| Error::FormatError(format!("unrecognized livephoto url: {url}")))?
+        .to_string();
+    let url = Url::parse(&url)?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| Error::FormatError(format!("unrecognized livephoto url: {url}")))?;
+    let path = url
+        .path()
+        .strip_prefix("/")
+        .expect("url path start with `/'");
+    Ok(format!("{}/{}", host, path))
 }
 
 pub fn make_resource_dir_name(page_name: &str) -> String {
@@ -226,7 +243,7 @@ pub fn generate_standalone_pic_output_paths<'a>(
     definition: PictureDefinition,
 ) -> impl Iterator<Item = String> + 'a {
     extract_standalone_pic_metas(post, definition).map(|meta| {
-        url_to_filename(meta.url())
+        pic_url_to_filename(meta.url())
             .ok()
             .and_then(|name| pic_folder.join(name).to_str().map(|s| s.to_string()))
             .unwrap()
@@ -307,16 +324,17 @@ mod local_tests {
     #[test]
     fn test_url_to_filename() {
         assert_eq!(
-            url_to_filename(&Url::parse("http://example.com/path/to/file.txt").unwrap()).unwrap(),
-            "file.txt"
-        );
-        assert_eq!(
-            url_to_filename(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap())
+            pic_url_to_filename(&Url::parse("http://example.com/path/to/file.txt").unwrap())
                 .unwrap(),
             "file.txt"
         );
-        assert!(url_to_filename(&Url::parse("http://example.com/").unwrap()).is_err());
-        assert!(url_to_filename(&Url::parse("http://example.com").unwrap()).is_err());
+        assert_eq!(
+            pic_url_to_filename(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap())
+                .unwrap(),
+            "file.txt"
+        );
+        assert!(pic_url_to_filename(&Url::parse("http://example.com/").unwrap()).is_err());
+        assert!(pic_url_to_filename(&Url::parse("http://example.com").unwrap()).is_err());
     }
 
     #[test]
@@ -338,15 +356,15 @@ mod local_tests {
     #[test]
     fn test_url_to_path() {
         assert_eq!(
-            url_to_path_str(&Url::parse("http://example.com/path/to/file.txt").unwrap()),
+            pic_url_to_path_str(&Url::parse("http://example.com/path/to/file.txt").unwrap()),
             "example.com/path/to/file.txt".to_string()
         );
         assert_eq!(
-            url_to_path_str(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()),
+            pic_url_to_path_str(&Url::parse("http://example.com/path/to/file.txt?a=1").unwrap()),
             "example.com/path/to/file.txt".to_string()
         );
         assert_eq!(
-            url_to_path_str(&Url::parse("http://example.com").unwrap()),
+            pic_url_to_path_str(&Url::parse("http://example.com").unwrap()),
             "example.com".to_string()
         );
     }

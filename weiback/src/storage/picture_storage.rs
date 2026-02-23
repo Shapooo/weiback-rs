@@ -9,7 +9,7 @@ use url::Url;
 use super::internal::picture;
 use crate::error::{Error, Result};
 use crate::models::Picture;
-use crate::utils::url_to_path_str;
+use crate::utils::pic_url_to_path_str;
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemPictureStorage;
@@ -56,7 +56,7 @@ impl FileSystemPictureStorage {
         E: Executor<'e, Database = Sqlite>,
     {
         let url = picture.meta.url();
-        let relative_path = url_to_path_str(url);
+        let relative_path = pic_url_to_path_str(url);
         let absolute_path = picture_path.join(&relative_path);
         create_dir_all(
             absolute_path

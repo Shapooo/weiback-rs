@@ -9,7 +9,7 @@ use url::Url;
 use super::internal::video;
 use crate::error::{Error, Result};
 use crate::models::Video;
-use crate::utils::url_to_path_str;
+use crate::utils::livephoto_video_url_to_path_str;
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemVideoStorage;
@@ -59,7 +59,7 @@ impl FileSystemVideoStorage {
         E: Executor<'e, Database = Sqlite>,
     {
         let url = video.meta.url();
-        let relative_path = PathBuf::from(url_to_path_str(url));
+        let relative_path = PathBuf::from(livephoto_video_url_to_path_str(url)?);
         let absolute_path = video_path.join(&relative_path);
         create_dir_all(
             absolute_path

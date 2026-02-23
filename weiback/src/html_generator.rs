@@ -14,7 +14,7 @@ use crate::error::Result;
 use crate::exporter::{HTMLPage, PictureExport};
 use crate::models::{PictureDefinition, PictureMeta, Post};
 use crate::storage::Storage;
-use crate::utils::{extract_all_pic_metas, make_resource_dir_name, url_to_filename};
+use crate::utils::{extract_all_pic_metas, make_resource_dir_name, pic_url_to_filename};
 use view_model::PostView;
 
 lazy_static! {
@@ -116,7 +116,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
     ) -> Result<Option<PictureExport>> {
         let url = pic_meta.url();
         if let Some(source_path) = self.storage.get_picture_path(ctx, url).await? {
-            let target_file_name = url_to_filename(url)?;
+            let target_file_name = pic_url_to_filename(url)?;
             Ok(Some(PictureExport {
                 source_path,
                 target_file_name,
