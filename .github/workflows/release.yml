@@ -7,54 +7,81 @@ on:
   push:
     tags:
       - v[0-9]+.*
+  workflow_dispatch:
 
 jobs:
+  # --- 第一步：解析 CHANGELOG 并创建 Release 壳子 ---
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      # --- 添加此步骤来配置 Git 认证 ---
-      - name: Configure Git for private repo
-        run: |
-          git config --global url."https://oauth2:${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      # ------------------------------------
-      - uses: taiki-e/create-gh-release-action@v1
+      - uses: actions/checkout@v4
+      - name: Create Release
+        id: create
+        uses: taiki-e/create-gh-release-action@v1
         with:
-          # (optional) Path to changelog.
+          # 它会自动提取 CHANGELOG.md 中对应当前 Tag 的部分
           changelog: CHANGELOG.md
           draft: true
-          # (required) GitHub token for creating GitHub Releases.
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  upload-assets:
+  # --- 第二步：编译并上传 Tauri 主程序 ---
+  publish-tauri:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: yarn install
+        working-directory: ./tauri-app
+
+      - name: Build and upload Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./tauri-app
+          releaseDraft: true
+          tagName: ${{ github.ref_name }}
+
+  # --- 第三步：上传数据库升级工具 (CLI) ---
+  upload-db-upgrade-tool:
+    needs: create-release
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-      # --- 添加此步骤来配置 Git 认证 ---
-      - name: Configure Git for private repo
-        run: |
-          git config --global url."https://oauth2:${{ secrets.PRIVATE_REPO_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      # ------------------------------------
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Upload db-upgrade-tool
+        uses: taiki-e/upload-rust-binary-action@v1
         with:
-          # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
-          # Note that glob pattern is not supported yet.
-          bin: weiback-rs,db-upgrade-tool
-          archive: weiback-rs-$tag-$target
-          # (optional) On which platform to distribute the `.tar.gz` file.
-          # [default value: unix]
-          # [possible values: all, unix, windows, none]
+          bin: db-upgrade-tool
+          # 这里使用原始 tag，不需要手动拼接
+          archive: db-upgrade-tool-$tag-$target
           tar: unix
-          # (optional) On which platform to distribute the `.zip` file.
-          # [default value: windows]
-          # [possible values: all, unix, windows, none]
-          include: templates
           zip: windows
-          # (required) GitHub token for uploading assets to GitHub Releases.
           token: ${{ secrets.GITHUB_TOKEN }}
