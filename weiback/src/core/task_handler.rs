@@ -141,7 +141,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             num_pages
         );
 
-        for page in start..=end {
+        for page in start..end {
             let posts_sum = page_backup_fn(page).await.map_err(|e| {
                 error!(
                     "Failed to backup page {} for task {}: {}",
