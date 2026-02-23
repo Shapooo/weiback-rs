@@ -22,7 +22,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import FullSizeImage from '../components/FullSizeImage';
 import PostDisplay from '../components/PostDisplay';
-import { PostInfo, User, PostQuery, ExportJobOptions } from '../types';
+import { PostInfo, User, PostQuery, ExportJobOptions, TaskStatus } from '../types';
 import PostPreviewModal from '../components/PostPreviewModal';
 import { useTaskStore } from '../stores/taskStore';
 import UserSelector from '../components/UserSelector';
@@ -34,7 +34,8 @@ const POSTS_PER_PAGE = 12;
 
 const LocalExportPage: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
-    const isTaskRunning = useTaskStore(state => !!state.currentTask);
+    const isTaskRunning = useTaskStore(state => state.currentTask?.status === TaskStatus.InProgress);
+    const fetchCurrentTask = useTaskStore(state => state.fetchCurrentTask);
 
     // State for UI controls
     const [userInput, setUserInput] = useState<User | string | null>(null);
@@ -217,6 +218,7 @@ const LocalExportPage: React.FC = () => {
 
             await exportPosts(options);
             enqueueSnackbar('导出任务已成功启动', { variant: 'success' });
+            fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`启动导出任务失败: ${e}`, { variant: 'error' });
         }

@@ -15,6 +15,7 @@ const UserBackupSection: React.FC = () => {
     const [numPages, setNumPages] = useState(1);
     const [backupType, setBackupType] = useState<BackupType>(BackupType.Normal);
     const isTaskRunning = useTaskStore(state => state.currentTask?.status === TaskStatus.InProgress);
+    const fetchCurrentTask = useTaskStore(state => state.fetchCurrentTask);
     const loggedInUser = useAuthStore(state => state.userInfo);
 
 
@@ -65,6 +66,7 @@ const UserBackupSection: React.FC = () => {
         try {
             await backupUser(backupId, numPages, backupType);
             enqueueSnackbar('用户备份任务已成功启动', { variant: 'success' });
+            fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
         }
@@ -126,6 +128,7 @@ const FavoritesBackupSection: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [numPages, setNumPages] = useState(1);
     const isTaskRunning = useTaskStore(state => state.currentTask?.status === TaskStatus.InProgress);
+    const fetchCurrentTask = useTaskStore(state => state.fetchCurrentTask);
 
     const handleBackup = async () => {
         if (numPages <= 0) {
@@ -135,6 +138,7 @@ const FavoritesBackupSection: React.FC = () => {
         try {
             await backupFavorites(numPages);
             enqueueSnackbar('收藏备份任务已成功启动', { variant: 'success' });
+            fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`备份失败: ${e}`, { variant: 'error' });
         }
@@ -144,6 +148,7 @@ const FavoritesBackupSection: React.FC = () => {
         try {
             await unfavoritePosts();
             enqueueSnackbar('开始取消已备份收藏', { variant: 'success' })
+            fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`取消收藏失败：${e}`, { variant: 'error' })
         }
