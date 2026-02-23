@@ -120,7 +120,7 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ imageId, size, onClick })
                 if (error && typeof error === 'object' && 'kind' in error && (error as any).kind === 'NotFound') {
                     setStatus('not-found');
                 } else {
-                    console.error('Failed to fetch attached image:', error);
+                    console.error(`Failed to fetch attached image ${imageId}: ${error}`);
                     setStatus('error');
                 }
             }

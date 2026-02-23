@@ -35,7 +35,7 @@ const Emoji: React.FC<EmojiProps> = ({ imageId, emojiText }) => {
                     setImageUrl(''); // Ensure imageUrl is cleared if blob is empty/invalid
                 }
             } catch (error) {
-                console.error('Failed to fetch emoji image:', error);
+                console.error(`Failed to fetch emoji image ${imageId}: ${error}`);
                 setImageUrl(''); // Clear imageUrl on error to trigger fallback
             } finally {
                 if (!isCancelled) setLoading(false);

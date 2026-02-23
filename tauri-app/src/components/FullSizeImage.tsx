@@ -109,7 +109,7 @@ const FullSizeImage: React.FC<FullSizeImageProps> = ({ imageId, onClose }) => {
                     setImageUrl(objectUrl);
                 }
             } catch (error) {
-                console.error('Failed to fetch full-size image:', error);
+                console.error(`Failed to fetch full-size image ${imageId}: ${error}`);
             } finally {
                 if (!isCancelled) setLoading(false);
             }
