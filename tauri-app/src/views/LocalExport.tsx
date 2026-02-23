@@ -15,6 +15,7 @@ import {
     FormControlLabel,
     Checkbox,
     Modal,
+    TextField,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -50,6 +51,7 @@ const LocalExportPage: React.FC = () => {
     const [postInfos, setPostInfos] = useState<PostInfo[]>([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
+    const [jumpPage, setJumpPage] = useState('');
     const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
     const [hoveredPostInfo, setHoveredPostInfo] = useState<PostInfo | null>(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -57,6 +59,16 @@ const LocalExportPage: React.FC = () => {
 
     // State for loading indicators
     const [loading, setLoading] = useState(false);
+
+    const handleJump = () => {
+        const pageNum = parseInt(jumpPage, 10);
+        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+            setPage(pageNum);
+            setJumpPage('');
+        } else {
+            enqueueSnackbar(`请输入 1 到 ${totalPages} 之间的有效页码`, { variant: 'warning' });
+        }
+    };
 
     const handleOpenLightbox = (imageId: string) => {
         setLightboxImageId(imageId);
@@ -315,13 +327,30 @@ const LocalExportPage: React.FC = () => {
                             )}
 
                             {totalPages > 0 && (
-                                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 3, flexWrap: 'wrap', gap: 2 }}>
                                     <Pagination
                                         count={totalPages}
                                         page={page}
                                         onChange={handlePageChange}
                                         color="primary"
                                     />
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <TextField
+                                            size="small"
+                                            label="跳至"
+                                            value={jumpPage}
+                                            onChange={(e) => setJumpPage(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    handleJump();
+                                                }
+                                            }}
+                                            sx={{ width: '80px' }}
+                                        />
+                                        <Button variant="outlined" size="small" onClick={handleJump} sx={{ height: '40px' }}>
+                                            跳转
+                                        </Button>
+                                    </Stack>
                                 </Box>
                             )}
                         </>
