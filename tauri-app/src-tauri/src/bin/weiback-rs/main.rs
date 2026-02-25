@@ -26,13 +26,24 @@ fn init_logger() -> Result<()> {
         .create(true)
         .truncate(true)
         .open(log_path)?;
-    Builder::new()
-        .filter_level(LevelFilter::Debug)
+
+    let mut builder = Builder::new();
+    #[cfg(debug_assertions)]
+    {
+        builder.filter_level(LevelFilter::Debug);
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        builder.filter_level(LevelFilter::Info);
+    }
+
+    builder
         .parse_default_env()
         .filter_module("sqlx", LevelFilter::Error)
         .filter_module("h2", LevelFilter::Warn)
         .filter_module("hyper_util", LevelFilter::Warn)
         .filter_module("reqwest", LevelFilter::Warn)
+        .filter_module("weibosdk_rs", LevelFilter::Warn)
         .target(env_logger::Target::Pipe(Box::new(log_file)))
         .init();
     Ok(())
