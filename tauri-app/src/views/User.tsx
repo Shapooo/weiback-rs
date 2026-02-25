@@ -15,10 +15,15 @@ enum UserPageState {
 
 const UserPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
-  const { userInfo, isLoggedIn, isAuthLoading, login, logout } = useAuthStore();
+  const { userInfo, isLoggedIn, isAuthLoading, login, logout, checkLoginState } = useAuthStore();
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState(Array(6).fill(''));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    // 切换到此页面时主动刷新登录状态
+    checkLoginState();
+  }, [checkLoginState]);
 
   const [pageState, setPageState] = useState<UserPageState>(
     isLoggedIn ? UserPageState.LoggedIn : UserPageState.Phone
