@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSnackbar } from 'notistack';
 import {
-  Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer, CircularProgress
+  Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer, CircularProgress, IconButton
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAuthStore } from '../stores/authStore';
 import { getSmsCode, login as apiLogin } from '../lib/api';
+
+enum UserPageState {
+  Phone,
+  Code,
+  LoggedIn,
+}
 
 const UserPage: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar();
@@ -13,12 +20,17 @@ const UserPage: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState(Array(6).fill(''));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const [isCodeSent, setIsCodeSent] = useState(false);
+  const [pageState, setPageState] = useState<UserPageState>(
+    isLoggedIn ? UserPageState.LoggedIn : UserPageState.Phone
+  );
 
   useEffect(() => {
-    // Reset local component state if the global auth state changes to logged out
-    if (!isLoggedIn) {
-      setIsCodeSent(false);
+    // Synchronize local page state with global auth state
+    if (isLoggedIn) {
+      setPageState(UserPageState.LoggedIn);
+    } else if (pageState === UserPageState.LoggedIn) {
+      // Only reset to Phone if we were previously in LoggedIn state
+      setPageState(UserPageState.Phone);
       setPhone('');
       setVerificationCode(Array(6).fill(''));
     }
@@ -31,9 +43,9 @@ const UserPage: React.FC = () => {
     }
     try {
       await getSmsCode(phone);
-      setIsCodeSent(true);
+      setPageState(UserPageState.Code);
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
-      inputRefs.current[0]?.focus();
+      setTimeout(() => inputRefs.current[0]?.focus(), 0);
     } catch (e) {
       enqueueSnackbar(`验证码请求失败: ${e}`, { variant: 'error' });
     }
@@ -51,7 +63,6 @@ const UserPage: React.FC = () => {
         login(res);
         enqueueSnackbar('登录成功！', { variant: 'success' });
       } else {
-        // This case might happen if login returns null for some reason
         enqueueSnackbar('登录失败，未获取到用户信息', { variant: 'error' });
       }
     } catch (e) {
@@ -79,24 +90,18 @@ const UserPage: React.FC = () => {
     }
   };
 
-  if (isAuthLoading) {
-    return (
-      <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
-        <CardContent sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+  const renderContent = () => {
+    if (isAuthLoading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
-        </CardContent>
-      </Card>
-    );
-  }
+        </Box>
+      );
+    }
 
-  return (
-    <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
-      <CardContent>
-        <Typography variant="h5" component="div" sx={{ mb: 2 }}>
-          {isLoggedIn ? '用户信息' : '用户登录'}
-        </Typography>
-
-        {isLoggedIn && userInfo ? (
+    switch (pageState) {
+      case UserPageState.LoggedIn:
+        return userInfo ? (
           <Box>
             <TableContainer component={Paper}>
               <Table>
@@ -110,43 +115,69 @@ const UserPage: React.FC = () => {
               退出登录
             </Button>
           </Box>
-        ) : (
-          <Box component="form" noValidate autoComplete="off">
-            {!isCodeSent ? (
-              <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  label="手机号"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-                <Button variant="contained" onClick={handleGetCode} fullWidth>
-                  获取验证码
-                </Button>
-              </Stack>
-            ) : (
-              <Stack spacing={2}>
-                <Typography align="center">验证码已发送至 {phone}</Typography>
-                <Grid container spacing={1} justifyContent="center">
-                  {verificationCode.map((digit, index) => (
-                    <Grid size={{ xs: 2 }} key={index}>
-                      <TextField
-                        inputRef={(el) => (inputRefs.current[index] = el)}
-                        value={digit}
-                        onChange={(e) => handleCodeInputChange(index, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(index, e)}
-                        slotProps={{ htmlInput: { maxLength: 1, style: { textAlign: 'center' } } }}
-                      />
-                    </Grid>
-                  ))}
+        ) : null;
+
+      case UserPageState.Phone:
+        return (
+          <Stack spacing={2}>
+            <TextField
+              fullWidth
+              label="手机号"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <Button variant="contained" onClick={handleGetCode} fullWidth>
+              获取验证码
+            </Button>
+          </Stack>
+        );
+
+      case UserPageState.Code:
+        return (
+          <Stack spacing={2}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <IconButton
+                size="small"
+                onClick={() => setPageState(UserPageState.Phone)}
+                sx={{ mr: 1 }}
+                title="返回修改手机号"
+              >
+                <ArrowBackIcon fontSize="small" />
+              </IconButton>
+              <Typography variant="body2" color="text.secondary">
+                验证码已发送至 {phone}
+              </Typography>
+            </Box>
+            <Grid container spacing={1} justifyContent="center">
+              {verificationCode.map((digit, index) => (
+                <Grid size={{ xs: 2 }} key={index}>
+                  <TextField
+                    inputRef={(el) => (inputRefs.current[index] = el)}
+                    value={digit}
+                    onChange={(e) => handleCodeInputChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    slotProps={{ htmlInput: { maxLength: 1, style: { textAlign: 'center' } } }}
+                  />
                 </Grid>
-                <Button variant="contained" color="success" onClick={handleLogin} fullWidth>
-                  登 录
-                </Button>
-              </Stack>
-            )}
-          </Box>
-        )}
+              ))}
+            </Grid>
+            <Button variant="contained" color="success" onClick={handleLogin} fullWidth>
+              登 录
+            </Button>
+          </Stack>
+        );
+    }
+  };
+
+  return (
+    <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
+      <CardContent>
+        <Typography variant="h5" component="div" sx={{ mb: 2 }}>
+          {pageState === UserPageState.LoggedIn ? '用户信息' : '用户登录'}
+        </Typography>
+        <Box component="form" noValidate autoComplete="off">
+          {renderContent()}
+        </Box>
       </CardContent>
     </Card>
   );
