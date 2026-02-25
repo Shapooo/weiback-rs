@@ -85,21 +85,9 @@ impl Core {
     // ========================= login stuff =========================
 
     pub async fn get_sms_code(&self, phone_number: String) -> Result<()> {
-        info!(
-            "send_code called for phone number (partially hidden): ...{}",
-            &phone_number.chars().skip(7).collect::<String>()
-        );
-        match self.sdk_api_client.login_state() {
-            LoginState::LoggedIn { .. } => {
-                warn!("Already logged in, skipping send_code.");
-                Ok(())
-            }
-            _ => {
-                info!("Sending SMS code.");
-                self.sdk_api_client.get_sms_code(phone_number).await?;
-                Ok(())
-            }
-        }
+        info!("send_code called for phone number: {phone_number}");
+        self.sdk_api_client.get_sms_code(phone_number).await?;
+        Ok(())
     }
 
     pub async fn login(&self, sms_code: String) -> Result<()> {
