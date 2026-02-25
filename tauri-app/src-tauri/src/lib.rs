@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use log::{debug, error, info, warn};
 use serde::Serialize;
-use serde_json::Value;
 use tauri::{self, App, Manager, State};
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
@@ -134,13 +133,13 @@ async fn get_sms_code(core: State<'_, Arc<Core>>, phone_number: String) -> Resul
 }
 
 #[tauri::command]
-async fn login(core: State<'_, Arc<Core>>, sms_code: String) -> Result<()> {
+async fn login(core: State<'_, Arc<Core>>, sms_code: String) -> Result<User> {
     info!("login called with sms code: {sms_code}");
     Ok(core.login(sms_code).await?)
 }
 
 #[tauri::command]
-async fn login_state(core: State<'_, Arc<Core>>) -> Result<Option<Value>> {
+async fn login_state(core: State<'_, Arc<Core>>) -> Result<Option<User>> {
     info!("login_state called");
     Ok(core.login_state().await?)
 }

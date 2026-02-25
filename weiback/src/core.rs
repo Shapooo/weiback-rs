@@ -5,7 +5,6 @@ pub mod task_manager;
 
 use bytes::Bytes;
 use log::{debug, error, info, warn};
-use serde_json::Value;
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -90,7 +89,7 @@ impl Core {
         Ok(())
     }
 
-    pub async fn login(&self, sms_code: String) -> Result<()> {
+    pub async fn login(&self, sms_code: String) -> Result<User> {
         info!("login called with a sms_code");
         match self.sdk_api_client.login_state() {
             LoginState::WaitingForCode { .. } => {
@@ -110,18 +109,21 @@ impl Core {
 
                 let th = self.task_handler.clone();
                 let ctx = self.create_short_task_context();
+                let user_clone = user.clone();
                 spawn(async move {
-                    if let Err(e) = th.save_user_info(ctx, &user).await {
+                    if let Err(e) = th.save_user_info(ctx, &user_clone).await {
                         error!("Save user info failed: {e}");
                     }
                 });
                 info!("Logged in user {} saved.", user_id);
 
-                Ok(())
+                Ok(user)
             }
             LoginState::LoggedIn { .. } => {
                 warn!("Already logged in, skipping login.");
-                Ok(())
+                let session = self.sdk_api_client.session()?;
+                let user: User = serde_json::from_value(session.user)?;
+                Ok(user)
             }
             LoginState::Init => {
                 error!("Wrong login state to login: Init");
@@ -132,9 +134,14 @@ impl Core {
         }
     }
 
-    pub async fn login_state(&self) -> Result<Option<Value>> {
+    pub async fn login_state(&self) -> Result<Option<User>> {
         info!("get login state");
-        Ok(self.sdk_api_client.session().ok().map(|s| s.user))
+        Ok(self
+            .sdk_api_client
+            .session()
+            .ok()
+            .map(|s| serde_json::from_value(s.user))
+            .transpose()?)
     }
 
     pub async fn login_with_session(&self) -> Result<()> {

@@ -13,7 +13,7 @@ import { Config } from '../types/config';
 // Auth
 export const loginState = () => invoke<User | null>('login_state');
 export const getSmsCode = (phoneNumber: string) => invoke('get_sms_code', { phoneNumber });
-export const login = (smsCode: string) => invoke<User | null>('login', { smsCode });
+export const login = (smsCode: string) => invoke<User>('login', { smsCode });
 
 // Tasks
 export const getCurrentTaskStatus = () => invoke<Task | null>('get_current_task_status');
