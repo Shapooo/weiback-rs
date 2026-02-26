@@ -13,6 +13,8 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
+image = { workspace = true }
+img_hash = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -39,3 +41,7 @@ weibosdk-rs = { workspace = true, features = ["test-mocks"] }
 [features]
 dev-mode = ["dep:uuid"]
 internal-models = []
+
+[build-dependencies]
+image = { workspace = true }
+img_hash = { workspace = true }
