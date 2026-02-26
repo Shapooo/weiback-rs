@@ -10,6 +10,7 @@ edition = "2024"
 anyhow = "1.0"
 bytes = "1"
 chrono = { version = "0.4", default-features = false }
+clap = { version = "4", features = ["derive"] }
 dirs = "6"
 env_logger = "0.11"
 futures = "0.3"
@@ -40,4 +41,5 @@ tokio = { version = "1", features = [
 ] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v7"] }
+walkdir = "2"
 weibosdk-rs = { git = "https://github.com/Shapooo/weibosdk-rs.git", rev = "4e176a1b93d3b4f6b471828e0ae8f54bd369501d" }
