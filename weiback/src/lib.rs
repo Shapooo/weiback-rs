@@ -6,6 +6,7 @@ pub mod emoji_map;
 pub mod error;
 pub mod exporter;
 pub mod html_generator;
+pub mod image_validator;
 pub mod media_downloader;
 pub mod message;
 pub mod models;
