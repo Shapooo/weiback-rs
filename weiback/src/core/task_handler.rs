@@ -19,7 +19,7 @@ use crate::exporter::Exporter;
 use crate::html_generator::HTMLGenerator;
 use crate::media_downloader::MediaDownloader;
 use crate::models::{Picture, PictureMeta, User};
-use crate::storage::{PictureInfo, Storage};
+use crate::storage::Storage;
 use crate::utils::make_page_name;
 
 #[derive(Debug, Clone)]
@@ -61,18 +61,25 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     pub async fn get_picture_blob(&self, ctx: Arc<TaskContext>, id: &str) -> Result<Option<Bytes>> {
-        let infos = self.storage.get_pictures_by_id(id).await?;
-        if let Some(info) = self.choose_best_picture(infos) {
-            self.storage.get_picture_blob(ctx, info.meta.url()).await
-        } else {
-            Ok(None)
-        }
-    }
+        let mut infos = self.storage.get_pictures_by_id(id).await?;
+        infos.sort_by(|a, b| match (&a.meta, &b.meta) {
+            (
+                PictureMeta::Attached { definition: da, .. },
+                PictureMeta::Attached { definition: db, .. },
+            ) => db.cmp(da),
+            _ => std::cmp::Ordering::Equal,
+        });
 
-    fn choose_best_picture(&self, infos: Vec<PictureInfo>) -> Option<PictureInfo> {
-        // Placeholder logic: just take the first one.
-        // TODO: Implement proper resolution priority logic here.
-        infos.into_iter().next()
+        for info in infos {
+            if let Some(blob) = self
+                .storage
+                .get_picture_blob(ctx.clone(), info.meta.url())
+                .await?
+            {
+                return Ok(Some(blob));
+            }
+        }
+        Ok(None)
     }
 
     pub async fn save_user_info(&self, ctx: Arc<TaskContext>, user: &User) -> Result<()> {
