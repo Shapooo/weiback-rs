@@ -6,6 +6,7 @@ export interface SdkConfig {
 }
 
 export enum PictureDefinition {
+    RealOriginal = "RealOriginal",
     Thumbnail = "Thumbnail",
     Bmiddle = "Bmiddle",
     Large = "Large",

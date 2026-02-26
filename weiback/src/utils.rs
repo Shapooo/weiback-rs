@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::error::{Error, Result};
 use crate::models::{
-    HugeInfo, MixMediaInfoItem, PicInfoDetail, PicInfoItem, PictureDefinition, PictureMeta, Post,
+    HugeInfo, MixMediaInfoItem, PicInfoItem, PictureDefinition, PictureMeta, Post,
 };
 
 #[allow(unused_macros)]
@@ -148,20 +148,6 @@ pub fn extract_all_pic_metas(
     pic_metas
 }
 
-pub fn def_to_pic_info_detail(
-    pic_info_item: &PicInfoItem,
-    quality: PictureDefinition,
-) -> &PicInfoDetail {
-    match quality {
-        PictureDefinition::Thumbnail => &pic_info_item.thumbnail,
-        PictureDefinition::Bmiddle => &pic_info_item.bmiddle,
-        PictureDefinition::Large => &pic_info_item.large,
-        PictureDefinition::Original => &pic_info_item.original,
-        PictureDefinition::Largest => &pic_info_item.largest,
-        PictureDefinition::Mw2000 => &pic_info_item.mw2000,
-    }
-}
-
 fn extract_inline_pic_metas(
     post: &Post,
     definition: PictureDefinition,
@@ -191,8 +177,8 @@ fn extract_inline_pic_metas(
                     return None;
                 };
 
-                let url = def_to_pic_info_detail(pic_info, definition).url.as_str();
-                PictureMeta::attached(url, target_id, definition).ok()
+                let url = pic_info.get_pic_url(definition);
+                PictureMeta::attached(url.as_str(), target_id, definition).ok()
             })
         })
 }
@@ -261,10 +247,8 @@ fn extract_current_standalone_pic_metas(
     let page_info = post.page_info.as_ref();
 
     let pic_info_handler = move |pic_info_item: &PicInfoItem| {
-        let url = def_to_pic_info_detail(pic_info_item, definition)
-            .url
-            .as_str();
-        PictureMeta::attached(url, post_id, definition)
+        let url = pic_info_item.get_pic_url(definition);
+        PictureMeta::attached(url.as_str(), post_id, definition)
             .map_err(|e| error!("cannot parse {url} {e}"))
             .ok()
     };
