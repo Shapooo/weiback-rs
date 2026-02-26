@@ -13,8 +13,9 @@ pub enum PictureDefinition {
     Large,
     Original,
     Mw2000,
-    #[default]
     Largest,
+    #[default]
+    RealOriginal,
 }
 
 impl From<&str> for PictureDefinition {
@@ -40,6 +41,7 @@ impl From<&PictureDefinition> for &str {
             PictureDefinition::Original => "original",
             PictureDefinition::Mw2000 => "mw2000",
             PictureDefinition::Largest => "largest",
+            PictureDefinition::RealOriginal => "real_original",
         }
     }
 }

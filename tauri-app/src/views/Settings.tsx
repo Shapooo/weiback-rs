@@ -14,11 +14,12 @@ import { SdkConfig, PictureDefinition, Config } from '../types/config';
 import { getConfig, setConfig } from '../lib/api';
 
 const pictureDefinitionMap = [
-    { value: PictureDefinition.Largest, label: '原始尺寸' },
-    { value: PictureDefinition.Mw2000, label: '超高清' },
-    { value: PictureDefinition.Original, label: '高清' },
-    { value: PictureDefinition.Large, label: '中等' },
-    { value: PictureDefinition.Bmiddle, label: '标清' },
+    { value: PictureDefinition.RealOriginal, label: '原始尺寸' },
+    { value: PictureDefinition.Largest, label: '高' },
+    { value: PictureDefinition.Mw2000, label: '中高' },
+    { value: PictureDefinition.Original, label: '中' },
+    { value: PictureDefinition.Large, label: '中低' },
+    { value: PictureDefinition.Bmiddle, label: '低' },
     { value: PictureDefinition.Thumbnail, label: '缩略图' },
 ];
 
@@ -109,12 +110,25 @@ const SettingsPage: React.FC = () => {
                                     value={config.picture_definition}
                                     label="图片清晰度"
                                     onChange={(e) => handleChange('picture_definition', e.target.value)}
-                                    renderValue={(selectedValue) =>
-                                        pictureDefinitionMap.find(item => item.value === selectedValue)?.label ?? selectedValue
-                                    }
+                                    renderValue={(selectedValue) => {
+                                        const item = pictureDefinitionMap.find(i => i.value === selectedValue);
+                                        return (
+                                            <Box sx={{ display: 'flex', alignItems: 'baseline' }}>
+                                                {item?.label ?? selectedValue}
+                                                <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                                    {item?.value}
+                                                </Typography>
+                                            </Box>
+                                        );
+                                    }}
                                 >
                                     {pictureDefinitionMap.map((item) => (
-                                        <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>
+                                        <MenuItem key={item.value} value={item.value}>
+                                            {item.label}
+                                            <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                                {item.value}
+                                            </Typography>
+                                        </MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>

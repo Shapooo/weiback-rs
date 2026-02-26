@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use url::Url;
 
-use super::PicInfoDetail;
+use super::{PicInfoDetail, PictureDefinition};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoItem {
@@ -27,6 +27,24 @@ pub struct PicInfoItem {
     pub video_object_id: Option<String>,
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
     pub video_hd: Option<Url>,
+}
+
+impl PicInfoItem {
+    pub fn get_pic_url(&self, definition: PictureDefinition) -> Url {
+        match definition {
+            PictureDefinition::Thumbnail => self.thumbnail.url.clone(),
+            PictureDefinition::Bmiddle => self.bmiddle.url.clone(),
+            PictureDefinition::Large => self.large.url.clone(),
+            PictureDefinition::Original => self.original.url.clone(),
+            PictureDefinition::Mw2000 => self.mw2000.url.clone(),
+            PictureDefinition::Largest => self.largest.url.clone(),
+            PictureDefinition::RealOriginal => {
+                let url_str = self.largest.url.as_str();
+                let ori_url = url_str.replace("/large/", "/original/");
+                Url::parse(&ori_url).expect("must be valid url")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
