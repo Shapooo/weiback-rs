@@ -34,8 +34,11 @@ uuid = { workspace = true, optional = true }
 weibosdk-rs = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
 mockito = "1"
 tempfile = "3"
+walkdir = { workspace = true }
 weibosdk-rs = { workspace = true, features = ["test-mocks"] }
 
 [features]
