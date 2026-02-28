@@ -7,6 +7,7 @@ import {
     PostQuery,
     ExportJobOptions,
     BackupType,
+    ResolutionPolicy,
 } from '../types';
 import { Config } from '../types/config';
 
@@ -41,6 +42,7 @@ export const exportPosts = (options: ExportJobOptions) => invoke('export_posts',
 
 // Pictures
 export const getPictureBlob = (id: string) => invoke<ArrayBuffer>('get_picture_blob', { id });
+export const cleanupPictures = (policy: ResolutionPolicy) => invoke('cleanup_pictures', { options: { policy } });
 
 // Config
 export const getConfig = () => invoke<Config>('get_config_command');

@@ -3,6 +3,16 @@ export enum TaskType {
     BackupFavorites = "BackupFavorites",
     UnfavoritePosts = "UnfavoritePosts",
     Export = "Export",
+    CleanupPictures = "CleanupPictures",
+}
+
+export enum ResolutionPolicy {
+    Highest = "Highest",
+    Lowest = "Lowest",
+}
+
+export interface CleanupPicturesOptions {
+    policy: ResolutionPolicy;
 }
 
 export enum TaskStatus {
