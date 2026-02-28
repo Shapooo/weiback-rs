@@ -93,6 +93,24 @@ VALUES
     Ok(())
 }
 
+pub async fn get_users_by_ids<'e, E>(executor: E, ids: &[i64]) -> Result<Vec<User>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!("SELECT * FROM users WHERE id IN ({});", placeholders);
+
+    let mut query = sqlx::query_as::<_, UserInternal>(&sql);
+    for id in ids {
+        query = query.bind(id);
+    }
+    let records = query.fetch_all(executor).await?;
+    records.into_iter().map(|u| u.try_into()).collect()
+}
+
 pub async fn search_users_by_screen_name_prefix<'e, E>(
     executor: E,
     prefix: &str,

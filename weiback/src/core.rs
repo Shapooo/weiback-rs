@@ -248,6 +248,20 @@ impl Core {
         Ok(())
     }
 
+    pub async fn cleanup_invalid_avatars(&self) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0;
+        self.task_manager
+            .start_task(id, TaskType::CleanupAvatars, "清理失效头像".into(), total)?;
+        spawn(handle_task_request(
+            self.task_handler.clone(),
+            ctx,
+            TaskRequest::CleanupAvatars,
+        ));
+        Ok(())
+    }
+
     // ========================= context creators =========================
 
     fn create_long_task_context(&self) -> Arc<TaskContext> {
@@ -283,6 +297,7 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
         TaskRequest::CleanupPictures(options) => {
             task_handler.cleanup_pictures(ctx.clone(), options).await
         }
+        TaskRequest::CleanupAvatars => task_handler.cleanup_invalid_avatars(ctx.clone()).await,
     };
 
     if let Err(err) = res {

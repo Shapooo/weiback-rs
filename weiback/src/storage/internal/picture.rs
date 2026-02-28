@@ -123,6 +123,18 @@ where
     Ok(raw_res.map(PathBuf::from))
 }
 
+pub async fn get_users_with_duplicate_avatars<'e, E>(executor: E) -> Result<Vec<i64>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let ids = sqlx::query_scalar::<Sqlite, i64>(
+        "SELECT user_id FROM picture WHERE user_id IS NOT NULL GROUP BY user_id HAVING COUNT(user_id) > 1",
+    )
+    .fetch_all(executor)
+    .await?;
+    Ok(ids)
+}
+
 pub async fn get_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result<Vec<PictureInfo>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -132,6 +144,19 @@ where
             .bind(post_id)
             .fetch_all(executor)
             .await?;
+    records.into_iter().map(PictureInfo::try_from).collect()
+}
+
+pub async fn get_avatars_by_user_id<'e, E>(executor: E, user_id: i64) -> Result<Vec<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let records: Vec<PictureDbRecord> = sqlx::query_as(
+        "SELECT * FROM picture WHERE user_id = ? AND post_id IS NULL AND path IS NOT NULL",
+    )
+    .bind(user_id)
+    .fetch_all(executor)
+    .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 

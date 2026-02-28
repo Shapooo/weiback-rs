@@ -10,6 +10,7 @@ pub enum TaskType {
     UnfavoritePosts,
     Export,
     CleanupPictures,
+    CleanupAvatars,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
