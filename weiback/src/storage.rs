@@ -39,6 +39,7 @@ pub struct PictureInfo {
 pub trait Storage: Send + Sync + Clone + 'static {
     async fn save_user(&self, user: &User) -> Result<()>;
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
+    async fn get_users_by_ids(&self, ids: &[i64]) -> Result<Vec<User>>;
     async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>>;
     async fn save_post(&self, post: &Post) -> Result<()>;
     async fn get_post(&self, id: i64) -> Result<Option<Post>>;
@@ -55,6 +56,8 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn get_picture_path(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<PathBuf>>;
     async fn get_attached_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
     async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>>;
+    async fn get_avatar_infos(&self, user_id: i64) -> Result<Vec<PictureInfo>>;
+    async fn get_users_with_duplicate_avatars(&self) -> Result<Vec<i64>>;
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
     async fn get_pictures_by_id(&self, id: &str) -> Result<Vec<PictureInfo>>;
     async fn get_duplicate_pic_ids(&self) -> Result<Vec<String>>;
@@ -202,6 +205,10 @@ impl Storage for StorageImpl {
         user::get_user(&self.db_pool, uid).await
     }
 
+    async fn get_users_by_ids(&self, ids: &[i64]) -> Result<Vec<User>> {
+        user::get_users_by_ids(&self.db_pool, ids).await
+    }
+
     async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>> {
         user::search_users_by_screen_name_prefix(&self.db_pool, prefix).await
     }
@@ -283,6 +290,14 @@ impl Storage for StorageImpl {
 
     async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>> {
         picture::get_avatar_by_user_id(&self.db_pool, user_id).await
+    }
+
+    async fn get_avatar_infos(&self, user_id: i64) -> Result<Vec<PictureInfo>> {
+        picture::get_avatars_by_user_id(&self.db_pool, user_id).await
+    }
+
+    async fn get_users_with_duplicate_avatars(&self) -> Result<Vec<i64>> {
+        picture::get_users_with_duplicate_avatars(&self.db_pool).await
     }
 
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>> {

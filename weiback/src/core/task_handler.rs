@@ -21,7 +21,7 @@ use crate::html_generator::HTMLGenerator;
 use crate::media_downloader::MediaDownloader;
 use crate::models::{Picture, PictureMeta, User};
 use crate::storage::Storage;
-use crate::utils::make_page_name;
+use crate::utils::{make_page_name, pic_url_to_id};
 
 #[derive(Debug, Clone)]
 pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> {
@@ -388,6 +388,43 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         }
 
         info!("Finished cleanup pictures task");
+        Ok(())
+    }
+
+    pub(super) async fn cleanup_invalid_avatars(&self, ctx: Arc<TaskContext>) -> Result<()> {
+        info!("Starting cleanup invalid avatars task");
+        let duplicate_uids = self.storage.get_users_with_duplicate_avatars().await?;
+        let total = duplicate_uids.len() as u64;
+        ctx.task_manager.update_progress(0, total)?;
+
+        let users = self.storage.get_users_by_ids(&duplicate_uids).await?;
+        let avatar_map: std::collections::HashMap<i64, String> = users
+            .into_iter()
+            .filter_map(|u| pic_url_to_id(&u.avatar_hd).ok().map(|id| (u.id, id)))
+            .collect();
+
+        for user_id in duplicate_uids {
+            let current_id = avatar_map.get(&user_id);
+            if let Some(current_id) = current_id {
+                let avatar_infos = self.storage.get_avatar_infos(user_id).await?;
+                for info in avatar_infos {
+                    let pic_id = pic_url_to_id(info.meta.url())?;
+                    if pic_id != *current_id {
+                        info!("Deleting invalid avatar: {} for user {}", pic_id, user_id);
+                        if let Err(e) = self
+                            .storage
+                            .delete_picture(ctx.clone(), info.meta.url())
+                            .await
+                        {
+                            error!("Failed to delete invalid avatar {}: {}", pic_id, e);
+                        }
+                    }
+                }
+            }
+            ctx.task_manager.update_progress(1, 0)?;
+        }
+
+        info!("Finished cleanup invalid avatars task");
         Ok(())
     }
 

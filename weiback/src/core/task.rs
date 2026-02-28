@@ -24,6 +24,7 @@ pub enum TaskRequest {
     BackupUser(BackupUserPostsOptions),
     Export(ExportJobOptions),
     CleanupPictures(CleanupPicturesOptions),
+    CleanupAvatars,
 }
 
 impl TaskRequest {
@@ -34,6 +35,7 @@ impl TaskRequest {
             TaskRequest::UnfavoritePosts => 1,
             TaskRequest::Export(_) => 1,
             TaskRequest::CleanupPictures(_) => 0,
+            TaskRequest::CleanupAvatars => 0,
         }
     }
 }
