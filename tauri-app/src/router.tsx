@@ -9,6 +9,7 @@ const OnlineBackup = React.lazy(() => import('./views/OnlineBackup'));
 const LocalExport = React.lazy(() => import('./views/LocalExport'));
 const Settings = React.lazy(() => import('./views/Settings'));
 const User = React.lazy(() => import('./views/User'));
+const DataManage = React.lazy(() => import('./views/DataManage'));
 
 const AppRouter: React.FC = () => (
   <Suspense fallback={
@@ -20,6 +21,7 @@ const AppRouter: React.FC = () => (
       <Route path="/" element={<Navigate to="/online-backup" replace />} />
       <Route path="/online-backup" element={<OnlineBackup />} />
       <Route path="/export" element={<LocalExport />} />
+      <Route path="/manage" element={<DataManage />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/user" element={<User />} />
     </Routes>
