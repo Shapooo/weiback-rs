@@ -234,6 +234,20 @@ impl Core {
         Ok(())
     }
 
+    pub async fn cleanup_pictures(&self, request: TaskRequest) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0; // Will be updated in task_handler
+        self.task_manager.start_task(
+            id,
+            TaskType::CleanupPictures,
+            "清理图片清晰度".into(),
+            total,
+        )?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
+        Ok(())
+    }
+
     // ========================= context creators =========================
 
     fn create_long_task_context(&self) -> Arc<TaskContext> {
@@ -266,6 +280,9 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
             task_handler.backup_favorites(ctx.clone(), options).await
         }
         TaskRequest::Export(options) => task_handler.export_posts(ctx.clone(), options).await,
+        TaskRequest::CleanupPictures(options) => {
+            task_handler.cleanup_pictures(ctx.clone(), options).await
+        }
     };
 
     if let Err(err) = res {

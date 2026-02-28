@@ -23,6 +23,7 @@ pub enum TaskRequest {
     // to backup user (id, with pic, image definition level)
     BackupUser(BackupUserPostsOptions),
     Export(ExportJobOptions),
+    CleanupPictures(CleanupPicturesOptions),
 }
 
 impl TaskRequest {
@@ -32,6 +33,7 @@ impl TaskRequest {
             TaskRequest::BackupUser(options) => options.num_pages,
             TaskRequest::UnfavoritePosts => 1,
             TaskRequest::Export(_) => 1,
+            TaskRequest::CleanupPictures(_) => 0,
         }
     }
 }
@@ -47,6 +49,18 @@ pub struct BackupUserPostsOptions {
     pub uid: i64,
     #[serde(default)]
     pub backup_type: BackupType,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+pub enum ResolutionPolicy {
+    #[default]
+    Highest,
+    Lowest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanupPicturesOptions {
+    pub policy: ResolutionPolicy,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]

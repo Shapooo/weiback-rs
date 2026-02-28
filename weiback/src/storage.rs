@@ -57,6 +57,8 @@ pub trait Storage: Send + Sync + Clone + 'static {
     async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>>;
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
     async fn get_pictures_by_id(&self, id: &str) -> Result<Vec<PictureInfo>>;
+    async fn get_duplicate_pic_ids(&self) -> Result<Vec<String>>;
+    async fn delete_picture(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()>;
     async fn get_picture_blob(
         &self,
         ctx: Arc<TaskContext>,
@@ -289,6 +291,16 @@ impl Storage for StorageImpl {
 
     async fn get_pictures_by_id(&self, id: &str) -> Result<Vec<PictureInfo>> {
         picture::get_pictures_by_id(&self.db_pool, id).await
+    }
+
+    async fn get_duplicate_pic_ids(&self) -> Result<Vec<String>> {
+        picture::get_duplicate_pic_ids(&self.db_pool).await
+    }
+
+    async fn delete_picture(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()> {
+        self.pic_storage
+            .delete_picture(&ctx.config.picture_path, &self.db_pool, url)
+            .await
     }
 
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
