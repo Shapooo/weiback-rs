@@ -4,6 +4,7 @@ export enum TaskType {
     UnfavoritePosts = "UnfavoritePosts",
     Export = "Export",
     CleanupPictures = "CleanupPictures",
+    CleanupAvatars = "CleanupAvatars",
 }
 
 export enum ResolutionPolicy {

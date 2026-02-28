@@ -199,6 +199,12 @@ async fn cleanup_pictures(
         .await?)
 }
 
+#[tauri::command]
+async fn cleanup_invalid_avatars(core: State<'_, Arc<Core>>) -> Result<()> {
+    info!("cleanup_invalid_avatars called");
+    Ok(core.cleanup_invalid_avatars().await?)
+}
+
 pub fn run() -> Result<()> {
     info!("Starting application");
     weiback::config::init()?;
@@ -225,7 +231,8 @@ pub fn run() -> Result<()> {
             rebackup_post,
             get_current_task_status,
             get_and_clear_sub_task_errors,
-            cleanup_pictures
+            cleanup_pictures,
+            cleanup_invalid_avatars
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

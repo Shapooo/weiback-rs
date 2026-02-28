@@ -43,6 +43,7 @@ export const exportPosts = (options: ExportJobOptions) => invoke('export_posts',
 // Pictures
 export const getPictureBlob = (id: string) => invoke<ArrayBuffer>('get_picture_blob', { id });
 export const cleanupPictures = (policy: ResolutionPolicy) => invoke('cleanup_pictures', { options: { policy } });
+export const cleanupInvalidAvatars = () => invoke('cleanup_invalid_avatars');
 
 // Config
 export const getConfig = () => invoke<Config>('get_config_command');

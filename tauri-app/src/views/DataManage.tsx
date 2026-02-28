@@ -16,7 +16,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useTaskStore } from '../stores/taskStore';
 import { TaskStatus, ResolutionPolicy } from '../types';
-import { cleanupPictures } from '../lib/api';
+import { cleanupPictures, cleanupInvalidAvatars } from '../lib/api';
 
 const DataManage: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
@@ -32,6 +32,16 @@ const DataManage: React.FC = () => {
             fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`启动清理任务失败: ${e}`, { variant: 'error' });
+        }
+    };
+
+    const handleCleanupAvatars = async () => {
+        try {
+            await cleanupInvalidAvatars();
+            enqueueSnackbar('失效头像清理任务已启动', { variant: 'success' });
+            fetchCurrentTask();
+        } catch (e) {
+            enqueueSnackbar(`启动头像清理失败: ${e}`, { variant: 'error' });
         }
     };
 
@@ -84,6 +94,35 @@ const DataManage: React.FC = () => {
                                     disabled={isTaskRunning}
                                 >
                                     {isTaskRunning ? '任务进行中...' : '开始清理'}
+                                </Button>
+                            </Box>
+                        </CardContent>
+                    </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Card>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                                头像清理 (失效去重)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                微博用户更换头像后，本地可能仍保留着旧的头像文件。此操作将对比数据库中记录的最新头像，清理所有已失效的历史头像文件。
+                            </Typography>
+
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                                仅清理 user 表中已记录的用户的历史头像。
+                            </Alert>
+
+                            <Box sx={{ mt: 3 }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    fullWidth
+                                    onClick={handleCleanupAvatars}
+                                    disabled={isTaskRunning}
+                                >
+                                    {isTaskRunning ? '任务进行中...' : '开始清理失效头像'}
                                 </Button>
                             </Box>
                         </CardContent>
