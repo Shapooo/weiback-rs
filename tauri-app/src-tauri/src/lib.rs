@@ -9,7 +9,7 @@ use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
     BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PostQuery, TaskRequest,
-    task::{BackupType, PaginatedPostInfo},
+    task::{BackupType, CleanupPicturesOptions, PaginatedPostInfo},
     task_manager::{SubTaskError, Task},
 };
 use weiback::models::User;
@@ -188,6 +188,17 @@ async fn search_id_by_username_prefix(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn cleanup_pictures(
+    core: State<'_, Arc<Core>>,
+    options: CleanupPicturesOptions,
+) -> Result<()> {
+    info!("cleanup_pictures called with options: {options:?}");
+    Ok(core
+        .cleanup_pictures(TaskRequest::CleanupPictures(options))
+        .await?)
+}
+
 pub fn run() -> Result<()> {
     info!("Starting application");
     weiback::config::init()?;
@@ -213,7 +224,8 @@ pub fn run() -> Result<()> {
             delete_post,
             rebackup_post,
             get_current_task_status,
-            get_and_clear_sub_task_errors
+            get_and_clear_sub_task_errors,
+            cleanup_pictures
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")
