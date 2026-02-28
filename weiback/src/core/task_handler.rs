@@ -11,7 +11,8 @@ use super::post_processer::PostProcesser;
 use super::task::TaskContext;
 use crate::api::{ApiClient, ContainerType};
 use crate::core::task::{
-    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
+    BackupFavoritesOptions, BackupUserPostsOptions, CleanupPicturesOptions, ExportJobOptions,
+    PaginatedPostInfo, PostQuery, ResolutionPolicy,
 };
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
@@ -333,6 +334,61 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
     pub async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         self.storage.delete_post(ctx, id).await
+    }
+
+    pub(super) async fn cleanup_pictures(
+        &self,
+        ctx: Arc<TaskContext>,
+        options: CleanupPicturesOptions,
+    ) -> Result<()> {
+        info!(
+            "Starting cleanup pictures task with policy: {:?}",
+            options.policy
+        );
+        let ids = self.storage.get_duplicate_pic_ids().await?;
+        let total = ids.len() as u64;
+        info!("Found {} duplicate picture IDs", total);
+        ctx.task_manager.update_progress(0, total)?;
+
+        for id in ids {
+            let mut pictures = self.storage.get_pictures_by_id(&id).await?;
+            if pictures.len() <= 1 {
+                ctx.task_manager.update_progress(1, 0)?;
+                continue;
+            }
+
+            // Sort by definition
+            pictures.sort_by(|a, b| match (&a.meta, &b.meta) {
+                (
+                    PictureMeta::Attached { definition: da, .. },
+                    PictureMeta::Attached { definition: db, .. },
+                ) => match options.policy {
+                    ResolutionPolicy::Highest => db.cmp(da), // Highest resolution first
+                    ResolutionPolicy::Lowest => da.cmp(db),  // Lowest resolution first
+                },
+                _ => std::cmp::Ordering::Equal,
+            });
+
+            // Keep the first one, delete the rest
+            for pic in pictures.into_iter().skip(1) {
+                if let Err(e) = self
+                    .storage
+                    .delete_picture(ctx.clone(), pic.meta.url())
+                    .await
+                {
+                    error!(
+                        "Failed to delete redundant picture {}: {}",
+                        pic.meta.url(),
+                        e
+                    );
+                }
+            }
+
+            ctx.task_manager.update_progress(1, 0)?;
+        }
+
+        info!("Finished cleanup pictures task");
+        Ok(())
     }
 
     pub async fn rebackup_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {

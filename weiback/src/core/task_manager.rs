@@ -9,6 +9,7 @@ pub enum TaskType {
     BackupFavorites,
     UnfavoritePosts,
     Export,
+    CleanupPictures,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

@@ -194,6 +194,18 @@ where
     Ok(())
 }
 
+pub async fn get_duplicate_pic_ids<'e, E>(executor: E) -> Result<Vec<String>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let ids = sqlx::query_scalar::<Sqlite, String>(
+        "SELECT id FROM picture WHERE id != '' GROUP BY id HAVING COUNT(id) > 1",
+    )
+    .fetch_all(executor)
+    .await?;
+    Ok(ids)
+}
+
 pub async fn delete_picture_by_url<'e, E>(executor: E, url: &Url) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,

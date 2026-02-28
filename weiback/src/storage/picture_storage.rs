@@ -104,6 +104,26 @@ impl FileSystemPictureStorage {
         }
     }
 
+    pub async fn delete_picture<'c, A>(
+        &self,
+        picture_path: &Path,
+        acquirer: A,
+        url: &Url,
+    ) -> Result<()>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
+        let mut conn = acquirer.acquire().await?;
+        if let Some(relative_path) = picture::get_picture_path(&mut *conn, url).await? {
+            let absolute_path = picture_path.join(relative_path);
+            if absolute_path.exists() {
+                tokio::fs::remove_file(&absolute_path).await?;
+            }
+            picture::delete_picture_by_url(&mut *conn, url).await?;
+        }
+        Ok(())
+    }
+
     pub async fn delete_pictures_of_post(
         &self,
         picture_path: &Path,
