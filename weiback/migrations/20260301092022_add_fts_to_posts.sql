@@ -1,3 +1,6 @@
+-- Create INDEX for retweeted_id in posts
+CREATE INDEX IF NOT EXISTS idx_posts_retweeted_id ON posts(retweeted_id);
+
 -- Enable FTS5 by creating the virtual table with trigram tokenizer
 CREATE VIRTUAL TABLE posts_fts USING fts5(
     text,

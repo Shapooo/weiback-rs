@@ -292,9 +292,18 @@ where
     if query.is_favorited {
         where_conditions.push("id IN (SELECT id FROM favorited_posts)");
     }
-    if query.search_term.is_some() {
-        where_conditions.push("id IN (SELECT rowid FROM posts_fts WHERE text MATCH ?)");
-    }
+
+    let (from_clause, select_posts, select_count, order_by) = if query.search_term.is_some() {
+        where_conditions.push("f.text MATCH ?");
+        (
+            "FROM posts p INNER JOIN posts_fts f ON (f.rowid = p.id OR f.rowid = p.retweeted_id)",
+            "SELECT DISTINCT p.*",
+            "SELECT COUNT(DISTINCT p.id)",
+            "p.id",
+        )
+    } else {
+        ("FROM posts", "SELECT *", "SELECT COUNT(*)", "id")
+    };
 
     let where_clause = if where_conditions.is_empty() {
         String::new()
@@ -302,13 +311,13 @@ where
         format!("WHERE {}", where_conditions.join(" AND "))
     };
 
-    let count_sql = format!("SELECT COUNT(*) FROM posts {}", where_clause);
+    let count_sql = format!("{} {} {}", select_count, from_clause, where_clause);
     let mut count_query = sqlx::query_scalar(&count_sql);
 
     let order = if query.reverse_order { "ASC" } else { "DESC" };
     let posts_sql = format!(
-        "SELECT * FROM posts {} ORDER BY id {} LIMIT ? OFFSET ?",
-        where_clause, order,
+        "{} {} {} ORDER BY {} {} LIMIT ? OFFSET ?",
+        select_posts, from_clause, where_clause, order_by, order,
     );
     let mut posts_query = sqlx::query_as(&posts_sql);
 
