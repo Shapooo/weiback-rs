@@ -31,11 +31,15 @@ export interface PaginatedPostInfo {
     total_items: number;
 }
 
+export type SearchTerm =
+    | { Fuzzy: string }
+    | { Strict: string };
+
 export interface PostQuery {
     user_id?: number;
     start_date?: number; // Unix timestamp
     end_date?: number;   // Unix timestamp
-    search_term?: string;
+    search_term?: SearchTerm;
     is_favorited: boolean;
     reverse_order: boolean;
     page: number;

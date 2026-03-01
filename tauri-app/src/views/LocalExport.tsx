@@ -16,6 +16,9 @@ import {
     Checkbox,
     Modal,
     TextField,
+    InputAdornment,
+    Select,
+    MenuItem,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -45,6 +48,7 @@ const LocalExportPage: React.FC = () => {
         isFavorited: false,
         reverseOrder: false,
         searchTerm: '',
+        searchMode: 'fuzzy' as 'fuzzy' | 'strict',
     });
     // State to hold the filters that are actually applied
     const [appliedFilters, setAppliedFilters] = useState({ ...filters, userInput });
@@ -124,7 +128,11 @@ const LocalExportPage: React.FC = () => {
                 user_id: userId,
                 start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
-                search_term: currentFilters.searchTerm || undefined,
+                search_term: currentFilters.searchTerm
+                    ? (currentFilters.searchMode === 'fuzzy'
+                        ? { Fuzzy: currentFilters.searchTerm }
+                        : { Strict: currentFilters.searchTerm })
+                    : undefined,
             };
 
             const result = await queryLocalPosts(query);
@@ -160,6 +168,7 @@ const LocalExportPage: React.FC = () => {
             isFavorited: false,
             reverseOrder: false,
             searchTerm: '',
+            searchMode: 'fuzzy' as 'fuzzy' | 'strict',
         };
         const clearedUserInput = null;
 
@@ -209,7 +218,11 @@ const LocalExportPage: React.FC = () => {
                 user_id: userId,
                 start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
-                search_term: appliedFilters.searchTerm || undefined,
+                search_term: appliedFilters.searchTerm
+                    ? (appliedFilters.searchMode === 'fuzzy'
+                        ? { Fuzzy: appliedFilters.searchTerm }
+                        : { Strict: appliedFilters.searchTerm })
+                    : undefined,
             };
 
             const options: ExportJobOptions = {
@@ -279,6 +292,22 @@ const LocalExportPage: React.FC = () => {
                                             if (e.key === 'Enter') {
                                                 handleSearch();
                                             }
+                                        }}
+                                        InputProps={{
+                                            startAdornment: (
+                                                <InputAdornment position="start">
+                                                    <Select
+                                                        variant="standard"
+                                                        value={filters.searchMode}
+                                                        onChange={(e) => setFilters(f => ({ ...f, searchMode: e.target.value as 'fuzzy' | 'strict' }))}
+                                                        disableUnderline
+                                                        sx={{ fontSize: '0.875rem' }}
+                                                    >
+                                                        <MenuItem value="fuzzy">模糊</MenuItem>
+                                                        <MenuItem value="strict">严格</MenuItem>
+                                                    </Select>
+                                                </InputAdornment>
+                                            ),
                                         }}
                                     />
                                 </Grid>
