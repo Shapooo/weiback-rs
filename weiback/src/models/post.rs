@@ -4,9 +4,7 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::User;
-use super::{mix_media_info::MixMediaInfo, page_info::PageInfo, url_struct::UrlStruct};
-use crate::models::pic_infos::PicInfoItem;
+use super::{MixMediaInfo, PageInfo, PicInfoItem, TagStruct, UrlStruct, User};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Post {
@@ -32,6 +30,7 @@ pub struct Post {
     pub repost_type: Option<i64>,
     pub retweeted_status: Option<Box<Post>>,
     pub source: Option<String>,
+    pub tag_struct: Option<TagStruct>,
     pub text: String,
     pub url_struct: Option<UrlStruct>,
     pub user: Option<User>,

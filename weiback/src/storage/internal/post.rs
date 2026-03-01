@@ -1,5 +1,6 @@
 use chrono::DateTime;
 use log::debug;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, to_value};
 use sqlx::{Acquire, Executor, FromRow, Sqlite};
 
@@ -7,7 +8,7 @@ use crate::core::task::PostQuery;
 use crate::error::{Error, Result};
 use crate::models::Post;
 
-#[derive(Debug, Clone, PartialEq, FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
 pub struct PostInternal {
     pub attitudes_count: Option<i64>,
     pub attitudes_status: i64,
@@ -30,6 +31,7 @@ pub struct PostInternal {
     pub repost_type: Option<i64>,
     pub retweeted_id: Option<i64>,
     pub source: Option<String>,
+    pub tag_struct: Option<Value>,
     pub text: String,
     pub uid: Option<i64>,
     pub url_struct: Option<Value>,
@@ -60,6 +62,7 @@ impl TryFrom<Post> for PostInternal {
             repost_type: post.repost_type,
             retweeted_id: post.retweeted_status.map(|r| r.id),
             source: post.source,
+            tag_struct: post.tag_struct.map(|t| to_value(&t)).transpose()?,
             text: post.text,
             uid: post.user.map(|u| u.id),
             url_struct: post.url_struct.map(to_value).transpose()?,
@@ -92,6 +95,7 @@ impl TryInto<Post> for PostInternal {
             repost_type: self.repost_type,
             retweeted_status: None,
             source: self.source,
+            tag_struct: self.tag_struct.map(from_value).transpose()?,
             text: self.text,
             url_struct: self.url_struct.map(from_value).transpose()?,
             user: None,

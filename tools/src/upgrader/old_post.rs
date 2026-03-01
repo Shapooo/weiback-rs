@@ -147,6 +147,7 @@ pub struct OldPost {
     pub repost_type: Option<i64>,
     pub retweeted_id: Option<i64>,
     pub source: Option<String>,
+    pub tag_struct: Option<Value>,
     pub text_raw: String,
     pub uid: Option<i64>,
     pub unfavorited: bool,
@@ -350,31 +351,40 @@ pub fn convert_old_to_internal_post(
         })
         .transpose()?;
 
+    let tag_struct = old
+        .tag_struct
+        .as_ref()
+        .map(|t| {
+            serde_json::to_value(t).with_context(|| format!("post {id}, serializing TagStruct"))
+        })
+        .transpose()?;
+
     Ok(PostInternal {
-        id,
-        mblogid: old.mblogid,
-        uid: old.uid,
-        created_at,
-        text: old.text_raw,
-        reposts_count: old.reposts_count,
-        comments_count: old.comments_count,
         attitudes_count: old.attitudes_count,
         attitudes_status: old.attitudes_status,
+        comments_count: old.comments_count,
+        created_at,
         deleted: old.deleted,
-        favorited: old.favorited,
         edit_count: old.edit_count,
+        favorited: old.favorited,
         geo: old.geo,
+        id,
+        mblogid: old.mblogid,
+        mix_media_ids,
         mix_media_info,
         page_info,
         pic_ids,
         pic_infos,
         pic_num: old.pic_num,
         region_name: old.region_name,
+        reposts_count: old.reposts_count,
         repost_type: old.repost_type,
         retweeted_id: old.retweeted_id,
         source: old.source,
+        tag_struct,
+        text: old.text_raw,
+        uid: old.uid,
         url_struct,
-        mix_media_ids,
     })
 }
 

@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal, user::UserInternal};
 use crate::error::Error;
-use crate::models::{Post, mix_media_info::MixMediaInfo, pic_infos::PicInfoItem};
+use crate::models::{MixMediaInfo, PicInfoItem, Post, TagStruct};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PostInternal {
@@ -43,6 +43,7 @@ pub struct PostInternal {
     pub repost_type: Option<i64>,
     pub retweeted_status: Option<Box<PostInternal>>,
     pub source: Option<String>,
+    pub tag_struct: Option<TagStruct>,
     pub text: String,
     pub url_struct: Option<UrlStructInternal>,
     #[serde(default, deserialize_with = "deserialize_user")]
@@ -83,6 +84,7 @@ impl TryFrom<PostInternal> for Post {
                 .transpose()?
                 .map(Box::new),
             source: value.source,
+            tag_struct: value.tag_struct,
             text: value.text,
             url_struct: value.url_struct.map(|u| u.try_into()).transpose()?,
             user: value.user.map(|u| u.into()),
