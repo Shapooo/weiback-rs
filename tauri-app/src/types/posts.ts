@@ -35,6 +35,7 @@ export interface PostQuery {
     user_id?: number;
     start_date?: number; // Unix timestamp
     end_date?: number;   // Unix timestamp
+    search_term?: string;
     is_favorited: boolean;
     reverse_order: boolean;
     page: number;

@@ -292,6 +292,9 @@ where
     if query.is_favorited {
         where_conditions.push("id IN (SELECT id FROM favorited_posts)");
     }
+    if query.search_term.is_some() {
+        where_conditions.push("id IN (SELECT rowid FROM posts_fts WHERE text MATCH ?)");
+    }
 
     let where_clause = if where_conditions.is_empty() {
         String::new()
@@ -324,6 +327,10 @@ where
         let dt = DateTime::from_timestamp(end_date, 0).unwrap().to_rfc3339();
         count_query = count_query.bind(dt.clone());
         posts_query = posts_query.bind(dt);
+    }
+    if let Some(search_term) = query.search_term {
+        count_query = count_query.bind(search_term.clone());
+        posts_query = posts_query.bind(search_term);
     }
     let mut conn = acquirer.acquire().await?;
     let total_items = count_query.fetch_one(&mut *conn).await?;
@@ -446,6 +453,7 @@ mod local_tests {
             user_id: None,
             start_date: None,
             end_date: None,
+            search_term: None,
             is_favorited: true,
             reverse_order: false,
             page: 1,
@@ -494,6 +502,7 @@ mod local_tests {
             user_id: None,
             start_date: None,
             end_date: None,
+            search_term: None,
             is_favorited: true,
             reverse_order: false,
             page: 1,
@@ -536,6 +545,7 @@ mod local_tests {
             user_id: None,
             start_date: None,
             end_date: None,
+            search_term: None,
             is_favorited: false,
             reverse_order: false,
             page: 1,
@@ -578,6 +588,7 @@ mod local_tests {
             user_id: Some(uid),
             start_date: None,
             end_date: None,
+            search_term: None,
             is_favorited: false,
             reverse_order: false,
             page: 1,
