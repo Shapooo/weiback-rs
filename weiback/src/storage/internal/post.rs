@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, to_value};
 use sqlx::{Acquire, Executor, FromRow, Sqlite};
 
-use crate::core::task::PostQuery;
+use crate::core::task::{PostQuery, SearchTerm};
 use crate::error::{Error, Result};
 use crate::models::Post;
 
@@ -329,8 +329,16 @@ where
         posts_query = posts_query.bind(dt);
     }
     if let Some(search_term) = query.search_term {
-        count_query = count_query.bind(search_term.clone());
-        posts_query = posts_query.bind(search_term);
+        let fts_query = match search_term {
+            SearchTerm::Fuzzy(term) => term
+                .split_whitespace()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" AND "),
+            SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
+        };
+        count_query = count_query.bind(fts_query.clone());
+        posts_query = posts_query.bind(fts_query);
     }
     let mut conn = acquirer.acquire().await?;
     let total_items = count_query.fetch_one(&mut *conn).await?;
