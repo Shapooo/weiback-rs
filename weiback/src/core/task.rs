@@ -113,6 +113,7 @@ pub struct PostQuery {
     pub user_id: Option<i64>,
     pub start_date: Option<i64>, // Unix timestamp
     pub end_date: Option<i64>,   // Unix timestamp
+    pub search_term: Option<String>,
     pub is_favorited: bool,
     pub reverse_order: bool,
     // for pagination

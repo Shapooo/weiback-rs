@@ -44,6 +44,7 @@ const LocalExportPage: React.FC = () => {
         endDate: null as Date | null,
         isFavorited: false,
         reverseOrder: false,
+        searchTerm: '',
     });
     // State to hold the filters that are actually applied
     const [appliedFilters, setAppliedFilters] = useState({ ...filters, userInput });
@@ -123,6 +124,7 @@ const LocalExportPage: React.FC = () => {
                 user_id: userId,
                 start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
+                search_term: currentFilters.searchTerm || undefined,
             };
 
             const result = await queryLocalPosts(query);
@@ -157,6 +159,7 @@ const LocalExportPage: React.FC = () => {
             endDate: null,
             isFavorited: false,
             reverseOrder: false,
+            searchTerm: '',
         };
         const clearedUserInput = null;
 
@@ -206,6 +209,7 @@ const LocalExportPage: React.FC = () => {
                 user_id: userId,
                 start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
                 end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
+                search_term: appliedFilters.searchTerm || undefined,
             };
 
             const options: ExportJobOptions = {
@@ -263,6 +267,19 @@ const LocalExportPage: React.FC = () => {
                                     <UserSelector
                                         value={userInput}
                                         onChange={setUserInput}
+                                    />
+                                </Grid>
+                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                                    <TextField
+                                        fullWidth
+                                        label="搜索正文"
+                                        value={filters.searchTerm}
+                                        onChange={(e) => setFilters(f => ({ ...f, searchTerm: e.target.value }))}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                handleSearch();
+                                            }
+                                        }}
                                     />
                                 </Grid>
                                 {/* Second Line: Date Pickers */}
