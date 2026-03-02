@@ -1,3 +1,23 @@
+//! This module provides functions for interacting with the `picture` table in the database.
+//!
+//! It handles the storage, retrieval, and deletion of picture metadata, including associated posts,
+//! users, and definitions.
+//!
+//! # Table Structure: `picture`
+//!
+//! | Column     | Type    | Description                                       |
+//! |------------|---------|---------------------------------------------------|
+//! | `id`       | `TEXT`  | A derived ID, typically from the filename without extension. |
+//! | `definition` | `TEXT`  | The definition of the picture (e.g., "large", "thumb"). |
+//! | `path`     | `TEXT`  | The local path where the picture is stored.       |
+//! | `post_id`  | `INTEGER` | The ID of the post this picture is attached to (if any). |
+//! | `url`      | `TEXT`  | The original URL of the picture. **Primary Key.** |
+//! | `user_id`  | `INTEGER` | The ID of the user this picture belongs to (e.g., avatar). |
+//!
+//! The `url` column serves as the primary key for uniqueness.
+//! The `id` column is derived from the URL and is used for grouping related pictures
+//! (e.g., different definitions of the same image from a post).
+
 use std::path::PathBuf;
 
 use sqlx::{Executor, Sqlite};
@@ -69,6 +89,19 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
     }
 }
 
+/// Saves picture metadata into the database.
+///
+/// If a picture with the same URL already exists, it will be ignored.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor (e.g., `SqlitePool` or `&mut SqliteConnection`).
+/// * `picture_meta` - The `PictureMeta` enum containing the picture's metadata.
+/// * `relative_path_str` - An optional string slice representing the picture's relative path on disk.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn save_picture_meta<'e, E>(
     executor: E,
     picture_meta: &PictureMeta,
@@ -111,6 +144,16 @@ VALUES
     Ok(())
 }
 
+/// Retrieves the local path of a picture given its URL.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `url` - The URL of the picture to retrieve the path for.
+///
+/// # Returns
+///
+/// A `Result` containing an `Option<PathBuf>`. `Some(PathBuf)` if the picture is found, `None` otherwise.
 pub async fn get_picture_path<'e, E>(executor: E, url: &Url) -> Result<Option<PathBuf>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -123,6 +166,15 @@ where
     Ok(raw_res.map(PathBuf::from))
 }
 
+/// Retrieves a list of user IDs who have more than one avatar entry in the database.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<i64>` of user IDs with duplicate avatars.
 pub async fn get_users_with_duplicate_avatars<'e, E>(executor: E) -> Result<Vec<i64>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -135,6 +187,16 @@ where
     Ok(ids)
 }
 
+/// Retrieves all `PictureInfo` associated with a specific post ID.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `post_id` - The ID of the post.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PictureInfo>` for the given post ID.
 pub async fn get_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result<Vec<PictureInfo>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -147,6 +209,16 @@ where
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
+/// Retrieves all `PictureInfo` representing avatars for a specific user ID.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `user_id` - The ID of the user.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PictureInfo>` of avatars for the given user ID.
 pub async fn get_avatars_by_user_id<'e, E>(executor: E, user_id: i64) -> Result<Vec<PictureInfo>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -160,6 +232,18 @@ where
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
+/// Retrieves a single `PictureInfo` representing an avatar for a specific user ID.
+///
+/// If multiple avatars exist for a user, this function will return an arbitrary one.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `user_id` - The ID of the user.
+///
+/// # Returns
+///
+/// A `Result` containing an `Option<PictureInfo>`. `Some(PictureInfo)` if an avatar is found, `None` otherwise.
 pub async fn get_avatar_by_user_id<'e, E>(executor: E, user_id: i64) -> Result<Option<PictureInfo>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -173,6 +257,16 @@ where
     record.map(PictureInfo::try_from).transpose()
 }
 
+/// Retrieves all `PictureInfo` for a given list of picture IDs.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `ids` - A slice of picture IDs (Strings).
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PictureInfo>` for the given IDs.
 pub async fn get_pictures_by_ids<'e, E>(executor: E, ids: &[String]) -> Result<Vec<PictureInfo>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -195,6 +289,19 @@ where
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
+/// Retrieves all `PictureInfo` for a single picture ID.
+///
+/// Note: While `id` is not the primary key, it is used for grouping pictures,
+/// so multiple pictures might share the same `id` but have different `url`s.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The ID of the picture (e.g., the filename without extension).
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PictureInfo>` for the given ID.
 pub async fn get_pictures_by_id<'e, E>(executor: E, id: &str) -> Result<Vec<PictureInfo>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -208,6 +315,16 @@ where
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
+/// Deletes all picture entries associated with a given post ID from the database.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `post_id` - The ID of the post whose pictures are to be deleted.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn delete_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -219,6 +336,17 @@ where
     Ok(())
 }
 
+/// Retrieves a list of picture IDs that have more than one entry in the database.
+///
+/// This indicates multiple pictures (with different URLs) share the same logical ID (e.g., filename without extension).
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<String>` of duplicate picture IDs.
 pub async fn get_duplicate_pic_ids<'e, E>(executor: E) -> Result<Vec<String>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -231,6 +359,16 @@ where
     Ok(ids)
 }
 
+/// Deletes a specific picture entry from the database using its URL.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `url` - The URL of the picture to be deleted.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn delete_picture_by_url<'e, E>(executor: E, url: &Url) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
