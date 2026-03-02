@@ -100,21 +100,20 @@ where {
 
 #[cfg(test)]
 mod local_tests {
-    use std::fs;
-
     use tempfile::{TempDir, tempdir};
+    use tokio::fs;
 
     use super::*;
     use crate::error::Error;
 
     // New test helper to create source files
-    fn create_test_page_with_files(
+    async fn create_test_page_with_files(
         temp_dir: &TempDir,
         html_content: &str,
         num_pics: usize,
     ) -> (HTMLPage, Vec<String>) {
         let source_dir = temp_dir.path().join("source_pics");
-        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&source_dir).await.unwrap();
 
         let mut expected_pic_contents = Vec::new();
 
@@ -123,7 +122,7 @@ mod local_tests {
                 let source_file_name = format!("source_{}.jpg", i);
                 let source_path = source_dir.join(&source_file_name);
                 let content = format!("pic_content_{}", i);
-                fs::write(&source_path, &content).unwrap();
+                std::fs::write(&source_path, &content).unwrap();
                 expected_pic_contents.push(content);
 
                 PictureExport {
@@ -158,7 +157,8 @@ mod local_tests {
         let exporter = ExporterImpl::new();
 
         let (page, expected_contents) =
-            create_test_page_with_files(&temp_dir, "<html><body><h1>Hello</h1></body></html>", 2);
+            create_test_page_with_files(&temp_dir, "<html><body><h1>Hello</h1></body></html>", 2)
+                .await;
         exporter
             .export_page(page.clone(), &page_name, &export_dir)
             .await
@@ -167,7 +167,7 @@ mod local_tests {
         // Verify HTML file
         let html_path = export_dir.join(make_html_file_name(&page_name));
         assert!(html_path.exists());
-        let html_content = fs::read_to_string(html_path).unwrap();
+        let html_content = fs::read_to_string(html_path).await.unwrap();
         assert_eq!(html_content, page.html);
 
         // Verify resources directory and copied picture files
@@ -178,7 +178,7 @@ mod local_tests {
         for (i, pic_export) in page.pictures_to_export.iter().enumerate() {
             let pic_path = resources_path.join(&pic_export.target_file_name);
             assert!(pic_path.exists());
-            let pic_content = fs::read_to_string(pic_path).unwrap();
+            let pic_content = fs::read_to_string(pic_path).await.unwrap();
             assert_eq!(pic_content, expected_contents[i]);
         }
     }
@@ -200,7 +200,7 @@ mod local_tests {
         let html_name = make_html_file_name(&page_name);
         let html_path = export_dir.join(html_name);
         assert!(html_path.exists());
-        let html_content = fs::read_to_string(html_path).unwrap();
+        let html_content = fs::read_to_string(html_path).await.unwrap();
         assert_eq!(html_content, page.html);
 
         // Verify resources directory is NOT created
@@ -216,7 +216,7 @@ mod local_tests {
         let html_file_name = make_html_file_name(&page_name);
         let html_path = export_dir.join(&html_file_name);
 
-        fs::write(&html_path, "initial content").unwrap();
+        fs::write(&html_path, "initial content").await.unwrap();
 
         let exporter = ExporterImpl::new();
 
@@ -227,7 +227,7 @@ mod local_tests {
             .await
             .unwrap();
 
-        let final_content = fs::read_to_string(&html_path).unwrap();
+        let final_content = fs::read_to_string(&html_path).await.unwrap();
         assert_eq!(final_content, new_html_content);
     }
 
@@ -235,7 +235,7 @@ mod local_tests {
     async fn test_export_to_path_that_is_a_file_fails() {
         let temp_dir = tempdir().unwrap();
         let file_path = temp_dir.path().join("i_am_a_file_not_a_dir");
-        fs::write(&file_path, "hello").unwrap();
+        fs::write(&file_path, "hello").await.unwrap();
 
         let exporter = ExporterImpl::new();
         let page = create_test_page_no_files("test");

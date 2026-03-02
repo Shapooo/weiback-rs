@@ -327,9 +327,10 @@ impl Storage for StorageImpl {
 mod local_tests {
     use std::{
         collections::{HashMap, HashSet},
-        fs::read_to_string,
         path::Path,
     };
+
+    use tokio::fs::read_to_string;
 
     use super::*;
     use crate::{
@@ -349,7 +350,7 @@ mod local_tests {
 
     async fn create_test_posts() -> Vec<Post> {
         let favorites = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/favorites.json");
-        let s = read_to_string(favorites).unwrap();
+        let s = read_to_string(favorites).await.unwrap();
         let favs = serde_json::from_str::<FavoritesSucc>(s.as_str()).unwrap();
         let mut favs: Vec<Post> = favs
             .favorites
@@ -360,7 +361,7 @@ mod local_tests {
         let profile_statuses =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/profile_statuses.json");
         let statuses = serde_json::from_str::<ProfileStatusesSucc>(
-            read_to_string(profile_statuses).unwrap().as_str(),
+            read_to_string(profile_statuses).await.unwrap().as_str(),
         )
         .unwrap();
         let statuses: Vec<Post> = statuses
