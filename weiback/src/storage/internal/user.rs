@@ -1,9 +1,30 @@
+//! This module provides functions for interacting with the `users` table in the database.
+//!
+//! It handles the storage and retrieval of user metadata.
+//!
+//! # Table Structure: `users`
+//!
+//! | Column              | Type    | Description                                       |
+//! |---------------------|---------|---------------------------------------------------|
+//! | `avatar_hd`         | `TEXT`  | URL of the high-definition avatar.                |
+//! | `avatar_large`      | `TEXT`  | URL of the large avatar.                          |
+//! | `domain`            | `TEXT`  | User's custom domain (if any).                    |
+//! | `following`         | `BOOLEAN` | Whether the current user is following this user.  |
+//! | `follow_me`         | `BOOLEAN` | Whether this user is following the current user.  |
+//! | `id`                | `INTEGER` | Unique identifier for the user. **Primary Key.** |
+//! | `profile_image_url` | `TEXT`  | URL of the profile image.                         |
+//! | `screen_name`       | `TEXT`  | User's screen name or nickname.                   |
+//!
+//! The `id` column serves as the primary key for uniqueness.
+
 use sqlx::{Executor, FromRow, Sqlite};
 use url::Url;
 
 use crate::error::{Error, Result};
 use crate::models::User;
 
+/// Represents the internal database structure for a user.
+/// This struct is used for direct interaction with the `users` table.
 #[derive(Debug, Clone, FromRow, PartialEq)]
 pub struct UserInternal {
     pub avatar_hd: String,
@@ -19,6 +40,7 @@ pub struct UserInternal {
 }
 
 impl From<User> for UserInternal {
+    /// Converts a `User` model into a `UserInternal` database representation.
     fn from(value: User) -> Self {
         Self {
             avatar_hd: value.avatar_hd.to_string(),
@@ -35,6 +57,8 @@ impl From<User> for UserInternal {
 
 impl TryFrom<UserInternal> for User {
     type Error = Error;
+    /// Tries to convert a `UserInternal` database representation into a `User` model.
+    /// This conversion can fail if URL strings are malformed.
     fn try_from(val: UserInternal) -> std::result::Result<Self, Self::Error> {
         let res = Self {
             avatar_hd: Url::parse(&val.avatar_hd)?,
@@ -50,6 +74,16 @@ impl TryFrom<UserInternal> for User {
     }
 }
 
+/// Retrieves a single user by their ID.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The unique identifier of the user.
+///
+/// # Returns
+///
+/// A `Result` containing an `Option<User>`. `Some(User)` if the user is found, `None` otherwise.
 pub async fn get_user<'e, E>(executor: E, id: i64) -> Result<Option<User>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -61,6 +95,18 @@ where
     user.map(|u| u.try_into()).transpose()
 }
 
+/// Saves a user's data into the database.
+///
+/// If a user with the same ID already exists, their data will be updated (UPSERT).
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `user` - The `User` object to save.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn save_user<'e, E>(executor: E, user: &User) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -93,6 +139,16 @@ VALUES
     Ok(())
 }
 
+/// Retrieves a list of users by their IDs.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `ids` - A slice of user IDs.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<User>` for the given IDs.
 pub async fn get_users_by_ids<'e, E>(executor: E, ids: &[i64]) -> Result<Vec<User>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -111,6 +167,16 @@ where
     records.into_iter().map(|u| u.try_into()).collect()
 }
 
+/// Searches for users whose screen names start with a given prefix, limited to 20 results.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `prefix` - The prefix to match against user screen names.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<User>` matching the prefix.
 pub async fn search_users_by_screen_name_prefix<'e, E>(
     executor: E,
     prefix: &str,
