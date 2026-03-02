@@ -1,3 +1,48 @@
+//! This module handles the storage and retrieval of `Post` data, along with related
+//! operations such as marking posts as favorited/unfavorited, retrieving retweeted posts,
+//! and querying posts based on various criteria.
+//!
+//! It interacts with the `posts` and `favorited_posts` tables in the database.
+//!
+//! # Table Structure: `posts`
+//!
+//! | Column             | Type      | Description                                       |
+//! |--------------------|-----------|---------------------------------------------------|
+//! | `attitudes_count`  | `INTEGER` | Number of attitudes (likes) for the post.         |
+//! | `attitudes_status` | `INTEGER` | Status of attitudes.                              |
+//! | `comments_count`   | `INTEGER` | Number of comments on the post.                   |
+//! | `created_at`       | `TEXT`    | Timestamp of post creation (RFC3339 format).      |
+//! | `deleted`          | `BOOLEAN` | Whether the post has been marked as deleted.      |
+//! | `edit_count`       | `INTEGER` | Number of times the post has been edited.         |
+//! | `favorited`        | `BOOLEAN` | Whether the post is marked as favorited.          |
+//! | `geo`              | `JSON`    | Geographical information as JSON.                 |
+//! | `id`               | `INTEGER` | Unique identifier for the post. **Primary Key.**  |
+//! | `mblogid`          | `TEXT`    | Microblog ID.                                     |
+//! | `mix_media_ids`    | `JSON`    | Mixed media IDs as JSON array.                    |
+//! | `mix_media_info`   | `JSON`    | Mixed media information as JSON.                  |
+//! | `page_info`        | `JSON`    | Page-specific information as JSON.                |
+//! | `pic_ids`          | `JSON`    | Picture IDs as JSON array.                        |
+//! | `pic_infos`        | `JSON`    | Picture information as JSON object.               |
+//! | `pic_num`          | `INTEGER` | Number of pictures in the post.                   |
+//! | `region_name`      | `TEXT`    | Region name of the post.                          |
+//! | `reposts_count`    | `INTEGER` | Number of reposts.                                |
+//! | `repost_type`      | `INTEGER` | Type of repost.                                   |
+//! | `retweeted_id`     | `INTEGER` | ID of the original post if this is a retweet.     |
+//! | `source`           | `TEXT`    | Source of the post (e.g., "iPhone client").       |
+//! | `tag_struct`       | `JSON`    | Tag structure as JSON.                            |
+//! | `text`             | `TEXT`    | The main text content of the post.                |
+//! | `uid`              | `INTEGER` | User ID of the post author.                       |
+//! | `url_struct`       | `JSON`    | URL structure as JSON.                            |
+//!
+//! The `id` column serves as the primary key for uniqueness in the `posts` table.
+//!
+//! # Table Structure: `favorited_posts`
+//!
+//! | Column        | Type      | Description                                       |
+//! |---------------|-----------|---------------------------------------------------|
+//! | `id`          | `INTEGER` | The ID of the favorited post. **Primary Key.**    |
+//! | `unfavorited` | `BOOLEAN` | True if the post has been unfavorited.            |
+
 use chrono::DateTime;
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -8,6 +53,8 @@ use crate::core::task::{PostQuery, SearchTerm};
 use crate::error::{Error, Result};
 use crate::models::Post;
 
+/// Represents the internal database structure for a post.
+/// This struct is used for direct interaction with the `posts` table.
 #[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
 pub struct PostInternal {
     pub attitudes_count: Option<i64>,
@@ -39,6 +86,11 @@ pub struct PostInternal {
 
 impl TryFrom<Post> for PostInternal {
     type Error = Error;
+    /// Tries to convert a `Post` model into a `PostInternal` database representation.
+    ///
+    /// **Note:** This is a lossy conversion for internal use. The `retweeted_status` field
+    /// is not fully preserved; only its ID is stored in `retweeted_id`. The `user` field's
+    /// ID is stored in `uid`.
     fn try_from(post: Post) -> Result<Self> {
         Ok(Self {
             attitudes_count: post.attitudes_count,
@@ -72,6 +124,12 @@ impl TryFrom<Post> for PostInternal {
 
 impl TryInto<Post> for PostInternal {
     type Error = Error;
+    /// Tries to convert a `PostInternal` database representation into a `Post` model.
+    /// This conversion can fail due to malformed date strings or invalid JSON data.
+    ///
+    /// **Note:** This is a lossy conversion for internal use. The `retweeted_status` and `user`
+    /// fields are always `None` after conversion. The caller is responsible for populating
+    /// these fields by fetching them separately from the database if needed.
     fn try_into(self) -> Result<Post> {
         Ok(Post {
             attitudes_count: self.attitudes_count,
@@ -103,6 +161,17 @@ impl TryInto<Post> for PostInternal {
     }
 }
 
+/// Checks the unfavorited status of a post from the `favorited_posts` table.
+/// This function is primarily for internal use and testing.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The ID of the post to check.
+///
+/// # Returns
+///
+/// A `Result` containing `Option<bool>`. `Some(true)` if unfavorited, `Some(false)` if favorited, `None` if not found.
 #[allow(unused)]
 async fn check_unfavorited<'e, E>(executor: E, id: i64) -> Result<Option<bool>>
 where
@@ -116,6 +185,16 @@ where
     .await?)
 }
 
+/// Retrieves a single post by its ID.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The unique identifier of the post.
+///
+/// # Returns
+///
+/// A `Result` containing an `Option<PostInternal>`. `Some(PostInternal)` if the post is found, `None` otherwise.
 pub async fn get_post<'e, E>(executor: E, id: i64) -> Result<Option<PostInternal>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -128,6 +207,20 @@ where
     )
 }
 
+/// Saves a post's data into the database.
+///
+/// This function can either insert a new post or replace an existing one based on the `overwrite` flag.
+/// It also handles marking the post as favorited if `post.favorited` is true.
+///
+/// # Arguments
+///
+/// * `acquirer` - A database acquirer (e.g., `SqlitePool` or `&mut SqliteConnection`).
+/// * `post` - The `PostInternal` object to save.
+/// * `overwrite` - If `true`, existing posts with the same ID will be replaced. If `false`, they will be ignored.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn save_post<'c, A>(acquirer: A, post: &PostInternal, overwrite: bool) -> Result<()>
 where
     A: Acquire<'c, Database = Sqlite>,
@@ -206,6 +299,16 @@ VALUES
     Ok(())
 }
 
+/// Marks a post as unfavorited in the `favorited_posts` table.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The ID of the post to mark as unfavorited.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn mark_post_unfavorited<'e, E>(executor: E, id: i64) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -218,6 +321,17 @@ where
     Ok(())
 }
 
+/// Marks a post as favorited in the `favorited_posts` table.
+/// If the post already exists in the table, its unfavorited status will be set to `false`.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The ID of the post to mark as favorited.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn mark_post_favorited<'e, E>(executor: E, id: i64) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -236,6 +350,15 @@ VALUES
     Ok(())
 }
 
+/// Retrieves a list of post IDs that are marked as favorited but not yet unfavorited in the `favorited_posts` table.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<i64>` of post IDs that need to be unfavorited.
 pub async fn get_posts_id_to_unfavorite<'e, E>(executor: E) -> Result<Vec<i64>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -250,6 +373,16 @@ where
     .collect())
 }
 
+/// Retrieves the IDs of posts that retweeted a given original post.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The ID of the original post.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<i64>` of post IDs that are retweets of the given post.
 pub async fn get_retweeted_posts_id<'e, E>(executor: E, id: i64) -> Result<Vec<i64>>
 where
     E: Executor<'e, Database = Sqlite>,
@@ -261,6 +394,16 @@ where
         .map_err(Into::into)
 }
 
+/// Deletes a post and its corresponding entry in `favorited_posts` table from the database.
+///
+/// # Arguments
+///
+/// * `acquirer` - A database acquirer.
+/// * `id` - The ID of the post to delete.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
 pub async fn delete_post<'c, A>(acquirer: A, id: i64) -> Result<()>
 where
     A: Acquire<'c, Database = Sqlite>,
@@ -277,6 +420,20 @@ where
     Ok(())
 }
 
+/// Queries posts from the database based on various criteria.
+///
+/// This function supports filtering by user ID, date range, search terms, and favorited status.
+/// It also handles pagination and ordering.
+///
+/// # Arguments
+///
+/// * `acquirer` - A database acquirer.
+/// * `query` - A `PostQuery` struct specifying the query parameters.
+///
+/// # Returns
+///
+/// A `Result` containing a tuple of `(Vec<PostInternal>, u64)`. The vector contains the
+/// matching posts, and `u64` is the total count of items matching the query without pagination.
 pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<PostInternal>, u64)>
 where
     A: Acquire<'c, Database = Sqlite>,
