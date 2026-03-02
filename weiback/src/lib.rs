@@ -1,3 +1,10 @@
+//! `weiback` is a Rust library designed for archiving Weibo data.
+//!
+//! It provides functionalities to interact with the Weibo API,
+//! store user posts and media, generate HTML exports, and manage
+//! the local data. The library is structured into modules covering
+//! API interactions, data storage, core logic, data models, and utility functions.
+
 pub mod api;
 pub mod builder;
 pub mod config;
