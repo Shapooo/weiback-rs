@@ -241,3 +241,256 @@ where
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod local_tests {
+    use sqlx::sqlite::SqlitePool;
+
+    use super::*;
+    use crate::storage::database::create_db_pool_with_url;
+
+    async fn setup_db() -> SqlitePool {
+        create_db_pool_with_url("sqlite::memory:").await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_picture() {
+        let db = setup_db().await;
+        let url = Url::parse("http://example.com/pic.jpg").unwrap();
+        let meta = PictureMeta::Other { url: url.clone() };
+        let path = "some/path/pic.jpg";
+
+        save_picture_meta(&db, &meta, Some(path)).await.unwrap();
+
+        let retrieved_path = get_picture_path(&db, &url).await.unwrap();
+        assert_eq!(retrieved_path, Some(PathBuf::from(path)));
+    }
+
+    #[tokio::test]
+    async fn test_picture_record_conversion() {
+        let url_str = "http://example.com/image.jpg";
+        let path = "image.jpg";
+
+        // Test Attached
+        let record = PictureDbRecord {
+            url: url_str.to_string(),
+            path: Some(path.to_string()),
+            post_id: Some(123),
+            user_id: None,
+            definition: Some("large".to_string()),
+        };
+        let info = PictureInfo::try_from(record).unwrap();
+        assert_eq!(info.path, PathBuf::from(path));
+        match info.meta {
+            PictureMeta::Attached {
+                url,
+                post_id,
+                definition,
+            } => {
+                assert_eq!(url.as_str(), url_str);
+                assert_eq!(post_id, 123);
+                assert_eq!(definition, PictureDefinition::Large);
+            }
+            _ => panic!("Wrong PictureMeta type"),
+        }
+
+        // Test Cover
+        let record = PictureDbRecord {
+            url: url_str.to_string(),
+            path: Some(path.to_string()),
+            post_id: Some(123),
+            user_id: None,
+            definition: None,
+        };
+        let info = PictureInfo::try_from(record).unwrap();
+        assert_eq!(info.path, PathBuf::from(path));
+        match info.meta {
+            PictureMeta::Cover { url, post_id } => {
+                assert_eq!(url.as_str(), url_str);
+                assert_eq!(post_id, 123);
+            }
+            _ => panic!("Wrong PictureMeta type"),
+        }
+
+        // Test Avatar
+        let record = PictureDbRecord {
+            url: url_str.to_string(),
+            path: Some(path.to_string()),
+            post_id: None,
+            user_id: Some(456),
+            definition: None,
+        };
+        let info = PictureInfo::try_from(record).unwrap();
+        assert_eq!(info.path, PathBuf::from(path));
+        match info.meta {
+            PictureMeta::Avatar { url, user_id } => {
+                assert_eq!(url.as_str(), url_str);
+                assert_eq!(user_id, 456);
+            }
+            _ => panic!("Wrong PictureMeta type"),
+        }
+
+        // Test Other
+        let record = PictureDbRecord {
+            url: url_str.to_string(),
+            path: Some(path.to_string()),
+            post_id: None,
+            user_id: None,
+            definition: None,
+        };
+        let info = PictureInfo::try_from(record).unwrap();
+        assert_eq!(info.path, PathBuf::from(path));
+        match info.meta {
+            PictureMeta::Other { url } => {
+                assert_eq!(url.as_str(), url_str);
+            }
+            _ => panic!("Wrong PictureMeta type"),
+        }
+
+        // Test missing path
+        let record = PictureDbRecord {
+            url: url_str.to_string(),
+            path: None,
+            post_id: None,
+            user_id: None,
+            definition: None,
+        };
+        assert!(PictureInfo::try_from(record).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_pictures_by_post_id() {
+        let db = setup_db().await;
+        let post_id = 123;
+        let url1 = Url::parse("http://example.com/pic1.jpg").unwrap();
+        let url2 = Url::parse("http://example.com/pic2.jpg").unwrap();
+        let meta1 = PictureMeta::Attached {
+            url: url1,
+            post_id,
+            definition: PictureDefinition::Large,
+        };
+        let meta2 = PictureMeta::Cover { url: url2, post_id };
+
+        save_picture_meta(&db, &meta1, Some("p1")).await.unwrap();
+        save_picture_meta(&db, &meta2, Some("p2")).await.unwrap();
+
+        let pictures = get_pictures_by_post_id(&db, post_id).await.unwrap();
+        assert_eq!(pictures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_avatar_functions() {
+        let db = setup_db().await;
+        let user_id1 = 1;
+        let user_id2 = 2;
+
+        // Save avatars
+        let url1 = Url::parse("http://example.com/avatar1.jpg").unwrap();
+        let meta1 = PictureMeta::Avatar {
+            url: url1.clone(),
+            user_id: user_id1,
+        };
+        save_picture_meta(&db, &meta1, Some("avatar1.jpg"))
+            .await
+            .unwrap();
+
+        // one user with two avatars
+        let url2 = Url::parse("http://example.com/avatar2.jpg").unwrap();
+        let meta2 = PictureMeta::Avatar {
+            url: url2.clone(),
+            user_id: user_id2,
+        };
+        save_picture_meta(&db, &meta2, Some("avatar2.jpg"))
+            .await
+            .unwrap();
+        let url3 = Url::parse("http://example.com/avatar3.jpg").unwrap();
+        let meta3 = PictureMeta::Avatar {
+            url: url3.clone(),
+            user_id: user_id2,
+        };
+        save_picture_meta(&db, &meta3, Some("avatar3.jpg"))
+            .await
+            .unwrap();
+
+        // get_avatars_by_user_id
+        let avatars1 = get_avatars_by_user_id(&db, user_id1).await.unwrap();
+        assert_eq!(avatars1.len(), 1);
+        let avatars2 = get_avatars_by_user_id(&db, user_id2).await.unwrap();
+        assert_eq!(avatars2.len(), 2);
+
+        // get_avatar_by_user_id (should return the first one)
+        let avatar1 = get_avatar_by_user_id(&db, user_id1).await.unwrap();
+        assert!(avatar1.is_some());
+
+        // get_users_with_duplicate_avatars
+        let duplicate_users = get_users_with_duplicate_avatars(&db).await.unwrap();
+        assert_eq!(duplicate_users, vec![user_id2]);
+    }
+
+    #[tokio::test]
+    async fn test_get_pictures_by_ids() {
+        let db = setup_db().await;
+        let url1 = Url::parse("http://example.com/pic1.jpg").unwrap();
+        let id1 = pic_url_to_id(&url1).unwrap();
+        let meta1 = PictureMeta::Other { url: url1 };
+        save_picture_meta(&db, &meta1, Some("p1")).await.unwrap();
+
+        let url2 = Url::parse("http://example.com/pic2.jpg").unwrap();
+        let id2 = pic_url_to_id(&url2).unwrap();
+        let meta2 = PictureMeta::Other { url: url2 };
+        save_picture_meta(&db, &meta2, Some("p2")).await.unwrap();
+
+        let ids = vec![id1.clone(), id2.clone()];
+        let pictures = get_pictures_by_ids(&db, &ids).await.unwrap();
+        assert_eq!(pictures.len(), 2);
+
+        let pictures = get_pictures_by_id(&db, &id1).await.unwrap();
+        assert_eq!(pictures.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_duplicate_pic_ids() {
+        let db = setup_db().await;
+        let url1 = Url::parse("http://example.com/duplicate.jpg").unwrap();
+        let id = pic_url_to_id(&url1).unwrap();
+
+        let meta1 = PictureMeta::Other { url: url1 };
+        save_picture_meta(&db, &meta1, Some("p1")).await.unwrap();
+
+        let url2 = Url::parse("http://example2.com/duplicate.png").unwrap();
+        let meta2 = PictureMeta::Other { url: url2 };
+        save_picture_meta(&db, &meta2, Some("p2")).await.unwrap();
+
+        let duplicates = get_duplicate_pic_ids(&db).await.unwrap();
+        assert_eq!(duplicates, vec![id]);
+    }
+
+    #[tokio::test]
+    async fn test_delete_functions() {
+        let db = setup_db().await;
+        let post_id = 999;
+        let url1 = Url::parse("http://example.com/todelete1.jpg").unwrap();
+        let meta1 = PictureMeta::Attached {
+            url: url1.clone(),
+            post_id,
+            definition: PictureDefinition::Large,
+        };
+        save_picture_meta(&db, &meta1, Some("p1")).await.unwrap();
+
+        let url2 = Url::parse("http://example.com/todelete2.jpg").unwrap();
+        let meta2 = PictureMeta::Other { url: url2.clone() };
+        save_picture_meta(&db, &meta2, Some("p2")).await.unwrap();
+
+        // Test delete by post_id
+        delete_pictures_by_post_id(&db, post_id).await.unwrap();
+        let pictures = get_pictures_by_post_id(&db, post_id).await.unwrap();
+        assert!(pictures.is_empty());
+
+        // Test delete by url
+        let path_before_delete = get_picture_path(&db, &url2).await.unwrap();
+        assert!(path_before_delete.is_some());
+        delete_picture_by_url(&db, &url2).await.unwrap();
+        let path_after_delete = get_picture_path(&db, &url2).await.unwrap();
+        assert!(path_after_delete.is_none());
+    }
+}
