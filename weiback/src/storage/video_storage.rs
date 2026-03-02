@@ -1,3 +1,8 @@
+//! This module provides file system storage and retrieval for videos,
+//! integrating with the database to manage video metadata.
+//! It handles saving, retrieving, and deleting video blobs,
+//! and ensures consistency between file system presence and database records.
+
 use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
@@ -11,6 +16,8 @@ use crate::error::{Error, Result};
 use crate::models::Video;
 use crate::utils::livephoto_video_url_to_path_str;
 
+/// A struct responsible for storing and retrieving video files on the file system.
+/// It works in conjunction with the database to manage video metadata.
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemVideoStorage;
 
@@ -21,6 +28,20 @@ impl FileSystemVideoStorage {
 }
 
 impl FileSystemVideoStorage {
+    /// Retrieves the binary content (blob) of a video from the file system.
+    ///
+    /// If the video file is not found on disk but an entry exists in the database,
+    /// the database entry will be deleted.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_path` - The base directory where videos are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `url` - The URL of the video to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing an `Option<Bytes>`. `Some(Bytes)` if the video is found, `None` otherwise.
     pub async fn get_video_blob<'c, A>(
         &self,
         video_path: &Path,
@@ -49,6 +70,19 @@ impl FileSystemVideoStorage {
         }
     }
 
+    /// Saves a video's binary content to the file system and its metadata to the database.
+    ///
+    /// Creates necessary parent directories if they don't exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_path` - The base directory where videos should be stored.
+    /// * `executor` - A database executor.
+    /// * `video` - The `Video` object containing metadata and binary blob.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
     pub async fn save_video<'e, E>(
         &self,
         video_path: &Path,
@@ -77,6 +111,19 @@ impl FileSystemVideoStorage {
         Ok(())
     }
 
+    /// Checks if a video is saved (both in the database and on the file system).
+    ///
+    /// If the video is found in the database but not on the file system, its database entry will be deleted.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_path` - The base directory where videos are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `url` - The URL of the video to check.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing `true` if the video is saved, `false` otherwise.
     pub async fn video_saved<'c, A>(
         &self,
         video_path: &Path,
@@ -103,6 +150,17 @@ impl FileSystemVideoStorage {
         }
     }
 
+    /// Deletes all videos associated with a given post from both the file system and the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_path` - The base directory where videos are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `post_id` - The ID of the post whose videos are to be deleted.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
     pub async fn delete_videos_of_post<'c, A>(
         &self,
         video_path: &Path,
