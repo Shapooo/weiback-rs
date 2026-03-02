@@ -622,4 +622,57 @@ mod local_tests {
         assert_eq!(fetched_posts_rev.len(), ones_posts_num);
         assert_eq!(sum as usize, ones_posts_num);
     }
+
+    #[tokio::test]
+    async fn test_delete_post() {
+        let db = setup_db().await;
+        let mut posts = create_test_posts().await;
+        let post = posts.remove(0);
+        let internal_post: PostInternal = post.try_into().unwrap();
+        save_post(&db, &internal_post, false).await.unwrap();
+
+        assert!(get_post(&db, internal_post.id).await.unwrap().is_some());
+        if internal_post.favorited {
+            assert!(
+                check_unfavorited(&db, internal_post.id)
+                    .await
+                    .unwrap()
+                    .is_some()
+            );
+        }
+
+        delete_post(&db, internal_post.id).await.unwrap();
+
+        assert!(get_post(&db, internal_post.id).await.unwrap().is_none());
+        assert!(
+            check_unfavorited(&db, internal_post.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_retweeted_posts_id() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+        let original_post = posts.iter().find(|p| p.retweeted_status.is_none()).unwrap();
+        let mut retweeted_post = posts
+            .iter()
+            .find(|p| p.retweeted_status.is_some())
+            .unwrap()
+            .clone();
+        retweeted_post.retweeted_status = Some(Box::new(original_post.clone()));
+
+        let internal_original: PostInternal = original_post.clone().try_into().unwrap();
+        let internal_retweeted: PostInternal = retweeted_post.try_into().unwrap();
+
+        save_post(&db, &internal_original, false).await.unwrap();
+        save_post(&db, &internal_retweeted, false).await.unwrap();
+
+        let ids = get_retweeted_posts_id(&db, internal_original.id)
+            .await
+            .unwrap();
+        assert_eq!(ids, vec![internal_retweeted.id]);
+    }
 }
