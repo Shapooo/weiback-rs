@@ -27,7 +27,7 @@ pub use task::{
     TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
-use task_manager::{SubTaskError, Task, TaskManager, TaskType};
+pub use task_manager::{SubTaskError, Task, TaskManager, TaskType};
 
 #[cfg(not(feature = "dev-mode"))]
 type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;

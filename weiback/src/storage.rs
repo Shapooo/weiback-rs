@@ -510,12 +510,16 @@ mod local_tests {
         path::Path,
     };
 
+    use itertools::Itertools;
+    use tempfile::TempDir;
     use tokio::fs::read_to_string;
 
     use super::*;
     use crate::{
         api::{favorites::FavoritesSucc, profile_statuses::ProfileStatusesSucc},
-        models::Post,
+        config::Config,
+        core::task_manager::{TaskManager, TaskType},
+        models::{PictureDefinition, Post, VideoMeta},
     };
 
     async fn setup_storage() -> StorageImpl {
@@ -552,6 +556,94 @@ mod local_tests {
             .unwrap();
         favs.extend(statuses);
         favs
+    }
+
+    async fn setup_task_context() -> (Arc<TaskContext>, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let picture_path = temp_dir.path().join("pictures");
+        let video_path = temp_dir.path().join("videos");
+
+        let config = Config {
+            picture_path,
+            video_path,
+            ..Default::default()
+        };
+
+        let task_manager = Arc::new(TaskManager::new());
+        task_manager
+            .start_task(0, TaskType::Export, "test".into(), 0)
+            .unwrap();
+
+        let ctx = Arc::new(TaskContext {
+            task_id: Some(0),
+            config,
+            task_manager,
+        });
+        (ctx, temp_dir)
+    }
+
+    fn create_test_picture(post_id: i64, name: &str) -> Picture {
+        let url = format!("http://example.com/pic_{name}.jpg");
+        Picture {
+            meta: PictureMeta::attached(&url, post_id, PictureDefinition::Large).unwrap(),
+            blob: Bytes::from_static(b"test_image_data"),
+        }
+    }
+
+    fn create_test_video(post_id: i64) -> Video {
+        let url = format!(
+            "https://video.weibo.com/media/play?livephoto=https%3A%2F%2Fus.sinaimg.cn%2Fvideo_{}.mov",
+            post_id
+        );
+        Video {
+            meta: VideoMeta::new(&url, post_id).unwrap(),
+            blob: Bytes::from_static(b"test_video_data"),
+        }
+    }
+
+    async fn create_test_users() -> Vec<User> {
+        create_test_posts()
+            .await
+            .into_iter()
+            .filter_map(|p| p.user)
+            .unique_by(|u| u.id)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_user_functions() {
+        let storage = setup_storage().await;
+        let users = create_test_users().await;
+        for user in users.iter() {
+            storage.save_user(user).await.unwrap();
+        }
+
+        // Test get_users_by_ids
+        let user_ids: Vec<i64> = users.iter().map(|u| u.id).collect();
+        let fetched_users = storage.get_users_by_ids(&user_ids).await.unwrap();
+        assert_eq!(fetched_users.len(), users.len());
+        assert_eq!(
+            fetched_users.iter().map(|u| u.id).collect::<HashSet<_>>(),
+            users.iter().map(|u| u.id).collect::<HashSet<_>>()
+        );
+
+        // Test search_users_by_screen_name_prefix
+        let Some(first_user) = users.first() else {
+            return;
+        };
+        let prefix = &first_user.screen_name[0..3];
+        let searched_users = storage
+            .search_users_by_screen_name_prefix(prefix)
+            .await
+            .unwrap();
+        assert!(!searched_users.is_empty());
+        for user in searched_users {
+            assert!(
+                user.screen_name
+                    .to_lowercase()
+                    .starts_with(&prefix.to_lowercase())
+            );
+        }
     }
 
     #[tokio::test]
@@ -719,6 +811,177 @@ mod local_tests {
         assert_eq!(
             storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
             favorited - favorited / 3 + not_favorited.len() as u64 / 3
+        );
+    }
+
+    #[tokio::test]
+    async fn test_media_and_delete_post() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await; // _temp_dir keeps the dir alive
+
+        let mut posts = create_test_posts().await;
+        let post = posts.remove(0);
+        storage.save_post(&post).await.unwrap();
+
+        let picture = create_test_picture(post.id, "post_pic");
+        let video = create_test_video(post.id);
+
+        // Test save_picture and picture_saved
+        storage.save_picture(ctx.clone(), &picture).await.unwrap();
+        assert!(
+            storage
+                .picture_saved(ctx.clone(), picture.meta.url())
+                .await
+                .unwrap()
+        );
+
+        // Test save_video and video_saved
+        storage.save_video(ctx.clone(), &video).await.unwrap();
+        assert!(
+            storage
+                .video_saved(ctx.clone(), video.meta.url())
+                .await
+                .unwrap()
+        );
+
+        // Test get_picture_blob
+        let blob = storage
+            .get_picture_blob(ctx.clone(), picture.meta.url())
+            .await
+            .unwrap();
+        assert_eq!(blob.as_deref(), Some(&b"test_image_data"[..]));
+
+        // Test get_video_blob
+        let blob = storage
+            .get_video_blob(ctx.clone(), video.meta.url())
+            .await
+            .unwrap();
+        assert_eq!(blob.as_deref(), Some(&b"test_video_data"[..]));
+
+        // Test get_picture_path
+        let path = storage
+            .get_picture_path(ctx.clone(), picture.meta.url())
+            .await
+            .unwrap();
+        assert!(path.is_some());
+        assert!(path.unwrap().exists());
+
+        // Test get_attached_infos
+        let infos = storage.get_attached_infos(post.id).await.unwrap();
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].meta.url(), picture.meta.url());
+
+        // Test delete_post
+        storage.delete_post(ctx.clone(), post.id).await.unwrap();
+        assert!(storage.get_post(post.id).await.unwrap().is_none());
+        // Check if picture is also deleted
+        assert!(
+            !storage
+                .picture_saved(ctx.clone(), picture.meta.url())
+                .await
+                .unwrap()
+        );
+        // Check if video is also deleted
+        assert!(
+            !storage
+                .video_saved(ctx.clone(), video.meta.url())
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_picture_queries_and_delete() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+        let users = create_test_users().await;
+        let user1 = users.first().unwrap();
+        storage.save_user(user1).await.unwrap();
+
+        // Setup Avatar
+        let avatar_pic = Picture {
+            meta: PictureMeta::Avatar {
+                url: Url::parse("http://example.com/avatar.jpg").unwrap(),
+                user_id: user1.id,
+            },
+            blob: Bytes::from_static(b"avatar_data"),
+        };
+        storage
+            .save_picture(ctx.clone(), &avatar_pic)
+            .await
+            .unwrap();
+
+        // Test get_avatar_info and get_avatar_infos
+        let avatar_info = storage.get_avatar_info(user1.id).await.unwrap();
+        assert!(avatar_info.is_some());
+        assert_eq!(avatar_info.unwrap().meta.url(), avatar_pic.meta.url());
+
+        let avatar_infos = storage.get_avatar_infos(user1.id).await.unwrap();
+        assert_eq!(avatar_infos.len(), 1);
+
+        // Test get_users_with_duplicate_avatars
+        let avatar_pic_2 = Picture {
+            meta: PictureMeta::Avatar {
+                url: Url::parse("http://example.com/avatar2.jpg").unwrap(),
+                user_id: user1.id,
+            },
+            blob: Bytes::from_static(b"avatar_data_2"),
+        };
+        storage
+            .save_picture(ctx.clone(), &avatar_pic_2)
+            .await
+            .unwrap();
+        let duplicate_users = storage.get_users_with_duplicate_avatars().await.unwrap();
+        assert_eq!(duplicate_users, vec![user1.id]);
+
+        // Setup attached pictures with same ID
+        let post_id = 12345;
+        let pic1_id = "test_pic_id".to_string();
+        let pic1_url = format!("http://example.com/large/{}.jpg", pic1_id);
+        let pic1 = Picture {
+            meta: PictureMeta::attached(&pic1_url, post_id, PictureDefinition::Large).unwrap(),
+            blob: Bytes::from_static(b"data1"),
+        };
+        let pic2_url = format!("http://example.com/thumb/{}.jpg", pic1_id);
+        let pic2 = Picture {
+            meta: PictureMeta::attached(&pic2_url, post_id, PictureDefinition::Thumbnail).unwrap(),
+            blob: Bytes::from_static(b"data2"),
+        };
+        storage.save_picture(ctx.clone(), &pic1).await.unwrap();
+        storage.save_picture(ctx.clone(), &pic2).await.unwrap();
+
+        // Test get_pictures_by_id (singular id, plural results)
+        let pic_infos = storage.get_pictures_by_id(&pic1_id).await.unwrap();
+        assert_eq!(pic_infos.len(), 2);
+
+        // Test get_pictures_by_ids (plural ids)
+        let pic_infos = storage
+            .get_pictures_by_ids(std::slice::from_ref(&pic1_id))
+            .await
+            .unwrap();
+        assert_eq!(pic_infos.len(), 2);
+
+        // Test get_duplicate_pic_ids
+        let dup_ids = storage.get_duplicate_pic_ids().await.unwrap();
+        assert!(dup_ids.contains(&pic1_id));
+
+        // Test delete_picture
+        storage
+            .delete_picture(ctx.clone(), pic1.meta.url())
+            .await
+            .unwrap();
+        assert!(
+            !storage
+                .picture_saved(ctx.clone(), pic1.meta.url())
+                .await
+                .unwrap()
+        );
+        // The other pic with the same id should still be there
+        assert!(
+            storage
+                .picture_saved(ctx.clone(), pic2.meta.url())
+                .await
+                .unwrap()
         );
     }
 }
