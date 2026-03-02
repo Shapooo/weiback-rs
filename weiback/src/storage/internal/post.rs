@@ -158,6 +158,7 @@ OR {} INTO posts (
     repost_type,
     retweeted_id,
     source,
+    tag_struct,
     text,
     uid,
     url_struct
@@ -166,7 +167,7 @@ VALUES
     (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?
+        ?, ?, ?, ?, ?
     );"#,
             if overwrite { "REPLACE" } else { "IGNORE" }
         )
@@ -193,6 +194,7 @@ VALUES
     .bind(post.repost_type)
     .bind(post.retweeted_id)
     .bind(&post.source)
+    .bind(&post.tag_struct)
     .bind(&post.text)
     .bind(post.uid)
     .bind(&post.url_struct)
