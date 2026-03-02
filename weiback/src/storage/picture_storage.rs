@@ -296,4 +296,177 @@ mod local_tests {
             .unwrap();
         assert!(blob.is_none());
     }
+
+    #[tokio::test]
+    async fn test_picture_saved_exists() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileSystemPictureStorage;
+        let picture = create_test_picture("http://example.com/exists.jpg");
+
+        let db = setup_db().await;
+        storage
+            .save_picture(temp_dir.path(), &db, &picture)
+            .await
+            .unwrap();
+
+        let saved = storage
+            .picture_saved(
+                temp_dir.path(),
+                &db,
+                &Url::parse("http://example.com/exists.jpg").unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(saved);
+    }
+
+    #[tokio::test]
+    async fn test_picture_saved_db_only() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileSystemPictureStorage;
+        let picture = create_test_picture("http://example.com/db_only.jpg");
+
+        let db = setup_db().await;
+        // Save to DB only, not to file system (by manually calling picture::save_picture_meta)
+        let url = picture.meta.url().clone();
+        let relative_path = pic_url_to_path_str(&url);
+        picture::save_picture_meta(&db, &picture.meta, Some(relative_path.as_str()))
+            .await
+            .unwrap();
+
+        assert!(!temp_dir.path().join("example.com/db_only.jpg").exists()); // Ensure file does not exist
+
+        let saved = storage
+            .picture_saved(temp_dir.path(), &db, &url)
+            .await
+            .unwrap();
+        assert!(!saved); // Should return false because file doesn't exist
+
+        // Verify DB entry was deleted
+        let db_entry = picture::get_picture_path(&db, &url).await.unwrap();
+        assert!(db_entry.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_picture() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileSystemPictureStorage;
+        let picture = create_test_picture("http://example.com/todelete.jpg");
+
+        let db = setup_db().await;
+        storage
+            .save_picture(temp_dir.path(), &db, &picture)
+            .await
+            .unwrap();
+
+        let url = picture.meta.url().clone();
+        let file_path = temp_dir.path().join(pic_url_to_path_str(&url));
+        assert!(file_path.exists());
+        assert!(
+            picture::get_picture_path(&db, &url)
+                .await
+                .unwrap()
+                .is_some()
+        );
+
+        storage
+            .delete_picture(temp_dir.path(), &db, &url)
+            .await
+            .unwrap();
+
+        assert!(!file_path.exists());
+        assert!(
+            picture::get_picture_path(&db, &url)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_pictures_of_post() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileSystemPictureStorage;
+        let post_id = 123;
+
+        let pic1 = Picture {
+            meta: PictureMeta::attached(
+                "http://example.com/post/pic1.jpg",
+                post_id,
+                PictureDefinition::Largest,
+            )
+            .unwrap(),
+            blob: Bytes::from_static(b"pic1 data"),
+        };
+        let pic2 = Picture {
+            meta: PictureMeta::attached(
+                "http://example.com/post/pic2.jpg",
+                post_id,
+                PictureDefinition::Largest,
+            )
+            .unwrap(),
+            blob: Bytes::from_static(b"pic2 data"),
+        };
+        let unrelated_pic = Picture {
+            meta: PictureMeta::attached(
+                "http://example.com/unrelated.jpg",
+                999,
+                PictureDefinition::Largest,
+            )
+            .unwrap(),
+            blob: Bytes::from_static(b"unrelated data"),
+        };
+
+        let db = setup_db().await;
+        storage
+            .save_picture(temp_dir.path(), &db, &pic1)
+            .await
+            .unwrap();
+        storage
+            .save_picture(temp_dir.path(), &db, &pic2)
+            .await
+            .unwrap();
+        storage
+            .save_picture(temp_dir.path(), &db, &unrelated_pic)
+            .await
+            .unwrap();
+
+        let file_path1 = temp_dir.path().join(pic_url_to_path_str(pic1.meta.url()));
+        let file_path2 = temp_dir.path().join(pic_url_to_path_str(pic2.meta.url()));
+        let unrelated_file_path = temp_dir
+            .path()
+            .join(pic_url_to_path_str(unrelated_pic.meta.url()));
+
+        assert!(file_path1.exists());
+        assert!(file_path2.exists());
+        assert!(unrelated_file_path.exists());
+        assert!(
+            picture::get_pictures_by_post_id(&db, post_id)
+                .await
+                .unwrap()
+                .len()
+                == 2
+        );
+
+        storage
+            .delete_pictures_of_post(temp_dir.path(), &db, post_id)
+            .await
+            .unwrap();
+
+        assert!(!file_path1.exists());
+        assert!(!file_path2.exists());
+        assert!(unrelated_file_path.exists()); // Unrelated picture should still exist
+        assert!(
+            picture::get_pictures_by_post_id(&db, post_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            picture::get_picture_path(&db, unrelated_pic.meta.url())
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
 }
