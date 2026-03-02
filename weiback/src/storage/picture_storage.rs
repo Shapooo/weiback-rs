@@ -1,3 +1,8 @@
+//! This module provides file system storage and retrieval for pictures,
+//! integrating with the database to manage picture metadata.
+//! It handles saving, retrieving, and deleting picture blobs,
+//! and ensures consistency between file system presence and database records.
+
 use std::fs::create_dir_all;
 use std::path::Path;
 
@@ -11,6 +16,8 @@ use crate::error::{Error, Result};
 use crate::models::Picture;
 use crate::utils::pic_url_to_path_str;
 
+/// A struct responsible for storing and retrieving picture files on the file system.
+/// It works in conjunction with the database to manage picture metadata.
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemPictureStorage;
 
@@ -21,6 +28,20 @@ impl FileSystemPictureStorage {
 }
 
 impl FileSystemPictureStorage {
+    /// Retrieves the binary content (blob) of a picture from the file system.
+    ///
+    /// If the picture file is not found on disk but an entry exists in the database,
+    /// the database entry will be deleted.
+    ///
+    /// # Arguments
+    ///
+    /// * `picture_path` - The base directory where pictures are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `url` - The URL of the picture to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing an `Option<Bytes>`. `Some(Bytes)` if the picture is found, `None` otherwise.
     pub async fn get_picture_blob<'c, A>(
         &self,
         picture_path: &Path,
@@ -46,6 +67,19 @@ impl FileSystemPictureStorage {
         }
     }
 
+    /// Saves a picture's binary content to the file system and its metadata to the database.
+    ///
+    /// Creates necessary parent directories if they don't exist.
+    ///
+    /// # Arguments
+    ///
+    /// * `picture_path` - The base directory where pictures should be stored.
+    /// * `executor` - A database executor.
+    /// * `picture` - The `Picture` object containing metadata and binary blob.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
     pub async fn save_picture<'e, E>(
         &self,
         picture_path: &Path,
@@ -78,6 +112,19 @@ impl FileSystemPictureStorage {
         Ok(())
     }
 
+    /// Checks if a picture is saved (both in the database and on the file system).
+    ///
+    /// If the picture is found in the database but not on the file system, its database entry will be deleted.
+    ///
+    /// # Arguments
+    ///
+    /// * `picture_path` - The base directory where pictures are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `url` - The URL of the picture to check.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing `true` if the picture is saved, `false` otherwise.
     pub async fn picture_saved<'c, A>(
         &self,
         picture_path: &Path,
@@ -104,6 +151,17 @@ impl FileSystemPictureStorage {
         }
     }
 
+    /// Deletes a specific picture from both the file system and the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `picture_path` - The base directory where pictures are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `url` - The URL of the picture to delete.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
     pub async fn delete_picture<'c, A>(
         &self,
         picture_path: &Path,
@@ -124,6 +182,17 @@ impl FileSystemPictureStorage {
         Ok(())
     }
 
+    /// Deletes all pictures associated with a given post from both the file system and the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `picture_path` - The base directory where pictures are stored.
+    /// * `db` - The database connection pool.
+    /// * `post_id` - The ID of the post whose pictures are to be deleted.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
     pub async fn delete_pictures_of_post(
         &self,
         picture_path: &Path,
