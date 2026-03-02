@@ -157,13 +157,17 @@ mod local_tests {
     async fn test_save_video() {
         let temp_dir = tempdir().unwrap();
         let storage = FileSystemVideoStorage;
-        let video = create_test_video("http://example.com/original/test.mp4");
+        let video = create_test_video(
+            "https://video.weibo.com/media/play?livephoto=https%3A%2F%2Fus.sinaimg.cn%2F0023jbLigx081byvTnCw0f0f01004O5e0k01.mov",
+        );
 
         let db = setup_db().await;
         let result = storage.save_video(temp_dir.path(), &db, &video).await;
         assert!(result.is_ok());
 
-        let expected_path = temp_dir.path().join("example.com/original/test.mp4");
+        let expected_path = temp_dir
+            .path()
+            .join("us.sinaimg.cn/0023jbLigx081byvTnCw0f0f01004O5e0k01.mov");
         assert!(expected_path.exists());
         let data = tokio::fs::read(expected_path).await.unwrap();
         assert_eq!(data, video.blob);
@@ -173,7 +177,9 @@ mod local_tests {
     async fn test_get_video_blob() {
         let temp_dir = tempdir().unwrap();
         let storage = FileSystemVideoStorage;
-        let video = create_test_video("http://example.com/test.mp4");
+        let video = create_test_video(
+            "https://video.weibo.com/media/play?livephoto=https%3A%2F%2Fus.sinaimg.cn%2F0023jbLigx081byvTnCw0f0f01004O5e0k01.mov",
+        );
 
         let db = setup_db().await;
         storage
@@ -185,7 +191,7 @@ mod local_tests {
             .get_video_blob(
                 temp_dir.path(),
                 &db,
-                &Url::parse("http://example.com/test.mp4").unwrap(),
+                &Url::parse("https://video.weibo.com/media/play?livephoto=https%3A%2F%2Fus.sinaimg.cn%2F0023jbLigx081byvTnCw0f0f01004O5e0k01.mov").unwrap(),
             )
             .await
             .unwrap();
