@@ -1,3 +1,9 @@
+//! This module defines the storage layer for the application.
+//! It provides a unified interface (`Storage` trait) for interacting with
+//! both the database (for metadata) and the file system (for media files).
+//! The primary implementation is `StorageImpl`, which coordinates between
+//! the SQLite database and file-system-based media storage.
+
 #![allow(async_fn_in_trait)]
 pub mod database;
 pub mod internal;
@@ -30,57 +36,224 @@ use internal::picture;
 use internal::post::{self, PostInternal};
 use internal::user;
 
+/// Represents metadata and the associated file system path for a picture.
 #[derive(Debug, Clone)]
 pub struct PictureInfo {
+    /// Metadata about the picture.
     pub meta: PictureMeta,
+    /// The relative path to the picture file on the file system.
     pub path: PathBuf,
 }
 
+/// A trait defining the operations for storing and retrieving application data.
+///
+/// This trait abstracts over the underlying storage mechanisms, providing
+/// methods for managing users, posts, and media (pictures and videos).
 pub trait Storage: Send + Sync + Clone + 'static {
+    /// Saves a user's information to the database.
+    ///
+    /// # Arguments
+    /// * `user` - The user model to save.
     async fn save_user(&self, user: &User) -> Result<()>;
+
+    /// Retrieves a user by their unique ID.
+    ///
+    /// # Arguments
+    /// * `uid` - The unique identifier of the user.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<User>`.
     async fn get_user(&self, uid: i64) -> Result<Option<User>>;
+
+    /// Retrieves multiple users by their unique IDs.
+    ///
+    /// # Arguments
+    /// * `ids` - A slice of user IDs to retrieve.
     async fn get_users_by_ids(&self, ids: &[i64]) -> Result<Vec<User>>;
+
+    /// Searches for users whose screen name starts with the given prefix.
+    ///
+    /// # Arguments
+    /// * `prefix` - The screen name prefix to search for.
     async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>>;
+
+    /// Saves a post to the database.
+    ///
+    /// # Arguments
+    /// * `post` - The post model to save.
     async fn save_post(&self, post: &Post) -> Result<()>;
+
+    /// Retrieves a post by its ID.
+    ///
+    /// # Arguments
+    /// * `id` - The unique identifier of the post.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<Post>`.
     async fn get_post(&self, id: i64) -> Result<Option<Post>>;
+
+    /// Queries posts based on various criteria.
+    ///
+    /// # Arguments
+    /// * `query` - A `PostQuery` object containing search and filter criteria.
+    ///
+    /// # Returns
+    /// A `Result` containing `PaginatedPosts`.
     async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts>;
+
+    /// Marks a post as unfavorited in the database.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the post to mark.
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()>;
+
+    /// Marks a post as favorited in the database.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the post to mark.
     async fn mark_post_favorited(&self, id: i64) -> Result<()>;
+
+    /// Retrieves IDs of posts that are marked for unfavoriting.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of post IDs.
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
+
+    /// Deletes a post and all its associated media from both the database and the file system.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context containing configuration (like storage paths).
+    /// * `id` - The ID of the post to delete.
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()>;
+
+    /// Saves a picture's content to the file system and its metadata to the database.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `picture` - The picture model containing metadata and binary data.
     fn save_picture(
         &self,
         ctx: Arc<TaskContext>,
         picture: &Picture,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Retrieves the absolute file system path for a given picture URL.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the picture.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<PathBuf>`.
     async fn get_picture_path(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<PathBuf>>;
+
+    /// Retrieves information for all pictures attached to a specific post.
+    ///
+    /// # Arguments
+    /// * `post_id` - The ID of the post.
     async fn get_attached_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>>;
+
+    /// Retrieves information for a user's primary avatar.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the user.
     async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>>;
+
+    /// Retrieves information for all avatars associated with a user.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the user.
     async fn get_avatar_infos(&self, user_id: i64) -> Result<Vec<PictureInfo>>;
+
+    /// Finds users who have duplicate avatar entries in the database.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of user IDs.
     async fn get_users_with_duplicate_avatars(&self) -> Result<Vec<i64>>;
+
+    /// Retrieves picture information for a list of picture IDs.
+    ///
+    /// # Arguments
+    /// * `ids` - A slice of picture IDs (URLs or keys).
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>>;
+
+    /// Retrieves picture information for a specific picture ID.
+    ///
+    /// # Arguments
+    /// * `id` - The picture ID.
     async fn get_pictures_by_id(&self, id: &str) -> Result<Vec<PictureInfo>>;
+
+    /// Finds IDs of pictures that have duplicate entries in the database.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of picture IDs.
     async fn get_duplicate_pic_ids(&self) -> Result<Vec<String>>;
+
+    /// Deletes a specific picture from both the file system and the database.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the picture to delete.
     async fn delete_picture(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()>;
+
+    /// Retrieves the binary content (blob) of a picture from the storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the picture.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<Bytes>`.
     async fn get_picture_blob(
         &self,
         ctx: Arc<TaskContext>,
         url: &Url,
     ) -> Result<Option<bytes::Bytes>>;
+
+    /// Checks if a picture is already saved in the storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the picture.
     async fn picture_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool>;
+
+    /// Saves a video's content to the file system and its metadata to the database.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `video` - The video model.
     fn save_video(
         &self,
         ctx: Arc<TaskContext>,
-        picture: &Video,
+        video: &Video,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Retrieves the binary content (blob) of a video from the storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the video.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Option<Bytes>`.
     async fn get_video_blob(
         &self,
         ctx: Arc<TaskContext>,
         url: &Url,
     ) -> Result<Option<bytes::Bytes>>;
+
+    /// Checks if a video is already saved in the storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the video.
     async fn video_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool>;
 }
 
+/// The default implementation of the `Storage` trait.
+///
+/// It uses a SQLite database pool for metadata management and specialized
+/// file system storage handlers for pictures and videos.
 #[derive(Debug, Clone)]
 pub struct StorageImpl {
     db_pool: SqlitePool,
@@ -89,6 +262,7 @@ pub struct StorageImpl {
 }
 
 impl StorageImpl {
+    /// Creates a new `StorageImpl` instance with the given database pool.
     pub fn new(db_pool: SqlitePool) -> Self {
         info!("Storage initialized successfully.");
         StorageImpl {
@@ -98,6 +272,7 @@ impl StorageImpl {
         }
     }
 
+    /// Recursively saves a post and its associated user and retweeted status.
     fn _save_post(&self, post: Post) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
             debug!("Saving post with id: {}", post.id);
@@ -121,6 +296,7 @@ impl StorageImpl {
         })
     }
 
+    /// Retrieves a post and hydrates it with user and retweet information.
     fn get_post(&self, id: i64) -> Pin<Box<dyn Future<Output = Result<Option<Post>>> + Send + '_>> {
         Box::pin(async move {
             if let Some(post) = post::get_post(&self.db_pool, id).await? {
@@ -131,6 +307,8 @@ impl StorageImpl {
         })
     }
 
+    /// Converts a internal post representation into a full `Post` model,
+    /// fetching the associated user and retweeted post from the database.
     async fn hydrate_post(&self, post: PostInternal) -> Result<Post> {
         let user = if let Some(uid) = post.uid {
             user::get_user(&self.db_pool, uid).await?
@@ -154,6 +332,7 @@ impl StorageImpl {
         Ok(post)
     }
 
+    /// Hydrates a collection of internal posts in parallel.
     async fn hydrate_posts(&self, posts: Vec<PostInternal>) -> Vec<Post> {
         let posts = posts.into_iter().map(|p| {
             let id = p.id;
@@ -173,6 +352,7 @@ impl StorageImpl {
         posts
     }
 
+    /// Recursively deletes a post, its retweets, and all associated media.
     fn delete_post_recursive(
         &self,
         ctx: Arc<TaskContext>,
