@@ -466,6 +466,56 @@ where
         .await?)
 }
 
+/// Retrieves the IDs of posts that are invalid.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `clean_retweeted_invalid` - Whether to include posts that are valid themselves but their retweeted content is invalid.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<i64>` of invalid post IDs.
+pub async fn get_invalid_posts_ids<'e, E>(
+    executor: E,
+    clean_retweeted_invalid: bool,
+) -> Result<Vec<i64>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    debug!(
+        "query invalid posts, clean_retweeted_invalid: {}",
+        clean_retweeted_invalid
+    );
+
+    let mut query = Query::select();
+    query.column(PostIden::Id).from(PostIden::Table);
+
+    if clean_retweeted_invalid {
+        // SELECT id FROM posts WHERE uid IS NULL
+        // delete_post will alse delete all retweeter post
+        query.and_where(Expr::col(PostIden::Uid).is_null());
+    } else {
+        // SELECT id FROM posts WHERE uid IS NULL AND id NOT IN (SELECT retweeted_id FROM posts WHERE retweeted_id IS NOT NULL)
+        query
+            .and_where(Expr::col(PostIden::Uid).is_null())
+            .and_where(
+                Expr::col(PostIden::Id).not_in_subquery(
+                    Query::select()
+                        .column(PostIden::RetweetedId)
+                        .from(PostIden::Table)
+                        .and_where(Expr::col(PostIden::RetweetedId).is_not_null())
+                        .take(),
+                ),
+            );
+    }
+
+    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
+    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
+        .fetch_all(executor)
+        .await?)
+}
+
 /// Retrieves the IDs of posts that retweeted a given original post.
 ///
 /// # Arguments
