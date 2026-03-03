@@ -1,9 +1,16 @@
+//! This example demonstrates how to use the `weiback::image_validator` to scan a directory
+//! for images and identify those that are likely "image deleted" placeholders from Weibo.
+//!
+//! It processes common image formats (JPG, JPEG, PNG, GIF) and skips files larger than 20KB
+//! as an optimization, assuming placeholder images are typically small.
+
 use clap::Parser;
 use std::path::PathBuf;
 use tokio::fs;
 use walkdir::WalkDir;
 use weiback::image_validator::{ImageStatus, ImageValidator};
 
+/// Command-line arguments for the image validation example.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -30,6 +37,7 @@ async fn main() -> Result<(), anyhow::Error> {
             "jpg" | "jpeg" | "png" | "gif" => {
                 match fs::read(path).await {
                     Ok(data) => {
+                        // Skip larger files, assuming placeholder images are typically small
                         if data.len() > 20_000 {
                             continue;
                         }

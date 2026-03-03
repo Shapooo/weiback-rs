@@ -1,3 +1,10 @@
+//! This module defines the `PostView` struct, which is a presentation-layer
+//! representation of a Weibo [`Post`].
+//!
+//! `PostView` transforms the raw `Post` data into a format suitable for HTML
+//! templating, including rendering the text with appropriate HTML tags for
+//! links, mentions, topics, and emojis, and preparing local paths for media.
+
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -12,27 +19,49 @@ use crate::utils::{
     generate_standalone_pic_output_paths, pic_url_to_filename,
 };
 
+/// A view-specific representation of a [`Post`] optimized for HTML rendering.
+///
+/// This struct flattens and transforms various fields from the raw `Post` object
+/// to simplify rendering in templates, particularly handling media paths and
+/// rich text formatting.
 #[derive(Debug, Serialize)]
 pub struct PostView {
-    // Fields from Post that are used directly in the template
+    /// Fields from Post that are used directly in the template
     user: Option<User>,
     id: i64,
     created_at: String,
     source: Option<String>,
     region_name: Option<String>,
 
-    // Transformed fields
+    /// Transformed fields
     text: String, // The rendered HTML text
 
-    // Newly generated view-specific fields
+    /// Newly generated view-specific fields
     avatar_path: Option<String>,
     pic_paths: Vec<String>,
 
-    // Recursive retweet
+    /// Recursive retweet
     retweeted_status: Option<Box<PostView>>,
 }
 
 impl PostView {
+    /// Creates a `PostView` from a raw [`Post`] object.
+    ///
+    /// This method performs the following transformations:
+    /// 1. Recursively converts `retweeted_status` into a nested `PostView`.
+    /// 2. Formats the `created_at` timestamp.
+    /// 3. Determines local paths for the user's avatar and standalone pictures.
+    /// 4. Renders the post text into HTML, converting newlines, URLs, mentions,
+    ///    topics, and emojis into appropriate HTML tags.
+    ///
+    /// # Arguments
+    /// * `post` - The raw [`Post`] data.
+    /// * `pic_folder` - The name of the folder where pictures for this page will reside.
+    /// * `pic_quality` - The desired picture definition for rendered images.
+    /// * `emoji_map` - A map to resolve emoji text to URLs.
+    ///
+    /// # Returns
+    /// A `Result` containing the `PostView` instance.
     pub fn from_post(
         mut post: Post,
         pic_folder: &str,
@@ -75,6 +104,10 @@ impl PostView {
     }
 }
 
+/// Transforms plain text content of a post into HTML-formatted text.
+///
+/// This function replaces newlines with `<br />`, converts URLs, mentions, topics,
+/// and emoji shortcodes into appropriate HTML tags.
 fn trans_text(
     post: &Post,
     pic_folder: &Path,
@@ -145,6 +178,9 @@ fn trans_text(
     Ok(text.to_string())
 }
 
+/// Transforms an emoji shortcode (e.g., `[doge]`) into an `<img>` tag.
+///
+/// It uses the `emoji_map` to find the local path of the emoji image.
 fn trans_emoji<'a>(
     s: &'a str,
     pic_folder: &'a Path,
@@ -169,10 +205,12 @@ fn trans_emoji<'a>(
         + r#"" />"#
 }
 
+/// Transforms an `@` mention into a hyperlink to the Weibo user's page.
 fn trans_user(s: &str) -> Cow<'_, str> {
     Borrowed(r#"<a class="bk-user" href="https://weibo.com/n/"#) + &s[1..] + "\">" + s + "</a>"
 }
 
+/// Transforms a topic hashtag (e.g., `#topic#`) into a hyperlink to the Weibo topic search page.
 fn trans_topic(s: &str) -> Cow<'_, str> {
     Borrowed(r#"<a class ="bk-link" href="https://s.weibo.com/weibo?q="#)
         + s
@@ -181,6 +219,7 @@ fn trans_topic(s: &str) -> Cow<'_, str> {
         + "</a>"
 }
 
+/// Transforms a URL found in post text into a hyperlink with a default or extracted title.
 fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, url: &'a str) -> Cow<'a, str> {
     let this_struct = url_struct.and_then(|p| p.0.iter().find(|u| u.short_url.as_str() == url));
     let url_title = this_struct
@@ -202,6 +241,7 @@ fn trans_url<'a>(url_struct: Option<&'a UrlStruct>, url: &'a str) -> Cow<'a, str
         + "</a>"
 }
 
+/// Extracts the local file path for a user's avatar from a post.
 fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
     post.user
         .as_ref()

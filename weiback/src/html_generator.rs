@@ -1,3 +1,9 @@
+//! This module is responsible for generating static HTML pages from locally stored Weibo posts.
+//!
+//! It leverages the `tera` templating engine to render post data into a user-friendly
+//! HTML format, complete with embedded images and proper linking. It also prepares
+//! associated image files for export alongside the HTML.
+
 pub mod view_model;
 
 use std::sync::Arc;
@@ -18,6 +24,7 @@ use crate::utils::{extract_all_pic_metas, make_resource_dir_name, pic_url_to_fil
 use view_model::PostView;
 
 lazy_static! {
+    /// Global instance of the Tera templating engine, pre-loaded with HTML templates.
     pub static ref TEMPLATES: Tera = {
         let mut tera = Tera::default();
         tera.add_raw_template("page.html", include_str!("../templates/page.html"))
@@ -29,6 +36,7 @@ lazy_static! {
     };
 }
 
+/// A service responsible for generating HTML content from posts and preparing associated media for export.
 #[derive(Debug, Clone)]
 pub struct HTMLGenerator<E: EmojiUpdateApi, S: Storage> {
     storage: S,
@@ -36,10 +44,27 @@ pub struct HTMLGenerator<E: EmojiUpdateApi, S: Storage> {
 }
 
 impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
+    /// Creates a new `HTMLGenerator` instance.
+    ///
+    /// # Arguments
+    /// * `emoji_map` - An `EmojiMap` to resolve emoji text to image URLs for rendering.
+    /// * `storage` - An implementation of `Storage` to retrieve local picture paths.
     pub fn new(emoji_map: EmojiMap<E>, storage: S) -> Self {
         Self { storage, emoji_map }
     }
 
+    /// Generates the HTML content for a list of posts.
+    ///
+    /// This method renders the `posts.html` template for the given posts and then
+    /// wraps it into the `page.html` layout.
+    ///
+    /// # Arguments
+    /// * `posts` - The list of posts to render.
+    /// * `page_name` - The base name for the generated page (used for resource folder).
+    /// * `pic_quality` - The desired picture definition to use for images in the HTML.
+    ///
+    /// # Returns
+    /// A `Result` containing the rendered HTML string.
     async fn generate_page(
         &self,
         posts: Vec<Post>,
@@ -65,6 +90,18 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         Ok(html)
     }
 
+    /// Generates the full HTML page content and identifies all pictures that need to be exported.
+    ///
+    /// This is the main public method for generating exportable HTML.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `posts` - The posts to include in the HTML.
+    /// * `page_name` - The base name for the HTML file and its associated resource folder.
+    ///
+    /// # Returns
+    /// A `Result` containing an `HTMLPage` struct, which includes the HTML content
+    /// and a list of `PictureExport` information.
     pub async fn generate_html(
         &self,
         ctx: Arc<TaskContext>,
@@ -109,6 +146,16 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         })
     }
 
+    /// Retrieves the necessary information to export a picture from local storage.
+    ///
+    /// This involves getting the physical path of the image and determining its target filename.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `pic_meta` - Metadata about the picture to export.
+    ///
+    /// # Returns
+    /// A `Result` containing `Some(PictureExport)` if the picture is found, or `None` if not.
     async fn get_picture_export_info(
         &self,
         ctx: Arc<TaskContext>,
