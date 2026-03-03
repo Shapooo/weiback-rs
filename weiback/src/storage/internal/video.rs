@@ -14,10 +14,21 @@
 
 use std::path::{Path, PathBuf};
 
+use sea_query::{Expr, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use sqlx::{Executor, Sqlite};
 use url::Url;
 
 use crate::error::Result;
+
+#[derive(sea_query::Iden)]
+#[iden = "video"]
+enum VideoIden {
+    Table,
+    Url,
+    Path,
+    PostId,
+}
 
 /// Retrieves the local paths of all videos associated with a specific post ID.
 ///
@@ -33,8 +44,12 @@ pub async fn get_video_paths_by_post_id<'e, E>(executor: E, post_id: i64) -> Res
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let paths: Vec<String> = sqlx::query_scalar("SELECT path FROM video WHERE post_id = ?")
-        .bind(post_id)
+    let (sql, values) = Query::select()
+        .column(VideoIden::Path)
+        .from(VideoIden::Table)
+        .and_where(Expr::col(VideoIden::PostId).eq(post_id))
+        .build_sqlx(SqliteQueryBuilder);
+    let paths: Vec<String> = sqlx::query_scalar_with(&sql, values)
         .fetch_all(executor)
         .await?;
     Ok(paths.into_iter().map(PathBuf::from).collect())
@@ -54,10 +69,11 @@ pub async fn delete_videos_by_post_id<'e, E>(executor: E, post_id: i64) -> Resul
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("DELETE FROM video WHERE post_id = ?")
-        .bind(post_id)
-        .execute(executor)
-        .await?;
+    let (sql, values) = Query::delete()
+        .from_table(VideoIden::Table)
+        .and_where(Expr::col(VideoIden::PostId).eq(post_id))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -79,20 +95,14 @@ pub async fn save_video_meta<'e, E>(executor: E, url: &Url, post_id: i64, path: 
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query::<Sqlite>(
-        r#"INSERT OR IGNORE INTO video (
-    url,
-    path,
-    post_id
-)
-VALUES
-    (?, ?, ?);"#,
-    )
-    .bind(url.as_str())
-    .bind(path.to_str())
-    .bind(post_id)
-    .execute(executor)
-    .await?;
+    let (sql, values) = Query::insert()
+        .into_table(VideoIden::Table)
+        .columns([VideoIden::Url, VideoIden::Path, VideoIden::PostId])
+        .values_panic([url.as_str().into(), path.to_str().into(), post_id.into()])
+        .on_conflict(OnConflict::column(VideoIden::Url).do_nothing().to_owned())
+        .build_sqlx(SqliteQueryBuilder);
+
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -110,11 +120,14 @@ pub async fn get_video_path<'e, E>(executor: E, url: &Url) -> Result<Option<Path
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let raw_res: Option<String> =
-        sqlx::query_scalar::<Sqlite, String>(r#"SELECT path FROM video WHERE url = ?;"#)
-            .bind(url.as_str())
-            .fetch_optional(executor)
-            .await?;
+    let (sql, values) = Query::select()
+        .column(VideoIden::Path)
+        .from(VideoIden::Table)
+        .and_where(Expr::col(VideoIden::Url).eq(url.as_str()))
+        .build_sqlx(SqliteQueryBuilder);
+    let raw_res: Option<String> = sqlx::query_scalar_with(&sql, values)
+        .fetch_optional(executor)
+        .await?;
     Ok(raw_res.map(PathBuf::from))
 }
 
@@ -132,10 +145,11 @@ pub async fn delete_video_by_url<'e, E>(executor: E, url: &Url) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("DELETE FROM video WHERE url = ?")
-        .bind(url.as_str())
-        .execute(executor)
-        .await?;
+    let (sql, values) = Query::delete()
+        .from_table(VideoIden::Table)
+        .and_where(Expr::col(VideoIden::Url).eq(url.as_str()))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -146,7 +160,7 @@ mod local_tests {
     use sqlx::SqlitePool;
 
     async fn setup_db() -> SqlitePool {
-        create_db_pool_with_url("sqlite::memory:").await.unwrap()
+        create_db_pool_with_url(":memory:").await.unwrap()
     }
 
     #[tokio::test]

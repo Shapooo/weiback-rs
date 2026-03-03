@@ -20,6 +20,8 @@
 
 use std::path::PathBuf;
 
+use sea_query::{Asterisk, Expr, ExprTrait, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use sqlx::{Executor, Sqlite};
 use url::Url;
 
@@ -35,6 +37,18 @@ struct PictureDbRecord {
     post_id: Option<i64>,
     user_id: Option<i64>,
     definition: Option<String>,
+}
+
+#[derive(sea_query::Iden)]
+#[iden = "picture"]
+enum PictureIden {
+    Table,
+    Id,
+    Definition,
+    Path,
+    PostId,
+    Url,
+    UserId,
 }
 
 impl TryFrom<PictureDbRecord> for PictureInfo {
@@ -121,26 +135,27 @@ where
         PictureMeta::Other { url } => (url, None, None, None),
     };
     let url_str = pic_url_to_db_key(url).to_string();
-    sqlx::query(
-        r#"INSERT OR IGNORE INTO picture (
-    id,
-    path,
-    post_id,
-    url,
-    user_id,
-    definition
-)
-VALUES
-    (?, ?, ?, ?, ?, ?);"#,
-    )
-    .bind(pic_url_to_id(picture_meta.url()).unwrap_or_default())
-    .bind(relative_path_str)
-    .bind(post_id)
-    .bind(url_str)
-    .bind(user_id)
-    .bind(definition.map(<&str>::from))
-    .execute(executor)
-    .await?;
+    let (sql, values) = Query::insert()
+        .into_table(PictureIden::Table)
+        .columns([
+            PictureIden::Id,
+            PictureIden::Path,
+            PictureIden::PostId,
+            PictureIden::Url,
+            PictureIden::UserId,
+            PictureIden::Definition,
+        ])
+        .values_panic([
+            pic_url_to_id(picture_meta.url()).unwrap_or_default().into(),
+            relative_path_str.into(),
+            post_id.into(),
+            url_str.into(),
+            user_id.into(),
+            definition.map(<&str>::from).into(),
+        ])
+        .on_conflict(OnConflict::column(PictureIden::Url).do_nothing().to_owned())
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -158,11 +173,14 @@ pub async fn get_picture_path<'e, E>(executor: E, url: &Url) -> Result<Option<Pa
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let raw_res =
-        sqlx::query_scalar::<Sqlite, String>(r#"SELECT path FROM picture WHERE url = ?;"#)
-            .bind(url.as_str())
-            .fetch_optional(executor)
-            .await?;
+    let (sql, values) = Query::select()
+        .column(PictureIden::Path)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Url).eq(url.as_str()))
+        .build_sqlx(SqliteQueryBuilder);
+    let raw_res = sqlx::query_scalar_with::<_, String, _>(&sql, values)
+        .fetch_optional(executor)
+        .await?;
     Ok(raw_res.map(PathBuf::from))
 }
 
@@ -179,11 +197,16 @@ pub async fn get_users_with_duplicate_avatars<'e, E>(executor: E) -> Result<Vec<
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let ids = sqlx::query_scalar::<Sqlite, i64>(
-        "SELECT user_id FROM picture WHERE user_id IS NOT NULL GROUP BY user_id HAVING COUNT(user_id) > 1",
-    )
-    .fetch_all(executor)
-    .await?;
+    let (sql, values) = Query::select()
+        .column(PictureIden::UserId)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::UserId).is_not_null())
+        .group_by_col(PictureIden::UserId)
+        .and_having(Expr::col(PictureIden::UserId).count().gt(1))
+        .build_sqlx(SqliteQueryBuilder);
+    let ids = sqlx::query_scalar_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
     Ok(ids)
 }
 
@@ -201,11 +224,15 @@ pub async fn get_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let records: Vec<PictureDbRecord> =
-        sqlx::query_as("SELECT * FROM picture WHERE post_id = ? AND path IS NOT NULL")
-            .bind(post_id)
-            .fetch_all(executor)
-            .await?;
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::PostId).eq(post_id))
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .build_sqlx(SqliteQueryBuilder);
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
@@ -223,12 +250,16 @@ pub async fn get_avatars_by_user_id<'e, E>(executor: E, user_id: i64) -> Result<
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let records: Vec<PictureDbRecord> = sqlx::query_as(
-        "SELECT * FROM picture WHERE user_id = ? AND post_id IS NULL AND path IS NOT NULL",
-    )
-    .bind(user_id)
-    .fetch_all(executor)
-    .await?;
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::UserId).eq(user_id))
+        .and_where(Expr::col(PictureIden::PostId).is_null())
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .build_sqlx(SqliteQueryBuilder);
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
@@ -248,12 +279,16 @@ pub async fn get_avatar_by_user_id<'e, E>(executor: E, user_id: i64) -> Result<O
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let record: Option<PictureDbRecord> = sqlx::query_as(
-        "SELECT * FROM picture WHERE user_id = ? AND post_id IS NULL AND path IS NOT NULL",
-    )
-    .bind(user_id)
-    .fetch_optional(executor)
-    .await?;
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::UserId).eq(user_id))
+        .and_where(Expr::col(PictureIden::PostId).is_null())
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .build_sqlx(SqliteQueryBuilder);
+    let record: Option<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+        .fetch_optional(executor)
+        .await?;
     record.map(PictureInfo::try_from).transpose()
 }
 
@@ -274,17 +309,16 @@ where
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!(
-        "SELECT * FROM picture WHERE id IN ({}) AND path IS NOT NULL",
-        placeholders
-    );
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Id).is_in(ids.iter()))
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .build_sqlx(SqliteQueryBuilder);
 
-    let mut query = sqlx::query_as::<_, PictureDbRecord>(&sql);
-    for id in ids {
-        query = query.bind(id);
-    }
-    let records = query.fetch_all(executor).await?;
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
 
     records.into_iter().map(PictureInfo::try_from).collect()
 }
@@ -306,12 +340,15 @@ pub async fn get_pictures_by_id<'e, E>(executor: E, id: &str) -> Result<Vec<Pict
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let records = sqlx::query_as::<_, PictureDbRecord>(
-        "SELECT * FROM picture WHERE id = ? AND path IS NOT NULL",
-    )
-    .bind(id)
-    .fetch_all(executor)
-    .await?;
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Id).eq(id))
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .build_sqlx(SqliteQueryBuilder);
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
 }
 
@@ -329,10 +366,11 @@ pub async fn delete_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Res
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("DELETE FROM picture WHERE post_id = ?")
-        .bind(post_id)
-        .execute(executor)
-        .await?;
+    let (sql, values) = Query::delete()
+        .from_table(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::PostId).eq(post_id))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -351,11 +389,16 @@ pub async fn get_duplicate_pic_ids<'e, E>(executor: E) -> Result<Vec<String>>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let ids = sqlx::query_scalar::<Sqlite, String>(
-        "SELECT id FROM picture WHERE id != '' GROUP BY id HAVING COUNT(id) > 1",
-    )
-    .fetch_all(executor)
-    .await?;
+    let (sql, values) = Query::select()
+        .column(PictureIden::Id)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Id).ne(""))
+        .group_by_col(PictureIden::Id)
+        .and_having(Expr::col(PictureIden::Id).count().gt(1))
+        .build_sqlx(SqliteQueryBuilder);
+    let ids = sqlx::query_scalar_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
     Ok(ids)
 }
 
@@ -373,10 +416,11 @@ pub async fn delete_picture_by_url<'e, E>(executor: E, url: &Url) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query("DELETE FROM picture WHERE url = ?")
-        .bind(url.as_str())
-        .execute(executor)
-        .await?;
+    let (sql, values) = Query::delete()
+        .from_table(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Url).eq(url.as_str()))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 

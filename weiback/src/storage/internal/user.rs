@@ -17,11 +17,27 @@
 //!
 //! The `id` column serves as the primary key for uniqueness.
 
+use sea_query::{Asterisk, Expr, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use sqlx::{Executor, FromRow, Sqlite};
 use url::Url;
 
 use crate::error::{Error, Result};
 use crate::models::User;
+
+#[derive(sea_query::Iden)]
+#[iden = "users"]
+enum UserIden {
+    Table,
+    AvatarHd,
+    AvatarLarge,
+    Domain,
+    Following,
+    FollowMe,
+    Id,
+    ProfileImageUrl,
+    ScreenName,
+}
 
 /// Represents the internal database structure for a user.
 /// This struct is used for direct interaction with the `users` table.
@@ -88,8 +104,12 @@ pub async fn get_user<'e, E>(executor: E, id: i64) -> Result<Option<User>>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let user = sqlx::query_as::<Sqlite, UserInternal>("SELECT * FROM users WHERE id = ?;")
-        .bind(id)
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(UserIden::Table)
+        .and_where(Expr::col(UserIden::Id).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    let user = sqlx::query_as_with::<_, UserInternal, _>(&sql, values)
         .fetch_optional(executor)
         .await?;
     user.map(|u| u.try_into()).transpose()
@@ -111,31 +131,43 @@ pub async fn save_user<'e, E>(executor: E, user: &User) -> Result<()>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let _ = sqlx::query(
-        r#"INSERT
-OR REPLACE INTO users (
-    avatar_hd,
-    avatar_large,
-    domain,
-    following,
-    follow_me,
-    id,
-    profile_image_url,
-    screen_name
-)
-VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?);"#,
-    )
-    .bind(user.avatar_hd.as_str())
-    .bind(user.avatar_large.as_str())
-    .bind(&user.domain)
-    .bind(user.following)
-    .bind(user.follow_me)
-    .bind(user.id)
-    .bind(user.profile_image_url.as_str())
-    .bind(&user.screen_name)
-    .execute(executor)
-    .await?;
+    let (sql, values) = Query::insert()
+        .into_table(UserIden::Table)
+        .columns([
+            UserIden::AvatarHd,
+            UserIden::AvatarLarge,
+            UserIden::Domain,
+            UserIden::Following,
+            UserIden::FollowMe,
+            UserIden::Id,
+            UserIden::ProfileImageUrl,
+            UserIden::ScreenName,
+        ])
+        .values_panic([
+            user.avatar_hd.as_str().into(),
+            user.avatar_large.as_str().into(),
+            user.domain.as_str().into(),
+            user.following.into(),
+            user.follow_me.into(),
+            user.id.into(),
+            user.profile_image_url.as_str().into(),
+            user.screen_name.as_str().into(),
+        ])
+        .on_conflict(
+            OnConflict::column(UserIden::Id)
+                .update_columns([
+                    UserIden::AvatarHd,
+                    UserIden::AvatarLarge,
+                    UserIden::Domain,
+                    UserIden::Following,
+                    UserIden::FollowMe,
+                    UserIden::ProfileImageUrl,
+                    UserIden::ScreenName,
+                ])
+                .to_owned(),
+        )
+        .build_sqlx(SqliteQueryBuilder);
+    let _ = sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -156,14 +188,15 @@ where
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-    let sql = format!("SELECT * FROM users WHERE id IN ({});", placeholders);
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(UserIden::Table)
+        .and_where(Expr::col(UserIden::Id).is_in(ids.iter().copied()))
+        .build_sqlx(SqliteQueryBuilder);
 
-    let mut query = sqlx::query_as::<_, UserInternal>(&sql);
-    for id in ids {
-        query = query.bind(id);
-    }
-    let records = query.fetch_all(executor).await?;
+    let records = sqlx::query_as_with::<_, UserInternal, _>(&sql, values)
+        .fetch_all(executor)
+        .await?;
     records.into_iter().map(|u| u.try_into()).collect()
 }
 
@@ -184,12 +217,15 @@ pub async fn search_users_by_screen_name_prefix<'e, E>(
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    let users = sqlx::query_as::<Sqlite, UserInternal>(
-        "SELECT * FROM users WHERE screen_name LIKE ? LIMIT 20;",
-    )
-    .bind(format!("{}%", prefix))
-    .fetch_all(executor)
-    .await?;
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(UserIden::Table)
+        .and_where(Expr::col(UserIden::ScreenName).like(format!("{}%", prefix)))
+        .limit(20)
+        .build_sqlx(SqliteQueryBuilder);
+    let users: Vec<UserInternal> = sqlx::query_as_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
     users.into_iter().map(|u| u.try_into()).collect()
 }
 
@@ -204,11 +240,10 @@ mod local_tests {
     use crate::api::{favorites::FavoritesSucc, profile_statuses::ProfileStatusesSucc};
     use crate::error::Result;
     use crate::models::{Post, User};
+    use crate::storage::database::create_db_pool_with_url;
 
     async fn setup_db() -> SqlitePool {
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
-        sqlx::migrate!().run(&pool).await.unwrap();
-        pool
+        create_db_pool_with_url(":memory:").await.unwrap()
     }
 
     async fn create_test_users() -> Vec<User> {

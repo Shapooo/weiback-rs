@@ -45,6 +45,8 @@
 
 use chrono::DateTime;
 use log::debug;
+use sea_query::{Asterisk, Expr, Func, Iden, OnConflict, Order, Query, SqliteQueryBuilder};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, to_value};
 use sqlx::{Acquire, Executor, FromRow, Sqlite};
@@ -52,6 +54,53 @@ use sqlx::{Acquire, Executor, FromRow, Sqlite};
 use crate::core::task::{PostQuery, SearchTerm};
 use crate::error::{Error, Result};
 use crate::models::Post;
+
+#[derive(Iden)]
+#[iden = "posts"]
+enum PostIden {
+    Table,
+    AttitudesCount,
+    AttitudesStatus,
+    CommentsCount,
+    CreatedAt,
+    Deleted,
+    EditCount,
+    Favorited,
+    Geo,
+    Id,
+    Mblogid,
+    MixMediaIds,
+    MixMediaInfo,
+    PageInfo,
+    PicIds,
+    PicInfos,
+    PicNum,
+    RegionName,
+    RepostsCount,
+    RepostType,
+    RetweetedId,
+    Source,
+    TagStruct,
+    Text,
+    Uid,
+    UrlStruct,
+}
+
+#[derive(Iden)]
+#[iden = "favorited_posts"]
+enum FavoritedPostIden {
+    Table,
+    Id,
+    Unfavorited,
+}
+
+#[derive(Iden)]
+#[iden = "posts_fts"]
+enum PostFtsIden {
+    Table,
+    #[allow(unused)]
+    Text,
+}
 
 /// Represents the internal database structure for a post.
 /// This struct is used for direct interaction with the `posts` table.
@@ -177,12 +226,14 @@ async fn check_unfavorited<'e, E>(executor: E, id: i64) -> Result<Option<bool>>
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    Ok(sqlx::query_scalar::<Sqlite, (bool)>(
-        "SELECT unfavorited FROM favorited_posts WHERE id = ?;",
-    )
-    .bind(id)
-    .fetch_optional(executor)
-    .await?)
+    let (sql, values) = Query::select()
+        .column(FavoritedPostIden::Unfavorited)
+        .from(FavoritedPostIden::Table)
+        .and_where(Expr::col(FavoritedPostIden::Id).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    Ok(sqlx::query_scalar_with::<Sqlite, bool, _>(&sql, values)
+        .fetch_optional(executor)
+        .await?)
 }
 
 /// Retrieves a single post by its ID.
@@ -199,12 +250,14 @@ pub async fn get_post<'e, E>(executor: E, id: i64) -> Result<Option<PostInternal
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    Ok(
-        sqlx::query_as::<Sqlite, PostInternal>("SELECT * FROM posts WHERE id = ?")
-            .bind(id)
-            .fetch_optional(executor)
-            .await?,
-    )
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PostIden::Table)
+        .and_where(Expr::col(PostIden::Id).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    Ok(sqlx::query_as_with::<Sqlite, PostInternal, _>(&sql, values)
+        .fetch_optional(executor)
+        .await?)
 }
 
 /// Saves a post's data into the database.
@@ -225,74 +278,110 @@ pub async fn save_post<'c, A>(acquirer: A, post: &PostInternal, overwrite: bool)
 where
     A: Acquire<'c, Database = Sqlite>,
 {
+    use serde_json::to_string;
     let mut conn = acquirer.acquire().await?;
-    sqlx::query(
-        format!(
-            r#"INSERT
-OR {} INTO posts (
-    attitudes_count,
-    attitudes_status,
-    comments_count,
-    created_at,
-    deleted,
-    edit_count,
-    favorited,
-    geo,
-    id,
-    mblogid,
-    mix_media_ids,
-    mix_media_info,
-    page_info,
-    pic_ids,
-    pic_infos,
-    pic_num,
-    region_name,
-    reposts_count,
-    repost_type,
-    retweeted_id,
-    source,
-    tag_struct,
-    text,
-    uid,
-    url_struct
-)
-VALUES
-    (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?
-    );"#,
-            if overwrite { "REPLACE" } else { "IGNORE" }
-        )
-        .as_str(),
-    )
-    .bind(post.attitudes_count)
-    .bind(post.attitudes_status)
-    .bind(post.comments_count)
-    .bind(&post.created_at)
-    .bind(post.deleted)
-    .bind(post.edit_count)
-    .bind(post.favorited)
-    .bind(&post.geo)
-    .bind(post.id)
-    .bind(&post.mblogid)
-    .bind(&post.mix_media_ids)
-    .bind(&post.mix_media_info)
-    .bind(&post.page_info)
-    .bind(&post.pic_ids)
-    .bind(&post.pic_infos)
-    .bind(post.pic_num)
-    .bind(&post.region_name)
-    .bind(post.reposts_count)
-    .bind(post.repost_type)
-    .bind(post.retweeted_id)
-    .bind(&post.source)
-    .bind(&post.tag_struct)
-    .bind(&post.text)
-    .bind(post.uid)
-    .bind(&post.url_struct)
-    .execute(&mut *conn)
-    .await?;
+    let mut insert = Query::insert();
+    insert
+        .into_table(PostIden::Table)
+        .columns([
+            PostIden::AttitudesCount,
+            PostIden::AttitudesStatus,
+            PostIden::CommentsCount,
+            PostIden::CreatedAt,
+            PostIden::Deleted,
+            PostIden::EditCount,
+            PostIden::Favorited,
+            PostIden::Geo,
+            PostIden::Id,
+            PostIden::Mblogid,
+            PostIden::MixMediaIds,
+            PostIden::MixMediaInfo,
+            PostIden::PageInfo,
+            PostIden::PicIds,
+            PostIden::PicInfos,
+            PostIden::PicNum,
+            PostIden::RegionName,
+            PostIden::RepostsCount,
+            PostIden::RepostType,
+            PostIden::RetweetedId,
+            PostIden::Source,
+            PostIden::TagStruct,
+            PostIden::Text,
+            PostIden::Uid,
+            PostIden::UrlStruct,
+        ])
+        .values_panic([
+            post.attitudes_count.into(),
+            post.attitudes_status.into(),
+            post.comments_count.into(),
+            post.created_at.clone().into(),
+            post.deleted.into(),
+            post.edit_count.into(),
+            post.favorited.into(),
+            post.geo.as_ref().map(to_string).transpose()?.into(),
+            post.id.into(),
+            post.mblogid.clone().into(),
+            post.mix_media_ids
+                .as_ref()
+                .map(to_string)
+                .transpose()?
+                .into(),
+            post.mix_media_info
+                .as_ref()
+                .map(to_string)
+                .transpose()?
+                .into(),
+            post.page_info.as_ref().map(to_string).transpose()?.into(),
+            post.pic_ids.as_ref().map(to_string).transpose()?.into(),
+            post.pic_infos.as_ref().map(to_string).transpose()?.into(),
+            post.pic_num.into(),
+            post.region_name.clone().into(),
+            post.reposts_count.into(),
+            post.repost_type.into(),
+            post.retweeted_id.into(),
+            post.source.clone().into(),
+            post.tag_struct.as_ref().map(to_string).transpose()?.into(),
+            post.text.clone().into(),
+            post.uid.into(),
+            post.url_struct.as_ref().map(to_string).transpose()?.into(),
+        ]);
+
+    let mut on_conflict = OnConflict::column(PostIden::Id);
+    if overwrite {
+        on_conflict.update_columns([
+            PostIden::AttitudesCount,
+            PostIden::AttitudesStatus,
+            PostIden::CommentsCount,
+            PostIden::CreatedAt,
+            PostIden::Deleted,
+            PostIden::EditCount,
+            PostIden::Favorited,
+            PostIden::Geo,
+            PostIden::Mblogid,
+            PostIden::MixMediaIds,
+            PostIden::MixMediaInfo,
+            PostIden::PageInfo,
+            PostIden::PicIds,
+            PostIden::PicInfos,
+            PostIden::PicNum,
+            PostIden::RegionName,
+            PostIden::RepostsCount,
+            PostIden::RepostType,
+            PostIden::RetweetedId,
+            PostIden::Source,
+            PostIden::TagStruct,
+            PostIden::Text,
+            PostIden::Uid,
+            PostIden::UrlStruct,
+        ]);
+    } else {
+        on_conflict.do_nothing();
+    }
+    insert.on_conflict(on_conflict);
+
+    let (sql, values) = insert.build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(&mut *conn).await?;
+
     if post.favorited {
         mark_post_favorited(&mut *conn, post.id).await?;
     }
@@ -314,10 +403,12 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     debug!("unfav post {id} in db");
-    sqlx::query("UPDATE favorited_posts SET unfavorited = true WHERE id = ?;")
-        .bind(id)
-        .execute(executor)
-        .await?;
+    let (sql, values) = Query::update()
+        .table(FavoritedPostIden::Table)
+        .values([(FavoritedPostIden::Unfavorited, true.into())])
+        .and_where(Expr::col(FavoritedPostIden::Id).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -337,16 +428,17 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     debug!("mark favorited post {id} in db");
-    sqlx::query(
-        r#"INSERT
-OR REPLACE INTO favorited_posts (id, unfavorited)
-VALUES
-    (?, ?);"#,
-    )
-    .bind(id)
-    .bind(false)
-    .execute(executor)
-    .await?;
+    let (sql, values) = Query::insert()
+        .into_table(FavoritedPostIden::Table)
+        .columns([FavoritedPostIden::Id, FavoritedPostIden::Unfavorited])
+        .values_panic([id.into(), false.into()])
+        .on_conflict(
+            OnConflict::column(FavoritedPostIden::Id)
+                .update_column(FavoritedPostIden::Unfavorited)
+                .to_owned(),
+        )
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
 }
 
@@ -364,13 +456,14 @@ where
     E: Executor<'e, Database = Sqlite>,
 {
     debug!("query all posts to unfavorite");
-    Ok(sqlx::query_scalar::<Sqlite, i64>(
-        "SELECT id FROM favorited_posts WHERE unfavorited == false;",
-    )
-    .fetch_all(executor)
-    .await?
-    .into_iter()
-    .collect())
+    let (sql, values) = Query::select()
+        .column(FavoritedPostIden::Id)
+        .from(FavoritedPostIden::Table)
+        .and_where(Expr::col(FavoritedPostIden::Unfavorited).eq(false))
+        .build_sqlx(SqliteQueryBuilder);
+    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
+        .fetch_all(executor)
+        .await?)
 }
 
 /// Retrieves the IDs of posts that retweeted a given original post.
@@ -387,11 +480,14 @@ pub async fn get_retweeted_posts_id<'e, E>(executor: E, id: i64) -> Result<Vec<i
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query_scalar("SELECT id FROM posts WHERE retweeted_id = ?")
-        .bind(id)
+    let (sql, values) = Query::select()
+        .column(PostIden::Id)
+        .from(PostIden::Table)
+        .and_where(Expr::col(PostIden::RetweetedId).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
         .fetch_all(executor)
-        .await
-        .map_err(Into::into)
+        .await?)
 }
 
 /// Deletes a post and its corresponding entry in `favorited_posts` table from the database.
@@ -409,14 +505,17 @@ where
     A: Acquire<'c, Database = Sqlite>,
 {
     let mut conn = acquirer.acquire().await?;
-    sqlx::query("DELETE FROM posts WHERE id = ?")
-        .bind(id)
-        .execute(&mut *conn)
-        .await?;
-    sqlx::query("DELETE FROM favorited_posts WHERE id = ?")
-        .bind(id)
-        .execute(&mut *conn)
-        .await?;
+    let (sql, values) = Query::delete()
+        .from_table(PostIden::Table)
+        .and_where(Expr::col(PostIden::Id).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(&mut *conn).await?;
+
+    let (sql, values) = Query::delete()
+        .from_table(FavoritedPostIden::Table)
+        .and_where(Expr::col(FavoritedPostIden::Id).eq(id))
+        .build_sqlx(SqliteQueryBuilder);
+    sqlx::query_with(&sql, values).execute(&mut *conn).await?;
     Ok(())
 }
 
@@ -438,65 +537,50 @@ pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<Po
 where
     A: Acquire<'c, Database = Sqlite>,
 {
-    let mut where_conditions = Vec::new();
-    if query.user_id.is_some() {
-        where_conditions.push("uid = ?");
-    }
-    if query.start_date.is_some() {
-        where_conditions.push("created_at >= ?");
-    }
-    if query.end_date.is_some() {
-        where_conditions.push("created_at <= ?");
-    }
-    if query.is_favorited {
-        where_conditions.push("id IN (SELECT id FROM favorited_posts)");
-    }
+    use sea_query::{Alias, JoinType};
 
-    let (from_clause, select_posts, select_count, order_by) = if query.search_term.is_some() {
-        where_conditions.push("f.text MATCH ?");
-        (
-            "FROM posts p INNER JOIN posts_fts f ON (f.rowid = p.id OR f.rowid = p.retweeted_id)",
-            "SELECT DISTINCT p.*",
-            "SELECT COUNT(DISTINCT p.id)",
-            "p.id",
-        )
-    } else {
-        ("FROM posts", "SELECT *", "SELECT COUNT(*)", "id")
-    };
+    let mut posts_query = Query::select();
+    posts_query.from(PostIden::Table);
 
-    let where_clause = if where_conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", where_conditions.join(" AND "))
-    };
-
-    let count_sql = format!("{} {} {}", select_count, from_clause, where_clause);
-    let mut count_query = sqlx::query_scalar(&count_sql);
-
-    let order = if query.reverse_order { "ASC" } else { "DESC" };
-    let posts_sql = format!(
-        "{} {} {} ORDER BY {} {} LIMIT ? OFFSET ?",
-        select_posts, from_clause, where_clause, order_by, order,
-    );
-    let mut posts_query = sqlx::query_as(&posts_sql);
+    if query.search_term.is_some() {
+        posts_query.distinct().join(
+            JoinType::InnerJoin,
+            PostFtsIden::Table,
+            Expr::col((PostFtsIden::Table, Alias::new("rowid")))
+                .eq(Expr::col((PostIden::Table, PostIden::Id)))
+                .or(Expr::col((PostFtsIden::Table, Alias::new("rowid")))
+                    .eq(Expr::col((PostIden::Table, PostIden::RetweetedId)))),
+        );
+    }
 
     if let Some(user_id) = query.user_id {
-        count_query = count_query.bind(user_id);
-        posts_query = posts_query.bind(user_id);
+        posts_query.and_where(Expr::col((PostIden::Table, PostIden::Uid)).eq(user_id));
     }
+
     if let Some(start_date) = query.start_date {
         let dt = DateTime::from_timestamp(start_date, 0)
             .unwrap()
             .to_rfc3339();
-        count_query = count_query.bind(dt.clone());
-        posts_query = posts_query.bind(dt);
+        posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).gte(dt));
     }
+
     if let Some(end_date) = query.end_date {
         let dt = DateTime::from_timestamp(end_date, 0).unwrap().to_rfc3339();
-        count_query = count_query.bind(dt.clone());
-        posts_query = posts_query.bind(dt);
+        posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).lte(dt));
     }
-    if let Some(search_term) = query.search_term {
+
+    if query.is_favorited {
+        posts_query.and_where(
+            Expr::col((PostIden::Table, PostIden::Id)).in_subquery(
+                Query::select()
+                    .column(FavoritedPostIden::Id)
+                    .from(FavoritedPostIden::Table)
+                    .take(),
+            ),
+        );
+    }
+
+    if let Some(search_term) = query.search_term.as_ref() {
         let fts_query = match search_term {
             SearchTerm::Fuzzy(term) => term
                 .split_whitespace()
@@ -505,17 +589,38 @@ where
                 .join(" AND "),
             SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
         };
-        count_query = count_query.bind(fts_query.clone());
-        posts_query = posts_query.bind(fts_query);
+        posts_query.and_where(Expr::cust_with_values(
+            "posts_fts.text MATCH ?",
+            [fts_query],
+        ));
     }
-    let mut conn = acquirer.acquire().await?;
-    let total_items = count_query.fetch_one(&mut *conn).await?;
 
-    let limit = query.posts_per_page;
-    let offset = query.page.saturating_sub(1) * limit;
-    let posts = posts_query
-        .bind(limit)
-        .bind(offset)
+    let mut count_query = posts_query.clone();
+    count_query.expr(if query.search_term.is_some() {
+        Expr::col((PostIden::Table, PostIden::Id)).count_distinct()
+    } else {
+        Func::count(1).into()
+    });
+
+    let (sql, values) = count_query.build_sqlx(SqliteQueryBuilder);
+    let mut conn = acquirer.acquire().await?;
+    let total_items: u64 = sqlx::query_scalar_with(&sql, values)
+        .fetch_one(&mut *conn)
+        .await?;
+
+    let order = if query.reverse_order {
+        Order::Asc
+    } else {
+        Order::Desc
+    };
+    posts_query
+        .column((PostIden::Table, Asterisk))
+        .order_by((PostIden::Table, PostIden::Id), order)
+        .limit(query.posts_per_page as u64)
+        .offset((query.page.saturating_sub(1) * query.posts_per_page) as u64);
+
+    let (sql, values) = posts_query.build_sqlx(SqliteQueryBuilder);
+    let posts = sqlx::query_as_with::<Sqlite, PostInternal, _>(&sql, values)
         .fetch_all(&mut *conn)
         .await?;
 
