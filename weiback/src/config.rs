@@ -1,3 +1,9 @@
+//! This module manages the application's configuration.
+//!
+//! It handles loading configuration from files (or creating a default one if none exists),
+//! saving configurations, and providing a globally accessible instance of the `Config` struct.
+//! The configuration includes paths for the database, session, downloaded media,
+//! task intervals, and SDK-specific settings.
 use std::{
     fs,
     path::PathBuf,
@@ -13,14 +19,19 @@ use weibosdk_rs::config::Conifg as SdkConfig;
 use crate::error::Result;
 use crate::models::PictureDefinition;
 
-// 使用 OnceCell 替代 Lazy，以支持可能失败的、显式的初始化。
+/// Global, lazily initialized instance of the application configuration.
+///
+/// It is wrapped in an `Arc<RwLock<Config>>` to allow safe concurrent
+/// read/write access across multiple threads.
 static CONFIG: OnceCell<Arc<RwLock<Config>>> = OnceCell::new();
 
+/// Helper module for serializing/deserializing `std::time::Duration` as seconds.
 mod duration_as_secs {
     use std::time::Duration;
 
     use serde::{Deserialize, Deserializer, Serializer};
 
+    /// Custom serialization for `Duration` to seconds (u64).
     pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -28,6 +39,7 @@ mod duration_as_secs {
         serializer.serialize_u64(duration.as_secs())
     }
 
+    /// Custom deserialization for `Duration` from seconds (u64).
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
     where
         D: Deserializer<'de>,
@@ -37,26 +49,45 @@ mod duration_as_secs {
     }
 }
 
+/// Represents the application's configuration settings.
+///
+/// This includes paths for data storage, download preferences, task intervals,
+/// and SDK-specific configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Path to the SQLite database file.
     pub db_path: PathBuf,
+    /// Path to the session file for Weibo API authentication.
     pub session_path: PathBuf,
+    /// Whether to download pictures associated with posts.
     pub download_pictures: bool,
+    /// The preferred definition/size for downloaded pictures.
     pub picture_definition: PictureDefinition,
+    /// Interval for background backup tasks.
     #[serde(with = "duration_as_secs")]
     pub backup_task_interval: Duration,
+    /// Interval for other background tasks.
     #[serde(with = "duration_as_secs")]
     pub other_task_interval: Duration,
+    /// Number of posts to include in each generated HTML file.
     pub posts_per_html: u32,
+    /// Base path for storing downloaded pictures.
     pub picture_path: PathBuf,
+    /// Base path for storing downloaded videos.
     pub video_path: PathBuf,
+    /// Configuration settings for the Weibo SDK.
     pub sdk_config: SdkConfig,
+    /// Output directory for dev mode, if enabled.
     #[cfg(feature = "dev-mode")]
     pub dev_mode_out_dir: Option<PathBuf>,
 }
 
 impl Default for Config {
+    /// Provides default configuration values.
+    ///
+    /// These defaults are typically based on platform-specific user directories
+    /// (e.g., `dirs::config_dir`, `dirs::data_dir`).
     fn default() -> Self {
         let config_dir = dirs::config_dir().unwrap_or_default().join("weiback");
         let data_dir = dirs::data_dir().unwrap_or_default().join("weiback");
@@ -77,37 +108,43 @@ impl Default for Config {
     }
 }
 
-/// 显式初始化函数，应在 main 函数开始时调用。
+/// Explicit initialization function, which should be called at the start of the `main` function.
 ///
-/// 它会尝试加载配置文件。如果所有路径都找不到配置文件，
-/// 它将创建一个默认配置并尝试将其写入用户本地配置目录。
+/// It attempts to load the configuration file. If the configuration file is not found
+/// in any predefined path, it creates a default configuration and attempts to write it
+/// to the user's local configuration directory.
 ///
 /// # Errors
-///
-/// 如果配置文件存在但无法读取，或者在尝试写入新的默认配置文件时发生 I/O 错误，
-/// 此函数将返回一个错误。
+/// This function will return an error if:
+/// - The configuration file exists but cannot be read.
+/// - An I/O error occurs while trying to write a new default configuration file.
 pub fn init() -> Result<()> {
     info!("Initializing config...");
     let config = load_or_create()?;
-    // set 如果已经初始化，会返回 Err，这里我们忽略这个错误，因为这意味着已经有别的线程初始化了。
+    // If already initialized, set() returns an error, which we ignore here,
+    // as it means another thread has already initialized it.
     let _ = CONFIG.set(Arc::new(RwLock::new(config)));
     info!("Config initialized successfully.");
     Ok(())
 }
 
-/// 获取全局配置实例。
+/// Retrieves the global configuration instance.
 ///
-/// 这是一个健壮的函数，保证总能返回一个配置实例。
+/// This is a robust function that guarantees to always return a configuration instance.
+/// - If `init()` has been successfully called, it will return the configuration set by `init()`.
+/// - If `init()` has never been called, it will first attempt to load the configuration
+///   from files (but will not create a new file). If loading fails for any reason,
+///   it will fall back to an in-memory default configuration, ensuring the program
+///   does not panic.
 ///
-/// - 如果 `init()` 已经被成功调用，它将返回 `init()` 设置的配置。
-/// - 如果 `init()` 从未被调用，它将首次尝试从文件加载配置（但不会创建新文件）。
-///   如果加载失败（任何原因），它将回退到内存中的默认配置，并确保程序不会崩溃。
+/// # Returns
+/// An `Arc<RwLock<Config>>` providing shared, thread-safe access to the application's configuration.
 pub fn get_config() -> Arc<RwLock<Config>> {
     CONFIG
         .get_or_init(|| {
-            // "隐式"初始化路径：尝试加载，如果失败（包括未找到、权限问题等），
-            // 则使用默认值。这保证了 get_config 总能成功返回，不会 panic。
-            // 这里不写入文件，以避免在运行时产生不可控的 I/O 错误。
+            // "Implicit" initialization path: attempts to load, if fails (e.g., not found, permissions),
+            // it uses the default value. This ensures get_config always returns successfully, without panicking.
+            // It does not write to a file here to avoid uncontrollable I/O errors at runtime.
             warn!("Config not explicitly initialized, trying to load from files or use default.");
             let config = load_from_files()
                 .unwrap_or_else(|e| {
@@ -120,6 +157,17 @@ pub fn get_config() -> Arc<RwLock<Config>> {
         .clone()
 }
 
+/// Saves the current configuration to the appropriate configuration file.
+///
+/// If a configuration file already exists in one of the predefined paths, it will be
+/// updated. Otherwise, a new default configuration file will be created in the
+/// user's local configuration directory.
+///
+/// # Arguments
+/// * `config` - A reference to the `Config` instance to save.
+///
+/// # Returns
+/// A `Result` indicating success or an `Error` if saving fails (e.g., I/O errors, serialization errors).
 pub fn save_config(config: &Config) -> Result<()> {
     let config_path = if let Some(path) = find_config_file()? {
         path
@@ -146,7 +194,11 @@ pub fn save_config(config: &Config) -> Result<()> {
     Ok(())
 }
 
-// 尝试从所有已知路径加载配置。
+/// Attempts to load the configuration from all known predefined paths.
+///
+/// # Returns
+/// A `Result` containing `Some(Config)` if a configuration file is found and successfully parsed,
+/// `None` if no configuration file is found, or an `Error` if a file is found but cannot be read or parsed.
 fn load_from_files() -> Result<Option<Config>> {
     let Some(config_path) = find_config_file()? else {
         return Ok(None);
@@ -155,14 +207,20 @@ fn load_from_files() -> Result<Option<Config>> {
     Ok(toml::from_str(&content)?)
 }
 
-// 尝试加载配置，如果找不到，则创建并保存一个新的默认配置。
+/// Attempts to load the configuration from a file. If no configuration file is found,
+/// it creates a new default configuration and saves it to the user's local
+/// configuration directory.
+///
+/// # Returns
+/// A `Result` containing the loaded or newly created `Config` instance.
+/// Returns an `Error` if loading fails or if writing the default config fails.
 fn load_or_create() -> Result<Config> {
     if let Some(path) = find_config_file()? {
         let content = fs::read_to_string(path)?;
         return Ok(toml::from_str(&content)?);
     }
 
-    // 未找到配置文件，创建并写入默认配置
+    // No config file found, create and write default config
     let config = Config::default();
     let config_local_path = dirs::config_local_dir()
         .unwrap_or_default()
@@ -177,7 +235,14 @@ fn load_or_create() -> Result<Config> {
     Ok(config)
 }
 
-// 在预设的路径中查找存在的配置文件。
+/// Searches for an existing configuration file in a set of predefined paths.
+///
+/// The search order is typically: user's local config directory, user's shared config directory,
+/// and then a `weiback/config.toml` relative to the executable's directory.
+///
+/// # Returns
+/// A `Result` containing `Some(PathBuf)` if a config file is found, or `None` otherwise.
+/// Returns an `Error` if the current executable path cannot be determined.
 fn find_config_file() -> Result<Option<PathBuf>> {
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path.parent().unwrap_or(&exe_path);
