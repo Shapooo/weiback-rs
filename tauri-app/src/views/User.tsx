@@ -179,16 +179,20 @@ const UserPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         用户账号管理
       </Typography>
-      <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
-        <CardContent>
-          <Typography variant="h5" component="div" sx={{ mb: 2 }}>
-            {pageState === UserPageState.LoggedIn ? '用户信息' : '用户登录'}
-          </Typography>
-          <Box component="form" noValidate autoComplete="off">
-            {renderContent()}
-          </Box>
-        </CardContent>
-      </Card>
+      <Grid container justifyContent="center">
+        <Grid size={{ xs: 12, md: 8, lg: 6 }}>
+          <Card sx={{ mt: 5 }}>
+            <CardContent>
+              <Typography variant="h5" component="div" sx={{ mb: 2 }}>
+                {pageState === UserPageState.LoggedIn ? '用户信息' : '用户登录'}
+              </Typography>
+              <Box component="form" noValidate autoComplete="off">
+                {renderContent()}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Box>
   );
 };
