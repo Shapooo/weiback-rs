@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSnackbar } from 'notistack';
-import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { Card, CardContent, Typography, TextField, Button, Box, Stack, Select, MenuItem, InputLabel, FormControl, Grid } from '@mui/material';
 import { useTaskStore } from '../stores/taskStore';
 import { useAuthStore } from '../stores/authStore';
 import { User, BackupType, TaskStatus } from '../types';
@@ -73,7 +73,7 @@ const UserBackupSection: React.FC = () => {
     };
 
     return (
-        <Card sx={{ maxWidth: 500, mx: 'auto', mt: 3 }}>
+        <Card sx={{ height: '100%' }}>
             <CardContent>
                 <Typography variant="h5" component="div" sx={{ mb: 2 }}>
                     用户备份
@@ -155,7 +155,7 @@ const FavoritesBackupSection: React.FC = () => {
     }
 
     return (
-        <Card sx={{ maxWidth: 500, mx: 'auto', mt: 3 }}>
+        <Card sx={{ height: '100%' }}>
             <CardContent>
                 <Typography variant="h5" component="div" sx={{ mb: 2 }}>
                     收藏备份
@@ -190,8 +190,14 @@ const OnlineBackupPage: React.FC = () => {
             <Typography variant="h4" gutterBottom>
                 在线备份任务
             </Typography>
-            <UserBackupSection />
-            <FavoritesBackupSection />
+            <Grid container spacing={3}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <UserBackupSection />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <FavoritesBackupSection />
+                </Grid>
+            </Grid>
         </Box>
     );
 };
