@@ -1,3 +1,10 @@
+//! A collection of utility functions used throughout the application.
+//!
+//! This module provides helpers for various tasks, including:
+//! - String manipulation via lazily-compiled regular expressions.
+//! - Parsing and transforming Weibo picture URLs into different formats (e.g., for database keys or file paths).
+//! - Extracting complex metadata (like pictures, avatars, and emojis) from `Post` objects.
+
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -18,33 +25,40 @@ macro_rules! here {
     };
 }
 
+/// Matches newline characters.
 pub static NEWLINE_EXPR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n").unwrap());
+/// Matches generic URLs.
 pub static URL_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(http|https)://[a-zA-Z0-9$%&~_#/.\-:=,?]{5,280}")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
+/// Matches `@` mentions.
 pub static AT_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
+/// Matches emoji text like `[doge]`.
 pub static EMOJI_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(\[.*?\])")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
+/// Matches email addresses.
 pub static EMAIL_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
+/// Matches topic hashtags like `#topic#`.
 pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"#([^#]+)#")
         .map_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 
+/// Normalizes a URL to be used as a stable database key by removing query and fragment parts.
 pub fn pic_url_to_db_key(url: &Url) -> Url {
     let mut url = url.to_owned();
     url.set_fragment(None);
@@ -52,6 +66,8 @@ pub fn pic_url_to_db_key(url: &Url) -> Url {
     url
 }
 
+/// Converts a picture URL into a file path string for local storage.
+/// e.g., `http://example.com/path/to/file.jpg` -> `example.com/path/to/file.jpg`
 pub fn pic_url_to_path_str(url: &Url) -> String {
     let host = url.host_str().expect("host cannot be none");
     let path = url
@@ -65,6 +81,7 @@ pub fn pic_url_to_path_str(url: &Url) -> String {
     }
 }
 
+/// Extracts the filename from a URL.
 pub fn pic_url_to_filename(url: &Url) -> Result<String> {
     url.path_segments()
         .and_then(|mut segments| segments.next_back())
@@ -78,6 +95,7 @@ pub fn pic_url_to_filename(url: &Url) -> Result<String> {
         .ok_or_else(|| Error::FormatError(format!("no filename in url: {url}")))
 }
 
+/// Extracts the picture ID from its URL. This is usually the filename without the extension.
 pub fn pic_url_to_id(url: &Url) -> Result<String> {
     let file_path_str = pic_url_to_path_str(url);
     Path::new(&file_path_str)
@@ -93,6 +111,7 @@ pub fn pic_url_to_id(url: &Url) -> Result<String> {
         .ok_or_else(|| Error::FormatError(format!("not a valid picture url: {url}")))
 }
 
+/// Converts a LivePhoto video URL into a file path string for local storage.
 pub fn livephoto_video_url_to_path_str(url: &Url) -> Result<String> {
     let queries = url.query_pairs().collect::<HashMap<_, _>>();
     let url = queries
@@ -110,18 +129,27 @@ pub fn livephoto_video_url_to_path_str(url: &Url) -> Result<String> {
     Ok(format!("{}/{}", host, path))
 }
 
+/// Generates the name for the resource directory associated with an HTML page.
 pub fn make_resource_dir_name(page_name: &str) -> String {
     page_name.to_string() + "_files"
 }
 
+/// Generates the filename for an HTML page.
 pub fn make_html_file_name(page_name: &str) -> String {
     page_name.to_string() + ".html"
 }
 
+/// Generates a unique page name from a task name and an index.
 pub fn make_page_name(task_name: &str, index: i32) -> String {
     format!("{task_name}-{index}")
 }
 
+/// Extracts all unique picture metadata (standalone, emoji, avatar, inline) from a slice of posts.
+///
+/// # Arguments
+/// * `posts` - The posts to process.
+/// * `definition` - The desired picture quality.
+/// * `emoji_map` - A map to resolve emoji text to URLs.
 pub fn extract_all_pic_metas(
     posts: &[Post],
     definition: PictureDefinition,
@@ -148,6 +176,7 @@ pub fn extract_all_pic_metas(
     pic_metas
 }
 
+/// Extracts picture metadata for images that are referenced via short URLs inside post text.
 fn extract_inline_pic_metas(
     post: &Post,
     definition: PictureDefinition,
@@ -183,6 +212,7 @@ fn extract_inline_pic_metas(
         })
 }
 
+/// Extracts emoji URLs from text using a pre-populated emoji map.
 fn extract_emoji_urls<'a>(
     text: &'a str,
     emoji_map: Option<&'a HashMap<String, Url>>,
@@ -194,10 +224,12 @@ fn extract_emoji_urls<'a>(
         .filter_map(|i| i.map(|s| s.as_str()))
 }
 
+/// Extracts all emoji text (e.g., `[doge]`) from a string.
 pub fn extract_emojis_from_text(text: &str) -> impl Iterator<Item = &str> {
     EMOJI_EXPR.find_iter(text).map(|m| m.as_str())
 }
 
+/// Extracts avatar URLs for the post author and the author of the retweet, if present.
 fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
     let current_user_iter = post
         .user
@@ -223,6 +255,7 @@ fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
     current_user_iter.chain(retweet_user_iter)
 }
 
+/// Generates local file paths for standalone pictures in a post, for use in HTML exports.
 pub fn generate_standalone_pic_output_paths<'a>(
     post: &'a Post,
     pic_folder: &'a Path,
@@ -236,6 +269,7 @@ pub fn generate_standalone_pic_output_paths<'a>(
     })
 }
 
+/// Extracts metadata for pictures directly attached to a post (not inline links).
 fn extract_current_standalone_pic_metas(
     post: &Post,
     definition: PictureDefinition,
@@ -285,6 +319,10 @@ fn extract_current_standalone_pic_metas(
     pic_infos_iter.chain(mix_media_iter).chain(page_info_iter)
 }
 
+/// Extracts metadata for standalone pictures.
+///
+/// If the post is a retweet, this function extracts pictures from the retweeted content.
+/// Otherwise, it extracts from the main post.
 pub fn extract_standalone_pic_metas(
     post: &Post,
     definition: PictureDefinition,

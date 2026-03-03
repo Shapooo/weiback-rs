@@ -1,3 +1,9 @@
+//! This module provides the [`EmojiMap`], which manages the mapping of emoji text
+//! (e.g., `[doge]`) to their corresponding image URLs.
+//!
+//! The mapping is lazily initialized using [`OnceCell`] to ensure that the API
+//! request for the emoji list is only made when first needed.
+
 use std::collections::HashMap;
 
 use log::warn;
@@ -7,6 +13,7 @@ use url::Url;
 use crate::api::EmojiUpdateApi;
 use crate::error::Result;
 
+/// A thread-safe, lazily-initialized map for Weibo emojis.
 #[derive(Debug, Clone)]
 pub struct EmojiMap<E: EmojiUpdateApi> {
     api_client: E,
@@ -14,6 +21,10 @@ pub struct EmojiMap<E: EmojiUpdateApi> {
 }
 
 impl<W: EmojiUpdateApi> EmojiMap<W> {
+    /// Creates a new `EmojiMap` instance.
+    ///
+    /// # Arguments
+    /// * `api_client` - An implementor of [`EmojiUpdateApi`] used to fetch the emoji list.
     pub fn new(api_client: W) -> Self {
         Self {
             api_client,
@@ -21,6 +32,16 @@ impl<W: EmojiUpdateApi> EmojiMap<W> {
         }
     }
 
+    /// Returns the emoji map, initializing it if it hasn't been yet.
+    ///
+    /// This method is idempotent and thread-safe. Subsequent calls will return
+    /// the cached mapping.
+    ///
+    /// # Returns
+    /// A `Result` containing a reference to the `HashMap<String, Url>`.
+    ///
+    /// # Errors
+    /// Returns an error if the underlying API call to fetch emojis fails.
     pub async fn get_or_try_init(&self) -> Result<&HashMap<String, Url>> {
         self.emoji_map
             .get_or_try_init(async || self.api_client.emoji_update().await)

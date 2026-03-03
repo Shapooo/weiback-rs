@@ -1,3 +1,10 @@
+//! This module provides a development-focused HTTP client that records API responses.
+//!
+//! When `dev-mode` is enabled, the [`DevClient`] intercepts HTTP requests and saves
+//! the resulting JSON, text, or binary data to a local directory. It also maintains
+//! a `records.json` file that maps request URLs and queries to these local files.
+//! This is invaluable for creating mock data and debugging without hitting the live API.
+
 use std::{
     fs::{create_dir_all, read_to_string},
     ops::Deref,
@@ -18,6 +25,7 @@ use weibosdk_rs::{
 
 const RECORDS_FN: &str = "records.json";
 
+/// An HTTP client that wraps a standard [`Client`] and records responses.
 #[derive(Debug, Clone)]
 pub struct DevClient {
     client: Client,
@@ -25,6 +33,14 @@ pub struct DevClient {
 }
 
 impl DevClient {
+    /// Creates a new `DevClient`.
+    ///
+    /// If `dev_mode_out_dir` is provided, it will attempt to load existing records
+    /// from `records.json` in that directory.
+    ///
+    /// # Arguments
+    /// * `client` - The underlying standard HTTP client.
+    /// * `dev_mode_out_dir` - The directory where responses and records should be saved.
     pub fn new(client: Client, dev_mode_out_dir: Option<PathBuf>) -> Self {
         if let Some(path) = dev_mode_out_dir.clone() {
             let json_path = path.join(RECORDS_FN);
@@ -101,6 +117,7 @@ impl HttpClient for DevClient {
     }
 }
 
+/// A wrapper around `reqwest::Response` that records data when consumed.
 #[derive(Debug)]
 pub struct DevResponse {
     pub res: Response,
@@ -110,6 +127,7 @@ pub struct DevResponse {
 }
 
 impl DevResponse {
+    /// Creates a new `DevResponse`.
     pub fn new(res: Response, output_dir: Option<PathBuf>, url: String, query: String) -> Self {
         Self {
             res,
@@ -121,6 +139,7 @@ impl DevResponse {
 }
 
 impl HttpResponse for DevResponse {
+    /// Consumes the response and parses it as JSON, while saving the raw text to disk.
     async fn json<T: serde::de::DeserializeOwned>(self) -> weibosdk_rs::error::Result<T> {
         if let Some(path) = self.output_dir {
             let txt = self.res.text().await?;
@@ -140,6 +159,7 @@ impl HttpResponse for DevResponse {
         }
     }
 
+    /// Consumes the response as text and saves it to disk.
     async fn text(self) -> weibosdk_rs::error::Result<String> {
         if let Some(path) = self.output_dir {
             let txt = self.res.text().await?;
@@ -159,6 +179,7 @@ impl HttpResponse for DevResponse {
         }
     }
 
+    /// Consumes the response as bytes and saves them to disk.
     async fn bytes(self) -> weibosdk_rs::error::Result<bytes::Bytes> {
         if let Some(path) = self.output_dir {
             let bt = self.res.bytes().await?;
@@ -179,6 +200,7 @@ impl HttpResponse for DevResponse {
     }
 }
 
+/// Internal function to add a record item to the global list.
 fn append_record(item: RecordItem) {
     if let Some(records) = RECORDS.get() {
         debug!("Appending record for url: {}", &item.url);
@@ -187,6 +209,7 @@ fn append_record(item: RecordItem) {
     }
 }
 
+/// Represents a mapping between a request and its saved response file.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 struct RecordItem {
     url: String,
@@ -194,6 +217,7 @@ struct RecordItem {
     file_name: String,
 }
 
+/// Internal structure to hold the global record state.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct Record {
     pub records: Arc<Mutex<Vec<RecordItem>>>,
@@ -202,6 +226,10 @@ struct Record {
 
 static RECORDS: OnceLock<Record> = OnceLock::new();
 
+/// Persists all captured records to the `records.json` file.
+///
+/// This should be called before the application exits to ensure all intercepted
+/// requests are indexed correctly.
 pub fn save_records() {
     let Some(records) = RECORDS.get() else {
         return;

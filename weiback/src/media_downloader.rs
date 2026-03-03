@@ -1,3 +1,15 @@
+//! This module provides an asynchronous media downloader implemented using an
+//! actor-based pattern.
+//!
+//! The downloader is split into two parts:
+//! 1.  [`MediaDownloaderHandle`]: A thread-safe handle used to queue download requests
+//!     via a message channel.
+//! 2.  [`DownloaderWorker`]: A background task that processes these requests, performs
+//!     HTTP downloads using `reqwest`, and executes callbacks upon success.
+//!
+//! This architecture ensures that media downloads (which can be slow or unreliable)
+//! do not block the main application flow and can be easily monitored.
+
 #![allow(async_fn_in_trait)]
 use std::future::Future;
 use std::pin::Pin;
@@ -13,7 +25,14 @@ use super::core::task::TaskContext;
 use super::core::task_manager::{SubTaskError, SubTaskErrorType};
 use crate::error::Result;
 
+/// A trait for high-level media downloading capabilities.
 pub trait MediaDownloader: Clone + Send + Sync + 'static {
+    /// Queues a media download request.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context for progress and error reporting.
+    /// * `url` - The URL of the media file to download.
+    /// * `callback` - An async closure executed on the downloaded data if successful.
     async fn download_media(
         &self,
         ctx: Arc<TaskContext>,
@@ -22,7 +41,7 @@ pub trait MediaDownloader: Clone + Send + Sync + 'static {
     ) -> Result<()>;
 }
 
-/// The callback is for success cases and is async.
+/// A type alias for the asynchronous callback function executed after a successful download.
 pub type AsyncDownloadCallback = Box<
     dyn FnOnce(
             Arc<TaskContext>,
@@ -32,34 +51,35 @@ pub type AsyncDownloadCallback = Box<
         + 'static,
 >;
 
-/// A task for the media downloader actor.
+/// Internal structure representing a single download request sent to the worker.
 struct DownloadTask {
     ctx: Arc<TaskContext>,
     url: Url,
     callback: AsyncDownloadCallback,
 }
 
-/// The worker that runs in a background task.
-/// It owns the receiver and the HTTP client,
-/// and is consumed when its `run` method is called.
+/// The worker that runs in a background task and performs actual downloads.
 #[must_use = "The worker must be spawned to process download requests"]
 pub struct DownloaderWorker {
     receiver: mpsc::Receiver<DownloadTask>,
     client: Client,
 }
 
-/// A media downloader that handles downloading media file in a separate actor.
+/// A thread-safe handle for communicating with the [`DownloaderWorker`].
 #[derive(Debug, Clone)]
 pub struct MediaDownloaderHandle {
     sender: mpsc::Sender<DownloadTask>,
 }
 
-/// Creates a new media downloader handle and its associated worker.
+/// Initializes a new media downloader system.
+///
+/// # Arguments
+/// * `buffer` - The capacity of the message channel.
+/// * `client` - The HTTP client used for downloads.
 ///
 /// # Returns
-/// A tuple containing:
-/// 1. `DownloaderHandle`: The handle to send download requests.
-/// 2. `DownloaderWorker`: The worker that must be spawned to handle the requests.
+/// A tuple containing the handle and the worker. The worker **must** be spawned
+/// into a task (e.g., using `tokio::spawn(worker.run())`) to function.
 pub fn create_downloader(
     buffer: usize,
     client: Client,
@@ -71,11 +91,12 @@ pub fn create_downloader(
 }
 
 impl MediaDownloader for MediaDownloaderHandle {
-    /// Queues a media file for download.
+    /// Sends a download request to the background worker.
     ///
-    /// This method sends a task to the background downloader actor and returns immediately.
-    /// The provided async callback will be executed once the download is complete and successful.
-    /// If the download fails, the task is discarded and the callback is never called.
+    /// This method is non-blocking and returns as soon as the request is queued.
+    ///
+    /// # Errors
+    /// Returns an error if the internal channel is closed.
     async fn download_media(
         &self,
         ctx: Arc<TaskContext>,
@@ -95,11 +116,10 @@ impl MediaDownloader for MediaDownloaderHandle {
 }
 
 impl DownloaderWorker {
-    /// Runs the download processing loop.
+    /// Starts the worker's processing loop.
     ///
-    /// This method consumes the worker and should be spawned as a background task.
-    /// It will run until the corresponding DownloaderHandle is dropped and
-    /// all messages have been processed.
+    /// This method will run indefinitely until the handle is dropped or the channel
+    /// is closed. It should be spawned onto a background executor.
     pub async fn run(mut self) {
         info!("Media downloader actor started.");
         while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
@@ -117,6 +137,7 @@ impl DownloaderWorker {
         info!("Media downloader actor finished.");
     }
 
+    /// Performs the HTTP request and handles the response.
     async fn process_task(
         &self,
         ctx: Arc<TaskContext>,
