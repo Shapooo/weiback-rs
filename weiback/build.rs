@@ -1,3 +1,19 @@
+//! Build script to generate constants for image validation.
+//!
+//! This script scans the `resources/samples/invalid` directory for sample images that
+//! Weibo uses as placeholders for deleted or invalid content. It performs the following:
+//!
+//! 1.  **Perceptual Hashing**: Calculates `img_hash` values for these samples to enable
+//!     fuzzy detection of similar invalid images in the main application.
+//! 2.  **Color Sampling**: Analyzes the grayscale values (Red channel) of these images
+//!     to determine the typical intensity range of the placeholder backgrounds.
+//! 3.  **Code Generation**: Writes the results into `invalid_consts.rs` in the build
+//!     output directory (`OUT_DIR`), defining `SAMPLE_GRAY_MIN`, `SAMPLE_GRAY_MAX`,
+//!     and `INVALID_HASHES`.
+//!
+//! These generated constants are used by the `image_validator` module to identify
+//! and filter out "image deleted" placeholders during media processing.
+
 use std::env;
 use std::fs;
 use std::io::Cursor;
