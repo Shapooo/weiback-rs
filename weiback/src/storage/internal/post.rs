@@ -310,7 +310,7 @@ where
             PostIden::Uid,
             PostIden::UrlStruct,
         ])
-        .values_panic([
+        .values([
             post.attitudes_count.into(),
             post.attitudes_status.into(),
             post.comments_count.into(),
@@ -344,7 +344,7 @@ where
             post.text.clone().into(),
             post.uid.into(),
             post.url_struct.as_ref().map(to_string).transpose()?.into(),
-        ]);
+        ])?;
 
     let mut on_conflict = OnConflict::column(PostIden::Id);
     if overwrite {
@@ -431,7 +431,7 @@ where
     let (sql, values) = Query::insert()
         .into_table(FavoritedPostIden::Table)
         .columns([FavoritedPostIden::Id, FavoritedPostIden::Unfavorited])
-        .values_panic([id.into(), false.into()])
+        .values([id.into(), false.into()])?
         .on_conflict(
             OnConflict::column(FavoritedPostIden::Id)
                 .update_column(FavoritedPostIden::Unfavorited)

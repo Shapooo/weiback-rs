@@ -145,14 +145,14 @@ where
             PictureIden::UserId,
             PictureIden::Definition,
         ])
-        .values_panic([
+        .values([
             pic_url_to_id(picture_meta.url()).unwrap_or_default().into(),
             relative_path_str.into(),
             post_id.into(),
             url_str.into(),
             user_id.into(),
             definition.map(<&str>::from).into(),
-        ])
+        ])?
         .on_conflict(OnConflict::column(PictureIden::Url).do_nothing().to_owned())
         .build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(executor).await?;

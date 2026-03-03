@@ -143,7 +143,7 @@ where
             UserIden::ProfileImageUrl,
             UserIden::ScreenName,
         ])
-        .values_panic([
+        .values([
             user.avatar_hd.as_str().into(),
             user.avatar_large.as_str().into(),
             user.domain.as_str().into(),
@@ -152,7 +152,7 @@ where
             user.id.into(),
             user.profile_image_url.as_str().into(),
             user.screen_name.as_str().into(),
-        ])
+        ])?
         .on_conflict(
             OnConflict::column(UserIden::Id)
                 .update_columns([

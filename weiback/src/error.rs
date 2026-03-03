@@ -58,6 +58,10 @@ pub enum Error {
     #[error("Task related error: {0}")]
     InconsistentTask(String),
 
+    /// An error related to SQL query building.
+    #[error("Query build error: {0}")]
+    QueryBuild(#[from] sea_query::error::Error),
+
     /// An error related to application configuration.
     #[error("Config error: {0}")]
     ConfigError(String),

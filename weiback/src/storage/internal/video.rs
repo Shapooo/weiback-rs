@@ -98,7 +98,7 @@ where
     let (sql, values) = Query::insert()
         .into_table(VideoIden::Table)
         .columns([VideoIden::Url, VideoIden::Path, VideoIden::PostId])
-        .values_panic([url.as_str().into(), path.to_str().into(), post_id.into()])
+        .values([url.as_str().into(), path.to_str().into(), post_id.into()])?
         .on_conflict(OnConflict::column(VideoIden::Url).do_nothing().to_owned())
         .build_sqlx(SqliteQueryBuilder);
 
