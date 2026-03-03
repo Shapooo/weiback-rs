@@ -1,3 +1,11 @@
+//! This module defines the core data models used across the `weiback` application.
+//!
+//! It aggregates and re-exports various structures representing Weibo entities
+//! such as posts, users, pictures, videos, and associated metadata like
+//! error responses, mix media information, page information, and URL structures.
+//! These models are used for both deserialization from the Weibo API and
+//! for internal application logic and storage.
+
 pub mod common;
 pub mod err_response;
 pub mod mix_media_info;

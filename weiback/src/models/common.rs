@@ -1,3 +1,9 @@
+//! This module defines common data structures shared across various Weibo API models.
+//!
+//! It includes detailed information for pictures (`PicInfoDetail`), huge content items (`HugeInfo`),
+//! video information (`VideoInfo`), simpler picture item details (`PicInfoItemSimple`),
+//! and an enum for video orientation (`Orientation`). These models are primarily used
+//! for deserializing complex API responses.
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use url::Url;
