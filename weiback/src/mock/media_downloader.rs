@@ -1,4 +1,10 @@
-//! Test mock for media_downloader
+//! This module provides a mock implementation of the [`MediaDownloader`] trait.
+//!
+//! `MockMediaDownloader` is used in tests to simulate media download operations.
+//! It can be pre-configured with specific responses for given URLs, or default to
+//! success/failure based on its `default_succ` setting. This allows testing
+//! components that depend on media downloads without actual network interaction.
+
 use std::{
     collections::HashMap,
     future::Future,
@@ -18,18 +24,29 @@ use crate::{
     media_downloader::{AsyncDownloadCallback, MediaDownloader},
 };
 
+/// A mock implementation of the [`MediaDownloader`] trait.
+///
+/// This struct allows tests to control the outcomes of media download requests.
 #[derive(Debug, Clone, Default)]
 pub struct MockMediaDownloader {
     inner: Arc<Mutex<Inner>>,
+    /// If `true`, any un-mocked download request will succeed with dummy data.
+    /// If `false`, it will fail.
     default_succ: bool,
 }
 
+/// Internal state for `MockMediaDownloader`.
 #[derive(Debug, Default)]
 struct Inner {
+    /// A map from URL to a pre-defined download result (either success with `Bytes` or an `Error`).
     responses: HashMap<Url, Result<Bytes>>,
 }
 
 impl MockMediaDownloader {
+    /// Creates a new `MockMediaDownloader` instance.
+    ///
+    /// # Arguments
+    /// * `default_succ` - Determines the behavior for URLs that are not explicitly mocked.
     pub fn new(default_succ: bool) -> Self {
         Self {
             inner: Default::default(),
@@ -37,12 +54,34 @@ impl MockMediaDownloader {
         }
     }
 
+    /// Adds a pre-defined response for a specific URL.
+    ///
+    /// When `download_media` is called with this `url`, it will return the provided `response`.
+    ///
+    /// # Arguments
+    /// * `url` - The URL to mock.
+    /// * `response` - The `Result<Bytes>` that `download_media` should return for this URL.
     pub fn add_response(&self, url: Url, response: Result<Bytes>) {
         self.inner.lock().unwrap().responses.insert(url, response);
     }
 }
 
 impl MediaDownloader for MockMediaDownloader {
+    /// Simulates downloading a media file.
+    ///
+    /// It checks for a mocked response for the given URL. If found, it uses that.
+    /// Otherwise, its behavior depends on `default_succ`. If `default_succ` is true,
+    /// it calls the callback with dummy data; if false, it records a sub-task error.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context for reporting errors.
+    /// * `url` - The URL of the media to "download".
+    /// * `callback` - The callback to execute with the "downloaded" data.
+    ///
+    /// # Returns
+    /// A `Result` indicating if the download request was processed by the mock.
+    /// Actual success/failure of the simulated download is handled by the mock's
+    /// internal logic and reported via `ctx.task_manager.add_sub_task_error`.
     async fn download_media(
         &self,
         ctx: Arc<TaskContext>,

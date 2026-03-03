@@ -1,3 +1,10 @@
+//! This module provides a mock implementation of the [`ApiClient`] trait.
+//!
+//! `MockApi` is used in tests to simulate responses from the Weibo API without
+//! making actual network requests. It wraps `weibosdk_rs::mock::MockClient`
+//! to provide predefined responses for specific API calls, allowing for
+//! predictable and isolated testing of application logic that depends on API interactions.
+
 use std::collections::HashMap;
 
 use url::Url;
@@ -12,12 +19,19 @@ use crate::{
     models::post::Post,
 };
 
+/// A mock implementation of the [`ApiClient`] trait.
+///
+/// This struct allows tests to control the responses of Weibo API calls.
 #[derive(Clone)]
 pub struct MockApi {
     client: ApiClientImpl<MockClient>,
 }
 
 impl MockApi {
+    /// Creates a new `MockApi` instance.
+    ///
+    /// # Arguments
+    /// * `client` - The `weibosdk_rs::mock::MockClient` to use for setting up mock responses.
     pub fn new(client: MockClient) -> Self {
         Self {
             client: ApiClientImpl::new(SdkApiClient::from_session(client, Default::default())),
@@ -26,28 +40,49 @@ impl MockApi {
 }
 
 impl EmojiUpdateApi for MockApi {
+    /// Mocks the `emoji_update` API call.
+    ///
+    /// The response can be configured on the underlying `weibosdk_rs::mock::MockClient`.
     async fn emoji_update(&self) -> Result<HashMap<String, Url>> {
         self.client.emoji_update().await
     }
 }
 
 impl FavoritesApi for MockApi {
+    /// Mocks the `favorites` API call.
+    ///
+    /// # Arguments
+    /// * `page` - The page number of favorites to retrieve.
     async fn favorites(&self, page: u32) -> Result<Vec<Post>> {
         self.client.favorites(page).await
     }
 
+    /// Mocks the `favorites_destroy` API call.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the post to unfavorite.
     async fn favorites_destroy(&self, id: i64) -> Result<()> {
         self.client.favorites_destroy(id).await
     }
 }
 
 impl StatusesShowApi for MockApi {
+    /// Mocks the `statuses_show` API call.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the status to retrieve.
     async fn statuses_show(&self, id: i64) -> Result<Post> {
         self.client.statuses_show(id).await
     }
 }
 
 impl ProfileStatusesApi for MockApi {
+    /// Mocks the `profile_statuses` API call.
+    ///
+    /// # Arguments
+    /// * `uid` - The user ID.
+    /// * `page` - The page number of statuses to retrieve.
+    /// * `container_type` - The type of content to filter by (e.g., original, pictures).
     async fn profile_statuses(
         &self,
         uid: i64,
