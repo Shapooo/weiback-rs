@@ -1,3 +1,11 @@
+//! This module provides the `Exporter` trait and its implementation for writing
+//! generated HTML and associated media files to the local file system.
+//!
+//! The main entry point is the `Exporter` trait, which defines the `export_page`
+//! method. `ExporterImpl` provides the concrete logic for creating directories,
+//! writing the HTML file, and copying all necessary image files from the local
+//! cache to a resource sub-folder.
+
 #![allow(async_fn_in_trait)]
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -12,32 +20,59 @@ use tokio::{
 use crate::error::Result;
 use crate::utils::{make_html_file_name, make_resource_dir_name};
 
+/// A trait for services that can export an `HTMLPage` to a persistent medium.
 pub trait Exporter: Send + Sync {
+    /// Exports a single HTML page and its associated pictures.
+    ///
+    /// # Arguments
+    /// * `page` - The `HTMLPage` containing the HTML content and pictures to export.
+    /// * `page_name` - The base name for the output file (e.g., "page-1").
+    /// * `export_dir` - The top-level directory where the export should be saved.
     async fn export_page(&self, page: HTMLPage, page_name: &str, export_dir: &Path) -> Result<()>;
 }
 
+/// Represents a single picture to be exported.
 #[derive(Debug, Clone)]
 pub struct PictureExport {
+    /// The path to the source image file in the local cache.
     pub source_path: PathBuf,
+    /// The target filename for the image in the export's resource directory.
     pub target_file_name: String,
 }
 
+/// A container for the complete data needed to render and export a single HTML page.
 #[derive(Debug, Clone)]
 pub struct HTMLPage {
+    /// The fully rendered HTML content.
     pub html: String,
+    /// A list of all pictures referenced in the HTML that need to be copied to the export directory.
     pub pictures_to_export: Vec<PictureExport>,
 }
 
+/// The default implementation of the `Exporter` trait, which writes to the local file system.
 #[derive(Debug, Clone, Default)]
 pub struct ExporterImpl();
 
 impl ExporterImpl {
+    /// Creates a new `ExporterImpl`.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
 impl Exporter for ExporterImpl {
+    /// Writes the HTML content to a file and copies all associated pictures to a
+    /// corresponding `_files` directory.
+    ///
+    /// For a `page_name` of "my-export-1", this would produce:
+    /// - `export_dir/my-export-1.html`
+    /// - `export_dir/my-export-1_files/` (containing all images)
+    ///
+    /// This method is idempotent and will overwrite existing files.
+    ///
+    /// # Errors
+    /// Returns an `Error::Io` if the `export_dir` path exists but is a file, or if
+    /// there are issues with file I/O operations.
     async fn export_page(&self, page: HTMLPage, page_name: &str, export_dir: &Path) -> Result<()>
 where {
         info!("Exporting page for task '{page_name}' to {export_dir:?}",);
