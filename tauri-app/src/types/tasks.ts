@@ -5,6 +5,11 @@ export enum TaskType {
     Export = "Export",
     CleanupPictures = "CleanupPictures",
     CleanupAvatars = "CleanupAvatars",
+    CleanupInvalidPosts = "CleanupInvalidPosts",
+}
+
+export interface CleanupInvalidPostsOptions {
+    clean_retweeted_invalid: boolean;
 }
 
 export enum ResolutionPolicy {

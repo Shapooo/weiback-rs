@@ -8,7 +8,8 @@ use tauri::{self, App, Manager, State};
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
-    BackupFavoritesOptions, BackupUserPostsOptions, Core, ExportJobOptions, PostQuery, TaskRequest,
+    BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions, Core,
+    ExportJobOptions, PostQuery, TaskRequest,
     task::{BackupType, CleanupPicturesOptions, PaginatedPostInfo},
     task_manager::{SubTaskError, Task},
 };
@@ -205,6 +206,17 @@ async fn cleanup_invalid_avatars(core: State<'_, Arc<Core>>) -> Result<()> {
     Ok(core.cleanup_invalid_avatars().await?)
 }
 
+#[tauri::command]
+async fn cleanup_invalid_posts(
+    core: State<'_, Arc<Core>>,
+    options: CleanupInvalidPostsOptions,
+) -> Result<()> {
+    info!("cleanup_invalid_posts called with options: {options:?}");
+    Ok(core
+        .cleanup_invalid_posts(TaskRequest::CleanupInvalidPosts(options))
+        .await?)
+}
+
 pub fn run() -> Result<()> {
     info!("Starting application");
     weiback::config::init()?;
@@ -232,7 +244,8 @@ pub fn run() -> Result<()> {
             get_current_task_status,
             get_and_clear_sub_task_errors,
             cleanup_pictures,
-            cleanup_invalid_avatars
+            cleanup_invalid_avatars,
+            cleanup_invalid_posts
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

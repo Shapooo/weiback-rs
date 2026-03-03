@@ -8,6 +8,7 @@ import {
     ExportJobOptions,
     BackupType,
     ResolutionPolicy,
+    CleanupInvalidPostsOptions,
 } from '../types';
 import { Config } from '../types/config';
 
@@ -44,6 +45,7 @@ export const exportPosts = (options: ExportJobOptions) => invoke('export_posts',
 export const getPictureBlob = (id: string) => invoke<ArrayBuffer>('get_picture_blob', { id });
 export const cleanupPictures = (policy: ResolutionPolicy) => invoke('cleanup_pictures', { options: { policy } });
 export const cleanupInvalidAvatars = () => invoke('cleanup_invalid_avatars');
+export const cleanupInvalidPosts = (options: CleanupInvalidPostsOptions) => invoke('cleanup_invalid_posts', { options });
 
 // Config
 export const getConfig = () => invoke<Config>('get_config_command');

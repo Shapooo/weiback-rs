@@ -12,11 +12,12 @@ import {
     Button,
     Alert,
     Grid,
+    Checkbox,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useTaskStore } from '../stores/taskStore';
 import { TaskStatus, ResolutionPolicy } from '../types';
-import { cleanupPictures, cleanupInvalidAvatars } from '../lib/api';
+import { cleanupPictures, cleanupInvalidAvatars, cleanupInvalidPosts } from '../lib/api';
 
 const DataManage: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
@@ -24,6 +25,7 @@ const DataManage: React.FC = () => {
     const fetchCurrentTask = useTaskStore(state => state.fetchCurrentTask);
 
     const [policy, setPolicy] = useState<ResolutionPolicy>(ResolutionPolicy.Highest);
+    const [cleanRetweetedInvalid, setCleanRetweetedInvalid] = useState(false);
 
     const handleCleanup = async () => {
         try {
@@ -42,6 +44,16 @@ const DataManage: React.FC = () => {
             fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`启动头像清理失败: ${e}`, { variant: 'error' });
+        }
+    };
+
+    const handleCleanupInvalidPosts = async () => {
+        try {
+            await cleanupInvalidPosts({ clean_retweeted_invalid: cleanRetweetedInvalid });
+            enqueueSnackbar('失效内容清理任务已启动', { variant: 'success' });
+            fetchCurrentTask();
+        } catch (e) {
+            enqueueSnackbar(`启动失效内容清理失败: ${e}`, { variant: 'error' });
         }
     };
 
@@ -123,6 +135,58 @@ const DataManage: React.FC = () => {
                                     disabled={isTaskRunning}
                                 >
                                     {isTaskRunning ? '任务进行中...' : '开始清理失效头像'}
+                                </Button>
+                            </Box>
+                        </CardContent>
+                    </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Card>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                                失效微博清理
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                清理数据库中的失效微博。这些内容通常由于原作者注销或删除或者不可抗力而无法正常显示。
+                            </Typography>
+
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                                此操作将永久删除失效微博及其关联媒体。
+                            </Alert>
+
+                            <Box sx={{ mb: 2 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            checked={cleanRetweetedInvalid}
+                                            onChange={(e) => setCleanRetweetedInvalid(e.target.checked)}
+                                        />
+                                    }
+                                    label={<strong>深度清理模式</strong>}
+                                />
+                                <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 4 }}>
+                                    {cleanRetweetedInvalid ? (
+                                        <span>
+                                            <strong>当前模式：</strong> 清理所有失效内容。同时，如果某条正常微博转发的内容已失效，该正常微博也将被一并删除（保持数据库绝对纯净）。
+                                        </span>
+                                    ) : (
+                                        <span>
+                                            <strong>当前模式（默认）：</strong> 仅清理“独立”的失效内容。如果某条失效微博被你保存的其他微博转发了，为了保持转发链条的完整性，将予以保留。
+                                        </span>
+                                    )}
+                                </Typography>
+                            </Box>
+
+                            <Box sx={{ mt: 3 }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    fullWidth
+                                    onClick={handleCleanupInvalidPosts}
+                                    disabled={isTaskRunning}
+                                >
+                                    {isTaskRunning ? '任务进行中...' : '开始清理失效内容'}
                                 </Button>
                             </Box>
                         </CardContent>
