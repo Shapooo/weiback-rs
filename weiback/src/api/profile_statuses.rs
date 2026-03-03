@@ -1,3 +1,7 @@
+//! This module provides an API for fetching a user's statuses (posts).
+//!
+//! It includes functionality to retrieve posts from a specific user's timeline,
+//! handle various container types, and process the API responses into `Post` models.
 #![allow(async_fn_in_trait)]
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
@@ -5,7 +9,9 @@ use log::{debug, error, info};
 use serde::Deserialize;
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
 
-// re-export
+/// Re-exports `weibosdk_rs::profile_statuses::ContainerType` for convenience.
+///
+/// This enum specifies the type of container to fetch statuses from (e.g., original posts, all posts).
 pub use weibosdk_rs::profile_statuses::ContainerType;
 
 use super::{ApiClientImpl, internal::post::PostInternal};
@@ -15,13 +21,20 @@ use crate::{
     models::err_response::ErrResponse,
 };
 
+/// Represents a single card in the profile statuses API response.
+///
+/// A card typically contains a microblog (`mblog`) which is a `PostInternal`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Card {
+    /// The type of the card.
     #[allow(unused)]
     pub card_type: i32,
+    /// The microblog (post) contained within this card, if any.
     pub mblog: Option<PostInternal>,
 }
 
+/// An enum representing the possible responses from the profile statuses API endpoint,
+/// which can either be a successful data payload or an error.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum ProfileStatusesResponse {
@@ -29,12 +42,24 @@ enum ProfileStatusesResponse {
     Fail(ErrResponse),
 }
 
+/// Represents the successful response structure for fetching profile statuses.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProfileStatusesSucc {
+    /// A list of cards, each potentially containing a post.
     pub cards: Vec<Card>,
 }
 
+/// Trait for API clients that can fetch a user's profile statuses.
 pub trait ProfileStatusesApi {
+    /// Fetches a page of posts from a specific user's profile.
+    ///
+    /// # Arguments
+    /// * `uid` - The unique ID of the user whose statuses are to be fetched.
+    /// * `page` - The page number to fetch (1-indexed).
+    /// * `container_type` - The type of container to fetch statuses from (e.g., original posts).
+    ///
+    /// # Returns
+    /// A `Result` containing a `Vec<Post>` on success, or an `Error` on failure.
     async fn profile_statuses(
         &self,
         uid: i64,
@@ -44,6 +69,18 @@ pub trait ProfileStatusesApi {
 }
 
 impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
+    /// Fetches a page of posts from a specific user's profile from the Weibo API.
+    ///
+    /// The fetched posts are then processed to retrieve any long text or retweet details,
+    /// and filtered to ensure the correct user's posts are returned.
+    ///
+    /// # Arguments
+    /// * `uid` - The unique ID of the user whose statuses are to be fetched.
+    /// * `page` - The page number to fetch.
+    /// * `container_type` - The type of container to fetch statuses from.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of `Post` objects.
     async fn profile_statuses(
         &self,
         uid: i64,

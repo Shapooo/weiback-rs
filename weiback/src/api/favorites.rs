@@ -1,3 +1,7 @@
+//! This module provides an API for interacting with Weibo's favorites (collections) functionality.
+//!
+//! It includes methods to retrieve a user's favorited posts and to destroy (unfavorite) a post.
+//! The module handles the deserialization of API responses into internal `PostInternal` models.
 #![allow(async_fn_in_trait)]
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
@@ -12,11 +16,14 @@ use crate::{
     models::{Post, err_response::ErrResponse},
 };
 
+/// Represents a single favorited post from the API response.
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct FavoritesPost {
     pub status: PostInternal,
 }
 
+/// An enum representing the possible responses from the favorites API endpoint,
+/// which can either be a successful data payload or an error.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum FavoritesResponse {
@@ -24,6 +31,7 @@ enum FavoritesResponse {
     Fail(ErrResponse),
 }
 
+/// Represents the successful response structure for fetching favorites.
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct FavoritesSucc {
     pub favorites: Vec<FavoritesPost>,
@@ -34,9 +42,18 @@ pub(crate) struct FavoritesSucc {
 
 impl TryFrom<FavoritesResponse> for Vec<PostInternal> {
     type Error = Error;
+    /// Tries to convert a `FavoritesResponse` into a vector of `PostInternal` objects.
+    ///
+    /// This handles both successful API responses and error responses.
+    ///
+    /// # Arguments
+    /// * `value` - The `FavoritesResponse` to convert.
+    ///
+    /// # Returns
+    /// A `Result` containing a `Vec<PostInternal>` on success, or an `Error` if the API
+    /// returned an error or the format was unexpected.
     fn try_from(value: FavoritesResponse) -> Result<Self> {
-        let res = value;
-        match res {
+        match value {
             FavoritesResponse::Succ(FavoritesSucc { favorites, .. }) => {
                 debug!("got {} favorites", favorites.len());
                 let posts = favorites
@@ -54,17 +71,51 @@ impl TryFrom<FavoritesResponse> for Vec<PostInternal> {
 }
 
 impl From<FavoritesSucc> for Vec<PostInternal> {
+    /// Converts a successful favorites response directly into a vector of `PostInternal` objects.
+    ///
+    /// This conversion is infallible as it assumes a successful `FavoritesSucc` has already been established.
+    ///
+    /// # Arguments
+    /// * `value` - The `FavoritesSucc` struct to convert.
+    ///
+    /// # Returns
+    /// A `Vec<PostInternal>` containing the favorited posts.
     fn from(value: FavoritesSucc) -> Self {
         value.favorites.into_iter().map(|p| p.status).collect()
     }
 }
 
+/// Trait for API clients that can interact with Weibo's favorites.
 pub trait FavoritesApi {
+    /// Fetches a page of the user's favorited posts.
+    ///
+    /// # Arguments
+    /// * `page` - The page number to fetch (1-indexed).
+    ///
+    /// # Returns
+    /// A `Result` containing a `Vec<Post>` on success, or an `Error` on failure.
     async fn favorites(&self, page: u32) -> Result<Vec<Post>>;
+
+    /// Destroys (unfavorites) a specific post.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the post to unfavorite.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or failure.
     async fn favorites_destroy(&self, id: i64) -> Result<()>;
 }
 
 impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
+    /// Fetches a page of the user's favorited posts from the Weibo API.
+    ///
+    /// The fetched posts are then processed to retrieve any long text or retweet details.
+    ///
+    /// # Arguments
+    /// * `page` - The page number of favorites to retrieve.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of `Post` objects.
     async fn favorites(&self, page: u32) -> Result<Vec<Post>> {
         info!("getting favorites, page: {page}");
         let response = self.client.favorites(page).await?;
@@ -78,6 +129,13 @@ impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
         Ok(oks)
     }
 
+    /// Unfavorites a specific post on Weibo.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the post to unfavorite.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or failure of the unfavorite operation.
     async fn favorites_destroy(&self, id: i64) -> Result<()> {
         info!("destroying favorite, id: {id}");
         self.client.favorites_destroy(id).await?;

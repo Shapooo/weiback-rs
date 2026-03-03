@@ -1,3 +1,9 @@
+//! This module defines the internal `PostInternal` structure used for deserializing
+//! post data directly from the Weibo API.
+//!
+//! It includes custom deserializers for various fields to handle inconsistencies
+//! or specific formats in the API responses. It also provides a conversion
+//! from `PostInternal` to the public `Post` model.
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -10,6 +16,12 @@ use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal, user::Us
 use crate::error::Error;
 use crate::models::{MixMediaInfo, PicInfoItem, Post, TagStruct};
 
+/// Internal representation of a Weibo post as received directly from the API.
+///
+/// This struct is used for deserialization and contains many optional fields
+/// due to the varied nature of Weibo API responses. It includes custom deserializers
+/// for specific data types and handles nested structures like `LongText`, `PageInfo`,
+/// `UrlStruct`, and `User`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PostInternal {
     pub attitudes_count: Option<i64>,
@@ -41,6 +53,7 @@ pub struct PostInternal {
     pub region_name: Option<String>,
     pub reposts_count: Option<i64>,
     pub repost_type: Option<i64>,
+    /// The original post if this is a retweet. Can be nested.
     pub retweeted_status: Option<Box<PostInternal>>,
     pub source: Option<String>,
     pub tag_struct: Option<TagStruct>,
@@ -50,6 +63,7 @@ pub struct PostInternal {
     pub user: Option<UserInternal>,
 }
 
+/// Represents the extended content of a long Weibo post.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct LongText {
     pub content: String,
@@ -93,6 +107,10 @@ impl TryFrom<PostInternal> for Post {
     }
 }
 
+/// Custom deserializer for `UserInternal` that filters out users with ID `0`.
+///
+/// This is a workaround for cases where the API might return a placeholder user object
+/// with an ID of `0` when no actual user is associated.
 fn deserialize_user<'de, D>(deserializer: D) -> std::result::Result<Option<UserInternal>, D::Error>
 where
     D: Deserializer<'de>,
@@ -101,6 +119,9 @@ where
     Ok(user.and_then(|u| if u.id == 0 { None } else { Some(u) }))
 }
 
+/// Custom deserializer for `Vec<String>` IDs that converts empty vectors to `None`.
+///
+/// This simplifies handling of optional ID lists where an empty list is semantically equivalent to no list.
 pub fn deserialize_ids<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Option<Vec<String>>, D::Error>
@@ -111,6 +132,10 @@ where
     Ok(ids.and_then(|ids| if ids.is_empty() { None } else { Some(ids) }))
 }
 
+/// Custom deserializer for `created_at` timestamps.
+///
+/// It parses RFC 3339 formatted date-time strings, handling the specific format
+/// used by the Weibo API (e.g., "Tue May 31 17:46:55 +0800 2022").
 pub fn deserialize_created_at<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
 where
     D: Deserializer<'de>,

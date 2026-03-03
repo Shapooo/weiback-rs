@@ -1,3 +1,8 @@
+//! This module provides functionality for fetching and updating emoji (emoticon) data
+//! from the Weibo API.
+//!
+//! It includes logic to retrieve emoji from both the mobile and web versions of the API,
+//! consolidate them, and handle various response formats and errors.
 #![allow(async_fn_in_trait)]
 use std::collections::HashMap;
 
@@ -11,22 +16,27 @@ use super::ApiClientImpl;
 use crate::error::{Error, Result};
 use crate::models::err_response::ErrResponse;
 
+/// Represents a single emoji with its key (phrase) and URL.
 #[derive(Debug, Clone, Deserialize)]
 struct Emoji {
     key: String,
     url: Url,
 }
 
+/// Represents the structure containing a list of emojis in the mobile API response.
 #[derive(Debug, Clone, Deserialize)]
 struct EmojiData {
     card: Vec<Emoji>,
 }
 
+/// Represents the successful response structure from the mobile emoji update API.
 #[derive(Debug, Clone, Deserialize)]
 struct EmojiUpdateResponseInner {
     data: EmojiData,
 }
 
+/// An enum representing the possible responses from the mobile emoji update API,
+/// which can either be a successful data payload or an error.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum EmojiUpdateResponse {
@@ -34,7 +44,13 @@ enum EmojiUpdateResponse {
     Fail(ErrResponse),
 }
 
+/// Trait for API clients that can fetch and update emoji data.
 pub trait EmojiUpdateApi {
+    /// Fetches and consolidates emoji data from both mobile and web Weibo APIs.
+    ///
+    /// # Returns
+    /// A `Result` containing a `HashMap` where keys are emoji phrases (e.g., `[哈哈]`)
+    /// and values are their corresponding image URLs.
     async fn emoji_update(&self) -> Result<HashMap<String, Url>>;
 }
 
@@ -49,6 +65,12 @@ impl<C: HttpClient> EmojiUpdateApi for ApiClientImpl<C> {
 }
 
 impl<C: HttpClient> ApiClientImpl<C> {
+    /// Fetches emoji data from the web version of the Weibo API.
+    ///
+    /// This method parses a complex JSON structure specific to the web API's emoticon data.
+    ///
+    /// # Returns
+    /// A `Result` containing a `HashMap` of emoji phrases to URLs on success, or an `Error` on failure.
     async fn fetch_from_web_api(&self) -> Result<HashMap<String, Url>> {
         debug!("fetch emoticon");
         let res = self.client.fetch_from_web_api().await?;
@@ -97,6 +119,12 @@ impl<C: HttpClient> ApiClientImpl<C> {
         Ok(res)
     }
 
+    /// Fetches emoji data from the mobile version of the Weibo API.
+    ///
+    /// This method expects a structured JSON response that is deserialized into `EmojiUpdateResponse`.
+    ///
+    /// # Returns
+    /// A `Result` containing a `HashMap` of emoji phrases to URLs on success, or an `Error` on failure.
     async fn fetch_from_mobile_api(&self) -> Result<HashMap<String, Url>> {
         let response = self.client.fetch_from_mobile_api().await?;
         let res = response.json::<EmojiUpdateResponse>().await?;

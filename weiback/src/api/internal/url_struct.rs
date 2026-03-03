@@ -1,3 +1,8 @@
+//! This module defines internal structures for deserializing `UrlStruct` data
+//! from the Weibo API.
+//!
+//! It handles complex scenarios involving nested URL information, different
+//! formats for picture IDs, and conversion into the public `UrlStruct` models.
 use std::collections::HashMap;
 use std::result::Result;
 
@@ -11,10 +16,14 @@ use crate::models::{PicInfoDetail, UrlStruct, UrlStructItem, url_struct::UrlType
 use crate::models::{PicInfoItem, PicInfoType};
 use crate::utils::pic_url_to_id;
 
+/// Internal representation of a collection of URL structures from the Weibo API.
+///
+/// This struct wraps a vector of `UrlStructItemInternal`, designed for direct deserialization.
 #[derive(Debug, Clone, Deserialize)]
 pub struct UrlStructInternal(pub Vec<UrlStructItemInternal>);
 
 impl PartialEq for UrlStructInternal {
+    /// Compares two `UrlStructInternal` instances for equality by comparing their inner vectors.
     fn eq(&self, other: &Self) -> bool {
         if self.0.len() != other.0.len() {
             return false;
@@ -29,6 +38,7 @@ impl PartialEq for UrlStructInternal {
     }
 }
 
+/// Internal representation of picture information for a status item, used during deserialization.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfosForStatusItem {
     pub bmiddle: PicInfoDetail,
@@ -38,6 +48,16 @@ pub struct PicInfosForStatusItem {
 }
 
 impl From<PicInfosForStatusItem> for PicInfoItem {
+    /// Converts `PicInfosForStatusItem` (API specific) into the public `PicInfoItem` model.
+    ///
+    /// This conversion involves normalizing image URLs to derive various sizes
+    /// (largest, mw2000, original) and determining the `PicInfoType` (Gif or Pic).
+    ///
+    /// # Arguments
+    /// * `value` - The `PicInfosForStatusItem` to convert.
+    ///
+    /// # Returns
+    /// A `PicInfoItem` with normalized picture details.
     fn from(value: PicInfosForStatusItem) -> Self {
         let mut url = value.bmiddle.url.clone();
         let large_path = url.path().replace("wap360", "large");
@@ -88,6 +108,10 @@ impl From<PicInfosForStatusItem> for PicInfoItem {
     }
 }
 
+/// Internal representation of a single item within a `UrlStruct` from the Weibo API.
+///
+/// This struct holds details about a URL, including its short and long forms, associated
+/// page information, and custom deserializers for `pic_ids` and `pic_infos`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UrlStructItemInternal {
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
@@ -110,6 +134,15 @@ pub struct UrlStructItemInternal {
 
 impl TryFrom<UrlStructItemInternal> for UrlStructItem {
     type Error = Error;
+    /// Converts an internal `UrlStructItemInternal` into the public `UrlStructItem` model.
+    ///
+    /// This conversion is straightforward, mapping fields directly.
+    ///
+    /// # Arguments
+    /// * `value` - The `UrlStructItemInternal` to convert.
+    ///
+    /// # Returns
+    /// A `Result` containing the `UrlStructItem` model.
     fn try_from(value: UrlStructItemInternal) -> std::result::Result<Self, Self::Error> {
         let res = Self {
             long_url: value.long_url,
@@ -130,6 +163,16 @@ impl TryFrom<UrlStructItemInternal> for UrlStructItem {
 
 impl TryFrom<UrlStructInternal> for UrlStruct {
     type Error = Error;
+    /// Converts an internal `UrlStructInternal` into the public `UrlStruct` model.
+    ///
+    /// This involves converting each `UrlStructItemInternal` within the vector
+    /// to its public `UrlStructItem` equivalent.
+    ///
+    /// # Arguments
+    /// * `value` - The `UrlStructInternal` to convert.
+    ///
+    /// # Returns
+    /// A `Result` containing the `UrlStruct` model.
     fn try_from(value: UrlStructInternal) -> Result<Self, Self::Error> {
         let res = Self(
             value
@@ -142,6 +185,10 @@ impl TryFrom<UrlStructInternal> for UrlStruct {
     }
 }
 
+/// Custom deserializer for `pic_ids` that can handle either a single string or a vector of strings.
+///
+/// It extracts the first ID if a vector is provided, otherwise uses the single string.
+/// Empty vectors result in `None`.
 fn deserialize_pic_ids<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
@@ -165,6 +212,11 @@ where
     Ok(res)
 }
 
+/// Custom deserializer for `pic_infos` that can handle various JSON structures.
+///
+/// It attempts to deserialize into a `HashMap<String, PicInfosForStatusItem>`,
+/// `HashMap<String, PicInfoItem>`, or a single `PicInfosForStatusItem`,
+/// then converts the first item found into a `PicInfoItem`.
 fn deserialize_pic_infos<'de, D>(deserializer: D) -> Result<Option<PicInfoItem>, D::Error>
 where
     D: Deserializer<'de>,

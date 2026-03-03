@@ -1,3 +1,7 @@
+//! This module provides an API for fetching detailed information about a single Weibo status (post).
+//!
+//! It includes functionality to retrieve the full content of a post, including its long text
+//! and potentially nested retweeted status, by its unique ID.
 #![allow(async_fn_in_trait)]
 use log::{debug, error};
 use serde::Deserialize;
@@ -11,12 +15,16 @@ use crate::{
     models::err_response::ErrResponse,
 };
 
+/// Configuration related to post editing status in the API response.
 #[derive(Debug, Clone, Deserialize)]
 pub struct EditConfig {
+    /// Indicates whether the post has been edited.
     #[allow(unused)]
     pub edited: bool,
 }
 
+/// An enum representing the possible responses from the statuses show API endpoint,
+/// which can either be a successful `PostInternal` data payload or an `ErrResponse`.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -25,11 +33,29 @@ enum StatusesShowResponse {
     Fail(ErrResponse),
 }
 
+/// Trait for API clients that can fetch detailed information about a Weibo status.
 pub trait StatusesShowApi {
+    /// Fetches the full details of a single Weibo post by its ID.
+    ///
+    /// This includes resolving long text content and processing any retweeted status.
+    ///
+    /// # Arguments
+    /// * `id` - The unique ID of the status (post) to fetch.
+    ///
+    /// # Returns
+    /// A `Result` containing the `Post` model on success, or an `Error` on failure.
     async fn statuses_show(&self, id: i64) -> Result<Post>;
 }
 
 impl<C: HttpClient> ApiClientImpl<C> {
+    /// Internal helper to fetch a `PostInternal` by its ID, primarily used for resolving
+    /// long texts and retweeted statuses.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the post to fetch.
+    ///
+    /// # Returns
+    /// A `Result` containing the `PostInternal` on success, or an `Error` on failure.
     pub(super) async fn statuses_show_internal(&self, id: i64) -> Result<PostInternal> {
         debug!("getting long text, id: {id}");
 
@@ -48,6 +74,16 @@ impl<C: HttpClient> ApiClientImpl<C> {
     }
 }
 impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
+    /// Fetches the full details of a single Weibo post by its ID.
+    ///
+    /// This method leverages `statuses_show_internal` to get the raw `PostInternal`
+    /// and then uses `process_post` (from the main `ApiClientImpl` for hydration.
+    ///
+    /// # Arguments
+    /// * `id` - The unique ID of the status (post) to fetch.
+    ///
+    /// # Returns
+    /// A `Result` containing the `Post` model on success, or an `Error` on failure.
     async fn statuses_show(&self, id: i64) -> Result<Post> {
         let ss = self.statuses_show_internal(id).await?;
         self.process_post(ss).await

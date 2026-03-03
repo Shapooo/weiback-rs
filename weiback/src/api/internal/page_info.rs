@@ -1,3 +1,8 @@
+//! This module defines the internal representation for `PageInfo` received from the Weibo API.
+//!
+//! It includes the `PageInfoInternal` struct which is used for deserialization
+//! and a conversion into the public `PageInfo` model, handling complex scenarios
+//! like nested page information.
 use serde::Deserialize;
 use serde_aux::prelude::*;
 use serde_json::Value;
@@ -8,6 +13,10 @@ use crate::models::{
     page_info::{PageInfo, PagePicInfo},
 };
 
+/// Helper macro to merge optional fields from a source struct into a target struct.
+///
+/// This macro iterates through the specified fields. If a field in the `target` is `None`,
+/// it attempts to take the corresponding field from the `source` and move it into the `target`.
 macro_rules! merge_optional_fields {
     ($target:expr, $source:expr, $($field:ident),+) => {
         $(
@@ -18,11 +27,16 @@ macro_rules! merge_optional_fields {
     };
 }
 
+/// Internal representation of `PageInfo` as received directly from the Weibo API.
+///
+/// This struct handles the deserialization of various optional fields which might
+/// be nested or have specific deserialization requirements (e.g., numbers from strings, URLs).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PageInfoInternal {
     #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
     pub author_id: Option<i64>,
     pub card_info: Option<Value>,
+    /// Nested `PageInfoInternal` cards, used for merging information.
     pub cards: Option<Vec<PageInfoInternal>>,
     pub content1: Option<String>,
     pub content2: Option<String>,
@@ -52,6 +66,11 @@ pub struct PageInfoInternal {
 }
 
 impl From<PageInfoInternal> for PageInfo {
+    /// Converts an internal `PageInfoInternal` structure into the public `PageInfo` model.
+    ///
+    /// This conversion handles the merging of optional fields from nested `cards` if they exist.
+    /// It ensures that fields in the outer `PageInfoInternal` are preferred unless they are `None`,
+    /// in which case values from the first available card are used.
     fn from(mut page_info: PageInfoInternal) -> Self {
         if let Some(cards) = page_info.cards.take() {
             for mut card in cards {

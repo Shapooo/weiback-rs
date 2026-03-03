@@ -1,9 +1,20 @@
+//! This module defines the internal `UserInternal` structure used for deserializing
+//! user data directly from the Weibo API.
+//!
+//! It includes custom deserializers for various fields to handle inconsistencies
+//! or specific formats in the API responses. It also provides a conversion
+//! from `UserInternal` to the public `User` model.
 use serde::Deserialize;
 use serde_aux::prelude::*;
 use url::Url;
 
 use crate::models::User;
 
+/// Internal representation of a Weibo user as received directly from the API.
+///
+/// This struct is used for deserialization and contains many optional fields
+/// due to the varied nature of Weibo API responses. It includes custom deserializers
+/// for specific data types.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UserInternal {
     #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
@@ -25,6 +36,17 @@ pub struct UserInternal {
 }
 
 impl From<UserInternal> for User {
+    /// Converts an internal `UserInternal` structure into the public `User` model.
+    ///
+    /// This conversion assumes that essential URL fields like `avatar_hd`, `avatar_large`,
+    /// and `profile_image_url` will always be present in a valid `UserInternal` and thus
+    /// uses `expect`.
+    ///
+    /// # Arguments
+    /// * `value` - The `UserInternal` to convert.
+    ///
+    /// # Returns
+    /// A `User` model.
     fn from(value: UserInternal) -> Self {
         Self {
             avatar_hd: value.avatar_hd.expect("promised to be Some"),

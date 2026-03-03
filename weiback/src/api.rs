@@ -1,3 +1,9 @@
+//! This module defines the main API client for interacting with the Weibo SDK.
+//!
+//! It provides a unified trait `ApiClient` that aggregates functionality from various
+//! sub-modules (emoji, favorites, profile statuses, statuses show).
+//! The primary implementation is `ApiClientImpl`, which wraps the `weibosdk_rs::ApiClient`.
+
 pub mod emoji;
 pub mod favorites;
 pub(crate) mod internal;
@@ -16,6 +22,10 @@ pub use favorites::FavoritesApi;
 pub use profile_statuses::{ContainerType, ProfileStatusesApi};
 pub use statuses_show::StatusesShowApi;
 
+/// A trait that combines various Weibo API functionalities.
+///
+/// Implementors of this trait can perform operations related to emoji updates,
+/// managing favorites, fetching profile statuses, and retrieving detailed status information.
 pub trait ApiClient:
     emoji::EmojiUpdateApi
     + favorites::FavoritesApi
@@ -27,16 +37,34 @@ pub trait ApiClient:
 {
 }
 
+/// The default implementation of the `ApiClient` trait.
+///
+/// It wraps a `weibosdk_rs::ApiClient` instance to provide concrete API call functionality.
 #[derive(Debug, Clone)]
 pub struct ApiClientImpl<C: HttpClient> {
     pub client: SdkApiClient<C>,
 }
 
 impl<C: HttpClient> ApiClientImpl<C> {
+    /// Creates a new `ApiClientImpl` instance.
+    ///
+    /// # Arguments
+    /// * `client` - An instance of `weibosdk_rs::ApiClient` that handles the underlying HTTP requests.
     pub fn new(client: SdkApiClient<C>) -> Self {
         ApiClientImpl { client }
     }
 
+    /// Processes a `PostInternal` object, fetching full long text and retweet information if available.
+    ///
+    /// This method is responsible for hydrating a `PostInternal` from the database with
+    /// potentially missing details (like full long text content or complete retweet objects)
+    /// by making additional API calls if `is_long_text` is true or `retweeted_status` exists.
+    ///
+    /// # Arguments
+    /// * `post` - The `PostInternal` object to process.
+    ///
+    /// # Returns
+    /// A `Result` containing a fully hydrated `Post` object.
     async fn process_post(&self, mut post: PostInternal) -> Result<Post> {
         // If outer post is long text, fetch its full version.
         if post.is_long_text {
@@ -75,6 +103,8 @@ impl<C: HttpClient> ApiClientImpl<C> {
 
 impl<C: HttpClient> ApiClient for ApiClientImpl<C> {}
 
+/// A type alias for `ApiClientImpl` using the default `weibosdk_rs::Client`.
 pub type DefaultApiClient = ApiClientImpl<weibosdk_rs::Client>;
+/// A type alias for `ApiClientImpl` using `crate::dev_client::DevClient` for development mode.
 #[cfg(feature = "dev-mode")]
 pub type DevApiClient = ApiClientImpl<crate::dev_client::DevClient>;
