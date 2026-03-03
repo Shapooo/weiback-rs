@@ -1,3 +1,12 @@
+//! This module implements the high-level logic for all application tasks.
+//!
+//! The [`TaskHandler`] coordinates between the [`ApiClient`], [`Storage`], [`Exporter`],
+//! and [`PostProcesser`] to fulfill requests such as:
+//! - Backing up a user's entire post history.
+//! - Synchronizing favorited posts.
+//! - Exporting saved posts to HTML.
+//! - Cleaning up redundant media or invalid avatars.
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -23,6 +32,11 @@ use crate::models::{Picture, PictureMeta, User};
 use crate::storage::Storage;
 use crate::utils::{make_page_name, pic_url_to_id};
 
+/// The primary executor for application tasks.
+///
+/// `TaskHandler` is responsible for fetching data from the API, processing it
+/// (including media downloading), and managing its lifecycle within the local storage
+/// and export systems.
 #[derive(Debug, Clone)]
 pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> {
     api_client: A,
@@ -34,6 +48,7 @@ pub struct TaskHandler<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader
 }
 
 impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S, E, D> {
+    /// Creates a new `TaskHandler` instance.
     pub fn new(api_client: A, storage: S, exporter: E, downloader: D) -> Result<Self> {
         let emoji_map = EmojiMap::new(api_client.clone());
 
@@ -51,16 +66,26 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         })
     }
 
+    /// Retrieves a user from local storage by their UID.
     pub async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         self.storage.get_user(uid).await
     }
 
+    /// Searches for users in local storage by screen name prefix.
     pub async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>> {
         self.storage
             .search_users_by_screen_name_prefix(prefix)
             .await
     }
 
+    /// Retrieves the binary data of a picture from storage.
+    ///
+    /// This method automatically handles resolution fallback by sorting available
+    /// picture definitions.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `id` - The picture ID.
     pub async fn get_picture_blob(&self, ctx: Arc<TaskContext>, id: &str) -> Result<Option<Bytes>> {
         let mut infos = self.storage.get_pictures_by_id(id).await?;
         infos.sort_by(|a, b| match (&a.meta, &b.meta) {
@@ -83,6 +108,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(None)
     }
 
+    /// Persists user information to the database and downloads their high-definition avatar.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `user` - The user object to save.
     pub async fn save_user_info(&self, ctx: Arc<TaskContext>, user: &User) -> Result<()> {
         info!("Saving user info for user id: {}", user.id);
         self.storage.save_user(user).await?;
@@ -123,6 +153,14 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
+    /// Generic procedure for paginated backup tasks.
+    ///
+    /// Handles iteration, progress tracking, and intervals between requests.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `num_pages` - Number of pages to fetch.
+    /// * `page_backup_fn` - An async closure that performs the actual backup of a single page.
     async fn backup_procedure<F, Fut>(
         &self,
         ctx: Arc<TaskContext>,
@@ -181,7 +219,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    // backup user posts
+    /// Backs up posts for a specific user.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `options` - Configuration for the backup (UID, range, type).
     pub(super) async fn backup_user(
         &self,
         ctx: Arc<TaskContext>,
@@ -203,7 +245,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    // backup one page of posts of the user
+    /// Fetches and processes a single page of posts for a user.
     async fn backup_one_page(
         &self,
         ctx: Arc<TaskContext>,
@@ -224,7 +266,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(result)
     }
 
-    // export favorite posts from weibo
+    /// Backs up the current user's favorited posts.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `options` - Configuration for the backup (range).
     pub(super) async fn backup_favorites(
         &self,
         ctx: Arc<TaskContext>,
@@ -240,7 +286,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
-    // backup one page of favorites
+    /// Fetches and processes a single page of favorite posts.
     async fn backup_one_fav_page(&self, ctx: Arc<TaskContext>, page: u32) -> Result<usize> {
         debug!(
             "Backing up favorites page {page}, task {}",
@@ -258,7 +304,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(result)
     }
 
-    // unfavorite all posts that are in weibo favorites
+    /// Unfavorites posts on Weibo that are currently present in local storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
     pub(super) async fn unfavorite_posts(&self, ctx: Arc<TaskContext>) -> Result<()> {
         info!("Starting unfavorite posts task {}", ctx.task_id.unwrap());
         let task_interval = ctx.config.other_task_interval;
@@ -282,6 +331,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
+    /// Exports posts from local storage to an external format (HTML).
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `options` - Export configuration (query filters, output directory).
     pub async fn export_posts(
         &self,
         ctx: Arc<TaskContext>,
@@ -313,6 +367,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
+    /// Queries local posts and enriches them with media/metadata.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `query` - Search and filter criteria.
     pub async fn query_posts(
         &self,
         ctx: Arc<TaskContext>,
@@ -332,10 +391,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         })
     }
 
+    /// Deletes a post from local storage.
     pub async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         self.storage.delete_post(ctx, id).await
     }
 
+    /// Cleans up redundant picture files based on the specified resolution policy.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `options` - Cleanup configuration (Highest/Lowest resolution).
     pub(super) async fn cleanup_pictures(
         &self,
         ctx: Arc<TaskContext>,
@@ -391,6 +456,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
+    /// Identifies and removes invalid or outdated avatar files.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
     pub(super) async fn cleanup_invalid_avatars(&self, ctx: Arc<TaskContext>) -> Result<()> {
         info!("Starting cleanup invalid avatars task");
         let duplicate_uids = self.storage.get_users_with_duplicate_avatars().await?;
@@ -428,6 +497,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         Ok(())
     }
 
+    /// Re-fetches a single post from Weibo API and processes it.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `id` - The post ID to refresh.
     pub async fn rebackup_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         let post = self.api_client.statuses_show(id).await?;
         self.processer.process(ctx, vec![post]).await

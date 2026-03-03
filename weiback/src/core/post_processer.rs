@@ -1,3 +1,11 @@
+//! This module handles the post-processing phase of a task.
+//!
+//! It is responsible for:
+//! 1.  Extracting media metadata (images, videos, emojis, avatars) from posts.
+//! 2.  Downloading media files to local storage using a [`MediaDownloader`].
+//! 3.  Enriching post data (e.g., mapping emojis to local IDs).
+//! 4.  Saving processed posts into the [`Storage`].
+
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
@@ -19,6 +27,11 @@ use crate::utils::{
     extract_all_pic_metas, extract_emojis_from_text, extract_standalone_pic_metas, pic_url_to_id,
 };
 
+/// A processor that handles media downloading and post data enrichment.
+///
+/// `PostProcesser` implements the logic for extracting and downloading all media
+/// associated with a set of posts, ensuring they are stored locally before the
+/// posts themselves are saved to the database.
 #[derive(Debug, Clone)]
 pub struct PostProcesser<A: ApiClient, S: Storage, D: MediaDownloader> {
     storage: S,
@@ -27,6 +40,7 @@ pub struct PostProcesser<A: ApiClient, S: Storage, D: MediaDownloader> {
 }
 
 impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
+    /// Creates a new `PostProcesser` instance.
     pub fn new(storage: S, downloader: D, emoji_map: EmojiMap<A>) -> Result<Self> {
         info!("Initializing PostProcesser...");
         info!("PostProcesser initialized successfully.");
@@ -37,6 +51,13 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         })
     }
 
+    /// Enriches a raw `Post` with additional information for UI display.
+    ///
+    /// This includes mapping avatars, emojis, and pictures to their local identifiers.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `post` - The post to enrich.
     pub async fn build_post_info(&self, ctx: Arc<TaskContext>, post: Post) -> Result<PostInfo> {
         let avatar_id = if let Some(user) = &post.user {
             self.storage
@@ -91,6 +112,13 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         })
     }
 
+    /// Processes a batch of posts, downloading media and saving them to storage.
+    ///
+    /// This is the main entry point for persisting posts fetched from the API.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `posts` - The list of posts to process.
     pub async fn process(&self, ctx: Arc<TaskContext>, posts: Vec<Post>) -> Result<()> {
         info!(
             "Processing {} posts for task {:?}.",
@@ -122,10 +150,12 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         Ok(())
     }
 
+    /// Determines if a post needs to be inserted or updated in storage.
     async fn need_insert(&self, post: &Post) -> Result<bool> {
         Ok(is_valid_post(post) || self.storage.get_post(post.id).await?.is_none())
     }
 
+    /// Identifies and downloads all unique pictures found in a batch of posts.
     async fn handle_picture(
         &self,
         ctx: Arc<TaskContext>,
@@ -146,6 +176,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         Ok(())
     }
 
+    /// Downloads a single picture and saves it to local storage.
     async fn download_pic_to_local(
         &self,
         ctx: Arc<TaskContext>,
@@ -175,6 +206,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         Ok(())
     }
 
+    /// Identifies and downloads all unique LivePhoto videos found in a batch of posts.
     async fn handle_livephoto_video(&self, ctx: Arc<TaskContext>, posts: &[Post]) -> Result<()> {
         let video_metas = extract_livephoto_video_metas(posts);
         info!(
@@ -192,6 +224,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
         Ok(())
     }
 
+    /// Downloads a single video and saves it to local storage.
     async fn download_video_to_local(
         &self,
         ctx: Arc<TaskContext>,

@@ -1,3 +1,10 @@
+//! This module defines the data structures used to describe and configure tasks.
+//!
+//! It includes:
+//! - [`TaskRequest`]: An enum representing the different types of operations (Backup, Export, Cleanup).
+//! - [`TaskContext`]: Shared state and configuration passed throughout a task's execution.
+//! - Various options structs (e.g., [`BackupUserPostsOptions`], [`ExportJobOptions`]).
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,23 +14,31 @@ use serde::{Deserialize, Serialize};
 use super::task_manager::TaskManager;
 use crate::{api::ContainerType, config::Config, models::Post};
 
+/// Context shared across a single task's execution.
 #[derive(Debug)]
 pub struct TaskContext {
+    /// The unique ID of the task, if it is a long-running task.
     pub task_id: Option<u64>,
+    /// A snapshot of the application configuration at task start.
     pub config: Config,
+    /// Reference to the manager for progress and status reporting.
     pub task_manager: Arc<TaskManager>,
 }
 
+/// Represents a request to perform a specific application task.
 #[derive(Debug, Clone)]
 pub enum TaskRequest {
-    // to download favorites (range, with pic, image definition level)
+    /// Backup favorited posts from the currently logged-in user.
     BackupFavorites(BackupFavoritesOptions),
-    // to unfavorite favorite post
+    /// Unfavorite posts that are currently in Weibo's favorites list.
     UnfavoritePosts,
-    // to backup user (id, with pic, image definition level)
+    /// Backup posts from a specific user.
     BackupUser(BackupUserPostsOptions),
+    /// Export saved posts from local storage to an external format (e.g., HTML).
     Export(ExportJobOptions),
+    /// Clean up redundant images or enforce resolution policies.
     CleanupPictures(CleanupPicturesOptions),
+    /// Clean up invalid or outdated user avatars.
     CleanupAvatars,
 }
 
