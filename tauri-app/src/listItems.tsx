@@ -11,8 +11,8 @@ import StorageOutlined from '@mui/icons-material/StorageOutlined';
 
 const menuItems = [
     { key: '/online-backup', label: '备 份', icon: <CloudDownloadOutlined />, path: '/online-backup' },
-    { key: '/export', label: '导 出', icon: <ArchiveOutlined />, path: '/export' },
-    { key: '/manage', label: '管 理', icon: <StorageOutlined />, path: '/manage' },
+    { key: '/export', label: '内容管理', icon: <ArchiveOutlined />, path: '/export' },
+    { key: '/manage', label: '数据维护', icon: <StorageOutlined />, path: '/manage' },
     { key: '/user', label: '用 户', icon: <PersonOutlined />, path: '/user' },
     { key: '/settings', label: '设 置', icon: <SettingsOutlined />, path: '/settings' },
 ];

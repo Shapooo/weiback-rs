@@ -245,7 +245,7 @@ const LocalExportPage: React.FC = () => {
         <LocalizationProvider dateAdapter={AdapterDateFns}>
             <Box sx={{ width: '100%', p: 3 }}>
                 <Typography variant="h4" gutterBottom>
-                    本地导出与浏览
+                    内容浏览与处理
                 </Typography>
 
                 <Accordion defaultExpanded>
