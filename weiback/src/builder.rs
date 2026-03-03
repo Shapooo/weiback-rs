@@ -1,3 +1,11 @@
+//! This module provides the [`CoreBuilder`] for orchestrating the initialization of the application.
+//!
+//! The builder handles the complex setup process of all internal components, including:
+//! - Database connection pooling and storage initialization.
+//! - HTTP client and media downloader worker lifecycle management.
+//! - Weibo API client configuration (supporting both standard and development modes).
+//! - Task handler and core service assembly.
+
 use std::sync::Arc;
 
 use log::info;
@@ -20,13 +28,30 @@ use crate::{api::DevApiClient, dev_client::DevClient};
 
 const DOWNLOADER_BUFFER_SIZE: usize = 100;
 
+/// A builder for creating and configuring the [`Core`] service.
+///
+/// `CoreBuilder` follows the builder pattern to encapsulate the logic required to
+/// properly initialize all dependencies and sub-systems before the application starts.
 pub struct CoreBuilder;
 
 impl CoreBuilder {
+    /// Creates a new instance of `CoreBuilder`.
     pub fn new() -> Self {
         Self
     }
 
+    /// Builds and returns an initialized [`Core`] instance wrapped in an [`Arc`].
+    ///
+    /// This method performs the following steps:
+    /// 1. Reads the global configuration.
+    /// 2. Initializes the database pool and [`StorageImpl`].
+    /// 3. Sets up the [`ExporterImpl`].
+    /// 4. Configures the [`HttpClient`] and spawns the [`MediaDownloader`] worker thread/task.
+    /// 5. Initializes the appropriate API client (Standard or DevMode).
+    /// 6. Assembles the [`TaskHandler`] and finally the [`Core`] service.
+    ///
+    /// # Errors
+    /// Returns a [`Result`] if any component fails to initialize (e.g., database connection error).
     pub fn build(self) -> Result<Arc<Core>> {
         info!("CoreBuilder: Building Core service...");
         let main_config = get_config();
