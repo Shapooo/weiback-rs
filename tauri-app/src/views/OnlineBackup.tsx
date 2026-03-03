@@ -186,7 +186,10 @@ const FavoritesBackupSection: React.FC = () => {
 
 const OnlineBackupPage: React.FC = () => {
     return (
-        <Box>
+        <Box sx={{ p: 3 }}>
+            <Typography variant="h4" gutterBottom>
+                在线备份任务
+            </Typography>
             <UserBackupSection />
             <FavoritesBackupSection />
         </Box>

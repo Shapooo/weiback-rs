@@ -48,7 +48,7 @@ const DataManage: React.FC = () => {
     return (
         <Box sx={{ p: 3 }}>
             <Typography variant="h4" gutterBottom>
-                数据管理
+                全局数据维护
             </Typography>
 
             <Grid container spacing={3}>

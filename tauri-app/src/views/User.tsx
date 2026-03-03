@@ -175,16 +175,21 @@ const UserPage: React.FC = () => {
   };
 
   return (
-    <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
-      <CardContent>
-        <Typography variant="h5" component="div" sx={{ mb: 2 }}>
-          {pageState === UserPageState.LoggedIn ? '用户信息' : '用户登录'}
-        </Typography>
-        <Box component="form" noValidate autoComplete="off">
-          {renderContent()}
-        </Box>
-      </CardContent>
-    </Card>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        用户账号管理
+      </Typography>
+      <Card sx={{ maxWidth: 400, mx: 'auto', mt: 5 }}>
+        <CardContent>
+          <Typography variant="h5" component="div" sx={{ mb: 2 }}>
+            {pageState === UserPageState.LoggedIn ? '用户信息' : '用户登录'}
+          </Typography>
+          <Box component="form" noValidate autoComplete="off">
+            {renderContent()}
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 
