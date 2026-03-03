@@ -40,6 +40,8 @@ pub enum TaskRequest {
     CleanupPictures(CleanupPicturesOptions),
     /// Clean up invalid or outdated user avatars.
     CleanupAvatars,
+    /// Clean up invalid posts (e.g., user is None).
+    CleanupInvalidPosts(CleanupInvalidPostsOptions),
 }
 
 impl TaskRequest {
@@ -51,8 +53,15 @@ impl TaskRequest {
             TaskRequest::Export(_) => 1,
             TaskRequest::CleanupPictures(_) => 0,
             TaskRequest::CleanupAvatars => 0,
+            TaskRequest::CleanupInvalidPosts(_) => 0,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanupInvalidPostsOptions {
+    /// Whether to clean up posts that are valid themselves but their retweeted content is invalid.
+    pub clean_retweeted_invalid: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

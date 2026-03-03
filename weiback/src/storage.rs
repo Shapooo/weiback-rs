@@ -126,6 +126,12 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// * `id` - The ID of the post to delete.
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()>;
 
+    /// Retrieves IDs of posts that are invalid (e.g., uid is NULL).
+    ///
+    /// # Arguments
+    /// * `clean_retweeted_invalid` - Whether to include posts that are valid themselves but their retweeted content is invalid.
+    async fn get_invalid_posts_ids(&self, clean_retweeted_invalid: bool) -> Result<Vec<i64>>;
+
     /// Saves a picture's content to the file system and its metadata to the database.
     ///
     /// # Arguments
@@ -500,6 +506,10 @@ impl Storage for StorageImpl {
 
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         self.delete_post_recursive(ctx, id).await
+    }
+
+    async fn get_invalid_posts_ids(&self, clean_retweeted_invalid: bool) -> Result<Vec<i64>> {
+        post::get_invalid_posts_ids(&self.db_pool, clean_retweeted_invalid).await
     }
 }
 

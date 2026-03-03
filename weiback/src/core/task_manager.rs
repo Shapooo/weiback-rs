@@ -25,6 +25,8 @@ pub enum TaskType {
     CleanupPictures,
     /// Clean up invalid or outdated avatars.
     CleanupAvatars,
+    /// Clean up invalid posts (e.g., user is None).
+    CleanupInvalidPosts,
 }
 
 /// The current execution state of a task.

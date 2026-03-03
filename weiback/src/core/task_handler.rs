@@ -20,8 +20,8 @@ use super::post_processer::PostProcesser;
 use super::task::TaskContext;
 use crate::api::{ApiClient, ContainerType};
 use crate::core::task::{
-    BackupFavoritesOptions, BackupUserPostsOptions, CleanupPicturesOptions, ExportJobOptions,
-    PaginatedPostInfo, PostQuery, ResolutionPolicy,
+    BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions,
+    CleanupPicturesOptions, ExportJobOptions, PaginatedPostInfo, PostQuery, ResolutionPolicy,
 };
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
@@ -494,6 +494,39 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         }
 
         info!("Finished cleanup invalid avatars task");
+        Ok(())
+    }
+
+    /// Cleans up invalid posts based on the specified options.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `options` - Cleanup configuration.
+    pub(super) async fn cleanup_invalid_posts(
+        &self,
+        ctx: Arc<TaskContext>,
+        options: CleanupInvalidPostsOptions,
+    ) -> Result<()> {
+        info!(
+            "Starting cleanup invalid posts task with options: {:?}",
+            options
+        );
+        let ids = self
+            .storage
+            .get_invalid_posts_ids(options.clean_retweeted_invalid)
+            .await?;
+        let total = ids.len() as u64;
+        info!("Found {} invalid posts to clean up", total);
+        ctx.task_manager.update_progress(0, total)?;
+
+        for id in ids {
+            if let Err(e) = self.storage.delete_post(ctx.clone(), id).await {
+                error!("Failed to delete invalid post {}: {}", id, e);
+            }
+            ctx.task_manager.update_progress(1, 0)?;
+        }
+
+        info!("Finished cleanup invalid posts task");
         Ok(())
     }
 

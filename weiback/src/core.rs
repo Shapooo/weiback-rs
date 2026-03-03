@@ -326,6 +326,21 @@ impl Core {
         Ok(())
     }
 
+    /// Starts a long-running task to clean up invalid posts.
+    pub async fn cleanup_invalid_posts(&self, request: TaskRequest) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0;
+        self.task_manager.start_task(
+            id,
+            TaskType::CleanupInvalidPosts,
+            "清理失效内容".into(),
+            total,
+        )?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
+        Ok(())
+    }
+
     // ========================= context creators =========================
 
     /// Creates a task context for long-running tasks, including a unique task ID.
@@ -364,6 +379,11 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
             task_handler.cleanup_pictures(ctx.clone(), options).await
         }
         TaskRequest::CleanupAvatars => task_handler.cleanup_invalid_avatars(ctx.clone()).await,
+        TaskRequest::CleanupInvalidPosts(options) => {
+            task_handler
+                .cleanup_invalid_posts(ctx.clone(), options)
+                .await
+        }
     };
 
     if let Err(err) = res {
