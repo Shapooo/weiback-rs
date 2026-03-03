@@ -35,8 +35,8 @@ use crate::media_downloader::MediaDownloaderHandle;
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
-    BackupFavoritesOptions, BackupUserPostsOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
-    TaskContext, TaskRequest, UserPostFilter,
+    BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions, ExportJobOptions,
+    PaginatedPostInfo, PostQuery, TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
 pub use task_manager::{SubTaskError, Task, TaskManager, TaskType};
