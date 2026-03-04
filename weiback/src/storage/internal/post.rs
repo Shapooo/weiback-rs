@@ -569,24 +569,9 @@ where
     Ok(())
 }
 
-/// Queries posts from the database based on various criteria.
-///
-/// This function supports filtering by user ID, date range, search terms, and favorited status.
-/// It also handles pagination and ordering.
-///
-/// # Arguments
-///
-/// * `acquirer` - A database acquirer.
-/// * `query` - A `PostQuery` struct specifying the query parameters.
-///
-/// # Returns
-///
-/// A `Result` containing a tuple of `(Vec<PostInternal>, u64)`. The vector contains the
-/// matching posts, and `u64` is the total count of items matching the query without pagination.
-pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<PostInternal>, u64)>
-where
-    A: Acquire<'c, Database = Sqlite>,
-{
+/// Builds the common part of a post query based on the given `PostQuery` criteria.
+/// This includes joins for FTS and all the `WHERE` clause filters.
+fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
     use sea_query::{Alias, JoinType};
 
     let mut posts_query = Query::select();
@@ -644,6 +629,29 @@ where
             [fts_query],
         ));
     }
+
+    posts_query
+}
+
+/// Queries posts from the database based on various criteria.
+///
+/// This function supports filtering by user ID, date range, search terms, and favorited status.
+/// It also handles pagination and ordering.
+///
+/// # Arguments
+///
+/// * `acquirer` - A database acquirer.
+/// * `query` - A `PostQuery` struct specifying the query parameters.
+///
+/// # Returns
+///
+/// A `Result` containing a tuple of `(Vec<PostInternal>, u64)`. The vector contains the
+/// matching posts, and `u64` is the total count of items matching the query without pagination.
+pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<PostInternal>, u64)>
+where
+    A: Acquire<'c, Database = Sqlite>,
+{
+    let mut posts_query = build_common_query(&query);
 
     let mut count_query = posts_query.clone();
     count_query.expr(if query.search_term.is_some() {
@@ -691,72 +699,9 @@ pub async fn query_all_post_ids<'c, A>(acquirer: A, query: PostQuery) -> Result<
 where
     A: Acquire<'c, Database = Sqlite>,
 {
-    use sea_query::{Alias, JoinType};
+    let mut posts_query = build_common_query(&query);
 
-    let mut posts_query = Query::select();
-    posts_query.from(PostIden::Table);
-
-    if query.search_term.is_some() {
-        posts_query.distinct().join(
-            JoinType::InnerJoin,
-            PostFtsIden::Table,
-            Expr::col((PostFtsIden::Table, Alias::new("rowid")))
-                .eq(Expr::col((PostIden::Table, PostIden::Id)))
-                .or(Expr::col((PostFtsIden::Table, Alias::new("rowid")))
-                    .eq(Expr::col((PostIden::Table, PostIden::RetweetedId)))),
-        );
-    }
-
-    if let Some(user_id) = query.user_id {
-        posts_query.and_where(Expr::col((PostIden::Table, PostIden::Uid)).eq(user_id));
-    }
-
-    if let Some(start_date) = query.start_date {
-        let dt = DateTime::from_timestamp(start_date, 0)
-            .unwrap()
-            .to_rfc3339();
-        posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).gte(dt));
-    }
-
-    if let Some(end_date) = query.end_date {
-        let dt = DateTime::from_timestamp(end_date, 0).unwrap().to_rfc3339();
-        posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).lte(dt));
-    }
-
-    if query.is_favorited {
-        posts_query.and_where(
-            Expr::col((PostIden::Table, PostIden::Id)).in_subquery(
-                Query::select()
-                    .column(FavoritedPostIden::Id)
-                    .from(FavoritedPostIden::Table)
-                    .take(),
-            ),
-        );
-    }
-
-    if let Some(search_term) = query.search_term.as_ref() {
-        let fts_query = match search_term {
-            SearchTerm::Fuzzy(term) => term
-                .split_whitespace()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" AND "),
-            SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
-        };
-        posts_query.and_where(Expr::cust_with_values(
-            "posts_fts.text MATCH ?",
-            [fts_query],
-        ));
-    }
-
-    let order = if query.reverse_order {
-        Order::Asc
-    } else {
-        Order::Desc
-    };
-    posts_query
-        .column((PostIden::Table, PostIden::Id))
-        .order_by((PostIden::Table, PostIden::Id), order);
+    posts_query.column((PostIden::Table, PostIden::Id));
 
     let (sql, values) = posts_query.build_sqlx(SqliteQueryBuilder);
     let mut conn = acquirer.acquire().await?;
