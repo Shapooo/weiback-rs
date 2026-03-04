@@ -396,6 +396,65 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         self.storage.delete_post(ctx, id).await
     }
 
+    /// Re-fetches a batch of posts from Weibo API and processes them.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `query` - The `PostQuery` to select posts to be re-backed up.
+    pub(super) async fn rebackup_posts(
+        &self,
+        ctx: Arc<TaskContext>,
+        query: PostQuery,
+    ) -> Result<()> {
+        info!("Starting re-backup posts task with query: {:?}", query);
+        let ids = self.storage.query_all_post_ids(query).await.map_err(|e| {
+            error!(
+                "Failed to query post IDs for task {}: {}",
+                ctx.task_id.unwrap(),
+                e
+            );
+            e
+        })?;
+        let total = ids.len();
+        info!("Found {} posts to re-backup", total);
+        ctx.task_manager.update_progress(0, total as u64)?;
+
+        let task_interval = ctx.config.backup_task_interval;
+        for (i, id) in ids.into_iter().enumerate() {
+            let post = self.api_client.statuses_show(id).await.map_err(|e| {
+                error!(
+                    "Failed to fetch post {} for task {}: {}",
+                    id,
+                    ctx.task_id.unwrap(),
+                    e
+                );
+                e
+            })?;
+
+            self.processer
+                .process(ctx.clone(), vec![post])
+                .await
+                .map_err(|e| {
+                    error!(
+                        "Failed to process re-backed up post {} for task {}: {}",
+                        id,
+                        ctx.task_id.unwrap(),
+                        e
+                    );
+                    e
+                })?;
+
+            info!("re-backed up post {} ({}/{})", id, i + 1, total);
+            ctx.task_manager.update_progress(1, 0)?;
+
+            if i < total - 1 {
+                sleep(task_interval).await;
+            }
+        }
+        info!("Finished re-backing up posts.");
+        Ok(())
+    }
+
     /// Cleans up redundant picture files based on the specified resolution policy.
     ///
     /// # Arguments

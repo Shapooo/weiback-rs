@@ -296,6 +296,17 @@ impl Core {
         Ok(())
     }
 
+    /// Starts a long-running task to re-backup posts.
+    pub async fn rebackup_posts(&self, request: TaskRequest) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0; // Will be updated in task_handler
+        self.task_manager
+            .start_task(id, TaskType::RebackupPosts, "批量重新备份".into(), total)?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
+        Ok(())
+    }
+
     /// Starts a long-running task to clean up redundant or low-resolution images.
     pub async fn cleanup_pictures(&self, request: TaskRequest) -> Result<()> {
         let ctx = self.create_long_task_context();
@@ -384,6 +395,7 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
                 .cleanup_invalid_posts(ctx.clone(), options)
                 .await
         }
+        TaskRequest::RebackupPosts(query) => task_handler.rebackup_posts(ctx.clone(), query).await,
     };
 
     if let Err(err) = res {

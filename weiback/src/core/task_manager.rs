@@ -27,6 +27,8 @@ pub enum TaskType {
     CleanupAvatars,
     /// Clean up invalid posts (e.g., user is None).
     CleanupInvalidPosts,
+    /// Re-backup posts based on a query.
+    RebackupPosts,
 }
 
 /// The current execution state of a task.

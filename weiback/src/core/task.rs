@@ -42,6 +42,8 @@ pub enum TaskRequest {
     CleanupAvatars,
     /// Clean up invalid posts (e.g., user is None).
     CleanupInvalidPosts(CleanupInvalidPostsOptions),
+    /// Re-backup posts based on a query.
+    RebackupPosts(PostQuery),
 }
 
 impl TaskRequest {
@@ -54,6 +56,7 @@ impl TaskRequest {
             TaskRequest::CleanupPictures(_) => 0,
             TaskRequest::CleanupAvatars => 0,
             TaskRequest::CleanupInvalidPosts(_) => 0,
+            TaskRequest::RebackupPosts(_) => 0, // Total will be determined dynamically
         }
     }
 }
