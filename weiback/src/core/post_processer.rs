@@ -24,7 +24,7 @@ use crate::media_downloader::MediaDownloader;
 use crate::models::{PicInfoType, Picture, PictureDefinition, PictureMeta, Post, VideoMeta};
 use crate::storage::Storage;
 use crate::utils::{
-    extract_all_pic_metas, extract_emojis_from_text, extract_standalone_pic_metas, pic_url_to_id,
+    extract_all_pic_metas, extract_emojis_from_text, extract_standalone_pic_ids, pic_url_to_id,
 };
 
 /// A processor that handles media downloading and post data enrichment.
@@ -58,7 +58,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `post` - The post to enrich.
-    pub async fn build_post_info(&self, ctx: Arc<TaskContext>, post: Post) -> Result<PostInfo> {
+    pub async fn build_post_info(&self, post: Post) -> Result<PostInfo> {
         let avatar_id = if let Some(user) = &post.user {
             self.storage
                 .get_avatar_info(user.id)
@@ -69,10 +69,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             None
         };
 
-        let pic_metas = extract_standalone_pic_metas(&post, ctx.config.picture_definition);
-        let standalone_ids = pic_metas
-            .map(|meta| pic_url_to_id(meta.url()))
-            .collect::<Result<Vec<_>>>()?;
+        let standalone_ids = extract_standalone_pic_ids(&post);
 
         let mut inline_map = HashMap::new();
         if let Some(url_struct) = &post.url_struct {

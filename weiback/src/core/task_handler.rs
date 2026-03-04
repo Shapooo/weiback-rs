@@ -374,13 +374,13 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// * `query` - Search and filter criteria.
     pub async fn query_posts(
         &self,
-        ctx: Arc<TaskContext>,
+        _ctx: Arc<TaskContext>,
         query: PostQuery,
     ) -> Result<PaginatedPostInfo> {
         info!("Querying local posts with query: {:?}", query);
         let paginated_posts = self.storage.query_posts(query).await?;
         let posts_info = stream::iter(paginated_posts.posts)
-            .map(|post| self.processer.build_post_info(ctx.clone(), post))
+            .map(|post| self.processer.build_post_info(post))
             .buffered(5)
             .try_collect()
             .await?;

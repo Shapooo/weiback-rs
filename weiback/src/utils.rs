@@ -333,6 +333,43 @@ pub fn extract_standalone_pic_metas(
     extract_current_standalone_pic_metas(source, definition)
 }
 
+/// Extracts standalone picture IDs from a post.
+pub fn extract_standalone_pic_ids(post: &Post) -> Vec<String> {
+    let source = post.retweeted_status.as_deref().unwrap_or(post);
+    let mut ids = HashSet::new();
+
+    if let Some(pic_ids) = source.pic_ids.as_ref() {
+        ids.extend(pic_ids.iter().cloned());
+    }
+
+    if let Some(mmi) = source.mix_media_info.as_ref() {
+        for item in mmi.items.iter() {
+            match item {
+                MixMediaInfoItem::Pic { data, .. } => {
+                    ids.insert(data.pic_id.clone());
+                }
+                MixMediaInfoItem::Video { data, .. } => {
+                    if let Ok(url) = Url::parse(data.page_pic.as_str())
+                        && let Ok(id) = pic_url_to_id(&url)
+                    {
+                        ids.insert(id);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(p) = source.page_info.as_ref()
+        && let Some(pic_info) = p.pic_info.as_ref()
+        && let Ok(url) = Url::parse(pic_info.pic_big.url.as_str())
+        && let Ok(id) = pic_url_to_id(&url)
+    {
+        ids.insert(id);
+    }
+
+    ids.into_iter().collect()
+}
+
 #[cfg(test)]
 mod local_tests {
     use super::*;
