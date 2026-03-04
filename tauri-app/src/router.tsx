@@ -6,7 +6,7 @@ import { Box, CircularProgress } from '@mui/material';
 const OnlineBackup = React.lazy(() => import('./views/OnlineBackup'));
 
 // Pages
-const LocalExport = React.lazy(() => import('./views/LocalExport'));
+const ContentExplorer = React.lazy(() => import('./views/ContentExplorer'));
 const Settings = React.lazy(() => import('./views/Settings'));
 const User = React.lazy(() => import('./views/User'));
 const DataManage = React.lazy(() => import('./views/DataManage'));
@@ -20,7 +20,7 @@ const AppRouter: React.FC = () => (
     <Routes>
       <Route path="/" element={<Navigate to="/online-backup" replace />} />
       <Route path="/online-backup" element={<OnlineBackup />} />
-      <Route path="/export" element={<LocalExport />} />
+      <Route path="/explorer" element={<ContentExplorer />} />
       <Route path="/manage" element={<DataManage />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/user" element={<User />} />

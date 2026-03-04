@@ -26,6 +26,7 @@ export const backupUser = (uid: string, numPages: number, backupType: BackupType
     invoke('backup_user', { uid, numPages, backupType });
 export const backupFavorites = (numPages: number) => invoke('backup_favorites', { numPages });
 export const unfavoritePosts = () => invoke('unfavorite_posts');
+export const rebackupPosts = (query: PostQuery) => invoke('rebackup_posts', { query });
 
 // Posts
 export const queryLocalPosts = (query: PostQuery) =>

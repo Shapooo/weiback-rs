@@ -19,6 +19,7 @@ import {
     InputAdornment,
     Select,
     MenuItem,
+    Divider,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -29,13 +30,13 @@ import { PostInfo, User, PostQuery, ExportJobOptions, TaskStatus } from '../type
 import PostPreviewModal from '../components/PostPreviewModal';
 import { useTaskStore } from '../stores/taskStore';
 import UserSelector from '../components/UserSelector';
-import { queryLocalPosts, exportPosts } from '../lib/api';
+import { queryLocalPosts, exportPosts, rebackupPosts } from '../lib/api';
 
 const POSTS_PER_PAGE = 12;
 
 // --- Main Component ---
 
-const LocalExportPage: React.FC = () => {
+const ContentExplorerPage: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const isTaskRunning = useTaskStore(state => state.currentTask?.status === TaskStatus.InProgress);
     const fetchCurrentTask = useTaskStore(state => state.fetchCurrentTask);
@@ -105,35 +106,43 @@ const LocalExportPage: React.FC = () => {
         return undefined;
     }
 
+    const buildQueryFromFilters = (
+        currentFilters: typeof appliedFilters,
+        currentPage: number,
+        isBatchOperation: boolean,
+    ): PostQuery => {
+        const startDate = currentFilters.startDate ? new Date(currentFilters.startDate) : null;
+        if (startDate) {
+            startDate.setHours(0, 0, 0, 0);
+        }
+
+        const endDate = currentFilters.endDate ? new Date(currentFilters.endDate) : null;
+        if (endDate) {
+            endDate.setHours(23, 59, 59, 999);
+        }
+
+        const userId = getUserId(currentFilters.userInput);
+
+        return {
+            page: isBatchOperation ? 1 : currentPage,
+            posts_per_page: isBatchOperation ? 1_000_000 : POSTS_PER_PAGE,
+            is_favorited: currentFilters.isFavorited,
+            reverse_order: currentFilters.reverseOrder,
+            user_id: userId,
+            start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
+            end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
+            search_term: currentFilters.searchTerm
+                ? (currentFilters.searchMode === 'fuzzy'
+                    ? { Fuzzy: currentFilters.searchTerm }
+                    : { Strict: currentFilters.searchTerm })
+                : undefined,
+        };
+    };
 
     const fetchPosts = useCallback(async (currentPage: number, currentFilters: typeof appliedFilters) => {
         setLoading(true);
         try {
-            const startDate = currentFilters.startDate ? new Date(currentFilters.startDate) : null;
-            if (startDate) {
-                startDate.setHours(0, 0, 0, 0);
-            }
-
-            const endDate = currentFilters.endDate ? new Date(currentFilters.endDate) : null;
-            if (endDate) {
-                endDate.setHours(23, 59, 59, 999);
-            }
-            const userId = getUserId(currentFilters.userInput);
-
-            const query: PostQuery = {
-                page: currentPage,
-                posts_per_page: POSTS_PER_PAGE,
-                is_favorited: currentFilters.isFavorited,
-                reverse_order: currentFilters.reverseOrder,
-                user_id: userId,
-                start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
-                end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
-                search_term: currentFilters.searchTerm
-                    ? (currentFilters.searchMode === 'fuzzy'
-                        ? { Fuzzy: currentFilters.searchTerm }
-                        : { Strict: currentFilters.searchTerm })
-                    : undefined,
-            };
+            const query = buildQueryFromFilters(currentFilters, currentPage, false);
 
             const result = await queryLocalPosts(query);
             setPostInfos(result.posts);
@@ -198,33 +207,7 @@ const LocalExportPage: React.FC = () => {
         }
 
         try {
-            const startDate = appliedFilters.startDate ? new Date(appliedFilters.startDate) : null;
-            if (startDate) {
-                startDate.setHours(0, 0, 0, 0);
-            }
-
-            const endDate = appliedFilters.endDate ? new Date(appliedFilters.endDate) : null;
-            if (endDate) {
-                endDate.setHours(23, 59, 59, 999);
-            }
-
-            const userId = getUserId(appliedFilters.userInput);
-
-            const query: PostQuery = {
-                page: 1, // Export should start from page 1
-                posts_per_page: 1_000_000, // A large number to signify "all"
-                is_favorited: appliedFilters.isFavorited,
-                reverse_order: appliedFilters.reverseOrder,
-                user_id: userId,
-                start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
-                end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
-                search_term: appliedFilters.searchTerm
-                    ? (appliedFilters.searchMode === 'fuzzy'
-                        ? { Fuzzy: appliedFilters.searchTerm }
-                        : { Strict: appliedFilters.searchTerm })
-                    : undefined,
-            };
-
+            const query = buildQueryFromFilters(appliedFilters, page, true);
             const options: ExportJobOptions = {
                 query,
                 output: {
@@ -241,6 +224,17 @@ const LocalExportPage: React.FC = () => {
         }
     };
 
+    const handleRebackup = async () => {
+        try {
+            const query = buildQueryFromFilters(appliedFilters, page, true);
+            await rebackupPosts(query);
+            enqueueSnackbar('批量重新备份任务已成功启动', { variant: 'success' });
+            fetchCurrentTask();
+        } catch (e) {
+            enqueueSnackbar(`启动批量重新备份任务失败: ${e}`, { variant: 'error' });
+        }
+    };
+
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
             <Box sx={{ width: '100%', p: 3 }}>
@@ -250,97 +244,120 @@ const LocalExportPage: React.FC = () => {
 
                 <Accordion defaultExpanded>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="h6">筛选条件</Typography>
+                        <Typography variant="h6">查询与批量处理</Typography>
                     </AccordionSummary>
                     <AccordionDetails>
-                        <Stack spacing={2}>
-                            <Grid container spacing={2}>
-                                {/* First Line: Checkboxes and User ID */}
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                checked={filters.isFavorited}
-                                                onChange={(e) => setFilters(f => ({ ...f, isFavorited: e.target.checked }))}
-                                            />
-                                        }
-                                        label="收藏"
-                                    />
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                checked={filters.reverseOrder}
-                                                onChange={(e) => setFilters(f => ({ ...f, reverseOrder: e.target.checked }))}
-                                            />
-                                        }
-                                        label="逆序"
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                                    <UserSelector
-                                        value={userInput}
-                                        onChange={setUserInput}
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                                    <TextField
-                                        fullWidth
-                                        label="搜索正文"
-                                        value={filters.searchTerm}
-                                        onChange={(e) => setFilters(f => ({ ...f, searchTerm: e.target.value }))}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                handleSearch();
+                        <Stack spacing={3}>
+                            {/* --- Filter Section --- */}
+                            <Box>
+                                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                    筛选
+                                </Typography>
+                                <Grid container spacing={2} alignItems="center">
+                                    <Grid size={{ xs: 12, md: 6 }}>
+                                        <UserSelector
+                                            value={userInput}
+                                            onChange={setUserInput}
+                                        />
+                                    </Grid>
+                                    <Grid size={{ xs: 12, md: 6 }}>
+                                        <TextField
+                                            fullWidth
+                                            label="搜索正文"
+                                            value={filters.searchTerm}
+                                            onChange={(e) => setFilters(f => ({ ...f, searchTerm: e.target.value }))}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    handleSearch();
+                                                }
+                                            }}
+                                            InputProps={{
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        <Select
+                                                            variant="standard"
+                                                            value={filters.searchMode}
+                                                            onChange={(e) => setFilters(f => ({ ...f, searchMode: e.target.value as 'fuzzy' | 'strict' }))}
+                                                            disableUnderline
+                                                            sx={{ fontSize: '0.875rem' }}
+                                                        >
+                                                            <MenuItem value="fuzzy">模糊</MenuItem>
+                                                            <MenuItem value="strict">严格</MenuItem>
+                                                        </Select>
+                                                    </InputAdornment>
+                                                ),
+                                            }}
+                                        />
+                                    </Grid>
+                                    <Grid size={{ xs: 12, md: 6 }}>
+                                        <DatePicker
+                                            label="起始日期"
+                                            value={filters.startDate}
+                                            onChange={(date) => setFilters(f => ({ ...f, startDate: date }))}
+                                            sx={{ width: '100%' }}
+                                        />
+                                    </Grid>
+                                    <Grid size={{ xs: 12, md: 6 }}>
+                                        <DatePicker
+                                            label="结束日期"
+                                            value={filters.endDate}
+                                            onChange={(date) => setFilters(f => ({ ...f, endDate: date }))}
+                                            sx={{ width: '100%' }}
+                                        />
+                                    </Grid>
+                                    <Grid size={{ xs: 12 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={filters.isFavorited}
+                                                    onChange={(e) => setFilters(f => ({ ...f, isFavorited: e.target.checked }))}
+                                                />
                                             }
-                                        }}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <Select
-                                                        variant="standard"
-                                                        value={filters.searchMode}
-                                                        onChange={(e) => setFilters(f => ({ ...f, searchMode: e.target.value as 'fuzzy' | 'strict' }))}
-                                                        disableUnderline
-                                                        sx={{ fontSize: '0.875rem' }}
-                                                    >
-                                                        <MenuItem value="fuzzy">模糊</MenuItem>
-                                                        <MenuItem value="strict">严格</MenuItem>
-                                                    </Select>
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                    />
+                                            label="仅看收藏"
+                                        />
+                                        <FormControlLabel
+                                            control={
+                                                <Checkbox
+                                                    checked={filters.reverseOrder}
+                                                    onChange={(e) => setFilters(f => ({ ...f, reverseOrder: e.target.checked }))}
+                                                />
+                                            }
+                                            label="结果逆序"
+                                        />
+                                    </Grid>
                                 </Grid>
-                                {/* Second Line: Date Pickers */}
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                                    <DatePicker
-                                        label="起始日期"
-                                        value={filters.startDate}
-                                        onChange={(date) => setFilters(f => ({ ...f, startDate: date }))}
-                                    />
-                                </Grid>
-                                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                                    <DatePicker
-                                        label="结束日期"
-                                        value={filters.endDate}
-                                        onChange={(date) => setFilters(f => ({ ...f, endDate: date }))}
-                                    />
-                                </Grid>
-                            </Grid>
-                            <Stack direction="row" spacing={2} justifyContent="space-between">
-                                <Stack direction="row" spacing={2}>
+                                <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
                                     <Button variant="contained" onClick={handleSearch}>查询</Button>
                                     <Button variant="outlined" onClick={handleClearFilters}>清空筛选</Button>
                                 </Stack>
-                                <Button
-                                    variant="contained"
-                                    color="secondary"
-                                    onClick={handleExport}
-                                    disabled={isTaskRunning}
-                                >
-                                    {isTaskRunning ? '任务进行中...' : '导出筛选结果'}
-                                </Button>
-                            </Stack>
+                            </Box>
+
+                            <Divider />
+
+                            {/* --- Batch Actions Section --- */}
+                            <Box>
+                                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
+                                    对筛选结果进行操作
+                                </Typography>
+                                <Stack direction="row" spacing={2}>
+                                    <Button
+                                        variant="contained"
+                                        color="secondary"
+                                        onClick={handleExport}
+                                        disabled={isTaskRunning}
+                                    >
+                                        {isTaskRunning ? '任务进行中...' : '导出为 HTML'}
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        onClick={handleRebackup}
+                                        disabled={isTaskRunning}
+                                    >
+                                        {isTaskRunning ? '任务进行中...' : '重新备份筛选结果'}
+                                    </Button>
+                                </Stack>
+                            </Box>
                         </Stack>
                     </AccordionDetails>
                 </Accordion>
@@ -428,4 +445,4 @@ const LocalExportPage: React.FC = () => {
     );
 };
 
-export default LocalExportPage;
+export default ContentExplorerPage;

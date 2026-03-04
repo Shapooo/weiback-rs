@@ -166,6 +166,14 @@ async fn rebackup_post(core: State<'_, Arc<Core>>, id: String) -> Result<()> {
 }
 
 #[tauri::command]
+async fn rebackup_posts(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<()> {
+    info!("rebackup_posts called with query: {query:?}");
+    Ok(core
+        .rebackup_posts(TaskRequest::RebackupPosts(query))
+        .await?)
+}
+
+#[tauri::command]
 async fn get_username_by_id(
     core: State<'_, Arc<Core>>,
     uid: String,
@@ -241,6 +249,7 @@ pub fn run() -> Result<()> {
             get_picture_blob,
             delete_post,
             rebackup_post,
+            rebackup_posts,
             get_current_task_status,
             get_and_clear_sub_task_errors,
             cleanup_pictures,
