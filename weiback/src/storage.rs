@@ -101,6 +101,15 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// A `Result` containing `PaginatedPosts`.
     async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts>;
 
+    /// Queries posts based on various criteria and returns only their IDs.
+    ///
+    /// # Arguments
+    /// * `query` - A `PostQuery` object containing search and filter criteria.
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of post IDs.
+    async fn query_all_post_ids(&self, query: PostQuery) -> Result<Vec<i64>>;
+
     /// Marks a post as unfavorited in the database.
     ///
     /// # Arguments
@@ -411,6 +420,10 @@ impl Storage for StorageImpl {
         let (posts_internal, total_items) = post::query_posts(&self.db_pool, query).await?;
         let posts = self.hydrate_posts(posts_internal).await;
         Ok(PaginatedPosts { posts, total_items })
+    }
+
+    async fn query_all_post_ids(&self, query: PostQuery) -> Result<Vec<i64>> {
+        post::query_all_post_ids(&self.db_pool, query).await
     }
 
     async fn save_user(&self, user: &User) -> Result<()> {

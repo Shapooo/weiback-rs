@@ -677,6 +677,96 @@ where
     Ok((posts, total_items))
 }
 
+/// Queries all post IDs from the database based on various criteria, without pagination.
+///
+/// # Arguments
+///
+/// * `acquirer` - A database acquirer.
+/// * `query` - A `PostQuery` struct specifying the query parameters.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `i64` representing the post IDs.
+pub async fn query_all_post_ids<'c, A>(acquirer: A, query: PostQuery) -> Result<Vec<i64>>
+where
+    A: Acquire<'c, Database = Sqlite>,
+{
+    use sea_query::{Alias, JoinType};
+
+    let mut posts_query = Query::select();
+    posts_query.from(PostIden::Table);
+
+    if query.search_term.is_some() {
+        posts_query.distinct().join(
+            JoinType::InnerJoin,
+            PostFtsIden::Table,
+            Expr::col((PostFtsIden::Table, Alias::new("rowid")))
+                .eq(Expr::col((PostIden::Table, PostIden::Id)))
+                .or(Expr::col((PostFtsIden::Table, Alias::new("rowid")))
+                    .eq(Expr::col((PostIden::Table, PostIden::RetweetedId)))),
+        );
+    }
+
+    if let Some(user_id) = query.user_id {
+        posts_query.and_where(Expr::col((PostIden::Table, PostIden::Uid)).eq(user_id));
+    }
+
+    if let Some(start_date) = query.start_date {
+        let dt = DateTime::from_timestamp(start_date, 0)
+            .unwrap()
+            .to_rfc3339();
+        posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).gte(dt));
+    }
+
+    if let Some(end_date) = query.end_date {
+        let dt = DateTime::from_timestamp(end_date, 0).unwrap().to_rfc3339();
+        posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).lte(dt));
+    }
+
+    if query.is_favorited {
+        posts_query.and_where(
+            Expr::col((PostIden::Table, PostIden::Id)).in_subquery(
+                Query::select()
+                    .column(FavoritedPostIden::Id)
+                    .from(FavoritedPostIden::Table)
+                    .take(),
+            ),
+        );
+    }
+
+    if let Some(search_term) = query.search_term.as_ref() {
+        let fts_query = match search_term {
+            SearchTerm::Fuzzy(term) => term
+                .split_whitespace()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" AND "),
+            SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
+        };
+        posts_query.and_where(Expr::cust_with_values(
+            "posts_fts.text MATCH ?",
+            [fts_query],
+        ));
+    }
+
+    let order = if query.reverse_order {
+        Order::Asc
+    } else {
+        Order::Desc
+    };
+    posts_query
+        .column((PostIden::Table, PostIden::Id))
+        .order_by((PostIden::Table, PostIden::Id), order);
+
+    let (sql, values) = posts_query.build_sqlx(SqliteQueryBuilder);
+    let mut conn = acquirer.acquire().await?;
+    let ids = sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
+        .fetch_all(&mut *conn)
+        .await?;
+
+    Ok(ids)
+}
+
 #[cfg(test)]
 mod local_tests {
     use std::path::Path;
