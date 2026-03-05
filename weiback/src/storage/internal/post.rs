@@ -572,19 +572,55 @@ where
 /// Builds the common part of a post query based on the given `PostQuery` criteria.
 /// This includes joins for FTS and all the `WHERE` clause filters.
 fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
-    use sea_query::{Alias, JoinType};
+    use sea_query::{Alias, JoinType, UnionType};
 
     let mut posts_query = Query::select();
     posts_query.from(PostIden::Table);
 
-    if query.search_term.is_some() {
-        posts_query.distinct().join(
-            JoinType::InnerJoin,
-            PostFtsIden::Table,
-            Expr::col((PostFtsIden::Table, Alias::new("rowid")))
-                .eq(Expr::col((PostIden::Table, PostIden::Id)))
-                .or(Expr::col((PostFtsIden::Table, Alias::new("rowid")))
-                    .eq(Expr::col((PostIden::Table, PostIden::RetweetedId)))),
+    if let Some(search_term) = query.search_term.as_ref() {
+        let fts_query = match search_term {
+            SearchTerm::Fuzzy(term) => term
+                .split_whitespace()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" AND "),
+            SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
+        };
+
+        let mut subquery_self = Query::select();
+        subquery_self
+            .column((PostIden::Table, PostIden::Id))
+            .from(PostIden::Table)
+            .join(
+                JoinType::InnerJoin,
+                PostFtsIden::Table,
+                Expr::col((PostFtsIden::Table, Alias::new("rowid")))
+                    .eq(Expr::col((PostIden::Table, PostIden::Id))),
+            )
+            .and_where(Expr::cust_with_values(
+                "posts_fts.text MATCH ?",
+                [fts_query.clone()],
+            ));
+
+        let mut subquery_retweet = Query::select();
+        subquery_retweet
+            .column((PostIden::Table, PostIden::Id))
+            .from(PostIden::Table)
+            .join(
+                JoinType::InnerJoin,
+                PostFtsIden::Table,
+                Expr::col((PostFtsIden::Table, Alias::new("rowid")))
+                    .eq(Expr::col((PostIden::Table, PostIden::RetweetedId))),
+            )
+            .and_where(Expr::cust_with_values(
+                "posts_fts.text MATCH ?",
+                [fts_query],
+            ));
+
+        subquery_self.union(UnionType::All, subquery_retweet.take());
+
+        posts_query.and_where(
+            Expr::col((PostIden::Table, PostIden::Id)).in_subquery(subquery_self.take()),
         );
     }
 
@@ -613,21 +649,6 @@ fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
                     .take(),
             ),
         );
-    }
-
-    if let Some(search_term) = query.search_term.as_ref() {
-        let fts_query = match search_term {
-            SearchTerm::Fuzzy(term) => term
-                .split_whitespace()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" AND "),
-            SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
-        };
-        posts_query.and_where(Expr::cust_with_values(
-            "posts_fts.text MATCH ?",
-            [fts_query],
-        ));
     }
 
     posts_query
