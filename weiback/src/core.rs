@@ -21,7 +21,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 use tokio::spawn;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use weibosdk_rs::{ApiClient as SdkApiClient, api_client::LoginState, session::Session};
 
 #[cfg(not(feature = "dev-mode"))]
@@ -360,10 +360,10 @@ impl Core {
     }
 }
 
+#[tracing::instrument(skip(task_handler, ctx), fields(task_id = ctx.task_id))]
 async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, request: TaskRequest) {
     let task_id = ctx.task_id.unwrap();
     info!("Handling task request for task_id: {}", task_id);
-    debug!("Task request details: {:?}", request);
 
     let res = match request {
         TaskRequest::BackupUser(options) => task_handler.backup_user(ctx.clone(), options).await,

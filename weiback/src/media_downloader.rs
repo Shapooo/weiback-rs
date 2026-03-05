@@ -97,6 +97,7 @@ impl MediaDownloader for MediaDownloaderHandle {
     ///
     /// # Errors
     /// Returns an error if the internal channel is closed.
+    #[tracing::instrument(skip(self, ctx, callback), fields(url = %url))]
     async fn download_media(
         &self,
         ctx: Arc<TaskContext>,
@@ -138,6 +139,7 @@ impl DownloaderWorker {
     }
 
     /// Performs the HTTP request and handles the response.
+    #[tracing::instrument(skip(self, ctx, callback), fields(url = %url))]
     async fn process_task(
         &self,
         ctx: Arc<TaskContext>,

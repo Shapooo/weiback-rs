@@ -116,12 +116,8 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `posts` - The list of posts to process.
+    #[tracing::instrument(skip(self, ctx, posts), fields(task_id = ctx.task_id, batch_size = posts.len()))]
     pub async fn process(&self, ctx: Arc<TaskContext>, posts: Vec<Post>) -> Result<()> {
-        info!(
-            "Processing {} posts for task {:?}.",
-            posts.len(),
-            ctx.task_id
-        );
         let pic_quality = ctx.config.picture_definition;
         debug!("Picture definition set to: {pic_quality:?}");
 
@@ -174,6 +170,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
     }
 
     /// Downloads a single picture and saves it to local storage.
+    #[tracing::instrument(skip(self, ctx, pic_meta), fields(url = %pic_meta.url()))]
     async fn download_pic_to_local(
         &self,
         ctx: Arc<TaskContext>,

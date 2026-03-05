@@ -86,6 +86,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `id` - The picture ID.
+    #[tracing::instrument(skip(self, ctx), fields(pic_id = %id), level = "info")]
     pub async fn get_picture_blob(&self, ctx: Arc<TaskContext>, id: &str) -> Result<Option<Bytes>> {
         let mut infos = self.storage.get_pictures_by_id(id).await?;
         infos.sort_by(|a, b| match (&a.meta, &b.meta) {
@@ -113,13 +114,9 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `user` - The user object to save.
+    #[tracing::instrument(skip(self, ctx, user), fields(uid = user.id, screen_name = %user.screen_name), level = "info")]
     pub async fn save_user_info(&self, ctx: Arc<TaskContext>, user: &User) -> Result<()> {
-        info!("Saving user info for user id: {}", user.id);
         self.storage.save_user(user).await?;
-        info!(
-            "User {} with name {} saved to db",
-            user.id, user.screen_name
-        );
 
         let avatar_url = user.avatar_hd.clone();
 
@@ -161,6 +158,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// * `ctx` - The task context.
     /// * `num_pages` - Number of pages to fetch.
     /// * `page_backup_fn` - An async closure that performs the actual backup of a single page.
+    #[tracing::instrument(skip(self, ctx, page_backup_fn), fields(task_id = ctx.task_id))]
     async fn backup_procedure<F, Fut>(
         &self,
         ctx: Arc<TaskContext>,
@@ -171,10 +169,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         F: Fn(u32) -> Fut,
         Fut: Future<Output = Result<usize>>,
     {
-        info!(
-            "Starting backup procedure for task {}",
-            ctx.task_id.unwrap()
-        );
         let task_interval = ctx.config.backup_task_interval;
 
         let mut total_downloaded: usize = 0;
@@ -224,6 +218,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `options` - Configuration for the backup (UID, range, type).
+    #[tracing::instrument(skip(self, ctx), fields(uid = options.uid, pages = options.num_pages), level = "info")]
     pub(super) async fn backup_user(
         &self,
         ctx: Arc<TaskContext>,
@@ -231,10 +226,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     ) -> Result<()> {
         let uid = options.uid;
         let container_type = options.backup_type.into();
-        info!(
-            "Start backing up user {uid} posts, type: {:?}, from 1 to {}",
-            options.backup_type, options.num_pages
-        );
 
         self.backup_procedure(ctx.clone(), options.num_pages, |page| {
             self.backup_one_page(ctx.clone(), uid, page, container_type)
@@ -246,6 +237,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     /// Fetches and processes a single page of posts for a user.
+    #[tracing::instrument(skip(self, ctx), fields(uid, page))]
     async fn backup_one_page(
         &self,
         ctx: Arc<TaskContext>,
@@ -253,10 +245,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         page: u32,
         container_type: ContainerType,
     ) -> Result<usize> {
-        debug!(
-            "Backing up page {page} for user {uid}, task {}",
-            ctx.task_id.unwrap()
-        );
         let posts = self
             .api_client
             .profile_statuses(uid, page, container_type)
@@ -271,13 +259,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `options` - Configuration for the backup (range).
+    #[tracing::instrument(skip(self, ctx), fields(pages = options.num_pages), level = "info")]
     pub(super) async fn backup_favorites(
         &self,
         ctx: Arc<TaskContext>,
         options: BackupFavoritesOptions,
     ) -> Result<()> {
-        info!("Start backing up favorites from 1 to {}", options.num_pages);
-
         self.backup_procedure(ctx.clone(), options.num_pages, |page| {
             self.backup_one_fav_page(ctx.clone(), page)
         })
@@ -308,8 +295,8 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     ///
     /// # Arguments
     /// * `ctx` - The task context.
+    #[tracing::instrument(skip(self, ctx), fields(task_id = ctx.task_id), level = "info")]
     pub(super) async fn unfavorite_posts(&self, ctx: Arc<TaskContext>) -> Result<()> {
-        info!("Starting unfavorite posts task {}", ctx.task_id.unwrap());
         let task_interval = ctx.config.other_task_interval;
         let ids = self.storage.get_posts_id_to_unfavorite().await?;
         let len = ids.len();
@@ -336,12 +323,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `options` - Export configuration (query filters, output directory).
+    #[tracing::instrument(skip(self, ctx), fields(task_name = %options.output.task_name), level = "info")]
     pub async fn export_posts(
         &self,
         ctx: Arc<TaskContext>,
         options: ExportJobOptions,
     ) -> Result<()> {
-        info!("Starting export from local with options: {options:?}");
         let posts_per_page = crate::config::get_config().read()?.posts_per_html;
         let mut query = options.query;
         query.posts_per_page = posts_per_page;
@@ -372,12 +359,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `query` - Search and filter criteria.
+    #[tracing::instrument(skip(self, _ctx), fields(query = ?query))]
     pub async fn query_posts(
         &self,
         _ctx: Arc<TaskContext>,
         query: PostQuery,
     ) -> Result<PaginatedPostInfo> {
-        info!("Querying local posts with query: {:?}", query);
         let paginated_posts = self.storage.query_posts(query).await?;
         let posts_info = stream::iter(paginated_posts.posts)
             .map(|post| self.processer.build_post_info(post))
@@ -392,6 +379,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     }
 
     /// Deletes a post from local storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `id` - The id of post to delete.
+    #[tracing::instrument(skip(self, ctx), level = "info")]
     pub async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         self.storage.delete_post(ctx, id).await
     }
@@ -401,12 +393,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `query` - The `PostQuery` to select posts to be re-backed up.
+    #[tracing::instrument(skip(self, ctx), fields(query = ?query), level = "info")]
     pub(super) async fn rebackup_posts(
         &self,
         ctx: Arc<TaskContext>,
         query: PostQuery,
     ) -> Result<()> {
-        info!("Starting re-backup posts task with query: {:?}", query);
         let ids = self.storage.query_all_post_ids(query).await.map_err(|e| {
             error!(
                 "Failed to query post IDs for task {}: {}",
@@ -460,6 +452,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `options` - Cleanup configuration (Highest/Lowest resolution).
+    #[tracing::instrument(skip(self, ctx), fields(policy = ?options.policy), level = "info")]
     pub(super) async fn cleanup_pictures(
         &self,
         ctx: Arc<TaskContext>,
@@ -519,6 +512,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     ///
     /// # Arguments
     /// * `ctx` - The task context.
+    #[tracing::instrument(skip(self, ctx), level = "info")]
     pub(super) async fn cleanup_invalid_avatars(&self, ctx: Arc<TaskContext>) -> Result<()> {
         info!("Starting cleanup invalid avatars task");
         let duplicate_uids = self.storage.get_users_with_duplicate_avatars().await?;
@@ -561,6 +555,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `options` - Cleanup configuration.
+    #[tracing::instrument(skip(self, ctx), fields(clean_retweeted_invalid = options.clean_retweeted_invalid), level = "info")]
     pub(super) async fn cleanup_invalid_posts(
         &self,
         ctx: Arc<TaskContext>,
@@ -594,6 +589,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `id` - The post ID to refresh.
+    #[tracing::instrument(skip(self, ctx), level = "info")]
     pub async fn rebackup_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
         let post = self.api_client.statuses_show(id).await?;
         self.processer.process(ctx, vec![post]).await
