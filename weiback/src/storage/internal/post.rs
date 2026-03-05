@@ -44,12 +44,12 @@
 //! | `unfavorited` | `BOOLEAN` | True if the post has been unfavorited.            |
 
 use chrono::DateTime;
-use log::debug;
 use sea_query::{Asterisk, Expr, Func, Iden, OnConflict, Order, Query, SqliteQueryBuilder};
 use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, to_value};
 use sqlx::{Acquire, Executor, FromRow, Sqlite};
+use tracing::debug;
 
 use crate::core::task::{PostQuery, SearchTerm};
 use crate::error::{Error, Result};

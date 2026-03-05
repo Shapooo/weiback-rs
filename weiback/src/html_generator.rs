@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use futures::stream::{self, StreamExt};
 use lazy_static::lazy_static;
-use log::{debug, info};
 use tera::{Context, Tera};
+use tracing::{debug, info, warn};
 
 use crate::api::EmojiUpdateApi;
 use crate::core::task::TaskContext;
@@ -127,7 +127,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
                     Ok(Some(info)) => Some(info),
                     Ok(None) => None,
                     Err(e) => {
-                        log::warn!("Failed to get picture export info: {}", e);
+                        warn!("Failed to get picture export info: {}", e);
                         None
                     }
                 }
@@ -169,7 +169,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
                 target_file_name,
             }))
         } else {
-            log::warn!("Picture path not found in storage for url: {}", url);
+            warn!("Picture path not found in storage for url: {}", url);
             Ok(None)
         }
     }

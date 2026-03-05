@@ -6,9 +6,9 @@
 #![allow(async_fn_in_trait)]
 use std::collections::HashMap;
 
-use log::{debug, error, info};
 use serde::Deserialize;
 use serde_json::Value;
+use tracing::{debug, error, info};
 use url::Url;
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
 

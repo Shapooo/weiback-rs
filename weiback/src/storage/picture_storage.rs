@@ -7,8 +7,8 @@ use std::fs::create_dir_all;
 use std::path::Path;
 
 use bytes::Bytes;
-use log::{debug, warn};
 use sqlx::{Acquire, Executor, Sqlite};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::internal::picture;
@@ -207,7 +207,7 @@ impl FileSystemPictureStorage {
             if pic_path.exists()
                 && let Err(e) = tokio::fs::remove_file(&pic_path).await
             {
-                log::error!(
+                error!(
                     "Failed to delete picture file {}: {}",
                     pic_path.display(),
                     e

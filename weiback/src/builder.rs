@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use log::info;
+use tracing::info;
 use weibosdk_rs::{ApiClient as SdkApiClient, Client as HttpClient};
 
 use crate::{

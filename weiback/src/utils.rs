@@ -8,9 +8,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use log::error;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use tracing::error;
 use url::Url;
 
 use crate::error::{Error, Result};

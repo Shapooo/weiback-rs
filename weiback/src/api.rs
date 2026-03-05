@@ -10,7 +10,7 @@ pub(crate) mod internal;
 pub mod profile_statuses;
 pub mod statuses_show;
 
-use log::warn;
+use tracing::warn;
 use weibosdk_rs::{ApiClient as SdkApiClient, http_client::HttpClient};
 
 use crate::error::Result;

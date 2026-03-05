@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, FixedOffset, TimeZone};
-use log::warn;
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::SqlitePool;
+use tracing::warn;
 use url::Url;
 
 use weiback::{
@@ -41,7 +41,7 @@ fn create_pic_info_detail(id: &str, host: &str, clarity_type: &str, ext: &str) -
         height: 0, // Default value
         width: 0,  // Default value
         url: url_str.parse().unwrap_or_else(|_| {
-            log::warn!("Failed to parse reconstructed URL: {}", url_str);
+            warn!("Failed to parse reconstructed URL: {}", url_str);
             // Fallback to a dummy URL or handle error
             "https://example.com/placeholder.jpg".parse().unwrap()
         }),
@@ -115,7 +115,7 @@ fn deserialize_pic_infos(value: Value, post_id: i64) -> Result<HashMap<String, P
         .filter_map(|(id, old_item)| match old_item.try_into() {
             Ok(item) => Some((id, item)),
             Err(e) => {
-                log::warn!("post {post_id}, failed to convert OldPicInfoItem for id {id}: {e}");
+                warn!("post {post_id}, failed to convert OldPicInfoItem for id {id}: {e}");
                 None
             }
         })

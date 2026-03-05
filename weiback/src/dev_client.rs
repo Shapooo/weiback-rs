@@ -12,11 +12,11 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use log::{debug, error, info};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
 use tokio::fs::write;
+use tracing::{debug, error, info};
 use uuid::Uuid;
 use weibosdk_rs::{
     Client,

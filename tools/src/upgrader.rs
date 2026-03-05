@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use bytes::Bytes;
-use log::{info, warn};
 use sqlx::SqlitePool;
+use tracing::{info, warn};
 use url::Url;
 
 use old_picture::get_old_pictures_paged;

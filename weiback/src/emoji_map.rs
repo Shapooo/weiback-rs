@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
-use log::warn;
 use tokio::sync::OnceCell;
+use tracing::warn;
 use url::Url;
 
 use crate::api::EmojiUpdateApi;

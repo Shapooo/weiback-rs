@@ -255,7 +255,7 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
                     )))
                     .map(ToString::to_string)
                     .map_err(|e| {
-                        log::info!("{e}");
+                        tracing::info!("{e}");
                         e
                     })
             })

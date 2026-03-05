@@ -2,8 +2,8 @@
 use std::fs;
 
 use anyhow::Result;
-use env_logger::Builder;
-use log::{LevelFilter, info};
+use tracing::info;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 fn main() -> Result<()> {
     init_logger()?;
@@ -27,24 +27,22 @@ fn init_logger() -> Result<()> {
         .truncate(true)
         .open(log_path)?;
 
-    let mut builder = Builder::new();
-    #[cfg(debug_assertions)]
-    {
-        builder.filter_level(LevelFilter::Debug);
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        builder.filter_level(LevelFilter::Info);
-    }
+    let filter = EnvFilter::builder()
+        .with_default_directive(if cfg!(debug_assertions) {
+            tracing::Level::DEBUG.into()
+        } else {
+            tracing::Level::INFO.into()
+        })
+        .from_env_lossy()
+        .add_directive("sqlx=warn".parse()?)
+        .add_directive("h2=warn".parse()?)
+        .add_directive("hyper_util=warn".parse()?)
+        .add_directive("reqwest=warn".parse()?)
+        .add_directive("weibosdk_rs=warn".parse()?);
 
-    builder
-        .parse_default_env()
-        .filter_module("sqlx", LevelFilter::Error)
-        .filter_module("h2", LevelFilter::Warn)
-        .filter_module("hyper_util", LevelFilter::Warn)
-        .filter_module("reqwest", LevelFilter::Warn)
-        .filter_module("weibosdk_rs", LevelFilter::Warn)
-        .target(env_logger::Target::Pipe(Box::new(log_file)))
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().with_writer(std::sync::Mutex::new(log_file)))
         .init();
     Ok(())
 }

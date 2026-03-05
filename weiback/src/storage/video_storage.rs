@@ -7,8 +7,8 @@ use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
-use log::{debug, warn};
 use sqlx::{Acquire, Executor, Sqlite};
+use tracing::{debug, error, warn};
 use url::Url;
 
 use super::internal::video;
@@ -179,7 +179,7 @@ impl FileSystemVideoStorage {
             if absolute_path.exists()
                 && let Err(e) = tokio::fs::remove_file(&absolute_path).await
             {
-                log::error!(
+                error!(
                     "Failed to delete video file {}: {}",
                     absolute_path.display(),
                     e

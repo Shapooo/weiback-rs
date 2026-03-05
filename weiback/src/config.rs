@@ -11,9 +11,9 @@ use std::{
     time::Duration,
 };
 
-use log::{debug, info, warn};
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info, warn};
 use weibosdk_rs::config::Conifg as SdkConfig;
 
 use crate::error::Result;

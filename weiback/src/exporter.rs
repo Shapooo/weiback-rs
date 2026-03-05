@@ -11,11 +11,11 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use futures::stream::{self, StreamExt};
-use log::{debug, error, info, warn};
 use tokio::{
     fs::{DirBuilder, File},
     io::AsyncWriteExt,
 };
+use tracing::{debug, error, info, warn};
 
 use crate::error::Result;
 use crate::utils::{make_html_file_name, make_resource_dir_name};

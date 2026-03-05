@@ -3,10 +3,10 @@ mod upgrader;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use env_logger::Builder;
-use log::{LevelFilter, error, info, warn};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
 use tokio::fs;
+use tracing::{error, info, warn};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use upgrader::Upgrader;
 use weiback::config::{self, get_config};
@@ -134,6 +134,8 @@ async fn start() -> Result<()> {
 }
 
 fn init_logger() -> Result<()> {
+    tracing_log::LogTracer::init()?;
+
     let exe_path = std::env::current_exe()?;
     let log_file_name = exe_path
         .file_stem()
@@ -153,9 +155,14 @@ fn init_logger() -> Result<()> {
         .create(true)
         .truncate(true)
         .open(log_path)?;
-    Builder::new()
-        .filter_level(LevelFilter::Info)
-        .target(env_logger::Target::Pipe(Box::new(log_file)))
+
+    let filter = EnvFilter::builder()
+        .with_default_directive(tracing::Level::INFO.into())
+        .from_env_lossy();
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().with_writer(std::sync::Mutex::new(log_file)))
         .init();
     Ok(())
 }

@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::stream::{self, StreamExt, TryStreamExt};
-use log::{debug, error, info};
 use tokio::time::sleep;
+use tracing::{debug, error, info};
 
 use super::post_processer::PostProcesser;
 use super::task::TaskContext;

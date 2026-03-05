@@ -2,9 +2,9 @@ mod error;
 
 use std::sync::Arc;
 
-use log::{debug, error, info, warn};
 use serde::Serialize;
 use tauri::{self, App, Manager, State};
+use tracing::{debug, error, info, warn};
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{

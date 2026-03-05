@@ -3,8 +3,8 @@
 //! It includes functionality to retrieve the full content of a post, including its long text
 //! and potentially nested retweeted status, by its unique ID.
 #![allow(async_fn_in_trait)]
-use log::{debug, error};
 use serde::Deserialize;
+use tracing::{debug, error};
 use weibosdk_rs::http_client::HttpResponse;
 
 use super::{HttpClient, internal::post::PostInternal};

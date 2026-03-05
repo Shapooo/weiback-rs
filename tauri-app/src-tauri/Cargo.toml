@@ -12,14 +12,15 @@ path = "src/bin/weiback-rs/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 dirs = { workspace = true }
-env_logger = { workspace = true }
-log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-log = { workspace = true }
+tracing-subscriber = { workspace = true }
 weiback-rs = { path = "../../weiback" }
 weibosdk-rs = { workspace = true }
 

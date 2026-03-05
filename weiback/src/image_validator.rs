@@ -15,7 +15,7 @@
 
 use image::{DynamicImage, GenericImageView, Pixel};
 use img_hash::{HashAlg, HasherConfig};
-use log::debug;
+use tracing::debug;
 
 use crate::error::{Error, Result};
 

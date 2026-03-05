@@ -5,8 +5,8 @@
 #![allow(async_fn_in_trait)]
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
-use log::{debug, error, info};
 use serde::Deserialize;
+use tracing::{debug, error, info};
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
 
 /// Re-exports `weibosdk_rs::profile_statuses::ContainerType` for convenience.

@@ -21,9 +21,9 @@ use futures::{
     stream::{self, StreamExt},
 };
 use itertools::Itertools;
-use log::{debug, error, info, warn};
 use picture_storage::FileSystemPictureStorage;
 use sqlx::SqlitePool;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::core::task::{PaginatedPosts, PostQuery, TaskContext};

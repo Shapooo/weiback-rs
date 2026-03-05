@@ -16,9 +16,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use log::{debug, error, info};
 use reqwest::Client;
 use tokio::sync::mpsc;
+use tracing::{debug, error, info};
 use url::Url;
 
 use super::core::task::TaskContext;

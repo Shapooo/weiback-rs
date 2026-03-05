@@ -16,12 +16,12 @@ pub mod task_handler;
 pub mod task_manager;
 
 use bytes::Bytes;
-use log::{debug, error, info, warn};
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
 use tokio::spawn;
+use tracing::{debug, error, info, warn};
 use weibosdk_rs::{ApiClient as SdkApiClient, api_client::LoginState, session::Session};
 
 #[cfg(not(feature = "dev-mode"))]

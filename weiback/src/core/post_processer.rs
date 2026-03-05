@@ -12,7 +12,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use futures::stream::{self, StreamExt, TryStreamExt};
-use log::{debug, info};
+use tracing::{debug, info};
 use url::Url;
 
 use super::task::TaskContext;

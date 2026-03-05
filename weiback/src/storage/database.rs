@@ -4,8 +4,8 @@
 //! It provides functions to create a database pool for both default application usage
 //! and for custom database URLs, such as in-memory databases for testing.
 
-use log::{error, info};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase};
+use tracing::{error, info};
 
 use crate::config::get_config;
 use crate::error::{Error, Result};
