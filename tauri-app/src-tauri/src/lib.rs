@@ -25,6 +25,28 @@ pub enum PictureError {
     Internal(String),
 }
 
+/// A wrapper for Weibo IDs to handle conversion from string/number in Tauri commands.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct WeiboId(i64);
+
+impl<'de> serde::Deserialize<'de> for WeiboId {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse::<i64>()
+            .map(WeiboId)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<WeiboId> for i64 {
+    fn from(id: WeiboId) -> Self {
+        id.0
+    }
+}
+
 #[tauri::command(async)]
 async fn get_current_task_status(
     core: State<'_, Arc<Core>>,
@@ -77,19 +99,17 @@ fn set_config_command(config: Config) -> std::result::Result<(), String> {
 #[tauri::command]
 async fn backup_user(
     core: State<'_, Arc<Core>>,
-    uid: String,
+    uid: WeiboId,
     num_pages: u32,
     backup_type: BackupType,
 ) -> Result<()> {
     info!(
-        "backup_user called with uid: {uid}, pages num: {num_pages}, backup_type: {backup_type:?}"
+        "backup_user called with uid: {:?}, pages num: {num_pages}, backup_type: {backup_type:?}",
+        uid
     );
     Ok(core
         .backup_user(TaskRequest::BackupUser(BackupUserPostsOptions {
-            uid: uid.parse().map_err(|err| {
-                error!("Failed to parse uid: {err}");
-                err
-            })?,
+            uid: uid.into(),
             num_pages,
             backup_type,
         }))
@@ -146,23 +166,15 @@ async fn login_state(core: State<'_, Arc<Core>>) -> Result<Option<User>> {
 }
 
 #[tauri::command]
-async fn delete_post(core: State<'_, Arc<Core>>, id: String) -> Result<()> {
-    info!("delete_post called with id: {id}");
-    let id = id.parse::<i64>().map_err(|err| {
-        error!("Failed to parse id: {err}");
-        err
-    })?;
-    Ok(core.delete_post(id).await?)
+async fn delete_post(core: State<'_, Arc<Core>>, id: WeiboId) -> Result<()> {
+    info!("delete_post called with id: {id:?}");
+    Ok(core.delete_post(id.into()).await?)
 }
 
 #[tauri::command]
-async fn rebackup_post(core: State<'_, Arc<Core>>, id: String) -> Result<()> {
-    info!("rebackup_post called with id: {id}");
-    let id = id.parse::<i64>().map_err(|err| {
-        error!("Failed to parse id: {err}");
-        err
-    })?;
-    Ok(core.rebackup_post(id).await?)
+async fn rebackup_post(core: State<'_, Arc<Core>>, id: WeiboId) -> Result<()> {
+    info!("rebackup_post called with id: {id:?}");
+    Ok(core.rebackup_post(id.into()).await?)
 }
 
 #[tauri::command]
@@ -176,12 +188,9 @@ async fn rebackup_posts(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<
 #[tauri::command]
 async fn get_username_by_id(
     core: State<'_, Arc<Core>>,
-    uid: String,
+    uid: WeiboId,
 ) -> std::result::Result<Option<String>, String> {
-    let Ok(uid) = uid.parse::<i64>() else {
-        return Ok(None);
-    };
-    core.get_username_by_id(uid)
+    core.get_username_by_id(uid.into())
         .await
         .map_err(|e| e.to_string())
 }
