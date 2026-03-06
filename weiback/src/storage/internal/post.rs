@@ -489,7 +489,7 @@ where
 
     if clean_retweeted_invalid {
         // SELECT id FROM posts WHERE uid IS NULL
-        // delete_post will alse delete all retweeter post
+        // delete_post will alse delete all retweets of the post
         query.and_where(Expr::col(PostIden::Uid).is_null());
     } else {
         // SELECT id FROM posts WHERE uid IS NULL AND id NOT IN (SELECT retweeted_id FROM posts WHERE retweeted_id IS NOT NULL)
@@ -512,17 +512,17 @@ where
         .await?)
 }
 
-/// Retrieves the IDs of posts that retweeted a given original post.
+/// Retrieves the IDs of posts that retweet a given original post.
 ///
 /// # Arguments
 ///
 /// * `executor` - A database executor.
-/// * `id` - The ID of the original post.
+/// * `id` - The ID of the original(retweeted) post.
 ///
 /// # Returns
 ///
 /// A `Result` containing a `Vec<i64>` of post IDs that are retweets of the given post.
-pub async fn get_retweeted_posts_id<'e, E>(executor: E, id: i64) -> Result<Vec<i64>>
+pub async fn get_retweet_id<'e, E>(executor: E, id: i64) -> Result<Vec<i64>>
 where
     E: Executor<'e, Database = Sqlite>,
 {
@@ -1030,9 +1030,7 @@ mod local_tests {
         save_post(&db, &internal_original).await.unwrap();
         save_post(&db, &internal_retweeted).await.unwrap();
 
-        let ids = get_retweeted_posts_id(&db, internal_original.id)
-            .await
-            .unwrap();
+        let ids = get_retweet_id(&db, internal_original.id).await.unwrap();
         assert_eq!(ids, vec![internal_retweeted.id]);
     }
 

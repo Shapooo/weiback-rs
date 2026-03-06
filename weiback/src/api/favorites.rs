@@ -109,7 +109,7 @@ pub trait FavoritesApi {
 impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
     /// Fetches a page of the user's favorited posts from the Weibo API.
     ///
-    /// The fetched posts are then processed to retrieve any long text or retweet details.
+    /// The fetched posts are then processed to retrieve any long text or retweeted post details.
     ///
     /// # Arguments
     /// * `page` - The page number of favorites to retrieve.

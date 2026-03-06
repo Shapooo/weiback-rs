@@ -54,10 +54,10 @@ impl<C: HttpClient> ApiClientImpl<C> {
         ApiClientImpl { client }
     }
 
-    /// Processes a `PostInternal` object, fetching full long text and retweet information if available.
+    /// Processes a `PostInternal` object, fetching full long text and retweeted information if available.
     ///
     /// This method is responsible for hydrating a `PostInternal` from the database with
-    /// potentially missing details (like full long text content or complete retweet objects)
+    /// potentially missing details (like full long text content or complete retweeted objects)
     /// by making additional API calls if `is_long_text` is true or `retweeted_status` exists.
     ///
     /// # Arguments
@@ -81,20 +81,20 @@ impl<C: HttpClient> ApiClientImpl<C> {
             }
         }
 
-        // If there's a retweet, fetch its full version.
-        // This also handles the long text of the retweet.
-        if let Some(mut retweet_box) = post.retweeted_status.take() {
-            let full_retweet = self.statuses_show_internal(retweet_box.id).await?;
-            *retweet_box = full_retweet;
+        // If there's a retweeted post, fetch its full version.
+        // This also handles the long text of the retweeted post.
+        if let Some(mut retweeted_box) = post.retweeted_status.take() {
+            let full_retweet = self.statuses_show_internal(retweeted_box.id).await?;
+            *retweeted_box = full_retweet;
 
-            if let Some(long_text) = retweet_box.long_text.take() {
-                retweet_box.text = long_text.content;
-            } else if retweet_box.is_long_text {
+            if let Some(long_text) = retweeted_box.long_text.take() {
+                retweeted_box.text = long_text.content;
+            } else if retweeted_box.is_long_text {
                 // workaround wrongly set is_long_text
-                let id = retweet_box.id;
+                let id = retweeted_box.id;
                 warn!("retweeted post {id} is_long_text without long_text");
             }
-            post.retweeted_status = Some(retweet_box);
+            post.retweeted_status = Some(retweeted_box);
         }
 
         post.try_into()

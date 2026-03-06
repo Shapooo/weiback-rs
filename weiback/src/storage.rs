@@ -138,7 +138,8 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// Retrieves IDs of posts that are invalid (e.g., uid is NULL).
     ///
     /// # Arguments
-    /// * `clean_retweeted_invalid` - Whether to include posts that are valid themselves but their retweeted content is invalid.
+    /// * `clean_retweeted_invalid` - Whether to include posts that are valid themselves
+    /// but their retweeted content is invalid.
     async fn get_invalid_posts_ids(&self, clean_retweeted_invalid: bool) -> Result<Vec<i64>>;
 
     /// Saves a picture's content to the file system and its metadata to the database.
@@ -311,7 +312,7 @@ impl StorageImpl {
         })
     }
 
-    /// Retrieves a post and hydrates it with user and retweet information.
+    /// Retrieves a post and hydrates it with user and retweeted post.
     fn get_post(&self, id: i64) -> Pin<Box<dyn Future<Output = Result<Option<Post>>> + Send + '_>> {
         Box::pin(async move {
             if let Some(post) = post::get_post(&self.db_pool, id).await? {
@@ -376,7 +377,7 @@ impl StorageImpl {
         Box::pin(async move {
             let picture_path = ctx.config.picture_path.clone();
             let video_path = ctx.config.video_path.clone();
-            let retweeted_posts_ids = post::get_retweeted_posts_id(&self.db_pool, id).await?;
+            let retweeted_posts_ids = post::get_retweet_id(&self.db_pool, id).await?;
             for post_id in retweeted_posts_ids {
                 self.delete_post_recursive(ctx.clone(), post_id).await?;
             }
@@ -706,14 +707,14 @@ mod local_tests {
             if let (Some(original_user), Some(fetched_user)) = (&original.user, &fetched.user) {
                 assert_eq!(original_user.id, fetched_user.id);
             }
-            if let (Some(original_retweet), Some(fetched_retweet)) =
+            if let (Some(original_retweeted), Some(fetched_retweeted)) =
                 (&original.retweeted_status, &fetched.retweeted_status)
             {
-                assert_eq!(original_retweet.id, fetched_retweet.id);
-                if let (Some(original_retweet_user), Some(fetched_retweet_user)) =
-                    (&original_retweet.user, &fetched_retweet.user)
+                assert_eq!(original_retweeted.id, fetched_retweeted.id);
+                if let (Some(original_retweeted_user), Some(fetched_retweeted_user)) =
+                    (&original_retweeted.user, &fetched_retweeted.user)
                 {
-                    assert_eq!(original_retweet_user.id, fetched_retweet_user.id);
+                    assert_eq!(original_retweeted_user.id, fetched_retweeted_user.id);
                 }
             }
         }

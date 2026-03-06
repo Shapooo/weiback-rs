@@ -40,7 +40,7 @@ pub struct PostView {
     avatar_path: Option<String>,
     pic_paths: Vec<String>,
 
-    /// Recursive retweet
+    /// Recursive retweeted
     retweeted_status: Option<Box<PostView>>,
 }
 
@@ -70,11 +70,11 @@ impl PostView {
     ) -> Result<Self> {
         let pic_folder_path = Path::new(pic_folder);
 
-        // Handle retweet first if it exists
-        let retweeted_status = if let Some(retweet_box) = post.retweeted_status.take() {
-            let retweet = *retweet_box;
+        // Handle retweeted first if it exists
+        let retweeted_status = if let Some(retweeted_box) = post.retweeted_status.take() {
+            let retweeted = *retweeted_box;
             Some(Box::new(PostView::from_post(
-                retweet,
+                retweeted,
                 pic_folder,
                 pic_quality,
                 emoji_map,

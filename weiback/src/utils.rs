@@ -184,9 +184,9 @@ fn extract_inline_pic_metas(
     let outer_id = post.id;
     let outer_text = post.text.as_str();
 
-    let retweet = post.retweeted_status.as_ref();
-    let inner_id = retweet.map(|r| r.id);
-    let inner_text = retweet.map(|r| r.text.as_str());
+    let retweeted = post.retweeted_status.as_ref();
+    let inner_id = retweeted.map(|r| r.id);
+    let inner_text = retweeted.map(|r| r.text.as_str());
 
     post.url_struct
         .as_ref()
@@ -229,7 +229,7 @@ pub fn extract_emojis_from_text(text: &str) -> impl Iterator<Item = &str> {
     EMOJI_EXPR.find_iter(text).map(|m| m.as_str())
 }
 
-/// Extracts avatar URLs for the post author and the author of the retweet, if present.
+/// Extracts avatar URLs for the post author and the author of the retweeted, if present.
 fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
     let current_user_iter = post
         .user
@@ -241,7 +241,7 @@ fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
         })
         .into_iter();
 
-    let retweet_user_iter = post
+    let retweeted_user_iter = post
         .retweeted_status
         .as_ref()
         .and_then(|re| re.user.as_ref())
@@ -252,7 +252,7 @@ fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
         })
         .into_iter();
 
-    current_user_iter.chain(retweet_user_iter)
+    current_user_iter.chain(retweeted_user_iter)
 }
 
 /// Generates local file paths for standalone pictures in a post, for use in HTML exports.
@@ -322,7 +322,7 @@ fn extract_current_standalone_pic_metas(
 /// Extracts metadata for standalone pictures.
 ///
 /// If the post is a retweet, this function extracts pictures from the retweeted content.
-/// Otherwise, it extracts from the main post.
+/// Otherwise, it extracts from the post self.
 pub fn extract_standalone_pic_metas(
     post: &Post,
     definition: PictureDefinition,

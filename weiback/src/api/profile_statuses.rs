@@ -71,7 +71,7 @@ pub trait ProfileStatusesApi {
 impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
     /// Fetches a page of posts from a specific user's profile from the Weibo API.
     ///
-    /// The fetched posts are then processed to retrieve any long text or retweet details,
+    /// The fetched posts are then processed to retrieve any long text or retweeted post details,
     /// and filtered to ensure the correct user's posts are returned.
     ///
     /// # Arguments

@@ -53,7 +53,6 @@ pub struct PostInternal {
     pub region_name: Option<String>,
     pub reposts_count: Option<i64>,
     pub repost_type: Option<i64>,
-    /// The original post if this is a retweet. Can be nested.
     pub retweeted_status: Option<Box<PostInternal>>,
     pub source: Option<String>,
     pub tag_struct: Option<TagStruct>,
