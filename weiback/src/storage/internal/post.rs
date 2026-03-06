@@ -579,11 +579,7 @@ fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
 
     if let Some(search_term) = query.search_term.as_ref() {
         let fts_query = match search_term {
-            SearchTerm::Fuzzy(term) => term
-                .split_whitespace()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" AND "),
+            SearchTerm::Fuzzy(term) => term.to_owned(),
             SearchTerm::Strict(term) => format!("\"{}\"", term.replace('"', "\"\"")),
         };
 
