@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
     User,
     Task,
-    SubTaskError,
+    TaskError,
     PaginatedPostInfo,
     PostQuery,
     ExportJobOptions,
@@ -19,7 +19,7 @@ export const login = (smsCode: string) => invoke<User>('login', { smsCode });
 
 // Tasks
 export const getCurrentTaskStatus = () => invoke<Task | null>('get_current_task_status');
-export const getAndClearSubTaskErrors = () => invoke<SubTaskError[]>('get_and_clear_sub_task_errors');
+export const getAndClearTaskErrors = () => invoke<TaskError[]>('get_and_clear_task_errors');
 
 // Backup
 export const backupUser = (uid: string, numPages: number, backupType: BackupType) =>

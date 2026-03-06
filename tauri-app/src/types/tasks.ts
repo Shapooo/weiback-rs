@@ -37,12 +37,12 @@ export interface Task {
     error: string | null;
 }
 
-export enum SubTaskErrorType {
+export enum TaskErrorType {
     DownloadMedia = "DownloadMedia",
 }
 
-export interface SubTaskError {
-    error_type: { [key in SubTaskErrorType]?: string }; // e.g., { "DownloadMedia": "http://..." }
+export interface TaskError {
+    error_type: { [key in TaskErrorType]?: string }; // e.g., { "DownloadMedia": "http://..." }
     message: string;
 }
 

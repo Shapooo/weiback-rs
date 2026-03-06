@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
 import { useSnackbar } from 'notistack';
 import { useTaskStore } from '../stores/taskStore';
-import { getCurrentTaskStatus, getAndClearSubTaskErrors } from '../lib/api';
+import { getCurrentTaskStatus, getAndClearTaskErrors } from '../lib/api';
 
 /**
  * A custom hook that periodically polls the backend for the current task status
- * and any non-fatal sub-task errors, updating the UI accordingly.
+ * and any non-fatal task errors, updating the UI accordingly.
  * @param intervalMs The interval in milliseconds to poll the backend. Defaults to 2000ms.
  */
 export function useTaskPolling(intervalMs = 2000) {
@@ -22,29 +22,29 @@ export function useTaskPolling(intervalMs = 2000) {
       }
     };
 
-    const pollSubTaskErrors = async () => {
-        try {
-            const errors = await getAndClearSubTaskErrors();
-            errors.forEach(error => {
-                const url = error.error_type.DownloadMedia;
-                enqueueSnackbar(`媒体下载失败: ${url} - ${error.message}`, {
-                    variant: 'error',
-                    persist: true, // Keep it visible until the user dismisses it
-                });
-            });
-        } catch (error) {
-            console.error('Failed to poll sub-task errors:', error);
-        }
+    const pollTaskErrors = async () => {
+      try {
+        const errors = await getAndClearTaskErrors();
+        errors.forEach(error => {
+          const url = error.error_type.DownloadMedia;
+          enqueueSnackbar(`媒体下载失败: ${url} - ${error.message}`, {
+            variant: 'error',
+            persist: true, // Keep it visible until the user dismisses it
+          });
+        });
+      } catch (error) {
+        console.error('Failed to poll task errors:', error);
+      }
     };
 
     const runPolls = () => {
-        pollTaskStatus();
-        pollSubTaskErrors();
+      pollTaskStatus();
+      pollTaskErrors();
     }
 
     // Poll immediately on mount to get the initial state
-    runPolls(); 
-    
+    runPolls();
+
     const intervalId = setInterval(runPolls, intervalMs);
 
     // Cleanup function to clear the interval when the component unmounts

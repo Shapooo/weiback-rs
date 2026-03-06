@@ -3,26 +3,42 @@ mod error;
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{self, App, Manager, State};
+use tauri::{self, App, Emitter, Manager, State, ipc::Response};
 use tracing::{debug, error, info, warn};
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
     BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions, Core,
-    ExportJobOptions, PostQuery, TaskRequest,
+    ExportJobOptions, PostQuery, TaskEventListener, TaskRequest,
     task::{BackupType, CleanupPicturesOptions, PaginatedPostInfo},
-    task_manager::{SubTaskError, Task},
+    task_manager::{Task, TaskError},
 };
 use weiback::models::User;
 
 use error::Result;
-use tauri::ipc::Response;
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum PictureError {
     NotFound,
     Internal(String),
+}
+
+/// A reporter that forwards task events to the Tauri frontend via `emit`.
+struct TauriTaskEventListener {
+    app_handle: tauri::AppHandle,
+}
+
+impl TaskEventListener for TauriTaskEventListener {
+    fn on_task_updated(&self, task: &Task) {
+        debug!("emit task-updated to frontend: {task:?}");
+        let _ = self.app_handle.emit("task-updated", task);
+    }
+
+    fn on_task_error(&self, error: &TaskError) {
+        debug!("emit task-error to frontend: {error:?}");
+        let _ = self.app_handle.emit("task-error", error);
+    }
 }
 
 /// A wrapper for Weibo IDs to handle conversion from string/number in Tauri commands.
@@ -55,11 +71,10 @@ async fn get_current_task_status(
 }
 
 #[tauri::command(async)]
-async fn get_and_clear_sub_task_errors(
+async fn get_and_clear_task_errors(
     core: State<'_, Arc<Core>>,
-) -> std::result::Result<Vec<SubTaskError>, String> {
-    core.get_and_clear_sub_task_errors()
-        .map_err(|e| e.to_string())
+) -> std::result::Result<Vec<TaskError>, String> {
+    core.get_and_clear_task_errors().map_err(|e| e.to_string())
 }
 
 #[tauri::command(async)]
@@ -260,7 +275,7 @@ pub fn run() -> Result<()> {
             rebackup_post,
             rebackup_posts,
             get_current_task_status,
-            get_and_clear_sub_task_errors,
+            get_and_clear_task_errors,
             cleanup_pictures,
             cleanup_invalid_avatars,
             cleanup_invalid_posts
@@ -284,6 +299,12 @@ pub fn run() -> Result<()> {
 fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let core = CoreBuilder::new().build()?;
     info!("Setting up Tauri application");
+
+    // Register the event listener for real-time updates
+    let listener = Box::new(TauriTaskEventListener {
+        app_handle: app.handle().clone(),
+    });
+    core.set_task_event_listener(listener)?;
 
     let core_clone = core.clone();
     tauri::async_runtime::spawn(async move { core_clone.login_with_session().await });
