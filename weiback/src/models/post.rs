@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use super::{MixMediaInfo, PageInfo, PicInfoItem, TagStruct, UrlStruct, User};
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 pub struct Post {
     pub attitudes_count: Option<i64>,
     pub attitudes_status: i64,

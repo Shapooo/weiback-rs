@@ -1039,4 +1039,93 @@ mod local_tests {
             .unwrap();
         assert_eq!(ids, vec![internal_retweeted.id]);
     }
+
+    #[tokio::test]
+    async fn test_query_posts_search_term() {
+        let db = setup_db().await;
+        let posts = vec![
+            Post {
+                id: 1,
+                text: "hello world".to_string(),
+                ..Default::default()
+            },
+            Post {
+                id: 2,
+                text: "rust 编程语言".to_string(),
+                ..Default::default()
+            },
+            Post {
+                id: 3,
+                text: "你好 rust".to_string(),
+                ..Default::default()
+            },
+            Post {
+                id: 4,
+                text: "微博备份工具".to_string(),
+                ..Default::default()
+            },
+            Post {
+                id: 5,
+                text: "备份很重要".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        for post in posts {
+            let internal: PostInternal = post.try_into().unwrap();
+            save_post(&db, &internal, false).await.unwrap();
+        }
+
+        let mut query = PostQuery {
+            user_id: None,
+            start_date: None,
+            end_date: None,
+            search_term: Some(SearchTerm::Fuzzy("hello".to_string())),
+            is_favorited: false,
+            reverse_order: false,
+            page: 1,
+            posts_per_page: 10,
+        };
+
+        // Fuzzy search "hello"
+        let (results, total) = query_posts(&db, query.clone()).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(results[0].id, 1);
+
+        // 中文模糊搜索 "备份工" (3个字符)
+        query.search_term = Some(SearchTerm::Fuzzy("备份工".to_string()));
+        let (results, total) = query_posts(&db, query.clone()).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(results[0].id, 4);
+
+        // 中文模糊搜索 "备份很" (3个字符)
+        query.search_term = Some(SearchTerm::Fuzzy("备份很".to_string()));
+        let (results, total) = query_posts(&db, query.clone()).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(results[0].id, 5);
+
+        // 中英混合模糊搜索 "你好 rust"
+        query.search_term = Some(SearchTerm::Fuzzy("你好 rust".to_string()));
+        let (results, total) = query_posts(&db, query.clone()).await.unwrap();
+        assert_eq!(total, 2);
+        assert_eq!(results[0].id, 3);
+
+        // 纯中文模糊搜索 "微博备" (3个字符)
+        query.search_term = Some(SearchTerm::Fuzzy("微博备".to_string()));
+        let (results, total) = query_posts(&db, query.clone()).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(results[0].id, 4);
+
+        // 中英混合精确搜索 "rust 编程语言"
+        query.search_term = Some(SearchTerm::Strict("rust 编程语言".to_string()));
+        let (results, total) = query_posts(&db, query.clone()).await.unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(results[0].id, 2);
+
+        // Fuzzy search with no matches
+        query.search_term = Some(SearchTerm::Fuzzy("nomatch".to_string()));
+        let (results, total) = query_posts(&db, query).await.unwrap();
+        assert_eq!(total, 0);
+        assert_eq!(results.len(), 0);
+    }
 }
