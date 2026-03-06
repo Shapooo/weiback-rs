@@ -193,14 +193,18 @@ impl FileSystemPictureStorage {
     /// # Returns
     ///
     /// A `Result` indicating success or failure.
-    pub async fn delete_pictures_of_post(
+    pub async fn delete_pictures_of_post<'c, A>(
         &self,
         picture_path: &Path,
-        db: &sqlx::SqlitePool,
+        acquirer: A,
         post_id: i64,
-    ) -> Result<()> {
-        let pic_infos = picture::get_pictures_by_post_id(db, post_id).await?;
-        picture::delete_pictures_by_post_id(db, post_id).await?;
+    ) -> Result<()>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
+        let mut conn = acquirer.acquire().await?;
+        let pic_infos = picture::get_pictures_by_post_id(&mut *conn, post_id).await?;
+        picture::delete_pictures_by_post_id(&mut *conn, post_id).await?;
 
         for info in pic_infos {
             let pic_path = picture_path.join(info.path);
