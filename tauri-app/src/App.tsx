@@ -3,7 +3,7 @@ import { Box, Drawer, CssBaseline, LinearProgress, Typography } from '@mui/mater
 import { useSnackbar } from 'notistack';
 import { MainListItems } from './listItems';
 import AppRouter from './router';
-import { useTaskPolling } from './hooks/useTaskPolling';
+import { useTaskEvents } from './hooks/useTaskEvents';
 import { useTaskStore } from './stores/taskStore';
 import { useAuthStore } from './stores/authStore';
 import { Task } from './types';
@@ -61,8 +61,8 @@ function GlobalTaskProgress() {
 
 
 const App: React.FC = () => {
-    // Start global polling for task status
-    useTaskPolling();
+    // Start listening for global task events
+    useTaskEvents();
     // Enable global notifications for task completion/failure
     useCompletionNotifier();
 
