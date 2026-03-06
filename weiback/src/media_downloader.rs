@@ -22,7 +22,7 @@ use tracing::{debug, error, info};
 use url::Url;
 
 use super::core::task::TaskContext;
-use super::core::task_manager::{SubTaskError, SubTaskErrorType};
+use super::core::task_manager::{TaskError, TaskErrorType};
 use crate::error::Result;
 
 /// A trait for high-level media downloading capabilities.
@@ -126,12 +126,12 @@ impl DownloaderWorker {
         while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
             debug!("Downloading media from {url}");
             if let Err(err) = self.process_task(ctx.clone(), &url, callback).await {
-                let sub_task_err = SubTaskError {
-                    error_type: SubTaskErrorType::DownloadMedia(url.to_string()),
+                let task_err = TaskError {
+                    error_type: TaskErrorType::DownloadMedia(url.to_string()),
                     message: err.to_string(),
                 };
-                if let Err(e) = ctx.task_manager.add_sub_task_error(sub_task_err) {
-                    error!("Failed to add sub-task error: {}", e);
+                if let Err(e) = ctx.task_manager.add_task_error(task_err) {
+                    error!("Failed to add task error: {}", e);
                 }
             }
         }
@@ -264,10 +264,10 @@ mod local_tests {
         // Allow some time for the worker to process the task
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        let errors = task_manager.get_and_clear_task_errors().unwrap();
         assert_eq!(errors.len(), 1);
         match &errors[0].error_type {
-            SubTaskErrorType::DownloadMedia(err_url) => {
+            TaskErrorType::DownloadMedia(err_url) => {
                 assert_eq!(err_url, url.as_str());
             }
         }
@@ -316,10 +316,10 @@ mod local_tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        let errors = task_manager.get_and_clear_task_errors().unwrap();
         assert_eq!(errors.len(), 1);
         match &errors[0].error_type {
-            SubTaskErrorType::DownloadMedia(err_url) => {
+            TaskErrorType::DownloadMedia(err_url) => {
                 assert_eq!(Url::parse(err_url), Url::parse(&url));
                 assert_eq!(errors[0].message, "I/O error: permission denied");
             }

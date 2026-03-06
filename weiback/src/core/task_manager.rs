@@ -2,7 +2,7 @@
 //!
 //! The [`TaskManager`] allows the application to:
 //! - Monitor the progress of a currently running task.
-//! - Retrieve error messages if a task or its sub-tasks fail.
+//! - Retrieve error messages if a task or its tasks fail.
 //! - Ensure that only one long-running task is active at a time.
 
 use serde::Serialize;
@@ -61,30 +61,52 @@ pub struct Task {
     pub error: Option<String>,
 }
 
-/// Types of errors that can occur within a sub-task (e.g., individual file download).
+/// Types of errors that can occur within a task (e.g., individual file download).
 #[derive(Debug, Clone, Serialize)]
-pub enum SubTaskErrorType {
+pub enum TaskErrorType {
     /// Failed to download a specific media file. Contains the URL.
     DownloadMedia(String),
 }
 
-/// A non-fatal error record for a specific sub-operation within a larger task.
+/// A non-fatal error record for a specific operation within a larger task.
 #[derive(Debug, Clone, Serialize)]
-pub struct SubTaskError {
+pub struct TaskError {
     /// The category of the error.
-    pub error_type: SubTaskErrorType,
+    pub error_type: TaskErrorType,
     /// A detailed error message.
     pub message: String,
+}
+
+/// A trait for listening to task-related events.
+///
+/// Implementations of this trait can receive real-time updates when a task's
+/// progress changes or when task errors occur.
+pub trait TaskEventListener: Send + Sync {
+    /// Called when a task's state or progress is updated.
+    fn on_task_updated(&self, task: &Task);
+    /// Called when a non-fatal task error is recorded.
+    fn on_task_error(&self, error: &TaskError);
 }
 
 /// A thread-safe manager for monitoring the execution state of application tasks.
 ///
 /// `TaskManager` ensures that long-running operations can be monitored from the
 /// UI and prevents multiple conflicting tasks from running simultaneously.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct TaskManager {
     current_task: Arc<Mutex<Option<Task>>>,
-    sub_task_errors: Arc<Mutex<Vec<SubTaskError>>>,
+    task_errors: Arc<Mutex<Vec<TaskError>>>,
+    listener: Arc<Mutex<Option<Box<dyn TaskEventListener>>>>,
+}
+
+impl std::fmt::Debug for TaskManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TaskManager")
+            .field("current_task", &self.current_task)
+            .field("task_errors", &self.task_errors)
+            .field("listener", &"Option<Box<dyn TaskEventListener>>")
+            .finish()
+    }
 }
 
 impl TaskManager {
@@ -92,8 +114,16 @@ impl TaskManager {
     pub fn new() -> Self {
         Self {
             current_task: Arc::new(Mutex::new(None)),
-            sub_task_errors: Arc::new(Mutex::new(Vec::new())),
+            task_errors: Arc::new(Mutex::new(Vec::new())),
+            listener: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Sets the task event listener.
+    pub fn set_listener(&self, listener: Box<dyn TaskEventListener>) -> Result<()> {
+        let mut listener_guard = self.listener.lock()?;
+        *listener_guard = Some(listener);
+        Ok(())
     }
 
     /// Registers and starts a new task.
@@ -131,7 +161,11 @@ impl TaskManager {
             total,
             error: None,
         };
-        *task_guard = Some(new_task);
+        *task_guard = Some(new_task.clone());
+
+        if let Some(listener) = self.listener.lock()?.as_ref() {
+            listener.on_task_updated(&new_task);
+        }
         Ok(())
     }
 
@@ -149,6 +183,10 @@ impl TaskManager {
             if task.status == TaskStatus::InProgress {
                 task.progress += progress_increment;
                 task.total += total_increment;
+                let task_clone = task.clone();
+                if let Some(listener) = self.listener.lock()?.as_ref() {
+                    listener.on_task_updated(&task_clone);
+                }
             }
             Ok(())
         } else {
@@ -166,6 +204,10 @@ impl TaskManager {
         let mut task_guard = self.current_task.lock()?;
         if let Some(task) = task_guard.as_mut() {
             task.status = TaskStatus::Completed;
+            let task_clone = task.clone();
+            if let Some(listener) = self.listener.lock()?.as_ref() {
+                listener.on_task_updated(&task_clone);
+            }
             Ok(())
         } else {
             Err(Error::InconsistentTask(
@@ -186,6 +228,10 @@ impl TaskManager {
         if let Some(task) = task_guard.as_mut() {
             task.status = TaskStatus::Failed;
             task.error = Some(error);
+            let task_clone = task.clone();
+            if let Some(listener) = self.listener.lock()?.as_ref() {
+                listener.on_task_updated(&task_clone);
+            }
             Ok(())
         } else {
             Err(Error::InconsistentTask(
@@ -194,23 +240,26 @@ impl TaskManager {
         }
     }
 
-    /// Records a non-fatal sub-task error.
+    /// Records a non-fatal task error.
     ///
     /// These errors do not stop the main task but are collected for reporting.
     ///
     /// # Arguments
-    /// * `error` - The `SubTaskError` to record.
-    pub fn add_sub_task_error(&self, error: SubTaskError) -> Result<()> {
-        self.sub_task_errors.lock()?.push(error);
+    /// * `error` - The `TaskError` to record.
+    pub fn add_task_error(&self, error: TaskError) -> Result<()> {
+        self.task_errors.lock()?.push(error.clone());
+        if let Some(listener) = self.listener.lock()?.as_ref() {
+            listener.on_task_error(&error);
+        }
         Ok(())
     }
 
-    /// Retrieves all recorded sub-task errors and clears the internal list.
+    /// Retrieves all recorded task errors and clears the internal list.
     ///
     /// # Returns
-    /// A `Result` containing a `Vec` of `SubTaskError`s.
-    pub fn get_and_clear_sub_task_errors(&self) -> Result<Vec<SubTaskError>> {
-        let mut errors = self.sub_task_errors.lock()?;
+    /// A `Result` containing a `Vec` of `TaskError`s.
+    pub fn get_and_clear_task_errors(&self) -> Result<Vec<TaskError>> {
+        let mut errors = self.task_errors.lock()?;
         let ret = errors.drain(..).collect();
         Ok(ret)
     }
@@ -303,29 +352,29 @@ mod tests {
     }
 
     #[test]
-    fn test_sub_task_error_handling() {
+    fn test_task_error_handling() {
         let manager = TaskManager::new();
-        assert!(manager.get_and_clear_sub_task_errors().unwrap().is_empty());
+        assert!(manager.get_and_clear_task_errors().unwrap().is_empty());
 
-        let error1 = SubTaskError {
-            error_type: SubTaskErrorType::DownloadMedia("url1".into()),
+        let error1 = TaskError {
+            error_type: TaskErrorType::DownloadMedia("url1".into()),
             message: "404 Not Found".into(),
         };
-        let error2 = SubTaskError {
-            error_type: SubTaskErrorType::DownloadMedia("url2".into()),
+        let error2 = TaskError {
+            error_type: TaskErrorType::DownloadMedia("url2".into()),
             message: "Timeout".into(),
         };
 
-        manager.add_sub_task_error(error1.clone()).unwrap();
-        manager.add_sub_task_error(error2.clone()).unwrap();
+        manager.add_task_error(error1.clone()).unwrap();
+        manager.add_task_error(error2.clone()).unwrap();
 
-        let errors = manager.get_and_clear_sub_task_errors().unwrap();
+        let errors = manager.get_and_clear_task_errors().unwrap();
         assert_eq!(errors.len(), 2);
         assert_eq!(errors[0].message, "404 Not Found");
         assert_eq!(errors[1].message, "Timeout");
 
         // Verify that the error list is cleared
-        assert!(manager.get_and_clear_sub_task_errors().unwrap().is_empty());
+        assert!(manager.get_and_clear_task_errors().unwrap().is_empty());
     }
 
     #[test]

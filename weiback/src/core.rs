@@ -39,7 +39,7 @@ pub use task::{
     PaginatedPostInfo, PostQuery, TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
-pub use task_manager::{SubTaskError, Task, TaskManager, TaskType};
+pub use task_manager::{Task, TaskError, TaskEventListener, TaskManager, TaskType};
 
 #[cfg(not(feature = "dev-mode"))]
 type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
@@ -84,11 +84,11 @@ impl Core {
         self.task_manager.get_current()
     }
 
-    /// Collects and removes all non-fatal sub-task errors (e.g., download failures).
+    /// Collects and removes all non-fatal task errors (e.g., download failures).
     ///
     /// This should be called periodically by the UI to report issues to the user.
-    pub fn get_and_clear_sub_task_errors(&self) -> Result<Vec<SubTaskError>> {
-        self.task_manager.get_and_clear_sub_task_errors()
+    pub fn get_and_clear_task_errors(&self) -> Result<Vec<TaskError>> {
+        self.task_manager.get_and_clear_task_errors()
     }
 
     /// Gets the Weibo UID of the currently logged-in user.
@@ -115,6 +115,14 @@ impl Core {
         self.task_handler
             .search_users_by_screen_name_prefix(prefix)
             .await
+    }
+
+    /// Sets a listener for task-related events.
+    ///
+    /// This allows the UI or other components to receive real-time updates
+    /// without polling.
+    pub fn set_task_event_listener(&self, listener: Box<dyn TaskEventListener>) -> Result<()> {
+        self.task_manager.set_listener(listener)
     }
 
     // ========================= login stuff =========================

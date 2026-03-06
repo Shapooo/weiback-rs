@@ -18,7 +18,7 @@ use url::Url;
 use crate::{
     core::{
         task::TaskContext,
-        task_manager::{SubTaskError, SubTaskErrorType, TaskManager},
+        task_manager::{TaskError, TaskErrorType, TaskManager},
     },
     error::{Error, Result},
     media_downloader::{AsyncDownloadCallback, MediaDownloader},
@@ -71,7 +71,7 @@ impl MediaDownloader for MockMediaDownloader {
     ///
     /// It checks for a mocked response for the given URL. If found, it uses that.
     /// Otherwise, its behavior depends on `default_succ`. If `default_succ` is true,
-    /// it calls the callback with dummy data; if false, it records a sub-task error.
+    /// it calls the callback with dummy data; if false, it records a task error.
     ///
     /// # Arguments
     /// * `ctx` - The task context for reporting errors.
@@ -81,7 +81,7 @@ impl MediaDownloader for MockMediaDownloader {
     /// # Returns
     /// A `Result` indicating if the download request was processed by the mock.
     /// Actual success/failure of the simulated download is handled by the mock's
-    /// internal logic and reported via `ctx.task_manager.add_sub_task_error`.
+    /// internal logic and reported via `ctx.task_manager.add_task_error`.
     async fn download_media(
         &self,
         ctx: Arc<TaskContext>,
@@ -102,11 +102,11 @@ impl MediaDownloader for MockMediaDownloader {
         };
 
         if let Err(err) = result {
-            let sub_task_err = SubTaskError {
-                error_type: SubTaskErrorType::DownloadMedia(url.to_string()),
+            let task_err = TaskError {
+                error_type: TaskErrorType::DownloadMedia(url.to_string()),
                 message: err.to_string(),
             };
-            ctx.task_manager.add_sub_task_error(sub_task_err)?;
+            ctx.task_manager.add_task_error(task_err)?;
         }
 
         Ok(())
@@ -173,10 +173,10 @@ mod local_tests {
             .await;
         assert!(result.is_ok());
 
-        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        let errors = task_manager.get_and_clear_task_errors().unwrap();
         assert_eq!(errors.len(), 1);
         match &errors[0].error_type {
-            SubTaskErrorType::DownloadMedia(err_url) => {
+            TaskErrorType::DownloadMedia(err_url) => {
                 assert_eq!(*err_url, url.to_string());
                 assert!(errors[0].message.contains("not found"));
             }
@@ -205,10 +205,10 @@ mod local_tests {
             .await;
         assert!(result.is_ok());
 
-        let errors = task_manager.get_and_clear_sub_task_errors().unwrap();
+        let errors = task_manager.get_and_clear_task_errors().unwrap();
         assert_eq!(errors.len(), 1);
         match &errors[0].error_type {
-            SubTaskErrorType::DownloadMedia(err_url) => {
+            TaskErrorType::DownloadMedia(err_url) => {
                 assert_eq!(*err_url, url.to_string());
                 assert!(errors[0].message.contains("URL not mocked"));
             }
