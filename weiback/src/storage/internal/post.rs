@@ -274,14 +274,13 @@ where
 /// # Returns
 ///
 /// A `Result` indicating success or failure.
-pub async fn save_post<'c, A>(acquirer: A, post: &PostInternal, overwrite: bool) -> Result<()>
+pub async fn save_post<'c, A>(acquirer: A, post: &PostInternal) -> Result<()>
 where
     A: Acquire<'c, Database = Sqlite>,
 {
     use serde_json::to_string;
     let mut conn = acquirer.acquire().await?;
-    let mut insert = Query::insert();
-    insert
+    let (sql, values) = Query::insert()
         .into_table(PostIden::Table)
         .columns([
             PostIden::AttitudesCount,
@@ -344,42 +343,39 @@ where
             post.text.clone().into(),
             post.uid.into(),
             post.url_struct.as_ref().map(to_string).transpose()?.into(),
-        ])?;
+        ])?
+        .on_conflict(
+            OnConflict::column(PostIden::Id)
+                .update_columns([
+                    PostIden::AttitudesCount,
+                    PostIden::AttitudesStatus,
+                    PostIden::CommentsCount,
+                    PostIden::CreatedAt,
+                    PostIden::Deleted,
+                    PostIden::EditCount,
+                    PostIden::Favorited,
+                    PostIden::Geo,
+                    PostIden::Mblogid,
+                    PostIden::MixMediaIds,
+                    PostIden::MixMediaInfo,
+                    PostIden::PageInfo,
+                    PostIden::PicIds,
+                    PostIden::PicInfos,
+                    PostIden::PicNum,
+                    PostIden::RegionName,
+                    PostIden::RepostsCount,
+                    PostIden::RepostType,
+                    PostIden::RetweetedId,
+                    PostIden::Source,
+                    PostIden::TagStruct,
+                    PostIden::Text,
+                    PostIden::Uid,
+                    PostIden::UrlStruct,
+                ])
+                .to_owned(),
+        )
+        .build_sqlx(SqliteQueryBuilder);
 
-    let mut on_conflict = OnConflict::column(PostIden::Id);
-    if overwrite {
-        on_conflict.update_columns([
-            PostIden::AttitudesCount,
-            PostIden::AttitudesStatus,
-            PostIden::CommentsCount,
-            PostIden::CreatedAt,
-            PostIden::Deleted,
-            PostIden::EditCount,
-            PostIden::Favorited,
-            PostIden::Geo,
-            PostIden::Mblogid,
-            PostIden::MixMediaIds,
-            PostIden::MixMediaInfo,
-            PostIden::PageInfo,
-            PostIden::PicIds,
-            PostIden::PicInfos,
-            PostIden::PicNum,
-            PostIden::RegionName,
-            PostIden::RepostsCount,
-            PostIden::RepostType,
-            PostIden::RetweetedId,
-            PostIden::Source,
-            PostIden::TagStruct,
-            PostIden::Text,
-            PostIden::Uid,
-            PostIden::UrlStruct,
-        ]);
-    } else {
-        on_conflict.do_nothing();
-    }
-    insert.on_conflict(on_conflict);
-
-    let (sql, values) = insert.build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(&mut *conn).await?;
 
     if post.favorited {
@@ -791,7 +787,7 @@ mod local_tests {
         let posts = create_test_posts().await;
         for mut post in posts {
             let internal_post: PostInternal = post.clone().try_into().unwrap();
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
 
             let fetched_post = get_post(&db, post.id)
                 .await
@@ -813,10 +809,10 @@ mod local_tests {
         for post in posts {
             let mut internal_post: PostInternal = post.try_into().unwrap();
 
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
 
             internal_post.text = "updated text".to_string();
-            save_post(&db, &internal_post, true).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
 
             let fetched_post = get_post(&db, internal_post.id).await.unwrap().unwrap();
             assert_eq!(fetched_post.text, "updated text");
@@ -829,7 +825,7 @@ mod local_tests {
         let posts = create_test_posts().await;
         for post in posts {
             let internal_post: PostInternal = post.try_into().unwrap();
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
         }
 
         let mut query = PostQuery {
@@ -856,7 +852,7 @@ mod local_tests {
         let posts = create_test_posts().await;
         for post in posts {
             let internal_post: PostInternal = post.try_into().unwrap();
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
 
             mark_post_favorited(&db, internal_post.id).await.unwrap();
             let unfavorited = get_post(&db, internal_post.id).await.unwrap();
@@ -878,7 +874,7 @@ mod local_tests {
             if internal_post.favorited {
                 favorited_count += 1;
             }
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
         }
 
         let query = PostQuery {
@@ -905,7 +901,7 @@ mod local_tests {
             if internal_post.favorited {
                 ids_to_unfavorite.push(internal_post.id);
             }
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
         }
 
         let ids = get_posts_id_to_unfavorite(&db).await.unwrap();
@@ -921,7 +917,7 @@ mod local_tests {
         let posts = create_test_posts().await;
         for post in posts.clone() {
             let internal_post: PostInternal = post.try_into().unwrap();
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
         }
 
         let mut query = PostQuery {
@@ -964,7 +960,7 @@ mod local_tests {
             .count();
         for post in posts.clone() {
             let internal_post: PostInternal = post.try_into().unwrap();
-            save_post(&db, &internal_post, false).await.unwrap();
+            save_post(&db, &internal_post).await.unwrap();
         }
 
         let mut query = PostQuery {
@@ -993,7 +989,7 @@ mod local_tests {
         let mut posts = create_test_posts().await;
         let post = posts.remove(0);
         let internal_post: PostInternal = post.try_into().unwrap();
-        save_post(&db, &internal_post, false).await.unwrap();
+        save_post(&db, &internal_post).await.unwrap();
 
         assert!(get_post(&db, internal_post.id).await.unwrap().is_some());
         if internal_post.favorited {
@@ -1031,8 +1027,8 @@ mod local_tests {
         let internal_original: PostInternal = original_post.clone().try_into().unwrap();
         let internal_retweeted: PostInternal = retweeted_post.try_into().unwrap();
 
-        save_post(&db, &internal_original, false).await.unwrap();
-        save_post(&db, &internal_retweeted, false).await.unwrap();
+        save_post(&db, &internal_original).await.unwrap();
+        save_post(&db, &internal_retweeted).await.unwrap();
 
         let ids = get_retweeted_posts_id(&db, internal_original.id)
             .await
@@ -1073,7 +1069,7 @@ mod local_tests {
 
         for post in posts {
             let internal: PostInternal = post.try_into().unwrap();
-            save_post(&db, &internal, false).await.unwrap();
+            save_post(&db, &internal).await.unwrap();
         }
 
         let mut query = PostQuery {

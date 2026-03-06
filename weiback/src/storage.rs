@@ -298,7 +298,7 @@ impl StorageImpl {
                 self._save_post(ret_post.clone()).await?;
             }
             let post_storage: PostInternal = post.try_into()?;
-            match post::save_post(&self.db_pool, &post_storage, true).await {
+            match post::save_post(&self.db_pool, &post_storage).await {
                 Ok(()) => {
                     debug!("Post with id: {} saved successfully", post_storage.id);
                     Ok(())

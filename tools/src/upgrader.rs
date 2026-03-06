@@ -105,7 +105,7 @@ impl Upgrader {
                 let id = post.id;
                 match convert_old_to_internal_post(post, &mut incompat_post_urls) {
                     Ok(internal_post) => {
-                        if let Err(e) = save_post(&mut *tx, &internal_post, true).await {
+                        if let Err(e) = save_post(&mut *tx, &internal_post).await {
                             warn!("Failed to save post {}: {:?}", internal_post.id, e);
                         }
                         if unfavorited {
