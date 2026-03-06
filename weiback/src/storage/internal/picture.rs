@@ -105,7 +105,7 @@ impl TryFrom<PictureDbRecord> for PictureInfo {
 
 /// Saves picture metadata into the database.
 ///
-/// If a picture with the same URL already exists, it will be ignored.
+/// If a picture with the same URL already exists, its metadata will be updated.
 ///
 /// # Arguments
 ///
@@ -153,7 +153,17 @@ where
             user_id.into(),
             definition.map(<&str>::from).into(),
         ])?
-        .on_conflict(OnConflict::column(PictureIden::Url).do_nothing().to_owned())
+        .on_conflict(
+            OnConflict::column(PictureIden::Url)
+                .update_columns([
+                    PictureIden::Id,
+                    PictureIden::Path,
+                    PictureIden::PostId,
+                    PictureIden::UserId,
+                    PictureIden::Definition,
+                ])
+                .to_owned(),
+        )
         .build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())
@@ -449,7 +459,7 @@ mod local_tests {
     }
 
     #[tokio::test]
-    async fn test_save_picture_meta_ignore() {
+    async fn test_save_picture_meta_update() {
         let db = setup_db().await;
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
         let meta = PictureMeta::Other { url: url.clone() };
@@ -457,11 +467,11 @@ mod local_tests {
         let path2 = "some/path/2.jpg";
 
         save_picture_meta(&db, &meta, Some(path1)).await.unwrap();
-        // Should ignore because URL is same
+        // Should update
         save_picture_meta(&db, &meta, Some(path2)).await.unwrap();
 
         let retrieved_path = get_picture_path(&db, &url).await.unwrap();
-        assert_eq!(retrieved_path, Some(PathBuf::from(path1)));
+        assert_eq!(retrieved_path, Some(PathBuf::from(path2)));
     }
 
     #[tokio::test]

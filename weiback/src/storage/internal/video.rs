@@ -79,7 +79,7 @@ where
 
 /// Saves video metadata into the database.
 ///
-/// If a video with the same URL already exists, it will be ignored.
+/// If a video with the same URL already exists, its metadata will be updated.
 ///
 /// # Arguments
 ///
@@ -99,7 +99,11 @@ where
         .into_table(VideoIden::Table)
         .columns([VideoIden::Url, VideoIden::Path, VideoIden::PostId])
         .values([url.as_str().into(), path.to_str().into(), post_id.into()])?
-        .on_conflict(OnConflict::column(VideoIden::Url).do_nothing().to_owned())
+        .on_conflict(
+            OnConflict::column(VideoIden::Url)
+                .update_columns([VideoIden::Path, VideoIden::PostId])
+                .to_owned(),
+        )
         .build_sqlx(SqliteQueryBuilder);
 
     sqlx::query_with(&sql, values).execute(executor).await?;
@@ -177,7 +181,7 @@ mod local_tests {
     }
 
     #[tokio::test]
-    async fn test_save_video_meta_ignore() {
+    async fn test_save_video_meta_update() {
         let db = setup_db().await;
         let url = Url::parse("http://example.com/video.mp4").unwrap();
         let post_id = 123;
@@ -185,11 +189,11 @@ mod local_tests {
         let path2 = Path::new("videos/2.mp4");
 
         save_video_meta(&db, &url, post_id, path1).await.unwrap();
-        // Should ignore because URL is same
+        // Should update
         save_video_meta(&db, &url, post_id, path2).await.unwrap();
 
         let retrieved_path = get_video_path(&db, &url).await.unwrap();
-        assert_eq!(retrieved_path, Some(path1.to_path_buf()));
+        assert_eq!(retrieved_path, Some(path2.to_path_buf()));
     }
 
     #[tokio::test]
