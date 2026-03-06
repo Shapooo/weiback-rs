@@ -304,16 +304,17 @@ mod local_tests {
     async fn test_save_duplicate_user() {
         let db = setup_db().await;
         let users = create_test_users().await;
-        for user in users {
-            // Save the same user twice
+        for mut user in users {
             save_user(&db, &user).await.unwrap();
-            let result = save_user(&db, &user).await;
 
-            // Should not fail because of "INSERT OR IGNORE"
-            assert!(result.is_ok());
+            // Change some field and save again
+            let original_name = user.screen_name.clone();
+            user.screen_name = format!("{}_updated", original_name);
+            save_user(&db, &user).await.unwrap();
 
             let fetched_user = get_user(&db, user.id).await.unwrap().unwrap();
-            assert_eq!(fetched_user, user);
+            assert_eq!(fetched_user.screen_name, user.screen_name);
+            assert_ne!(fetched_user.screen_name, original_name);
         }
     }
 }

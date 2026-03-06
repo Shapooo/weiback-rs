@@ -449,6 +449,22 @@ mod local_tests {
     }
 
     #[tokio::test]
+    async fn test_save_picture_meta_ignore() {
+        let db = setup_db().await;
+        let url = Url::parse("http://example.com/pic.jpg").unwrap();
+        let meta = PictureMeta::Other { url: url.clone() };
+        let path1 = "some/path/1.jpg";
+        let path2 = "some/path/2.jpg";
+
+        save_picture_meta(&db, &meta, Some(path1)).await.unwrap();
+        // Should ignore because URL is same
+        save_picture_meta(&db, &meta, Some(path2)).await.unwrap();
+
+        let retrieved_path = get_picture_path(&db, &url).await.unwrap();
+        assert_eq!(retrieved_path, Some(PathBuf::from(path1)));
+    }
+
+    #[tokio::test]
     async fn test_picture_record_conversion() {
         let url_str = "http://example.com/image.jpg";
         let path = "image.jpg";

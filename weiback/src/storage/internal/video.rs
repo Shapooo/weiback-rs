@@ -177,6 +177,22 @@ mod local_tests {
     }
 
     #[tokio::test]
+    async fn test_save_video_meta_ignore() {
+        let db = setup_db().await;
+        let url = Url::parse("http://example.com/video.mp4").unwrap();
+        let post_id = 123;
+        let path1 = Path::new("videos/1.mp4");
+        let path2 = Path::new("videos/2.mp4");
+
+        save_video_meta(&db, &url, post_id, path1).await.unwrap();
+        // Should ignore because URL is same
+        save_video_meta(&db, &url, post_id, path2).await.unwrap();
+
+        let retrieved_path = get_video_path(&db, &url).await.unwrap();
+        assert_eq!(retrieved_path, Some(path1.to_path_buf()));
+    }
+
+    #[tokio::test]
     async fn test_get_video_paths_by_post_id() {
         let db = setup_db().await;
         let post_id = 456;
