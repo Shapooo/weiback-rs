@@ -360,33 +360,6 @@ impl StorageImpl {
         }
         posts
     }
-
-    /// Recursively deletes a post, its retweets, and all associated media.
-    fn delete_post_recursive(
-        &self,
-        ctx: Arc<TaskContext>,
-        id: i64,
-    ) -> impl Future<Output = Result<()>> {
-        Box::pin(async move {
-            let picture_path = ctx.config.picture_path.clone();
-            let video_path = ctx.config.video_path.clone();
-            let retweeted_posts_ids = post::get_retweet_id(&self.db_pool, id).await?;
-            for post_id in retweeted_posts_ids {
-                self.delete_post_recursive(ctx.clone(), post_id).await?;
-            }
-
-            self.pic_storage
-                .delete_post_pictures(&picture_path, &self.db_pool, id)
-                .await?;
-            self.video_storage
-                .delete_post_videos(&video_path, &self.db_pool, id)
-                .await?;
-
-            post::delete_post(&self.db_pool, id).await?;
-
-            Ok(())
-        })
-    }
 }
 
 #[async_trait]
@@ -513,7 +486,30 @@ impl Storage for StorageImpl {
     }
 
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
-        self.delete_post_recursive(ctx, id).await
+        let picture_path = ctx.config.picture_path.clone();
+        let video_path = ctx.config.video_path.clone();
+        let Some(post) = post::get_post(&self.db_pool, id).await? else {
+            return Ok(());
+        };
+        if post.retweeted_id.is_some() {
+            self.pic_storage
+                .delete_post_pictures(&picture_path, &self.db_pool, id)
+                .await?;
+            self.video_storage
+                .delete_post_videos(&video_path, &self.db_pool, id)
+                .await?;
+            post::delete_post(&self.db_pool, id).await
+        } else {
+            let mut ids = post::get_retweet_ids(&self.db_pool, id).await?;
+            ids.push(id);
+            self.pic_storage
+                .batch_delete_posts_pictures(&picture_path, &self.db_pool, &ids)
+                .await?;
+            self.video_storage
+                .batch_delete_posts_videos(&video_path, &self.db_pool, &ids)
+                .await?;
+            post::batch_delete_posts(&self.db_pool, &ids).await
+        }
     }
 
     async fn get_invalid_posts_ids(&self, clean_retweeted_invalid: bool) -> Result<Vec<i64>> {

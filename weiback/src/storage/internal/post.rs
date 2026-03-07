@@ -522,7 +522,7 @@ where
 /// # Returns
 ///
 /// A `Result` containing a `Vec<i64>` of post IDs that are retweets of the given post.
-pub async fn get_retweet_id<'e, E>(executor: E, id: i64) -> Result<Vec<i64>>
+pub async fn get_retweet_ids<'e, E>(executor: E, id: i64) -> Result<Vec<i64>>
 where
     E: Executor<'e, Database = Sqlite>,
 {
@@ -1071,7 +1071,7 @@ mod local_tests {
         save_post(&db, &internal_original).await.unwrap();
         save_post(&db, &internal_retweeted).await.unwrap();
 
-        let ids = get_retweet_id(&db, internal_original.id).await.unwrap();
+        let ids = get_retweet_ids(&db, internal_original.id).await.unwrap();
         assert_eq!(ids, vec![internal_retweeted.id]);
     }
 
