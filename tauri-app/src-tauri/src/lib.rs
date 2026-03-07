@@ -87,8 +87,14 @@ fn perform_init_backend(app_handle: &AppHandle, state: &BackendState) -> Backend
     }
 
     info!("Initializing backend core...");
-    // Ensure config is initialized (it might have failed in run() or we might be retrying)
-    let _ = weiback::config::init();
+    // Attempt to initialize config from files.
+    if let Err(e) = weiback::config::init() {
+        warn!("Config initialization failed, using default: {e}");
+        // Notify frontend about the configuration issue.
+        let _ = app_handle.emit("config-error", e.to_string());
+        // Fallback to in-memory default configuration.
+        weiback::config::init_default();
+    }
 
     match CoreBuilder::new().build() {
         Ok(core) => {
@@ -308,9 +314,6 @@ async fn cleanup_invalid_posts(
 
 pub fn run() -> Result<()> {
     info!("Starting application");
-    if let Err(e) = weiback::config::init() {
-        error!("Failed to initialize config: {e}");
-    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -362,9 +365,6 @@ fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let state = BackendState {
         status: Mutex::new(BackendStatus::Uninitialized),
     };
-
-    // First attempt to initialize backend during startup
-    perform_init_backend(app.handle(), &state);
 
     app.manage(state);
     info!("Tauri setup complete");

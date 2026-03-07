@@ -119,16 +119,22 @@ impl Default for Config {
 ///
 /// # Errors
 /// This function will return an error if:
-/// - The configuration file exists but cannot be read.
+/// - The configuration file exists but cannot be read or parsed.
 /// - An I/O error occurs while trying to write a new default configuration file.
 pub fn init() -> Result<()> {
     info!("Initializing config...");
     let config = load_or_create()?;
-    // If already initialized, set() returns an error, which we ignore here,
-    // as it means another thread has already initialized it.
     let _ = CONFIG.set(Arc::new(RwLock::new(config)));
     info!("Config initialized successfully.");
     Ok(())
+}
+
+/// Forcefully initializes the global configuration with default values.
+///
+/// This is typically used as a fallback when `init()` fails, ensuring the
+/// application can still function with in-memory defaults.
+pub fn init_default() {
+    let _ = CONFIG.set(Arc::new(RwLock::new(Config::default())));
 }
 
 /// Retrieves the global configuration instance.
