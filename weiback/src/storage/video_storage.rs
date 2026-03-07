@@ -161,7 +161,7 @@ impl FileSystemVideoStorage {
     /// # Returns
     ///
     /// A `Result` indicating success or failure.
-    pub async fn delete_videos_of_post<'c, A>(
+    pub async fn delete_post_videos<'c, A>(
         &self,
         video_path: &Path,
         acquirer: A,
@@ -170,9 +170,33 @@ impl FileSystemVideoStorage {
     where
         A: Acquire<'c, Database = Sqlite>,
     {
+        self.batch_delete_posts_videos(video_path, acquirer, &[post_id])
+            .await
+    }
+
+    /// Deletes all videos associated with a given list of posts from both the file system and the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `video_path` - The base directory where videos are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `post_ids` - A slice of IDs of the posts whose videos are to be deleted.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
+    pub async fn batch_delete_posts_videos<'c, A>(
+        &self,
+        video_path: &Path,
+        acquirer: A,
+        post_ids: &[i64],
+    ) -> Result<()>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
         let mut conn = acquirer.acquire().await?;
-        let video_paths = video::get_video_paths_by_post_id(&mut *conn, post_id).await?;
-        video::delete_videos_by_post_id(&mut *conn, post_id).await?;
+        let video_paths = video::get_video_paths_by_post_ids(&mut *conn, post_ids).await?;
+        video::delete_videos_by_post_ids(&mut *conn, post_ids).await?;
 
         for path in video_paths {
             let absolute_path = video_path.join(path);
@@ -272,5 +296,65 @@ mod local_tests {
             .await
             .unwrap();
         assert!(blob.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_batch_delete_post_videos() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileSystemVideoStorage;
+        let post_id1 = 1;
+        let post_id2 = 2;
+
+        let video1 = create_test_video(
+            "https://video.weibo.com/media/play?livephoto=https%3A%2F%2Fus.sinaimg.cn%2F0023jbLigx081byvTnCw0f0f01004O5e0k01.mov",
+        );
+        let mut video1 = video1;
+        video1.meta.post_id = post_id1;
+
+        let video2 = create_test_video(
+            "https://video.weibo.com/media/play?livephoto=https%3A%2F%2Fus.sinaimg.cn%2F0023jbLigx081byvTnCw0f0f01004O5e0k02.mov",
+        );
+        let mut video2 = video2;
+        video2.meta.post_id = post_id2;
+
+        let db = setup_db().await;
+        storage
+            .save_video(temp_dir.path(), &db, &video1)
+            .await
+            .unwrap();
+        storage
+            .save_video(temp_dir.path(), &db, &video2)
+            .await
+            .unwrap();
+
+        let file_path1 = temp_dir
+            .path()
+            .join("us.sinaimg.cn/0023jbLigx081byvTnCw0f0f01004O5e0k01.mov");
+        let file_path2 = temp_dir
+            .path()
+            .join("us.sinaimg.cn/0023jbLigx081byvTnCw0f0f01004O5e0k02.mov");
+
+        assert!(file_path1.exists());
+        assert!(file_path2.exists());
+
+        storage
+            .batch_delete_posts_videos(temp_dir.path(), &db, &[post_id1, post_id2])
+            .await
+            .unwrap();
+
+        assert!(!file_path1.exists());
+        assert!(!file_path2.exists());
+        assert!(
+            video::get_video_paths_by_post_id(&db, post_id1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            video::get_video_paths_by_post_id(&db, post_id2)
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 }

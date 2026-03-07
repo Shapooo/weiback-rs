@@ -193,7 +193,7 @@ impl FileSystemPictureStorage {
     /// # Returns
     ///
     /// A `Result` indicating success or failure.
-    pub async fn delete_pictures_of_post<'c, A>(
+    pub async fn delete_post_pictures<'c, A>(
         &self,
         picture_path: &Path,
         acquirer: A,
@@ -202,9 +202,33 @@ impl FileSystemPictureStorage {
     where
         A: Acquire<'c, Database = Sqlite>,
     {
+        self.batch_delete_posts_pictures(picture_path, acquirer, &[post_id])
+            .await
+    }
+
+    /// Deletes all pictures associated with a given list of posts from both the file system and the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `picture_path` - The base directory where pictures are stored.
+    /// * `acquirer` - A database acquirer.
+    /// * `post_ids` - A slice of IDs of the posts whose pictures are to be deleted.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure.
+    pub async fn batch_delete_posts_pictures<'c, A>(
+        &self,
+        picture_path: &Path,
+        acquirer: A,
+        post_ids: &[i64],
+    ) -> Result<()>
+    where
+        A: Acquire<'c, Database = Sqlite>,
+    {
         let mut conn = acquirer.acquire().await?;
-        let pic_infos = picture::get_pictures_by_post_id(&mut *conn, post_id).await?;
-        picture::delete_pictures_by_post_id(&mut *conn, post_id).await?;
+        let pic_infos = picture::get_pictures_by_post_ids(&mut *conn, post_ids).await?;
+        picture::delete_pictures_by_post_ids(&mut *conn, post_ids).await?;
 
         for info in pic_infos {
             let pic_path = picture_path.join(info.path);
@@ -453,7 +477,7 @@ mod local_tests {
         );
 
         storage
-            .delete_pictures_of_post(temp_dir.path(), &db, post_id)
+            .delete_post_pictures(temp_dir.path(), &db, post_id)
             .await
             .unwrap();
 
@@ -471,6 +495,69 @@ mod local_tests {
                 .await
                 .unwrap()
                 .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_batch_delete_post_pictures() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileSystemPictureStorage;
+        let post_id1 = 1;
+        let post_id2 = 2;
+
+        let pic1 = Picture {
+            meta: PictureMeta::attached(
+                "http://example.com/post1/pic1.jpg",
+                post_id1,
+                PictureDefinition::Largest,
+            )
+            .unwrap(),
+            blob: Bytes::from_static(b"pic1 data"),
+        };
+        let pic2 = Picture {
+            meta: PictureMeta::attached(
+                "http://example.com/post2/pic2.jpg",
+                post_id2,
+                PictureDefinition::Largest,
+            )
+            .unwrap(),
+            blob: Bytes::from_static(b"pic2 data"),
+        };
+
+        let db = setup_db().await;
+        storage
+            .save_picture(temp_dir.path(), &db, &pic1)
+            .await
+            .unwrap();
+        storage
+            .save_picture(temp_dir.path(), &db, &pic2)
+            .await
+            .unwrap();
+
+        let file_path1 = temp_dir.path().join(pic_url_to_path_str(pic1.meta.url()));
+        let file_path2 = temp_dir.path().join(pic_url_to_path_str(pic2.meta.url()));
+
+        assert!(file_path1.exists());
+        assert!(file_path2.exists());
+
+        storage
+            .batch_delete_posts_pictures(temp_dir.path(), &db, &[post_id1, post_id2])
+            .await
+            .unwrap();
+
+        assert!(!file_path1.exists());
+        assert!(!file_path2.exists());
+        assert!(
+            picture::get_pictures_by_post_id(&db, post_id1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            picture::get_pictures_by_post_id(&db, post_id2)
+                .await
+                .unwrap()
+                .is_empty()
         );
     }
 }

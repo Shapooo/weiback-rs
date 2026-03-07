@@ -234,10 +234,33 @@ pub async fn get_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Result
 where
     E: Executor<'e, Database = Sqlite>,
 {
+    get_pictures_by_post_ids(executor, &[post_id]).await
+}
+
+/// Retrieves all `PictureInfo` associated with a list of post IDs.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `post_ids` - A slice of post IDs.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PictureInfo>` for the given post IDs.
+pub async fn get_pictures_by_post_ids<'e, E>(
+    executor: E,
+    post_ids: &[i64],
+) -> Result<Vec<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    if post_ids.is_empty() {
+        return Ok(Vec::new());
+    }
     let (sql, values) = Query::select()
         .column(Asterisk)
         .from(PictureIden::Table)
-        .and_where(Expr::col(PictureIden::PostId).eq(post_id))
+        .and_where(Expr::col(PictureIden::PostId).is_in(post_ids.iter().cloned()))
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
     let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
@@ -376,9 +399,29 @@ pub async fn delete_pictures_by_post_id<'e, E>(executor: E, post_id: i64) -> Res
 where
     E: Executor<'e, Database = Sqlite>,
 {
+    delete_pictures_by_post_ids(executor, &[post_id]).await
+}
+
+/// Deletes all picture entries associated with a list of post IDs from the database.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `post_ids` - A slice of post IDs.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
+pub async fn delete_pictures_by_post_ids<'e, E>(executor: E, post_ids: &[i64]) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    if post_ids.is_empty() {
+        return Ok(());
+    }
     let (sql, values) = Query::delete()
         .from_table(PictureIden::Table)
-        .and_where(Expr::col(PictureIden::PostId).eq(post_id))
+        .and_where(Expr::col(PictureIden::PostId).is_in(post_ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())

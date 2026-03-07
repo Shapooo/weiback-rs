@@ -44,10 +44,33 @@ pub async fn get_video_paths_by_post_id<'e, E>(executor: E, post_id: i64) -> Res
 where
     E: Executor<'e, Database = Sqlite>,
 {
+    get_video_paths_by_post_ids(executor, &[post_id]).await
+}
+
+/// Retrieves the local paths of all videos associated with a list of post IDs.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `post_ids` - A slice of post IDs.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PathBuf>` of video paths.
+pub async fn get_video_paths_by_post_ids<'e, E>(
+    executor: E,
+    post_ids: &[i64],
+) -> Result<Vec<PathBuf>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    if post_ids.is_empty() {
+        return Ok(Vec::new());
+    }
     let (sql, values) = Query::select()
         .column(VideoIden::Path)
         .from(VideoIden::Table)
-        .and_where(Expr::col(VideoIden::PostId).eq(post_id))
+        .and_where(Expr::col(VideoIden::PostId).is_in(post_ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
     let paths: Vec<String> = sqlx::query_scalar_with(&sql, values)
         .fetch_all(executor)
@@ -69,9 +92,29 @@ pub async fn delete_videos_by_post_id<'e, E>(executor: E, post_id: i64) -> Resul
 where
     E: Executor<'e, Database = Sqlite>,
 {
+    delete_videos_by_post_ids(executor, &[post_id]).await
+}
+
+/// Deletes all video entries associated with a list of post IDs from the database.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `post_ids` - A slice of post IDs.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
+pub async fn delete_videos_by_post_ids<'e, E>(executor: E, post_ids: &[i64]) -> Result<()>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    if post_ids.is_empty() {
+        return Ok(());
+    }
     let (sql, values) = Query::delete()
         .from_table(VideoIden::Table)
-        .and_where(Expr::col(VideoIden::PostId).eq(post_id))
+        .and_where(Expr::col(VideoIden::PostId).is_in(post_ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(executor).await?;
     Ok(())

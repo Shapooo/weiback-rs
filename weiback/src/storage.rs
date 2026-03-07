@@ -376,10 +376,10 @@ impl StorageImpl {
             }
 
             self.pic_storage
-                .delete_pictures_of_post(&picture_path, &self.db_pool, id)
+                .delete_post_pictures(&picture_path, &self.db_pool, id)
                 .await?;
             self.video_storage
-                .delete_videos_of_post(&video_path, &self.db_pool, id)
+                .delete_post_videos(&video_path, &self.db_pool, id)
                 .await?;
 
             post::delete_post(&self.db_pool, id).await?;
