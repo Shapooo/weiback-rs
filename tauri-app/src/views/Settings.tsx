@@ -91,9 +91,6 @@ const SettingsPage: React.FC = () => {
                 <Grid size={{ xs: 12, md: 10, lg: 8 }}>
                     <Card sx={{ mt: 3 }}>
                         <CardContent>
-                            {/* <Typography variant="h5" component="div" sx={{ mb: 2 }}>
-                                设置
-                            </Typography> */}
                             <Box component="form" noValidate autoComplete="off" sx={{ '& .MuiTextField-root': { my: 1 }, '& .MuiFormControl-root': { my: 1 } }}>
                                 <Grid container spacing={2}>
                                     <Grid size={{ xs: 12, sm: 6 }} >
@@ -184,32 +181,33 @@ const SettingsPage: React.FC = () => {
                                                         />
                                                     </Grid>
 
-                                                    {/* SDK Config */}
                                                     <Grid size={{ xs: 12 }}>
-                                                        <Typography variant="h6" sx={{ mt: 2 }}>SDK 配置</Typography>
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12, sm: 4 }}>
                                                         <TextField fullWidth
-                                                            label="收藏接口单次返回数量"
+                                                            label="单次抓取的微博数量"
+                                                            helperText="收藏和用户微博接口单次返回的数量"
                                                             type="number"
-                                                            value={config.sdk_config.fav_count}
-                                                            onChange={(e) => handleSdkChange('fav_count', parseInt(e.target.value, 10))}
+                                                            value={config.posts_count}
+                                                            onChange={(e) => handleChange('posts_count', parseInt(e.target.value, 10))}
                                                         />
                                                     </Grid>
-                                                    <Grid size={{ xs: 12, sm: 4 }}>
-                                                        <TextField fullWidth
-                                                            label="用户微博接口单次返回数量"
-                                                            type="number"
-                                                            value={config.sdk_config.status_count}
-                                                            onChange={(e) => handleSdkChange('status_count', parseInt(e.target.value, 10))}
-                                                        />
+
+                                                    <Grid size={{ xs: 12 }}>
+                                                        <Typography variant="h6" sx={{ mt: 2 }}>SDK 配置 (重启后生效)</Typography>
                                                     </Grid>
-                                                    <Grid size={{ xs: 12, sm: 4 }}>
+                                                    <Grid size={{ xs: 12, sm: 6 }}>
                                                         <TextField fullWidth
                                                             label="接口重试次数"
                                                             type="number"
                                                             value={config.sdk_config.retry_times}
                                                             onChange={(e) => handleSdkChange('retry_times', parseInt(e.target.value, 10))}
+                                                        />
+                                                    </Grid>
+                                                    <Grid size={{ xs: 12, sm: 6 }}>
+                                                        <TextField fullWidth
+                                                            label="接口超时时间 (秒)"
+                                                            type="number"
+                                                            value={config.sdk_config.timeout}
+                                                            onChange={(e) => handleSdkChange('timeout', parseInt(e.target.value, 10))}
                                                         />
                                                     </Grid>
 

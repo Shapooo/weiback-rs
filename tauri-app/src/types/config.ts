@@ -1,8 +1,7 @@
 // Mirror of the Rust Config struct
 export interface SdkConfig {
-    fav_count: number;
-    status_count: number;
     retry_times: number;
+    timeout: number; // Duration on Rust side, but serialized as seconds
 }
 
 export enum PictureDefinition {
@@ -23,6 +22,7 @@ export interface Config {
     backup_task_interval: number; // it's a Duration on Rust side, but serialized as seconds
     other_task_interval: number; // same
     posts_per_html: number;
+    posts_count: number;
     picture_path: string;
     video_path: string;
     sdk_config: SdkConfig;
