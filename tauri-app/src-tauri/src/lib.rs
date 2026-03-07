@@ -1,9 +1,9 @@
 mod error;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::{self, App, Emitter, Manager, State, ipc::Response};
+use tauri::{self, App, AppHandle, Emitter, Manager, State, ipc::Response};
 use tracing::{debug, error, info, warn};
 use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
@@ -16,6 +16,18 @@ use weiback::core::{
 use weiback::models::User;
 
 use error::Result;
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(tag = "status", content = "message")]
+pub enum BackendStatus {
+    Uninitialized,
+    Running,
+    Error(String),
+}
+
+pub struct BackendState {
+    pub status: Mutex<BackendStatus>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", content = "message")]
@@ -61,6 +73,51 @@ impl From<WeiboId> for i64 {
     fn from(id: WeiboId) -> Self {
         id.0
     }
+}
+
+#[tauri::command]
+async fn get_backend_status(state: State<'_, BackendState>) -> Result<BackendStatus> {
+    Ok(state.status.lock().unwrap().clone())
+}
+
+fn perform_init_backend(app_handle: &AppHandle, state: &BackendState) -> BackendStatus {
+    let mut status_guard = state.status.lock().unwrap();
+    if let BackendStatus::Running = *status_guard {
+        return status_guard.clone();
+    }
+
+    info!("Initializing backend core...");
+    // Ensure config is initialized (it might have failed in run() or we might be retrying)
+    let _ = weiback::config::init();
+
+    match CoreBuilder::new().build() {
+        Ok(core) => {
+            let listener = Box::new(TauriTaskEventListener {
+                app_handle: app_handle.clone(),
+            });
+            if let Err(e) = core.set_task_event_listener(listener) {
+                error!("Failed to set task event listener: {e}");
+            }
+
+            let core_clone = core.clone();
+            tauri::async_runtime::spawn(async move { core_clone.login_with_session().await });
+
+            app_handle.manage(core);
+            *status_guard = BackendStatus::Running;
+            info!("Backend initialized successfully");
+            status_guard.clone()
+        }
+        Err(e) => {
+            error!("Backend initialization failed: {e}");
+            *status_guard = BackendStatus::Error(e.to_string());
+            status_guard.clone()
+        }
+    }
+}
+
+#[tauri::command]
+fn init_backend(app_handle: AppHandle, state: State<'_, BackendState>) -> Result<BackendStatus> {
+    Ok(perform_init_backend(&app_handle, &state))
 }
 
 #[tauri::command(async)]
@@ -251,13 +308,17 @@ async fn cleanup_invalid_posts(
 
 pub fn run() -> Result<()> {
     info!("Starting application");
-    weiback::config::init()?;
+    if let Err(e) = weiback::config::init() {
+        error!("Failed to initialize config: {e}");
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
+            get_backend_status,
+            init_backend,
             backup_user,
             backup_favorites,
             unfavorite_posts,
@@ -297,20 +358,15 @@ pub fn run() -> Result<()> {
 }
 
 fn setup(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let core = CoreBuilder::new().build()?;
-    info!("Setting up Tauri application");
+    info!("Setting up Tauri application state");
+    let state = BackendState {
+        status: Mutex::new(BackendStatus::Uninitialized),
+    };
 
-    // Register the event listener for real-time updates
-    let listener = Box::new(TauriTaskEventListener {
-        app_handle: app.handle().clone(),
-    });
-    core.set_task_event_listener(listener)?;
+    // First attempt to initialize backend during startup
+    perform_init_backend(app.handle(), &state);
 
-    let core_clone = core.clone();
-    tauri::async_runtime::spawn(async move { core_clone.login_with_session().await });
-
-    app.manage(core);
-
+    app.manage(state);
     info!("Tauri setup complete");
     Ok(())
 }
