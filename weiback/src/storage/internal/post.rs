@@ -550,16 +550,36 @@ pub async fn delete_post<'c, A>(acquirer: A, id: i64) -> Result<()>
 where
     A: Acquire<'c, Database = Sqlite>,
 {
+    batch_delete_posts(acquirer, &[id]).await
+}
+
+/// Deletes multiple posts and their corresponding entries in `favorited_posts` table from the database.
+///
+/// # Arguments
+///
+/// * `acquirer` - A database acquirer.
+/// * `ids` - A slice of IDs of the posts to delete.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
+pub async fn batch_delete_posts<'c, A>(acquirer: A, ids: &[i64]) -> Result<()>
+where
+    A: Acquire<'c, Database = Sqlite>,
+{
+    if ids.is_empty() {
+        return Ok(());
+    }
     let mut conn = acquirer.acquire().await?;
     let (sql, values) = Query::delete()
         .from_table(PostIden::Table)
-        .and_where(Expr::col(PostIden::Id).eq(id))
+        .and_where(Expr::col(PostIden::Id).is_in(ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(&mut *conn).await?;
 
     let (sql, values) = Query::delete()
         .from_table(FavoritedPostIden::Table)
-        .and_where(Expr::col(FavoritedPostIden::Id).eq(id))
+        .and_where(Expr::col(FavoritedPostIden::Id).is_in(ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
     sqlx::query_with(&sql, values).execute(&mut *conn).await?;
     Ok(())
@@ -1010,6 +1030,27 @@ mod local_tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn test_batch_delete_posts() {
+        let db = setup_db().await;
+        let mut posts = create_test_posts().await;
+        let p1 = posts.remove(0);
+        let p2 = posts.remove(0);
+        let id1 = p1.id;
+        let id2 = p2.id;
+
+        save_post(&db, &p1.try_into().unwrap()).await.unwrap();
+        save_post(&db, &p2.try_into().unwrap()).await.unwrap();
+
+        assert!(get_post(&db, id1).await.unwrap().is_some());
+        assert!(get_post(&db, id2).await.unwrap().is_some());
+
+        batch_delete_posts(&db, &[id1, id2]).await.unwrap();
+
+        assert!(get_post(&db, id1).await.unwrap().is_none());
+        assert!(get_post(&db, id2).await.unwrap().is_none());
     }
 
     #[tokio::test]
