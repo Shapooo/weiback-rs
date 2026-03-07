@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use tracing::info;
+use tracing::{debug, info};
 use weibosdk_rs::{ApiClient as SdkApiClient, Client as HttpClient};
 
 use crate::{
@@ -57,7 +57,17 @@ impl CoreBuilder {
         let main_config = get_config();
         let main_config_read_guard = main_config.read()?;
 
-        let db_pool = Runtime::new()?.block_on(database::create_db_pool())?;
+        // Get current handle or create a temporary runtime for DB initialization
+        let db_pool = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            debug!("Using existing tokio handle for DB initialization");
+            // We are already in an async context.
+            // Use block_in_place to allow blocking the current thread for the async DB setup.
+            tokio::task::block_in_place(|| handle.block_on(database::create_db_pool()))?
+        } else {
+            debug!("No existing tokio handle, creating temporary runtime for DB initialization");
+            let rt = Runtime::new()?;
+            rt.block_on(database::create_db_pool())?
+        };
         let storage = StorageImpl::new(db_pool);
         info!("Storage initialized");
 
@@ -69,9 +79,12 @@ impl CoreBuilder {
 
         let (handle, worker) =
             create_downloader(DOWNLOADER_BUFFER_SIZE, http_client.main_client().clone());
+
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            debug!("Spawning downloader worker on current tokio handle");
             handle.spawn(worker.run());
         } else {
+            debug!("Spawning downloader worker on a new background thread");
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
