@@ -17,6 +17,8 @@ export function useTaskEvents() {
     let unlistenTask: (() => void) | null = null;
     let unlistenError: (() => void) | null = null;
 
+    let unlistenConfigError: (() => void) | null = null;
+
     const setupListeners = async () => {
       // 1. Get initial state to ensure UI is synced on mount/refresh
       try {
@@ -42,6 +44,14 @@ export function useTaskEvents() {
           persist: true,
         });
       });
+
+      // 4. Listen for configuration errors
+      unlistenConfigError = await listen<string>('config-error', (event) => {
+        enqueueSnackbar(`配置文件加载失败，已使用默认配置。错误详情: ${event.payload}`, {
+          variant: 'warning',
+          persist: true,
+        });
+      });
     };
 
     setupListeners();
@@ -49,6 +59,7 @@ export function useTaskEvents() {
     return () => {
       if (unlistenTask) unlistenTask();
       if (unlistenError) unlistenError();
+      if (unlistenConfigError) unlistenConfigError();
     };
   }, [setCurrentTask, enqueueSnackbar]);
 }
