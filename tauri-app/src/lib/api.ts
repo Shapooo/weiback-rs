@@ -12,6 +12,15 @@ import {
 } from '../types';
 import { Config } from '../types/config';
 
+// Backend
+export type BackendStatus =
+    | { status: 'Uninitialized' }
+    | { status: 'Running' }
+    | { status: 'Error', message: string };
+
+export const getBackendStatus = () => invoke<BackendStatus>('get_backend_status');
+export const initBackend = () => invoke<BackendStatus>('init_backend');
+
 // Auth
 export const loginState = () => invoke<User | null>('login_state');
 export const getSmsCode = (phoneNumber: string) => invoke('get_sms_code', { phoneNumber });

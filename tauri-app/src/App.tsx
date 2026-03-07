@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { Box, Drawer, CssBaseline, LinearProgress, Typography } from '@mui/material';
+import React, { useRef, useEffect, useState } from 'react';
+import { Box, Drawer, CssBaseline, LinearProgress, Typography, Backdrop, CircularProgress, Button, Alert, AlertTitle } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { MainListItems } from './listItems';
 import AppRouter from './router';
@@ -7,6 +7,7 @@ import { useTaskEvents } from './hooks/useTaskEvents';
 import { useTaskStore } from './stores/taskStore';
 import { useAuthStore } from './stores/authStore';
 import { Task } from './types';
+import { getBackendStatus, initBackend, BackendStatus } from './lib/api';
 
 
 const drawerWidth = 200;
@@ -61,15 +62,73 @@ function GlobalTaskProgress() {
 
 
 const App: React.FC = () => {
+    const [backendStatus, setBackendStatus] = useState<BackendStatus>({ status: 'Uninitialized' });
+    const [loading, setLoading] = useState(true);
+
+    const checkAndInitBackend = async () => {
+        setLoading(true);
+        try {
+            const status = await getBackendStatus();
+            if (status.status === 'Running') {
+                setBackendStatus(status);
+                useAuthStore.getState().checkLoginState();
+            } else if (status.status === 'Uninitialized' || status.status === 'Error') {
+                const newStatus = await initBackend();
+                setBackendStatus(newStatus);
+                if (newStatus.status === 'Running') {
+                    useAuthStore.getState().checkLoginState();
+                }
+            }
+        } catch (e) {
+            setBackendStatus({ status: 'Error', message: String(e) });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Start listening for global task events
     useTaskEvents();
     // Enable global notifications for task completion/failure
     useCompletionNotifier();
 
     useEffect(() => {
-        // Initialize auth state on app startup
-        useAuthStore.getState().checkLoginState();
+        checkAndInitBackend();
     }, []);
+
+    if (backendStatus.status !== 'Running') {
+        return (
+            <Backdrop
+                sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 2, backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
+                open={true}
+            >
+                <Box sx={{ textAlign: 'center', p: 4, maxWidth: 500 }}>
+                    {loading ? (
+                        <>
+                            <CircularProgress color="inherit" />
+                            <Typography sx={{ mt: 2 }}>正在启动后端服务...</Typography>
+                        </>
+                    ) : (backendStatus.status === 'Error' || backendStatus.status === 'Uninitialized') ? (
+                        <Alert
+                            severity="error"
+                            action={
+                                <Button color="inherit" size="small" onClick={checkAndInitBackend}>
+                                    重试
+                                </Button>
+                            }
+                        >
+                            <AlertTitle>后端启动失败</AlertTitle>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                                程序无法正常连接到后端核心服务，可能是由于配置文件错误或数据库连接失败，请查看日志。
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: 'block', wordBreak: 'break-all', opacity: 0.8 }}>
+                                错误信息: {backendStatus.status === 'Error' ? backendStatus.message : '未知原因'}
+                            </Typography>
+                        </Alert>
+                    ) : null}
+                </Box>
+            </Backdrop>
+        );
+    }
 
 
     return (
