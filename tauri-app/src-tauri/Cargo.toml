@@ -21,11 +21,11 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-weiback-rs = { path = "../../weiback" }
+weiback = { path = "../../weiback" }
 weibosdk-rs = { workspace = true }
 
 [build-dependencies]
 tauri-build = { workspace = true }
 
 [features]
-"dev-mode" = ["weiback-rs/dev-mode"]
+"dev-mode" = ["weiback/dev-mode"]

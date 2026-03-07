@@ -1,5 +1,5 @@
 [package]
-name = "weiback-rs"
+name = "weiback"
 version.workspace = true
 edition.workspace = true
 

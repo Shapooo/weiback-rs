@@ -5191,7 +5191,7 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber",
- "weiback-rs",
+ "weiback",
  "weibosdk-rs",
 ]
 
@@ -5783,7 +5783,7 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "url",
- "weiback-rs",
+ "weiback",
 ]
 
 [[package]]
@@ -6451,7 +6451,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
-name = "weiback-rs"
+name = "weiback"
 version = "0.2.4"
 dependencies = [
  "anyhow",
