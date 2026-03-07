@@ -4,7 +4,6 @@
 //! The primary implementation is `StorageImpl`, which coordinates between
 //! the SQLite database and file-system-based media storage.
 
-#![allow(async_fn_in_trait)]
 pub mod database;
 pub mod internal;
 pub mod picture_storage;
@@ -15,6 +14,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{
     TryFutureExt,
@@ -49,6 +49,7 @@ pub struct PictureInfo {
 ///
 /// This trait abstracts over the underlying storage mechanisms, providing
 /// methods for managing users, posts, and media (pictures and videos).
+#[async_trait]
 pub trait Storage: Send + Sync + Clone + 'static {
     /// Saves a user's information to the database.
     ///
@@ -147,11 +148,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `picture` - The picture model containing metadata and binary data.
-    fn save_picture(
-        &self,
-        ctx: Arc<TaskContext>,
-        picture: &Picture,
-    ) -> impl Future<Output = Result<()>> + Send;
+    async fn save_picture(&self, ctx: Arc<TaskContext>, picture: &Picture) -> Result<()>;
 
     /// Retrieves the absolute file system path for a given picture URL.
     ///
@@ -238,11 +235,7 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// # Arguments
     /// * `ctx` - The task context.
     /// * `video` - The video model.
-    fn save_video(
-        &self,
-        ctx: Arc<TaskContext>,
-        video: &Video,
-    ) -> impl Future<Output = Result<()>> + Send;
+    async fn save_video(&self, ctx: Arc<TaskContext>, video: &Video) -> Result<()>;
 
     /// Retrieves the binary content (blob) of a video from the storage.
     ///
@@ -396,6 +389,7 @@ impl StorageImpl {
     }
 }
 
+#[async_trait]
 impl Storage for StorageImpl {
     async fn get_user(&self, uid: i64) -> Result<Option<User>> {
         user::get_user(&self.db_pool, uid).await

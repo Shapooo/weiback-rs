@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use url::Url;
 use weibosdk_rs::{api_client::ApiClient as SdkApiClient, mock::MockClient};
 
@@ -39,6 +40,7 @@ impl MockApi {
     }
 }
 
+#[async_trait]
 impl EmojiUpdateApi for MockApi {
     /// Mocks the `emoji_update` API call.
     ///
@@ -48,6 +50,7 @@ impl EmojiUpdateApi for MockApi {
     }
 }
 
+#[async_trait]
 impl FavoritesApi for MockApi {
     /// Mocks the `favorites` API call.
     ///
@@ -66,6 +69,7 @@ impl FavoritesApi for MockApi {
     }
 }
 
+#[async_trait]
 impl StatusesShowApi for MockApi {
     /// Mocks the `statuses_show` API call.
     ///
@@ -76,6 +80,7 @@ impl StatusesShowApi for MockApi {
     }
 }
 
+#[async_trait]
 impl ProfileStatusesApi for MockApi {
     /// Mocks the `profile_statuses` API call.
     ///
@@ -95,6 +100,7 @@ impl ProfileStatusesApi for MockApi {
     }
 }
 
+#[async_trait]
 impl ApiClient for MockApi {}
 
 #[cfg(test)]

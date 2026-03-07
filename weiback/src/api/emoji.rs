@@ -3,9 +3,9 @@
 //!
 //! It includes logic to retrieve emoji from both the mobile and web versions of the API,
 //! consolidate them, and handle various response formats and errors.
-#![allow(async_fn_in_trait)]
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{debug, error, info};
@@ -45,6 +45,7 @@ enum EmojiUpdateResponse {
 }
 
 /// Trait for API clients that can fetch and update emoji data.
+#[async_trait]
 pub trait EmojiUpdateApi {
     /// Fetches and consolidates emoji data from both mobile and web Weibo APIs.
     ///
@@ -54,6 +55,7 @@ pub trait EmojiUpdateApi {
     async fn emoji_update(&self) -> Result<HashMap<String, Url>>;
 }
 
+#[async_trait]
 impl<C: HttpClient> EmojiUpdateApi for ApiClientImpl<C> {
     async fn emoji_update(&self) -> Result<HashMap<String, Url>> {
         info!("getting emoji update");

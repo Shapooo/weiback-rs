@@ -8,6 +8,7 @@ edition = "2024"
 
 [workspace.dependencies]
 anyhow = "1.0"
+async-trait = "0.1"
 bytes = "1"
 chrono = { version = "0.4", default-features = false }
 clap = { version = "4", features = ["derive"] }
@@ -46,4 +47,4 @@ tokio = { version = "1", features = [
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v7"] }
 walkdir = "2"
-weibosdk-rs = { git = "https://github.com/Shapooo/weibosdk-rs.git", rev = "4e176a1b93d3b4f6b471828e0ae8f54bd369501d" }
+weibosdk-rs = { git = "https://github.com/Shapooo/weibosdk-rs.git", rev = "4e0c914fbd8e5340c37b189085bb208c8ac3ca6c" }

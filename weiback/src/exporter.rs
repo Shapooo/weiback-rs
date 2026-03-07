@@ -6,10 +6,10 @@
 //! writing the HTML file, and copying all necessary image files from the local
 //! cache to a resource sub-folder.
 
-#![allow(async_fn_in_trait)]
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use tokio::{
     fs::{DirBuilder, File},
@@ -21,6 +21,7 @@ use crate::error::Result;
 use crate::utils::{make_html_file_name, make_resource_dir_name};
 
 /// A trait for services that can export an `HTMLPage` to a persistent medium.
+#[async_trait]
 pub trait Exporter: Send + Sync {
     /// Exports a single HTML page and its associated pictures.
     ///
@@ -60,6 +61,7 @@ impl ExporterImpl {
     }
 }
 
+#[async_trait]
 impl Exporter for ExporterImpl {
     /// Writes the HTML content to a file and copies all associated pictures to a
     /// corresponding `_files` directory.

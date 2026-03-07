@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+use async_trait::async_trait;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, to_string};
@@ -74,6 +75,7 @@ impl DevClient {
     }
 }
 
+#[async_trait]
 impl HttpClient for DevClient {
     type Response = DevResponse;
 
@@ -138,6 +140,7 @@ impl DevResponse {
     }
 }
 
+#[async_trait]
 impl HttpResponse for DevResponse {
     /// Consumes the response and parses it as JSON, while saving the raw text to disk.
     async fn json<T: serde::de::DeserializeOwned>(self) -> weibosdk_rs::error::Result<T> {

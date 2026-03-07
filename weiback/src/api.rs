@@ -10,6 +10,7 @@ pub(crate) mod internal;
 pub mod profile_statuses;
 pub mod statuses_show;
 
+use async_trait::async_trait;
 use tracing::warn;
 use weibosdk_rs::{ApiClient as SdkApiClient, http_client::HttpClient};
 
@@ -26,6 +27,7 @@ pub use statuses_show::StatusesShowApi;
 ///
 /// Implementors of this trait can perform operations related to emoji updates,
 /// managing favorites, fetching profile statuses, and retrieving detailed status information.
+#[async_trait]
 pub trait ApiClient:
     emoji::EmojiUpdateApi
     + favorites::FavoritesApi
@@ -101,6 +103,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
     }
 }
 
+#[async_trait]
 impl<C: HttpClient> ApiClient for ApiClientImpl<C> {}
 
 /// A type alias for `ApiClientImpl` using the default `weibosdk_rs::Client`.

@@ -9,6 +9,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
+
 use crate::{
     error::{Error, Result},
     exporter::{Exporter, HTMLPage},
@@ -49,6 +51,7 @@ impl MockExporter {
     }
 }
 
+#[async_trait]
 impl Exporter for MockExporter {
     /// Simulates the export of an HTML page.
     ///

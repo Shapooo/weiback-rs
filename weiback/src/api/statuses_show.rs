@@ -2,7 +2,7 @@
 //!
 //! It includes functionality to retrieve the full content of a post, including its long text
 //! and potentially nested retweeted status, by its unique ID.
-#![allow(async_fn_in_trait)]
+use async_trait::async_trait;
 use serde::Deserialize;
 use tracing::{debug, error};
 use weibosdk_rs::http_client::HttpResponse;
@@ -34,6 +34,7 @@ enum StatusesShowResponse {
 }
 
 /// Trait for API clients that can fetch detailed information about a Weibo status.
+#[async_trait]
 pub trait StatusesShowApi {
     /// Fetches the full details of a single Weibo post by its ID.
     ///
@@ -73,6 +74,7 @@ impl<C: HttpClient> ApiClientImpl<C> {
         }
     }
 }
+#[async_trait]
 impl<C: HttpClient> StatusesShowApi for ApiClientImpl<C> {
     /// Fetches the full details of a single Weibo post by its ID.
     ///

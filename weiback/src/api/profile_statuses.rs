@@ -2,7 +2,7 @@
 //!
 //! It includes functionality to retrieve posts from a specific user's timeline,
 //! handle various container types, and process the API responses into `Post` models.
-#![allow(async_fn_in_trait)]
+use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -50,6 +50,7 @@ pub struct ProfileStatusesSucc {
 }
 
 /// Trait for API clients that can fetch a user's profile statuses.
+#[async_trait]
 pub trait ProfileStatusesApi {
     /// Fetches a page of posts from a specific user's profile.
     ///
@@ -68,6 +69,7 @@ pub trait ProfileStatusesApi {
     ) -> Result<Vec<Post>>;
 }
 
+#[async_trait]
 impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
     /// Fetches a page of posts from a specific user's profile from the Weibo API.
     ///

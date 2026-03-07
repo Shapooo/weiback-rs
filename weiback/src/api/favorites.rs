@@ -2,7 +2,7 @@
 //!
 //! It includes methods to retrieve a user's favorited posts and to destroy (unfavorite) a post.
 //! The module handles the deserialization of API responses into internal `PostInternal` models.
-#![allow(async_fn_in_trait)]
+use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -86,6 +86,7 @@ impl From<FavoritesSucc> for Vec<PostInternal> {
 }
 
 /// Trait for API clients that can interact with Weibo's favorites.
+#[async_trait]
 pub trait FavoritesApi {
     /// Fetches a page of the user's favorited posts.
     ///
@@ -106,6 +107,7 @@ pub trait FavoritesApi {
     async fn favorites_destroy(&self, id: i64) -> Result<()>;
 }
 
+#[async_trait]
 impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
     /// Fetches a page of the user's favorited posts from the Weibo API.
     ///

@@ -9,6 +9,7 @@ name = "weiback"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
