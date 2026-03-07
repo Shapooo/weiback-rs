@@ -92,10 +92,11 @@ pub trait FavoritesApi {
     ///
     /// # Arguments
     /// * `page` - The page number to fetch (1-indexed).
+    /// * `count` - The number of favorites to fetch per page.
     ///
     /// # Returns
     /// A `Result` containing a `Vec<Post>` on success, or an `Error` on failure.
-    async fn favorites(&self, page: u32) -> Result<Vec<Post>>;
+    async fn favorites(&self, page: u32, count: u32) -> Result<Vec<Post>>;
 
     /// Destroys (unfavorites) a specific post.
     ///
@@ -115,12 +116,13 @@ impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
     ///
     /// # Arguments
     /// * `page` - The page number of favorites to retrieve.
+    /// * `count` - The number of favorites to retrieve per page.
     ///
     /// # Returns
     /// A `Result` containing a vector of `Post` objects.
-    async fn favorites(&self, page: u32) -> Result<Vec<Post>> {
-        info!("getting favorites, page: {page}");
-        let response = self.client.favorites(page).await?;
+    async fn favorites(&self, page: u32, count: u32) -> Result<Vec<Post>> {
+        info!("getting favorites, page: {page}, count: {count}");
+        let response = self.client.favorites(page, count).await?;
         let posts: Vec<PostInternal> = response.json::<FavoritesResponse>().await?.try_into()?;
         let posts = stream::iter(posts)
             .map(|post| self.process_post(post))
@@ -172,7 +174,7 @@ mod local_tests {
             .set_favorites_response_from_file(&testcase_path)
             .unwrap();
 
-        weibo_api.favorites(1).await.unwrap();
+        weibo_api.favorites(1, 20).await.unwrap();
     }
 
     #[tokio::test]
@@ -205,7 +207,7 @@ mod real_tests {
         if let Ok(session) = Session::load(session_file) {
             let client = http_client::Client::new().unwrap();
             let weibo_api = ApiClientImpl::new(SdkApiClient::from_session(client, session));
-            let _ = weibo_api.favorites(1).await.unwrap();
+            let _ = weibo_api.favorites(1, 20).await.unwrap();
         }
     }
 }

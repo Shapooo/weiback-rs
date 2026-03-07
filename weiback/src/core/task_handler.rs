@@ -245,9 +245,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         page: u32,
         container_type: ContainerType,
     ) -> Result<usize> {
+        let count = ctx.config.posts_count;
         let posts = self
             .api_client
-            .profile_statuses(uid, page, container_type)
+            .profile_statuses(uid, page, container_type, count)
             .await?;
         let result = posts.len();
         self.processer.process(ctx, posts).await?;
@@ -279,7 +280,8 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             "Backing up favorites page {page}, task {}",
             ctx.task_id.unwrap()
         );
-        let posts = self.api_client.favorites(page).await?;
+        let count = ctx.config.posts_count;
+        let posts = self.api_client.favorites(page, count).await?;
         let result = posts.len();
         let ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
         self.processer.process(ctx, posts).await?;
@@ -632,9 +634,9 @@ mod local_tests {
         client
             .set_statuses_show_response_from_file(&statuses_show_path)
             .unwrap();
-        let mut posts = api.favorites(0).await.unwrap();
+        let mut posts = api.favorites(0, 20).await.unwrap();
         posts.extend(
-            api.profile_statuses(1786055427, 0, Default::default())
+            api.profile_statuses(1786055427, 0, Default::default(), 20)
                 .await
                 .unwrap(),
         );

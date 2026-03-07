@@ -86,8 +86,7 @@ impl CoreBuilder {
         let (sdk_api_client, api_client) = {
             let dev_client =
                 DevClient::new(http_client, main_config_read_guard.dev_mode_out_dir.clone());
-            let sdk_api_client =
-                SdkApiClient::new(dev_client, main_config_read_guard.sdk_config.clone());
+            let sdk_api_client = SdkApiClient::new(dev_client, main_config_read_guard.sdk_config);
             let api_client = DevApiClient::new(sdk_api_client.clone());
             (Arc::new(sdk_api_client), api_client)
         };

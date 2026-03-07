@@ -66,6 +66,7 @@ pub trait ProfileStatusesApi {
         uid: i64,
         page: u32,
         container_type: ContainerType,
+        count: u32,
     ) -> Result<Vec<Post>>;
 }
 
@@ -88,14 +89,15 @@ impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
         uid: i64,
         page: u32,
         containter_type: ContainerType,
+        count: u32,
     ) -> Result<Vec<Post>> {
         info!(
-            "getting profile statuses, uid: {uid}, page: {page}, type: {:?}",
+            "getting profile statuses, uid: {uid}, page: {page}, count: {count}, type: {:?}",
             containter_type
         );
         let response = self
             .client
-            .profile_statuses(uid, page, containter_type)
+            .profile_statuses(uid, page, containter_type, count)
             .await?;
         let response = response.json::<ProfileStatusesResponse>().await?;
         match response {
@@ -148,7 +150,7 @@ mod local_tests {
             .unwrap();
 
         weibo_api
-            .profile_statuses(12345, 1, Default::default())
+            .profile_statuses(12345, 1, Default::default(), 20)
             .await
             .unwrap();
     }
@@ -166,7 +168,7 @@ mod real_tests {
             let client = http_client::Client::new().unwrap();
             let weibo_api = ApiClientImpl::new(SdkApiClient::from_session(client, session));
             let posts = weibo_api
-                .profile_statuses(1401527553, 1, Default::default())
+                .profile_statuses(1401527553, 1, Default::default(), 20)
                 .await
                 .unwrap();
             assert!(!posts.is_empty());

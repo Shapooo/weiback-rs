@@ -231,9 +231,9 @@ mod local_tests {
     }
 
     async fn create_posts(api: &MockApi) -> Vec<Post> {
-        let mut posts = api.favorites(0).await.unwrap();
+        let mut posts = api.favorites(0, 20).await.unwrap();
         posts.extend(
-            api.profile_statuses(1786055427, 0, Default::default())
+            api.profile_statuses(1786055427, 0, Default::default(), 20)
                 .await
                 .unwrap(),
         );

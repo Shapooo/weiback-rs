@@ -56,8 +56,9 @@ impl FavoritesApi for MockApi {
     ///
     /// # Arguments
     /// * `page` - The page number of favorites to retrieve.
-    async fn favorites(&self, page: u32) -> Result<Vec<Post>> {
-        self.client.favorites(page).await
+    /// * `count` - The number of favorites to retrieve per page.
+    async fn favorites(&self, page: u32, count: u32) -> Result<Vec<Post>> {
+        self.client.favorites(page, count).await
     }
 
     /// Mocks the `favorites_destroy` API call.
@@ -88,14 +89,16 @@ impl ProfileStatusesApi for MockApi {
     /// * `uid` - The user ID.
     /// * `page` - The page number of statuses to retrieve.
     /// * `container_type` - The type of content to filter by (e.g., original, pictures).
+    /// * `count` - The number of statuses to retrieve per page.
     async fn profile_statuses(
         &self,
         uid: i64,
         page: u32,
         container_type: ContainerType,
+        count: u32,
     ) -> Result<Vec<Post>> {
         self.client
-            .profile_statuses(uid, page, container_type)
+            .profile_statuses(uid, page, container_type, count)
             .await
     }
 }
@@ -139,14 +142,14 @@ mod local_tests {
         mock_client
             .set_favorites_response_from_file(&get_test_data_path("favorites.json"))
             .unwrap();
-        let result = api.favorites(1).await.unwrap();
+        let result = api.favorites(1, 20).await.unwrap();
         assert!(!result.is_empty());
     }
 
     #[tokio::test]
     async fn test_favorites_destroy() {
         let (mock_client, api) = create_logged_in_api();
-        mock_client.set_favorites_destroy_response_from_str("");
+        mock_client.set_favorites_destroy_response_from_str("{}");
         api.favorites_destroy(123).await.unwrap();
     }
 
@@ -166,7 +169,7 @@ mod local_tests {
             .set_profile_statuses_response_from_file(&get_test_data_path("profile_statuses.json"))
             .unwrap();
         let result = api
-            .profile_statuses(1786055427, 1, Default::default())
+            .profile_statuses(1786055427, 1, Default::default(), 20)
             .await
             .unwrap();
         assert!(!result.is_empty());

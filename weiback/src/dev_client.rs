@@ -10,6 +10,7 @@ use std::{
     ops::Deref,
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -84,8 +85,9 @@ impl HttpClient for DevClient {
         url: &str,
         query: &(impl serde::Serialize + Send + Sync),
         retry_times: u8,
+        timeout: Duration,
     ) -> weibosdk_rs::error::Result<Self::Response> {
-        let res = self.client.get(url, query, retry_times).await?;
+        let res = self.client.get(url, query, retry_times, timeout).await?;
         Ok(DevResponse::new(
             res,
             self.dev_mode_out_dir.clone(),
@@ -100,8 +102,9 @@ impl HttpClient for DevClient {
         url: &str,
         form: &(impl serde::Serialize + Send + Sync),
         retry_times: u8,
+        timeout: Duration,
     ) -> weibosdk_rs::error::Result<Self::Response> {
-        let res = self.client.post(url, form, retry_times).await?;
+        let res = self.client.post(url, form, retry_times, timeout).await?;
         Ok(DevResponse::new(
             res,
             self.dev_mode_out_dir.clone(),

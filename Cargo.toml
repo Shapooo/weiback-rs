@@ -47,4 +47,4 @@ tokio = { version = "1", features = [
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v7"] }
 walkdir = "2"
-weibosdk-rs = { git = "https://github.com/Shapooo/weibosdk-rs.git", rev = "4e0c914fbd8e5340c37b189085bb208c8ac3ca6c" }
+weibosdk-rs = { git = "https://github.com/Shapooo/weibosdk-rs.git", rev = "6ec2f44b2452f72a15aceefb941e96c5476fbb63" }
