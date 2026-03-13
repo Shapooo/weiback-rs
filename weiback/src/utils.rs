@@ -370,6 +370,21 @@ pub fn extract_standalone_pic_ids(post: &Post) -> Vec<String> {
     ids.into_iter().collect()
 }
 
+/// Extracts inline picture IDs from a post's url_struct.
+pub fn extract_inline_pic_ids(post: &Post) -> Vec<String> {
+    let mut ids = HashSet::new();
+    let source = post.retweeted_status.as_deref().unwrap_or(post);
+
+    if let Some(url_struct) = &source.url_struct {
+        for item in url_struct.0.iter() {
+            if let Some(pic_info) = item.pic_infos.as_ref() {
+                ids.insert(pic_info.pic_id.clone());
+            }
+        }
+    }
+    ids.into_iter().collect()
+}
+
 #[cfg(test)]
 mod local_tests {
     use super::*;
