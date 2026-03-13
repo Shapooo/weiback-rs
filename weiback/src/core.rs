@@ -346,6 +346,21 @@ impl Core {
         Ok(())
     }
 
+    /// Starts a long-running task to re-backup posts with missing images.
+    pub async fn rebackup_missing_images(&self, request: TaskRequest) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0; // Will be updated in task_handler
+        self.task_manager.start_task(
+            id,
+            TaskType::RebackupMissingImages,
+            "重新备份缺失图片".into(),
+            total,
+        )?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
+        Ok(())
+    }
+
     // ========================= context creators =========================
 
     /// Creates a task context for long-running tasks, including a unique task ID.
@@ -380,6 +395,11 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
             task_handler.backup_favorites(ctx.clone(), options).await
         }
         TaskRequest::RebackupPosts(query) => task_handler.rebackup_posts(ctx.clone(), query).await,
+        TaskRequest::RebackupMissingImages(query) => {
+            task_handler
+                .rebackup_missing_images(ctx.clone(), query)
+                .await
+        }
         _ => {
             error!("Unexpected TaskRequest for long task: {:?}", request);
             Err(crate::error::Error::InconsistentTask(format!(

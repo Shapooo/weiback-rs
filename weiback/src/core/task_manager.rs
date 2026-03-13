@@ -29,6 +29,8 @@ pub enum TaskType {
     CleanupInvalidPosts,
     /// Re-backup posts based on a query.
     RebackupPosts,
+    /// Re-backup posts that have missing images.
+    RebackupMissingImages,
 }
 
 /// The current execution state of a task.

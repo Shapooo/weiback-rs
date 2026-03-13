@@ -24,7 +24,8 @@ use crate::media_downloader::MediaDownloader;
 use crate::models::{PicInfoType, Picture, PictureDefinition, PictureMeta, Post, VideoMeta};
 use crate::storage::Storage;
 use crate::utils::{
-    extract_all_pic_metas, extract_emojis_from_text, extract_standalone_pic_ids, pic_url_to_id,
+    extract_all_pic_metas, extract_emojis_from_text, extract_inline_pic_ids,
+    extract_standalone_pic_ids, pic_url_to_id,
 };
 
 /// A processor that handles media downloading and post data enrichment.
@@ -49,6 +50,35 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             downloader,
             emoji_map,
         })
+    }
+
+    /// Checks if any image associated with a post (standalone or inline) is missing locally.
+    pub async fn is_any_image_missing(&self, ctx: Arc<TaskContext>, post: &Post) -> Result<bool> {
+        let mut all_ids = extract_standalone_pic_ids(post);
+        all_ids.extend(extract_inline_pic_ids(post));
+
+        for id in all_ids {
+            let infos = self.storage.get_pictures_by_id(&id).await?;
+            if infos.is_empty() {
+                return Ok(true);
+            }
+            // Check if at least one version of this picture is saved on disk
+            let mut found = false;
+            for info in infos {
+                if self
+                    .storage
+                    .picture_saved(ctx.clone(), info.meta.url())
+                    .await?
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Enriches a raw `Post` with additional information for UI display.

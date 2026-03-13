@@ -596,6 +596,44 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let post = self.api_client.statuses_show(id).await?;
         self.processer.process(ctx, vec![post]).await
     }
+
+    /// Scans all local posts and re-backups those that have missing images.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `query` - Search criteria for posts to check.
+    pub(super) async fn rebackup_missing_images(
+        &self,
+        ctx: Arc<TaskContext>,
+        query: PostQuery,
+    ) -> Result<()> {
+        info!("Starting re-backup missing images task");
+        let ids = self.storage.query_all_post_ids(query).await?;
+        let total = ids.len();
+        info!("Scanning {total} posts for missing images");
+        ctx.task_manager.update_progress(0, total as u64)?;
+
+        let task_interval = ctx.config.backup_task_interval;
+        for (i, id) in ids.into_iter().enumerate() {
+            if let Some(post) = self.storage.get_post(id).await?
+                && self
+                    .processer
+                    .is_any_image_missing(ctx.clone(), &post)
+                    .await?
+            {
+                info!("Post {id} has missing images, re-backing up...");
+                let post = self.api_client.statuses_show(id).await?;
+                self.processer.process(ctx.clone(), vec![post]).await?;
+                // Sleep between API calls to avoid rate limiting
+                sleep(task_interval).await;
+            }
+            ctx.task_manager.update_progress(1, 0)?;
+            info!("Scanned post {} ({}/{})", id, i + 1, total);
+        }
+
+        info!("Finished re-backup missing images task");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
