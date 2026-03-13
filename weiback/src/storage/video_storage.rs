@@ -30,29 +30,25 @@ impl FileSystemVideoStorage {
 impl FileSystemVideoStorage {
     /// Retrieves the binary content (blob) of a video from the file system.
     ///
-    /// If the video file is not found on disk but an entry exists in the database,
-    /// the database entry will be deleted.
-    ///
     /// # Arguments
     ///
     /// * `video_path` - The base directory where videos are stored.
-    /// * `acquirer` - A database acquirer.
+    /// * `executor` - A database executor.
     /// * `url` - The URL of the video to retrieve.
     ///
     /// # Returns
     ///
     /// A `Result` containing an `Option<Bytes>`. `Some(Bytes)` if the video is found, `None` otherwise.
-    pub async fn get_video_blob<'c, A>(
+    pub async fn get_video_blob<'e, E>(
         &self,
         video_path: &Path,
-        acquirer: A,
+        executor: E,
         url: &Url,
     ) -> Result<Option<Bytes>>
     where
-        A: Acquire<'c, Database = Sqlite>,
+        E: Executor<'e, Database = Sqlite>,
     {
-        let mut conn = acquirer.acquire().await?;
-        let Some(relative_path) = video::get_video_path(&mut *conn, url).await? else {
+        let Some(relative_path) = video::get_video_path(executor, url).await? else {
             return Ok(None);
         };
         let absolute_path = video_path.join(relative_path);
@@ -60,10 +56,9 @@ impl FileSystemVideoStorage {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 warn!(
-                    "video file not found at {:?}, deleting db entry",
+                    "video has db entry, but file not found at {:?}",
                     absolute_path
                 );
-                video::delete_video_by_url(&mut *conn, url).await?;
                 Ok(None)
             }
             Err(e) => Err(e.into()),
@@ -113,28 +108,25 @@ impl FileSystemVideoStorage {
 
     /// Checks if a video is saved (both in the database and on the file system).
     ///
-    /// If the video is found in the database but not on the file system, its database entry will be deleted.
-    ///
     /// # Arguments
     ///
     /// * `video_path` - The base directory where videos are stored.
-    /// * `acquirer` - A database acquirer.
+    /// * `executor` - A database executor.
     /// * `url` - The URL of the video to check.
     ///
     /// # Returns
     ///
     /// A `Result` containing `true` if the video is saved, `false` otherwise.
-    pub async fn video_saved<'c, A>(
+    pub async fn video_saved<'e, E>(
         &self,
         video_path: &Path,
-        acquirer: A,
+        executor: E,
         url: &Url,
     ) -> Result<bool>
     where
-        A: Acquire<'c, Database = Sqlite>,
+        E: Executor<'e, Database = Sqlite>,
     {
-        let mut conn = acquirer.acquire().await?;
-        let Some(relative_path) = video::get_video_path(&mut *conn, url).await? else {
+        let Some(relative_path) = video::get_video_path(executor, url).await? else {
             return Ok(false);
         };
         let absolute_path = video_path.join(relative_path);
@@ -142,10 +134,9 @@ impl FileSystemVideoStorage {
             Ok(true)
         } else {
             warn!(
-                "video file not found at {:?}, deleting db entry",
+                "video has db entry, but file not found at {:?}",
                 absolute_path
             );
-            video::delete_video_by_url(&mut *conn, url).await?;
             Ok(false)
         }
     }

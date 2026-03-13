@@ -30,37 +30,32 @@ impl FileSystemPictureStorage {
 impl FileSystemPictureStorage {
     /// Retrieves the binary content (blob) of a picture from the file system.
     ///
-    /// If the picture file is not found on disk but an entry exists in the database,
-    /// the database entry will be deleted.
-    ///
     /// # Arguments
     ///
     /// * `picture_path` - The base directory where pictures are stored.
-    /// * `acquirer` - A database acquirer.
+    /// * `executor` - A database executor.
     /// * `url` - The URL of the picture to retrieve.
     ///
     /// # Returns
     ///
     /// A `Result` containing an `Option<Bytes>`. `Some(Bytes)` if the picture is found, `None` otherwise.
-    pub async fn get_picture_blob<'c, A>(
+    pub async fn get_picture_blob<'e, E>(
         &self,
         picture_path: &Path,
-        acquirer: A,
+        executor: E,
         url: &Url,
     ) -> Result<Option<Bytes>>
     where
-        A: Acquire<'c, Database = Sqlite>,
+        E: Executor<'e, Database = Sqlite>,
     {
-        let mut conn = acquirer.acquire().await?;
-        let Some(relative_path) = picture::get_picture_path(&mut *conn, url).await? else {
+        let Some(relative_path) = picture::get_picture_path(executor, url).await? else {
             return Ok(None);
         };
         let path = picture_path.join(&relative_path);
         match tokio::fs::read(&path).await {
             Ok(blob) => Ok(Some(Bytes::from(blob))),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                warn!("picture file not found at {:?}, deleting db entry", path);
-                picture::delete_picture_by_url(&mut *conn, url).await?;
+                warn!("picture has db entry, but file not found at {:?}", path);
                 Ok(None)
             }
             Err(e) => Err(e.into()),
@@ -114,28 +109,25 @@ impl FileSystemPictureStorage {
 
     /// Checks if a picture is saved (both in the database and on the file system).
     ///
-    /// If the picture is found in the database but not on the file system, its database entry will be deleted.
-    ///
     /// # Arguments
     ///
     /// * `picture_path` - The base directory where pictures are stored.
-    /// * `acquirer` - A database acquirer.
+    /// * `executor` - A database executor.
     /// * `url` - The URL of the picture to check.
     ///
     /// # Returns
     ///
     /// A `Result` containing `true` if the picture is saved, `false` otherwise.
-    pub async fn picture_saved<'c, A>(
+    pub async fn picture_saved<'e, E>(
         &self,
         picture_path: &Path,
-        acquirer: A,
+        executor: E,
         url: &Url,
     ) -> Result<bool>
     where
-        A: Acquire<'c, Database = Sqlite>,
+        E: Executor<'e, Database = Sqlite>,
     {
-        let mut conn = acquirer.acquire().await?;
-        let Some(relative_path) = picture::get_picture_path(&mut *conn, url).await? else {
+        let Some(relative_path) = picture::get_picture_path(executor, url).await? else {
             return Ok(false);
         };
         let absolute_path = picture_path.join(relative_path);
@@ -143,10 +135,9 @@ impl FileSystemPictureStorage {
             Ok(true)
         } else {
             warn!(
-                "picture file not found at {:?}, deleting db entry",
+                "picture has db entry, but file not found at {:?}",
                 absolute_path
             );
-            picture::delete_picture_by_url(&mut *conn, url).await?;
             Ok(false)
         }
     }
@@ -369,10 +360,6 @@ mod local_tests {
             .await
             .unwrap();
         assert!(!saved); // Should return false because file doesn't exist
-
-        // Verify DB entry was deleted
-        let db_entry = picture::get_picture_path(&db, &url).await.unwrap();
-        assert!(db_entry.is_none());
     }
 
     #[tokio::test]
