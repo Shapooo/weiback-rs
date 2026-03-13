@@ -8,8 +8,11 @@ import { Task, TaskError } from '../types/tasks';
 /**
  * A custom hook that listens for real-time task events from the backend
  * and updates the UI accordingly.
+ * 
+ * @param isBackendRunning Whether the backend is currently in the 'Running' state.
+ *                         Only when true will it attempt to fetch the initial task status.
  */
-export function useTaskEvents() {
+export function useTaskEvents(isBackendRunning: boolean) {
   const setCurrentTask = useTaskStore((state) => state.setCurrentTask);
   const { enqueueSnackbar } = useSnackbar();
 
@@ -17,23 +20,13 @@ export function useTaskEvents() {
     let unlistenTask: (() => void) | null = null;
     let unlistenError: (() => void) | null = null;
 
-    let unlistenConfigError: (() => void) | null = null;
-
     const setupListeners = async () => {
-      // 1. Get initial state to ensure UI is synced on mount/refresh
-      try {
-        const initialTask = await getCurrentTaskStatus();
-        setCurrentTask(initialTask);
-      } catch (error) {
-        console.error('Failed to get initial task status:', error);
-      }
-
-      // 2. Listen for task updates (progress, status changes)
+      // 1. Listen for task updates (progress, status changes)
       unlistenTask = await listen<Task>('task-updated', (event) => {
         setCurrentTask(event.payload);
       });
 
-      // 3. Listen for task errors (e.g., media download failures)
+      // 2. Listen for task errors (e.g., media download failures)
       unlistenError = await listen<TaskError>('task-error', (event) => {
         const error = event.payload;
         const url = error.error_type.DownloadMedia;
@@ -44,14 +37,6 @@ export function useTaskEvents() {
           persist: true,
         });
       });
-
-      // 4. Listen for configuration errors
-      unlistenConfigError = await listen<string>('config-error', (event) => {
-        enqueueSnackbar(`配置文件加载失败，已使用默认配置。错误详情: ${event.payload}`, {
-          variant: 'warning',
-          persist: true,
-        });
-      });
     };
 
     setupListeners();
@@ -59,7 +44,17 @@ export function useTaskEvents() {
     return () => {
       if (unlistenTask) unlistenTask();
       if (unlistenError) unlistenError();
-      if (unlistenConfigError) unlistenConfigError();
     };
   }, [setCurrentTask, enqueueSnackbar]);
+
+  // Sync initial task status when backend becomes running
+  useEffect(() => {
+    if (isBackendRunning) {
+      getCurrentTaskStatus().then((initialTask) => {
+        setCurrentTask(initialTask);
+      }).catch((error) => {
+        console.error('Failed to get initial task status:', error);
+      });
+    }
+  }, [isBackendRunning, setCurrentTask]);
 }

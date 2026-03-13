@@ -18,11 +18,16 @@ use weiback::models::User;
 use error::Result;
 
 #[derive(Debug, Serialize, Clone)]
-#[serde(tag = "status", content = "message")]
+#[serde(tag = "status")]
 pub enum BackendStatus {
     Uninitialized,
-    Running,
-    Error(String),
+    Running {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        warning: Option<String>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 pub struct BackendState {
@@ -82,16 +87,16 @@ async fn get_backend_status(state: State<'_, BackendState>) -> Result<BackendSta
 
 fn perform_init_backend(app_handle: &AppHandle, state: &BackendState) -> BackendStatus {
     let mut status_guard = state.status.lock().unwrap();
-    if let BackendStatus::Running = *status_guard {
+    if let BackendStatus::Running { .. } = *status_guard {
         return status_guard.clone();
     }
 
     info!("Initializing backend core...");
     // Attempt to initialize config from files.
+    let mut warning = None;
     if let Err(e) = weiback::config::init() {
         warn!("Config initialization failed, using default: {e}");
-        // Notify frontend about the configuration issue.
-        let _ = app_handle.emit("config-error", e.to_string());
+        warning = Some(e.to_string());
         // Fallback to in-memory default configuration.
         weiback::config::init_default();
     }
@@ -109,13 +114,15 @@ fn perform_init_backend(app_handle: &AppHandle, state: &BackendState) -> Backend
             tauri::async_runtime::spawn(async move { core_clone.login_with_session().await });
 
             app_handle.manage(core);
-            *status_guard = BackendStatus::Running;
+            *status_guard = BackendStatus::Running { warning };
             info!("Backend initialized successfully");
             status_guard.clone()
         }
         Err(e) => {
             error!("Backend initialization failed: {e}");
-            *status_guard = BackendStatus::Error(e.to_string());
+            *status_guard = BackendStatus::Error {
+                message: e.to_string(),
+            };
             status_guard.clone()
         }
     }

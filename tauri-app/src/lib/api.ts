@@ -15,8 +15,8 @@ import { Config } from '../types/config';
 // Backend
 export type BackendStatus =
     | { status: 'Uninitialized' }
-    | { status: 'Running' }
-    | { status: 'Error', message: string };
+    | { status: 'Running'; warning?: string }
+    | { status: 'Error'; message: string };
 
 export const getBackendStatus = () => invoke<BackendStatus>('get_backend_status');
 export const initBackend = () => invoke<BackendStatus>('init_backend');

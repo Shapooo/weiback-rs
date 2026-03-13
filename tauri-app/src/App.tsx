@@ -62,22 +62,27 @@ function GlobalTaskProgress() {
 
 
 const App: React.FC = () => {
+    const { enqueueSnackbar } = useSnackbar();
     const [backendStatus, setBackendStatus] = useState<BackendStatus>({ status: 'Uninitialized' });
     const [loading, setLoading] = useState(true);
 
     const checkAndInitBackend = async () => {
         setLoading(true);
         try {
-            const status = await getBackendStatus();
+            let status = await getBackendStatus();
+            if (status.status === 'Uninitialized' || status.status === 'Error') {
+                status = await initBackend();
+            }
+
+            setBackendStatus(status);
             if (status.status === 'Running') {
-                setBackendStatus(status);
-                useAuthStore.getState().checkLoginState();
-            } else if (status.status === 'Uninitialized' || status.status === 'Error') {
-                const newStatus = await initBackend();
-                setBackendStatus(newStatus);
-                if (newStatus.status === 'Running') {
-                    useAuthStore.getState().checkLoginState();
+                if (status.warning) {
+                    enqueueSnackbar(`配置文件加载失败，已使用默认配置。错误详情: ${status.warning}`, {
+                        variant: 'warning',
+                        persist: true,
+                    });
                 }
+                useAuthStore.getState().checkLoginState();
             }
         } catch (e) {
             setBackendStatus({ status: 'Error', message: String(e) });
@@ -87,7 +92,7 @@ const App: React.FC = () => {
     };
 
     // Start listening for global task events
-    useTaskEvents();
+    useTaskEvents(backendStatus.status === 'Running');
     // Enable global notifications for task completion/failure
     useCompletionNotifier();
 
