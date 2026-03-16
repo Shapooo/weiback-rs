@@ -106,7 +106,7 @@ impl MediaDownloader for MockMediaDownloader {
                 error_type: TaskErrorType::DownloadMedia(url.to_string()),
                 message: err.to_string(),
             };
-            ctx.task_manager.add_task_error(task_err)?;
+            ctx.task_manager.report_task_error(task_err)?;
         }
 
         Ok(())

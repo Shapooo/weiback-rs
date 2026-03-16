@@ -130,7 +130,7 @@ impl DownloaderWorker {
                     error_type: TaskErrorType::DownloadMedia(url.to_string()),
                     message: err.to_string(),
                 };
-                if let Err(e) = ctx.task_manager.add_task_error(task_err) {
+                if let Err(e) = ctx.task_manager.report_task_error(task_err) {
                     error!("Failed to add task error: {}", e);
                 }
             }

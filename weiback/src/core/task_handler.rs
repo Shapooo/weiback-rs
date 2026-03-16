@@ -17,12 +17,13 @@ use tokio::time::sleep;
 use tracing::{debug, error, info};
 
 use super::post_processer::PostProcesser;
-use super::task::TaskContext;
-use crate::api::{ApiClient, ContainerType};
-use crate::core::task::{
+use super::task::{
     BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions,
     CleanupPicturesOptions, ExportJobOptions, PaginatedPostInfo, PostQuery, ResolutionPolicy,
+    TaskContext,
 };
+use super::task_manager::{TaskError, TaskErrorType};
+use crate::api::{ApiClient, ContainerType};
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
@@ -182,25 +183,33 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         );
 
         for page in start..end {
-            let posts_sum = page_backup_fn(page).await.map_err(|e| {
-                error!(
-                    "Failed to backup page {} for task {}: {}",
-                    page,
-                    ctx.task_id.unwrap(),
-                    e
-                );
-                e
-            })?;
+            let result = page_backup_fn(page).await;
 
-            total_downloaded += posts_sum;
-            info!(
-                "fetched {posts_sum} posts in {}th page ({}/{})",
-                page,
-                page - start + 1,
-                num_pages
-            );
+            match result {
+                Ok(posts_sum) => {
+                    total_downloaded += posts_sum;
+                    info!(
+                        "fetched {posts_sum} posts in {}th page ({}/{})",
+                        page,
+                        page - start + 1,
+                        num_pages
+                    );
+                    ctx.task_manager.update_progress(1, 0)?;
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to backup page {} for task {}: {}",
+                        page,
+                        ctx.task_id.unwrap(),
+                        e
+                    );
+                    ctx.task_manager.report_task_error(TaskError {
+                        error_type: TaskErrorType::DownloadMedia(format!("page {}", page)),
+                        message: e.to_string(),
+                    })?;
+                }
+            }
 
-            ctx.task_manager.update_progress(1, 0)?;
             if page != end {
                 sleep(task_interval).await;
             }
@@ -305,13 +314,24 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         info!("Found {len} posts to unfavorite");
         ctx.task_manager.update_progress(0, len as u64)?;
         for (i, id) in ids.into_iter().enumerate() {
-            if let Err(e) = self.api_client.favorites_destroy(id).await {
-                error!("Failed to unfavorite post {id}: {e}");
-                continue;
+            let result = self.api_client.favorites_destroy(id).await;
+
+            match result {
+                Ok(_) => {
+                    self.storage.mark_post_unfavorited(id).await?;
+                    info!("Post {id} ({i}/{len})unfavorited successfully");
+                    ctx.task_manager.update_progress(1, 0)?;
+                }
+                Err(e) => {
+                    error!("Failed to unfavorite post {id}: {e}");
+                    ctx.task_manager.report_task_error(TaskError {
+                        error_type: TaskErrorType::DownloadMedia(format!("unfavorite post {}", id)),
+                        message: e.to_string(),
+                    })?;
+                    ctx.task_manager.update_progress(1, 0)?;
+                }
             }
-            self.storage.mark_post_unfavorited(id).await?;
-            info!("Post {id} ({i}/{len})unfavorited successfully");
-            ctx.task_manager.update_progress(1, 0)?;
+
             if i < len - 1 {
                 tokio::time::sleep(task_interval).await;
             }
@@ -415,31 +435,39 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         let task_interval = ctx.config.backup_task_interval;
         for (i, id) in ids.into_iter().enumerate() {
-            let post = self.api_client.statuses_show(id).await.map_err(|e| {
-                error!(
-                    "Failed to fetch post {} for task {}: {}",
-                    id,
-                    ctx.task_id.unwrap(),
-                    e
-                );
-                e
-            })?;
+            let post_result = self.api_client.statuses_show(id).await;
+            let process_result = match post_result {
+                Ok(post) => self.processer.process(ctx.clone(), vec![post]).await,
+                Err(e) => {
+                    error!(
+                        "Failed to fetch post {} for task {}: {}",
+                        id,
+                        ctx.task_id.unwrap(),
+                        e
+                    );
+                    Err(e)
+                }
+            };
 
-            self.processer
-                .process(ctx.clone(), vec![post])
-                .await
-                .map_err(|e| {
+            match process_result {
+                Ok(_) => {
+                    info!("re-backed up post {} ({}/{})", id, i + 1, total);
+                    ctx.task_manager.update_progress(1, 0)?;
+                }
+                Err(e) => {
                     error!(
                         "Failed to process re-backed up post {} for task {}: {}",
                         id,
                         ctx.task_id.unwrap(),
                         e
                     );
-                    e
-                })?;
-
-            info!("re-backed up post {} ({}/{})", id, i + 1, total);
-            ctx.task_manager.update_progress(1, 0)?;
+                    ctx.task_manager.report_task_error(TaskError {
+                        error_type: TaskErrorType::DownloadMedia(format!("rebackup post {}", id)),
+                        message: e.to_string(),
+                    })?;
+                    ctx.task_manager.update_progress(1, 0)?;
+                }
+            }
 
             if i < total - 1 {
                 sleep(task_interval).await;
@@ -500,6 +528,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         pic.meta.url(),
                         e
                     );
+                    ctx.task_manager.report_task_error(TaskError {
+                        error_type: TaskErrorType::DownloadMedia(pic.meta.url().to_string()),
+                        message: e.to_string(),
+                    })?;
                 }
             }
 
@@ -532,7 +564,13 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             if let Some(current_id) = current_id {
                 let avatar_infos = self.storage.get_avatar_infos(user_id).await?;
                 for info in avatar_infos {
-                    let pic_id = pic_url_to_id(info.meta.url())?;
+                    let pic_id = match pic_url_to_id(info.meta.url()) {
+                        Ok(id) => id,
+                        Err(e) => {
+                            error!("Failed to parse avatar URL: {}", e);
+                            continue;
+                        }
+                    };
                     if pic_id != *current_id {
                         info!("Deleting invalid avatar: {} for user {}", pic_id, user_id);
                         if let Err(e) = self
@@ -541,6 +579,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                             .await
                         {
                             error!("Failed to delete invalid avatar {}: {}", pic_id, e);
+                            ctx.task_manager.report_task_error(TaskError {
+                                error_type: TaskErrorType::DownloadMedia(
+                                    info.meta.url().to_string(),
+                                ),
+                                message: e.to_string(),
+                            })?;
                         }
                     }
                 }
@@ -578,6 +622,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         for id in ids {
             if let Err(e) = self.storage.delete_post(ctx.clone(), id).await {
                 error!("Failed to delete invalid post {}: {}", id, e);
+                ctx.task_manager.report_task_error(TaskError {
+                    error_type: TaskErrorType::DownloadMedia(format!("delete post {}", id)),
+                    message: e.to_string(),
+                })?;
             }
             ctx.task_manager.update_progress(1, 0)?;
         }
@@ -615,17 +663,63 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         let task_interval = ctx.config.backup_task_interval;
         for (i, id) in ids.into_iter().enumerate() {
-            if let Some(post) = self.storage.get_post(id).await?
-                && self
-                    .processer
-                    .is_any_image_missing(ctx.clone(), &post)
-                    .await?
+            let post_opt = self.storage.get_post(id).await?;
+            let post = match post_opt {
+                Some(p) => p,
+                None => {
+                    ctx.task_manager.update_progress(1, 0)?;
+                    info!("Post {} not found, skipping ({}/{})", id, i + 1, total);
+                    continue;
+                }
+            };
+
+            let has_missing = match self
+                .processer
+                .is_any_image_missing(ctx.clone(), &post)
+                .await
             {
+                Ok(b) => b,
+                Err(e) => {
+                    error!("Failed to check missing images for post {}: {}", id, e);
+                    ctx.task_manager.report_task_error(TaskError {
+                        error_type: TaskErrorType::DownloadMedia(format!(
+                            "check images for post {}",
+                            id
+                        )),
+                        message: e.to_string(),
+                    })?;
+                    ctx.task_manager.update_progress(1, 0)?;
+                    info!("Scanned post {} ({}/{})", id, i + 1, total);
+                    continue;
+                }
+            };
+
+            if has_missing {
                 info!("Post {id} has missing images, re-backing up...");
-                let post = self.api_client.statuses_show(id).await?;
-                self.processer.process(ctx.clone(), vec![post]).await?;
-                // Sleep between API calls to avoid rate limiting
-                sleep(task_interval).await;
+                let fetch_result = self.api_client.statuses_show(id).await;
+                match fetch_result {
+                    Ok(post) => {
+                        if let Err(e) = self.processer.process(ctx.clone(), vec![post]).await {
+                            error!("Failed to process re-backed up post {}: {}", id, e);
+                            ctx.task_manager.report_task_error(TaskError {
+                                error_type: TaskErrorType::DownloadMedia(format!(
+                                    "rebackup post {}",
+                                    id
+                                )),
+                                message: e.to_string(),
+                            })?;
+                        }
+                        // Sleep between API calls to avoid rate limiting
+                        sleep(task_interval).await;
+                    }
+                    Err(e) => {
+                        error!("Failed to fetch post {} for re-backup: {}", id, e);
+                        ctx.task_manager.report_task_error(TaskError {
+                            error_type: TaskErrorType::DownloadMedia(format!("fetch post {}", id)),
+                            message: e.to_string(),
+                        })?;
+                    }
+                }
             }
             ctx.task_manager.update_progress(1, 0)?;
             info!("Scanned post {} ({}/{})", id, i + 1, total);

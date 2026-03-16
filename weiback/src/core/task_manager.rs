@@ -242,13 +242,13 @@ impl TaskManager {
         }
     }
 
-    /// Records a non-fatal task error.
+    /// Reports a non-fatal task error.
     ///
-    /// These errors do not stop the main task but are collected for reporting.
+    /// These errors do not stop the main task but are reported.
     ///
     /// # Arguments
-    /// * `error` - The `TaskError` to record.
-    pub fn add_task_error(&self, error: TaskError) -> Result<()> {
+    /// * `error` - The `TaskError` to report.
+    pub fn report_task_error(&self, error: TaskError) -> Result<()> {
         self.task_errors.lock()?.push(error.clone());
         if let Some(listener) = self.listener.lock()?.as_ref() {
             listener.on_task_error(&error);
@@ -367,8 +367,8 @@ mod tests {
             message: "Timeout".into(),
         };
 
-        manager.add_task_error(error1.clone()).unwrap();
-        manager.add_task_error(error2.clone()).unwrap();
+        manager.report_task_error(error1.clone()).unwrap();
+        manager.report_task_error(error2.clone()).unwrap();
 
         let errors = manager.get_and_clear_task_errors().unwrap();
         assert_eq!(errors.len(), 2);
