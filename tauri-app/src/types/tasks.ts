@@ -6,6 +6,9 @@ export enum TaskType {
     CleanupPictures = "CleanupPictures",
     CleanupAvatars = "CleanupAvatars",
     CleanupInvalidPosts = "CleanupInvalidPosts",
+    RebackupPosts = "RebackupPosts",
+    RebackupMissingImages = "RebackupMissingImages",
+    CleanupInvalidPictures = "CleanupInvalidPictures",
 }
 
 export interface CleanupInvalidPostsOptions {
