@@ -22,7 +22,6 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    let validator = ImageValidator::new();
 
     println!("Scanning directory: {:?}", args.directory);
 
@@ -41,15 +40,15 @@ async fn main() -> Result<(), anyhow::Error> {
                         if data.len() > 20_000 {
                             continue;
                         }
-                        match validator.is_invalid_weibo_image(&data) {
-                            Ok(ImageStatus::Invalid) => {
-                                println!("Invalid image found: {}", path.display());
+                        match ImageValidator::is_invalid_weibo_image(&data) {
+                            ImageStatus::Censored => {
+                                println!("Censored image found: {}", path.display());
                             }
-                            Ok(ImageStatus::Valid) => {
+                            ImageStatus::Unparseable => {
+                                println!("Unparseable image found: {}", path.display());
+                            }
+                            ImageStatus::Valid => {
                                 // It's a valid image, do nothing.
-                            }
-                            Err(e) => {
-                                eprintln!("Error processing image {}: {}", path.display(), e);
                             }
                         }
                     }
