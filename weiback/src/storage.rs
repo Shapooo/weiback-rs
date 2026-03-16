@@ -17,7 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{
-    TryFutureExt,
+    Stream, TryFutureExt,
     stream::{self, StreamExt},
 };
 use itertools::Itertools;
@@ -201,6 +201,15 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// # Returns
     /// A `Result` containing a vector of picture IDs.
     async fn get_duplicate_pic_ids(&self) -> Result<Vec<String>>;
+
+    /// Retrieves pictures with paths in batches for cleanup operations.
+    ///
+    /// Returns a lazy stream that automatically handles pagination.
+    // fn pictures(self: Arc<Self>) -> Pin<Box<dyn Stream<Item = Result<PictureInfo>> + Send>>;
+    fn get_all_pictures(&self) -> impl Stream<Item = Result<PictureInfo>> + Send + '_;
+
+    /// Counts the total number of pictures with paths in the database.
+    async fn count_pictures(&self) -> Result<u64>;
 
     /// Deletes a specific picture from both the file system and the database.
     ///
@@ -479,6 +488,50 @@ impl Storage for StorageImpl {
         picture::get_duplicate_pic_ids(&self.db_pool).await
     }
 
+    fn get_all_pictures(&self) -> impl Stream<Item = Result<PictureInfo>> + Send + '_ {
+        const BATCH_SIZE: u64 = 100;
+        let storage = self.clone();
+        stream::unfold(
+            (storage, 0u64, Vec::new(), false), // state：storage, offset, buffer, finished
+            |(storage, offset, mut buffer, mut finished)| async move {
+                if finished && buffer.is_empty() {
+                    return None;
+                }
+
+                if buffer.is_empty() && !finished {
+                    match picture::get_pictures_batch(&storage.db_pool, offset, BATCH_SIZE).await {
+                        Ok(pics) => {
+                            if pics.len() < BATCH_SIZE as usize {
+                                finished = true;
+                            }
+                            if pics.is_empty() {
+                                return None;
+                            }
+                            buffer = pics;
+                        }
+                        Err(e) => return Some((Err(e), (storage, offset, buffer, true))),
+                    }
+                }
+
+                if !buffer.is_empty() {
+                    let pic = buffer.remove(0);
+                    let next_offset = if buffer.is_empty() {
+                        offset + BATCH_SIZE
+                    } else {
+                        offset
+                    };
+                    Some((Ok(pic), (storage, next_offset, buffer, finished)))
+                } else {
+                    None
+                }
+            },
+        )
+    }
+
+    async fn count_pictures(&self) -> Result<u64> {
+        picture::count_pictures(&self.db_pool).await
+    }
+
     async fn delete_picture(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()> {
         self.pic_storage
             .delete_picture(&ctx.config.picture_path, &self.db_pool, url)
@@ -524,6 +577,7 @@ mod local_tests {
         path::Path,
     };
 
+    use futures::TryStreamExt;
     use itertools::Itertools;
     use tempfile::TempDir;
     use tokio::fs::read_to_string;
@@ -997,5 +1051,82 @@ mod local_tests {
                 .await
                 .unwrap()
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_all_pictures_empty() {
+        let storage = setup_storage().await;
+
+        // Collect all pictures from empty database
+        let pictures: Vec<_> = storage.get_all_pictures().try_collect().await.unwrap();
+
+        assert!(pictures.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_all_pictures_multiple_batches() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Save more pictures than BATCH_SIZE (100) to test batching
+        let post_id = 1002i64;
+        let num_pictures = 250;
+        for i in 0..num_pictures {
+            let url = format!("http://example.com/batch_pic_{}.jpg", i);
+            let picture = Picture {
+                meta: PictureMeta::attached(&url, post_id, PictureDefinition::Large).unwrap(),
+                blob: Bytes::from(format!("batch_image_data_{}", i)),
+            };
+            storage.save_picture(ctx.clone(), &picture).await.unwrap();
+        }
+
+        // Test get_all_pictures returns all pictures
+        let pictures: Vec<_> = storage
+            .get_all_pictures()
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap();
+
+        assert_eq!(pictures.len(), num_pictures);
+    }
+
+    #[tokio::test]
+    async fn test_get_all_pictures_with_avatars() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Create a user with avatar
+        let users = create_test_users().await;
+        let user = users.first().unwrap();
+        storage.save_user(user).await.unwrap();
+
+        // Save avatar
+        let avatar = Picture {
+            meta: PictureMeta::Avatar {
+                url: Url::parse("http://example.com/avatar_test.jpg").unwrap(),
+                user_id: user.id,
+            },
+            blob: Bytes::from_static(b"avatar_data"),
+        };
+        storage.save_picture(ctx.clone(), &avatar).await.unwrap();
+
+        // Save some attached pictures
+        let post_id = 1003i64;
+        let pic = Picture {
+            meta: PictureMeta::attached(
+                "http://example.com/attached.jpg",
+                post_id,
+                PictureDefinition::Large,
+            )
+            .unwrap(),
+            blob: Bytes::from_static(b"attached_data"),
+        };
+        storage.save_picture(ctx.clone(), &pic).await.unwrap();
+
+        // Test get_all_pictures returns both avatar and attached pictures
+        let pictures: Vec<_> = storage.get_all_pictures().try_collect().await.unwrap();
+
+        // Should have 1 avatar + 1 attached = 2 pictures
+        assert_eq!(pictures.len(), 2);
     }
 }

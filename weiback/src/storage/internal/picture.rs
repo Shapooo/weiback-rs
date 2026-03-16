@@ -20,7 +20,7 @@
 
 use std::path::PathBuf;
 
-use sea_query::{Asterisk, Expr, ExprTrait, OnConflict, Query, SqliteQueryBuilder};
+use sea_query::{Asterisk, Expr, ExprTrait, Func, OnConflict, Query, SqliteQueryBuilder};
 use sea_query_binder::SqlxBinder;
 use sqlx::{Executor, Sqlite};
 use url::Url;
@@ -477,6 +477,66 @@ where
     Ok(())
 }
 
+/// Retrieves pictures with paths in batches for cleanup operations.
+///
+/// This method is used for operations that need to process pictures in chunks
+/// to avoid loading too much data into memory at once.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `offset` - The number of records to skip.
+/// * `limit` - The maximum number of records to return.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<PictureInfo>` for the given batch.
+pub async fn get_pictures_batch<'e, E>(
+    executor: E,
+    offset: u64,
+    limit: u64,
+) -> Result<Vec<PictureInfo>>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let (sql, values) = Query::select()
+        .column(Asterisk)
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .order_by(PictureIden::Url, sea_query::Order::Asc)
+        .offset(offset)
+        .limit(limit)
+        .build_sqlx(SqliteQueryBuilder);
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+        .fetch_all(executor)
+        .await?;
+    records.into_iter().map(PictureInfo::try_from).collect()
+}
+
+/// Counts the total number of pictures with paths in the database.
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+///
+/// # Returns
+///
+/// A `Result` containing the total count.
+pub async fn count_pictures<'e, E>(executor: E) -> Result<u64>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let (sql, values) = Query::select()
+        .expr(Func::count(1))
+        .from(PictureIden::Table)
+        .and_where(Expr::col(PictureIden::Path).is_not_null())
+        .build_sqlx(SqliteQueryBuilder);
+    let count: u64 = sqlx::query_scalar_with(&sql, values)
+        .fetch_one(executor)
+        .await?;
+    Ok(count)
+}
+
 #[cfg(test)]
 mod local_tests {
     use sqlx::sqlite::SqlitePool;
@@ -743,5 +803,71 @@ mod local_tests {
         delete_picture_by_url(&db, &url2).await.unwrap();
         let path_after_delete = get_picture_path(&db, &url2).await.unwrap();
         assert!(path_after_delete.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_pictures_batch() {
+        let db = setup_db().await;
+
+        // Save multiple pictures
+        for i in 0..10 {
+            let url = Url::parse(&format!("http://example.com/pic{}.jpg", i)).unwrap();
+            let meta = PictureMeta::Other { url: url.clone() };
+            save_picture_meta(&db, &meta, Some(&format!("path/pic{}.jpg", i)))
+                .await
+                .unwrap();
+        }
+
+        // Test first batch (limit 3)
+        let batch1 = get_pictures_batch(&db, 0, 3).await.unwrap();
+        assert_eq!(batch1.len(), 3);
+
+        // Test second batch (limit 3, offset 3)
+        let batch2 = get_pictures_batch(&db, 3, 3).await.unwrap();
+        assert_eq!(batch2.len(), 3);
+
+        // Test offset beyond data
+        let batch3 = get_pictures_batch(&db, 10, 3).await.unwrap();
+        assert!(batch3.is_empty());
+
+        // Verify different pictures in different batches
+        let urls_batch1: Vec<_> = batch1.iter().map(|p| p.meta.url().to_string()).collect();
+        let urls_batch2: Vec<_> = batch2.iter().map(|p| p.meta.url().to_string()).collect();
+        assert!(!urls_batch1.iter().any(|u| urls_batch2.contains(u)));
+    }
+
+    #[tokio::test]
+    async fn test_count_pictures() {
+        let db = setup_db().await;
+
+        // Initially should be 0
+        let count = count_pictures(&db).await.unwrap();
+        assert_eq!(count, 0);
+
+        // Save some pictures
+        for i in 0..5 {
+            let url = Url::parse(&format!("http://example.com/pic{}.jpg", i)).unwrap();
+            let meta = PictureMeta::Other { url: url.clone() };
+            save_picture_meta(&db, &meta, Some(&format!("path/pic{}.jpg", i)))
+                .await
+                .unwrap();
+        }
+
+        // Should be 5
+        let count = count_pictures(&db).await.unwrap();
+        assert_eq!(count, 5);
+
+        // Add more pictures
+        for i in 5..10 {
+            let url = Url::parse(&format!("http://example.com/pic{}.jpg", i)).unwrap();
+            let meta = PictureMeta::Other { url: url.clone() };
+            save_picture_meta(&db, &meta, Some(&format!("path/pic{}.jpg", i)))
+                .await
+                .unwrap();
+        }
+
+        // Should be 10
+        let count = count_pictures(&db).await.unwrap();
+        assert_eq!(count, 10);
     }
 }
