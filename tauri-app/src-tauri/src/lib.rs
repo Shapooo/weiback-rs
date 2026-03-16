@@ -271,6 +271,14 @@ async fn rebackup_posts(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<
 }
 
 #[tauri::command]
+async fn rebackup_missing_images(core: State<'_, Arc<Core>>, query: PostQuery) -> Result<()> {
+    info!("rebackup_missing_images called with query: {query:?}");
+    Ok(core
+        .rebackup_missing_images(TaskRequest::RebackupMissingImages(query))
+        .await?)
+}
+
+#[tauri::command]
 async fn get_username_by_id(
     core: State<'_, Arc<Core>>,
     uid: WeiboId,
@@ -345,6 +353,7 @@ pub fn run() -> Result<()> {
             delete_post,
             rebackup_post,
             rebackup_posts,
+            rebackup_missing_images,
             get_current_task_status,
             get_and_clear_task_errors,
             cleanup_pictures,
