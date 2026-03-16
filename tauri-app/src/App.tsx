@@ -11,6 +11,7 @@ import { getBackendStatus, initBackend, BackendStatus } from './lib/api';
 
 
 const drawerWidth = 200;
+const taskProgressHeight = 80; // GlobalTaskProgress height + padding
 
 function useCompletionNotifier() {
     const { enqueueSnackbar } = useSnackbar();
@@ -65,6 +66,8 @@ const App: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
     const [backendStatus, setBackendStatus] = useState<BackendStatus>({ status: 'Uninitialized' });
     const [loading, setLoading] = useState(true);
+    const currentTask = useTaskStore((state) => state.currentTask);
+    const isTaskRunning = currentTask?.status === 'InProgress';
 
     const checkAndInitBackend = async () => {
         setLoading(true);
@@ -153,7 +156,7 @@ const App: React.FC = () => {
             </Drawer>
             <Box
                 component="main"
-                sx={{ flexGrow: 1, p: 3, width: `calc(100% - ${drawerWidth}px)` }}
+                sx={{ flexGrow: 1, p: 3, pb: isTaskRunning ? `${3 * 8 + taskProgressHeight}px` : 3, width: `calc(100% - ${drawerWidth}px)` }}
             >
                 <AppRouter />
             </Box>
