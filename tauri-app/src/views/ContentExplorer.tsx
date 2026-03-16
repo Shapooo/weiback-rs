@@ -30,7 +30,7 @@ import { PostInfo, User, PostQuery, ExportJobOptions, TaskStatus } from '../type
 import PostPreviewModal from '../components/PostPreviewModal';
 import { useTaskStore } from '../stores/taskStore';
 import UserSelector from '../components/UserSelector';
-import { queryLocalPosts, exportPosts, rebackupPosts } from '../lib/api';
+import { queryLocalPosts, exportPosts, rebackupPosts, rebackupMissingImages } from '../lib/api';
 
 const POSTS_PER_PAGE = 12;
 
@@ -235,6 +235,17 @@ const ContentExplorerPage: React.FC = () => {
         }
     };
 
+    const handleRebackupMissingImages = async () => {
+        try {
+            const query = buildQueryFromFilters(appliedFilters, page, true);
+            await rebackupMissingImages(query);
+            enqueueSnackbar('重新备份缺失图片任务已成功启动', { variant: 'success' });
+            fetchCurrentTask();
+        } catch (e) {
+            enqueueSnackbar(`启动重新备份缺失图片任务失败: ${e}`, { variant: 'error' });
+        }
+    };
+
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
             <Box sx={{ width: '100%', p: 3 }}>
@@ -355,6 +366,14 @@ const ContentExplorerPage: React.FC = () => {
                                         disabled={isTaskRunning}
                                     >
                                         {isTaskRunning ? '任务进行中...' : '重新备份筛选结果'}
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        onClick={handleRebackupMissingImages}
+                                        disabled={isTaskRunning}
+                                    >
+                                        {isTaskRunning ? '任务进行中...' : '重新备份缺失图片'}
                                     </Button>
                                 </Stack>
                             </Box>
