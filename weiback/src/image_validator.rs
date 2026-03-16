@@ -40,18 +40,13 @@ pub enum ImageStatus {
 }
 
 /// A validator for detecting invalid Weibo placeholder images.
-pub struct ImageValidator {
-    hasher: img_hash::Hasher,
-}
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ImageValidator;
 
 impl ImageValidator {
-    /// Creates a new `ImageValidator` and initializes its perceptual hasher.
+    /// Creates a new `ImageValidator`.
     pub fn new() -> Self {
-        let hasher = HasherConfig::new()
-            .hash_alg(HashAlg::Gradient)
-            .hash_size(16, 16)
-            .to_hasher();
-        Self { hasher }
+        Self
     }
 
     /// Checks if the given image data corresponds to a known invalid Weibo placeholder.
@@ -65,6 +60,12 @@ impl ImageValidator {
     /// # Errors
     /// Returns `Error::FormatError` if the image data cannot be decoded.
     pub fn is_invalid_weibo_image(&self, data: &[u8]) -> Result<ImageStatus> {
+        // Create hasher for each validation call to ensure Send + Sync
+        let hasher = HasherConfig::new()
+            .hash_alg(HashAlg::Gradient)
+            .hash_size(16, 16)
+            .to_hasher();
+
         // Use Cursor and guess_format to handle non-standard headers or format mismatches.
         let reader = image::io::Reader::new(std::io::Cursor::new(data))
             .with_guessed_format()
@@ -97,7 +98,7 @@ impl ImageValidator {
         debug!("Image passed Stage 2: Flatness match");
 
         // --- Stage 3: Perceptual Hash Structural Match (Final Decision) ---
-        if self.check_stage3_phash(&img) {
+        if self.check_stage3_phash(&img, &hasher) {
             debug!("Image passed Stage 3: pHash match. Marking as INVALID.");
             return Ok(ImageStatus::Invalid);
         }
@@ -161,8 +162,8 @@ impl ImageValidator {
     }
 
     /// Stage 3: Perceptual hash comparison.
-    fn check_stage3_phash(&self, img: &DynamicImage) -> bool {
-        let current_hash = self.hasher.hash_image(img);
+    fn check_stage3_phash(&self, img: &DynamicImage, hasher: &img_hash::Hasher) -> bool {
+        let current_hash = hasher.hash_image(img);
 
         for base64_hash in INVALID_HASHES {
             if let Ok(target_hash) = img_hash::ImageHash::from_base64(base64_hash)
@@ -172,11 +173,5 @@ impl ImageValidator {
             }
         }
         false
-    }
-}
-
-impl Default for ImageValidator {
-    fn default() -> Self {
-        Self::new()
     }
 }
