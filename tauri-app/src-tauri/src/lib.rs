@@ -327,6 +327,14 @@ async fn cleanup_invalid_posts(
         .await?)
 }
 
+#[tauri::command]
+async fn cleanup_invalid_pictures(core: State<'_, Arc<Core>>) -> Result<()> {
+    info!("cleanup_invalid_pictures called");
+    Ok(core
+        .cleanup_invalid_pictures(TaskRequest::CleanupInvalidPictures)
+        .await?)
+}
+
 pub fn run() -> Result<()> {
     info!("Starting application");
 
@@ -358,7 +366,8 @@ pub fn run() -> Result<()> {
             get_and_clear_task_errors,
             cleanup_pictures,
             cleanup_invalid_avatars,
-            cleanup_invalid_posts
+            cleanup_invalid_posts,
+            cleanup_invalid_pictures
         ])
         .build(tauri::generate_context!())
         .expect("tauri app build failed")

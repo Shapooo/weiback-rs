@@ -17,7 +17,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useTaskStore } from '../stores/taskStore';
 import { TaskStatus, ResolutionPolicy } from '../types';
-import { cleanupPictures, cleanupInvalidAvatars, cleanupInvalidPosts } from '../lib/api';
+import { cleanupPictures, cleanupInvalidAvatars, cleanupInvalidPosts, cleanupInvalidPictures } from '../lib/api';
 
 const DataManage: React.FC = () => {
     const { enqueueSnackbar } = useSnackbar();
@@ -54,6 +54,16 @@ const DataManage: React.FC = () => {
             fetchCurrentTask();
         } catch (e) {
             enqueueSnackbar(`启动失效内容清理失败: ${e}`, { variant: 'error' });
+        }
+    };
+
+    const handleCleanupInvalidPictures = async () => {
+        try {
+            await cleanupInvalidPictures();
+            enqueueSnackbar('失效图片清理任务已启动', { variant: 'success' });
+            fetchCurrentTask();
+        } catch (e) {
+            enqueueSnackbar(`启动失效图片清理失败: ${e}`, { variant: 'error' });
         }
     };
 
@@ -187,6 +197,35 @@ const DataManage: React.FC = () => {
                                     disabled={isTaskRunning}
                                 >
                                     {isTaskRunning ? '任务进行中...' : '开始清理失效内容'}
+                                </Button>
+                            </Box>
+                        </CardContent>
+                    </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Card>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom>
+                                失效图片清理
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                清理本地存储中已失效的图片: 1. 下载出错导致无法正常解析的图片; 2. 被和谐导致大眼化的图片。
+                            </Typography>
+
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                                此操作将永久删除失效图片文件及其数据库记录。
+                            </Alert>
+
+                            <Box sx={{ mt: 3 }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    fullWidth
+                                    onClick={handleCleanupInvalidPictures}
+                                    disabled={isTaskRunning}
+                                >
+                                    {isTaskRunning ? '任务进行中...' : '开始清理失效图片'}
                                 </Button>
                             </Box>
                         </CardContent>
