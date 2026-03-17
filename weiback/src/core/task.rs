@@ -46,6 +46,8 @@ pub enum TaskRequest {
     RebackupPosts(PostQuery),
     /// Re-backup posts that have missing images.
     RebackupMissingImages(PostQuery),
+    /// Clean up invalid pictures (e.g., "image deleted" placeholders).
+    CleanupInvalidPictures,
 }
 
 impl TaskRequest {
@@ -60,6 +62,7 @@ impl TaskRequest {
             TaskRequest::CleanupInvalidPosts(_) => 0,
             TaskRequest::RebackupPosts(_) => 0,
             TaskRequest::RebackupMissingImages(_) => 0,
+            TaskRequest::CleanupInvalidPictures => 0,
         }
     }
 }

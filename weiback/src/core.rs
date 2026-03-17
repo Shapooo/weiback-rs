@@ -361,6 +361,21 @@ impl Core {
         Ok(())
     }
 
+    /// Starts a long-running task to clean up invalid pictures.
+    pub async fn cleanup_invalid_pictures(&self, request: TaskRequest) -> Result<()> {
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        let total = 0; // Will be updated in task_handler
+        self.task_manager.start_task(
+            id,
+            TaskType::CleanupInvalidPictures,
+            "清理失效图片".into(),
+            total,
+        )?;
+        spawn(handle_task_request(self.task_handler.clone(), ctx, request));
+        Ok(())
+    }
+
     // ========================= context creators =========================
 
     /// Creates a task context for long-running tasks, including a unique task ID.
@@ -399,6 +414,9 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
             task_handler
                 .rebackup_missing_images(ctx.clone(), query)
                 .await
+        }
+        TaskRequest::CleanupInvalidPictures => {
+            task_handler.cleanup_invalid_pictures(ctx.clone()).await
         }
         _ => {
             error!("Unexpected TaskRequest for long task: {:?}", request);

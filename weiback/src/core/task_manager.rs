@@ -31,6 +31,8 @@ pub enum TaskType {
     RebackupPosts,
     /// Re-backup posts that have missing images.
     RebackupMissingImages,
+    /// Clean up invalid pictures (e.g., "image deleted" placeholders).
+    CleanupInvalidPictures,
 }
 
 /// The current execution state of a task.
