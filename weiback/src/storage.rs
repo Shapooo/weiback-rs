@@ -218,6 +218,14 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// * `url` - The URL of the picture to delete.
     async fn delete_picture(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()>;
 
+    /// Deletes a specific picture by URL from both the file system and the database.
+    /// This is a simplified version that takes ctx directly.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The URL of the picture to delete.
+    async fn delete_picture_by_url(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()>;
+
     /// Retrieves the binary content (blob) of a picture from the storage.
     ///
     /// # Arguments
@@ -536,6 +544,18 @@ impl Storage for StorageImpl {
         self.pic_storage
             .delete_picture(&ctx.config.picture_path, &self.db_pool, url)
             .await
+    }
+
+    async fn delete_picture_by_url(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()> {
+        let picture_path = &ctx.config.picture_path;
+        // Get the relative path from database
+        if let Some(relative_path) = picture::get_picture_path(&self.db_pool, url).await? {
+            let absolute_path = picture_path.join(relative_path);
+            // Try to delete the file, tolerate if it doesn't exist
+            let _ = tokio::fs::remove_file(&absolute_path).await;
+        }
+        // Delete from database
+        picture::delete_picture_by_url(&self.db_pool, url).await
     }
 
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
@@ -1128,5 +1148,101 @@ mod local_tests {
 
         // Should have 1 avatar + 1 attached = 2 pictures
         assert_eq!(pictures.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_delete_picture_by_url_exists() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Save a picture
+        let url = "http://example.com/delete_test.jpg";
+        let picture = Picture {
+            meta: PictureMeta::attached(url, 9999, PictureDefinition::Large).unwrap(),
+            blob: Bytes::from_static(b"test_image_data"),
+        };
+        storage.save_picture(ctx.clone(), &picture).await.unwrap();
+
+        // Verify it exists
+        assert!(
+            storage
+                .picture_saved(ctx.clone(), picture.meta.url())
+                .await
+                .unwrap()
+        );
+
+        // Delete the picture
+        storage
+            .delete_picture_by_url(ctx.clone(), picture.meta.url())
+            .await
+            .unwrap();
+
+        // Verify it's deleted
+        assert!(
+            !storage
+                .picture_saved(ctx.clone(), picture.meta.url())
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_picture_by_url_file_not_exists() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Save a picture
+        let url = "http://example.com/delete_test_no_file.jpg";
+        let picture = Picture {
+            meta: PictureMeta::attached(url, 9998, PictureDefinition::Large).unwrap(),
+            blob: Bytes::from_static(b"test_image_data"),
+        };
+        storage.save_picture(ctx.clone(), &picture).await.unwrap();
+        assert!(
+            storage
+                .picture_saved(ctx.clone(), picture.meta.url())
+                .await
+                .unwrap()
+        );
+
+        // Manually delete the file from filesystem (but keep database record)
+        let path = storage
+            .get_picture_path(ctx.clone(), picture.meta.url())
+            .await
+            .unwrap();
+        if let Some(p) = path {
+            tokio::fs::remove_file(&p).await.unwrap();
+            // Verify file is gone but database record exists
+            assert!(!p.exists());
+        }
+
+        // Delete via delete_picture_by_url (should tolerate missing file)
+        storage
+            .delete_picture_by_url(ctx.clone(), picture.meta.url())
+            .await
+            .unwrap();
+
+        // Verify database record is deleted
+        assert!(
+            !storage
+                .picture_saved(ctx.clone(), picture.meta.url())
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_picture_by_url_not_exists() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Try to delete a picture that doesn't exist
+        let url = Url::parse("http://example.com/nonexistent.jpg").unwrap();
+
+        // Should not panic, just succeed
+        storage
+            .delete_picture_by_url(ctx.clone(), &url)
+            .await
+            .unwrap();
     }
 }
