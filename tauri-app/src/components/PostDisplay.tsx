@@ -24,6 +24,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SyncIcon from '@mui/icons-material/Sync';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import LinkIcon from '@mui/icons-material/Link';
+import ImageIcon from '@mui/icons-material/Image';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachedCache } from '../cache';
 import Emoji from './Emoji';
@@ -223,6 +224,8 @@ interface ProcessedTextProps {
     emoji_map: Record<string, string>;
     url_struct: UrlStructItem[] | null;
     maxLines?: number;
+    inline_map?: Record<string, string>;
+    onImageClick?: (id: string) => void;
 }
 
 const URL_REGEX = /https?:\/\/[a-zA-Z0-9$%&~_#./\-:=,?]{5,280}/g;
@@ -234,7 +237,7 @@ const EMOJI_REGEX = /\[.*?\]/g;
 const COMBINED_REGEX = new RegExp(`(${URL_REGEX.source})|(${AT_REGEX.source})|(${TOPIC_REGEX.source})|(${EMOJI_REGEX.source})`, 'gu');
 
 
-const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_struct, maxLines }) => {
+const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_struct, maxLines, inline_map, onImageClick }) => {
     const inPreviewMode = maxLines !== undefined;
     const processedText = inPreviewMode ? text.replace(/\n/g, ' ') : text;
 
@@ -270,8 +273,25 @@ const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_stru
         }
 
         if (url) {
+            const inlinePicId = inline_map?.[url];
             const urlData = urlMap.get(url);
-            if (urlData) {
+            if (inlinePicId && onImageClick) {
+                nodes.push(
+                    <Link
+                        key={lastIndex}
+                        component="button"
+                        variant="body2"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onImageClick(inlinePicId);
+                        }}
+                        sx={{ verticalAlign: 'middle', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', border: 'none', background: 'none', p: 0 }}
+                    >
+                        <ImageIcon sx={{ marginRight: '0.2em', width: '16px', height: '16px' }} />
+                        查看图片
+                    </Link>
+                );
+            } else if (urlData) {
                 const longUrl = urlData.long_url || url;
                 const title = urlData.url_title || '网页链接';
                 nodes.push(
@@ -437,13 +457,25 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                         </Stack>
                     } />
                 <CardContent>
-                    <ProcessedText text={postInfo.post.text} emoji_map={postInfo.emoji_map} url_struct={postInfo.post.url_struct} maxLines={maxLines} />
+                    <ProcessedText
+                        text={postInfo.post.text}
+                        emoji_map={postInfo.emoji_map}
+                        url_struct={postInfo.post.url_struct}
+                        maxLines={maxLines}
+                        inline_map={postInfo.inline_map}
+                        onImageClick={onImageClick}
+                    />
                     {postInfo.post.retweeted_status && (
                         <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
                             <Typography variant="subtitle2" color="text.secondary">
                                 @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                             </Typography>
-                            <ProcessedText text={postInfo.post.retweeted_status.text} emoji_map={postInfo.emoji_map} url_struct={postInfo.post.retweeted_status.url_struct} maxLines={maxLines} />
+                            <ProcessedText
+                                text={postInfo.post.retweeted_status.text}
+                                emoji_map={postInfo.emoji_map}
+                                url_struct={postInfo.post.retweeted_status.url_struct}
+                                maxLines={maxLines}
+                            />
                         </Box>
                     )}
                     <AttachedImages attachedIds={postInfo.standalone_ids} onImageClick={onImageClick} maxImages={maxAttachedImages} />
