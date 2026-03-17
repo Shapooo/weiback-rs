@@ -12,8 +12,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use futures::stream::{self, StreamExt, TryStreamExt};
-use tokio::time::sleep;
+use futures::{
+    pin_mut,
+    stream::{self, StreamExt, TryStreamExt},
+};
+use tokio::{fs, time::sleep};
 use tracing::{debug, error, info};
 
 use super::post_processer::PostProcesser;
@@ -23,15 +26,19 @@ use super::task::{
     TaskContext,
 };
 use super::task_manager::{TaskError, TaskErrorType};
-use crate::api::{ApiClient, ContainerType};
 use crate::emoji_map::EmojiMap;
 use crate::error::Result;
 use crate::exporter::Exporter;
 use crate::html_generator::HTMLGenerator;
+use crate::image_validator::{ImageStatus, ImageValidator};
 use crate::media_downloader::MediaDownloader;
 use crate::models::{Picture, PictureMeta, User};
 use crate::storage::Storage;
 use crate::utils::{make_page_name, pic_url_to_id};
+use crate::{
+    api::{ApiClient, ContainerType},
+    storage::PictureInfo,
+};
 
 /// The primary executor for application tasks.
 ///
@@ -727,6 +734,98 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
         info!("Finished re-backup missing images task");
         Ok(())
+    }
+
+    /// Cleans up invalid pictures (e.g., "image deleted" placeholders) from local storage.
+    ///
+    /// This function:
+    /// 1. Loads pictures in batches from the database
+    /// 2. Checks file size - if > 15kB, skips (can't be invalid placeholder)
+    /// 3. If <= 15kB, tries to parse the image - if can't parse, it's invalid
+    /// 4. Otherwise, uses ImageValidator to check if it's invalid
+    /// 5. Deletes invalid images from both filesystem and database
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    pub(super) async fn cleanup_invalid_pictures(&self, ctx: Arc<TaskContext>) -> Result<()> {
+        info!("Starting cleanup invalid pictures task");
+
+        // Get total count first for progress tracking
+        let total = self.storage.count_pictures().await?;
+        info!("Found {} pictures to check", total);
+        ctx.task_manager.update_progress(0, total)?;
+
+        let mut deleted_count: u64 = 0;
+        let storage = self.storage.clone();
+
+        // Use the lazy stream to iterate over pictures
+        let picture_stream = storage.get_all_pictures();
+        pin_mut!(picture_stream);
+        while let Some(pic_info_result) = picture_stream.next().await {
+            // Process the picture, report error but continue if failed
+            let deleted = self
+                .process_picture_for_cleanup(ctx.clone(), pic_info_result)
+                .await?;
+
+            if deleted {
+                deleted_count += 1;
+            }
+
+            ctx.task_manager.update_progress(1, 0)?;
+        }
+
+        info!(
+            "Finished cleanup invalid pictures task. Processed: {}, Deleted: {}",
+            total, deleted_count
+        );
+        Ok(())
+    }
+
+    /// Processes a single picture for cleanup, checking if it's invalid and deleting if so.
+    ///
+    /// Returns `Ok(true)` if the picture was deleted, `Ok(false)` if it was kept,
+    /// or `Err` if an error occurred during processing.
+    async fn process_picture_for_cleanup(
+        &self,
+        ctx: Arc<TaskContext>,
+        pic_info_result: Result<PictureInfo>,
+    ) -> Result<bool> {
+        const MAX_FILE_SIZE: u64 = 15 * 1024; // 15kB
+
+        let pic_info = pic_info_result?;
+        let url = pic_info.meta.url();
+        let picture_path = &ctx.config.picture_path;
+        let file_path = picture_path.join(&pic_info.path);
+
+        // Check if file exists
+        let metadata = fs::metadata(&file_path).await?;
+        let file_size = metadata.len();
+
+        // Step 1: If file > 15kB, skip (can't be invalid placeholder)
+        if file_size > MAX_FILE_SIZE {
+            return Ok(false);
+        }
+
+        // Step 2: Read the file
+        let data = fs::read(&file_path).await?;
+
+        // Step 3: Decode and check if the image is invalid (censored or unparseable)
+        let status = ImageValidator::is_invalid_weibo_image(&data);
+
+        if status.is_invalid() {
+            let reason = match status {
+                ImageStatus::Censored => "censored (placeholder)",
+                ImageStatus::Unparseable => "unparseable",
+                ImageStatus::Valid => unreachable!(),
+            };
+            info!("Image is {}: {}", reason, file_path.display());
+
+            self.storage.delete_picture_by_url(ctx, url).await?;
+
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 }
 
