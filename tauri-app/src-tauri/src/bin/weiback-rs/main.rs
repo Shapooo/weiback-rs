@@ -16,11 +16,9 @@ fn main() -> Result<()> {
 }
 
 fn init_logger() -> Result<()> {
-    let log_path = dirs::data_dir()
-        .unwrap_or_default()
-        .join("weiback")
-        .join("weiback.log");
-    fs::create_dir_all(log_path.parent().unwrap())?;
+    let log_dir = dirs::data_dir().unwrap_or_default().join("weiback");
+    fs::create_dir_all(&log_dir)?;
+    let log_path = log_dir.join("weiback.log");
     let log_file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)

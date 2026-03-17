@@ -36,7 +36,7 @@ async fn start() -> Result<()> {
         return Ok(());
     }
 
-    let backup_db_url = format!("sqlite:{}", backup_db_path.to_str().unwrap());
+    let backup_db_url = format!("sqlite:{}", &backup_db_path.to_string_lossy());
     let old_db_pool = SqlitePool::connect(&backup_db_url).await?;
     info!(
         "Successfully connected to backup database '{}'.",
@@ -80,7 +80,10 @@ async fn start() -> Result<()> {
     let timestamp = chrono::Local::now().format("%Y%m%d").to_string();
     let temp_db_filename = format!(
         "{}-{}.db",
-        final_db_path.file_stem().unwrap().to_str().unwrap(),
+        final_db_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy(),
         timestamp
     );
     let temp_db_path = final_db_path.with_file_name(&temp_db_filename);
@@ -111,7 +114,10 @@ async fn start() -> Result<()> {
         let current_time = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
         let backup_filename = format!(
             "{}-bak-{}.db",
-            final_db_path.file_stem().unwrap().to_str().unwrap(),
+            final_db_path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy(),
             current_time
         );
         let backup_path = final_db_path.with_file_name(&backup_filename);
@@ -189,11 +195,11 @@ async fn create_temp_db_pool(db_path: &PathBuf) -> Result<SqlitePool> {
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    sqlx::Sqlite::create_database(db_path.to_str().unwrap()).await?;
+    sqlx::Sqlite::create_database(&db_path.to_string_lossy()).await?;
     info!("Temp database file created.");
 
     info!("Connecting to temp database and running migrations...");
-    let db_pool = SqlitePool::connect(db_path.to_str().unwrap()).await?;
+    let db_pool = SqlitePool::connect(&db_path.to_string_lossy()).await?;
 
     sqlx::migrate!("../weiback/migrations")
         .run(&db_pool)

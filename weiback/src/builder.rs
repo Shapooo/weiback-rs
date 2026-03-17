@@ -89,7 +89,7 @@ impl CoreBuilder {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
-                    .unwrap();
+                    .expect("build async runtime failed in core builder");
                 rt.block_on(worker.run());
             });
         }

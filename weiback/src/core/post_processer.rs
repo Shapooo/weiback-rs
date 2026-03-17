@@ -281,8 +281,11 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
 
 fn is_valid_post(post: &Post) -> bool {
     post.user.is_some()
-        && (post.retweeted_status.is_none()
-            || post.retweeted_status.as_ref().unwrap().user.is_some())
+        && (post
+            .retweeted_status
+            .as_ref()
+            .map(|r| r.user.is_some())
+            .unwrap_or(true))
 }
 
 fn extract_livephoto_video_metas(posts: &[Post]) -> Vec<VideoMeta> {

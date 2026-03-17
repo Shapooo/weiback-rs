@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 pub async fn create_db_pool() -> Result<SqlitePool> {
     let db_path = get_config().read()?.db_path.clone();
     info!("Initializing database pool at path: {db_path:?}");
-    create_db_pool_with_url(db_path.to_str().unwrap()).await
+    create_db_pool_with_url(&db_path.to_string_lossy()).await
 }
 
 /// Creates a database connection pool for a given database URL.

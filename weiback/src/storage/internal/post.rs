@@ -587,7 +587,7 @@ where
 
 /// Builds the common part of a post query based on the given `PostQuery` criteria.
 /// This includes joins for FTS and all the `WHERE` clause filters.
-fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
+fn build_common_query(query: &PostQuery) -> Result<sea_query::SelectStatement> {
     use sea_query::{Alias, JoinType, UnionType};
 
     let mut posts_query = Query::select();
@@ -642,13 +642,15 @@ fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
 
     if let Some(start_date) = query.start_date {
         let dt = DateTime::from_timestamp(start_date, 0)
-            .unwrap()
+            .ok_or(Error::FormatError("无效的开始时间".to_string()))?
             .to_rfc3339();
         posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).gte(dt));
     }
 
     if let Some(end_date) = query.end_date {
-        let dt = DateTime::from_timestamp(end_date, 0).unwrap().to_rfc3339();
+        let dt = DateTime::from_timestamp(end_date, 0)
+            .ok_or(Error::FormatError("无效的结束时间".to_string()))?
+            .to_rfc3339();
         posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).lte(dt));
     }
 
@@ -663,7 +665,7 @@ fn build_common_query(query: &PostQuery) -> sea_query::SelectStatement {
         );
     }
 
-    posts_query
+    Ok(posts_query)
 }
 
 /// Queries posts from the database based on various criteria.
@@ -684,7 +686,7 @@ pub async fn query_posts<'c, A>(acquirer: A, query: PostQuery) -> Result<(Vec<Po
 where
     A: Acquire<'c, Database = Sqlite>,
 {
-    let mut posts_query = build_common_query(&query);
+    let mut posts_query = build_common_query(&query)?;
 
     let mut count_query = posts_query.clone();
     count_query.expr(if query.search_term.is_some() {
@@ -732,7 +734,7 @@ pub async fn query_all_post_ids<'c, A>(acquirer: A, query: PostQuery) -> Result<
 where
     A: Acquire<'c, Database = Sqlite>,
 {
-    let mut posts_query = build_common_query(&query);
+    let mut posts_query = build_common_query(&query)?;
 
     posts_query.column((PostIden::Table, PostIden::Id));
 
