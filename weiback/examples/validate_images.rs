@@ -41,17 +41,14 @@ async fn main() -> Result<(), anyhow::Error> {
                             continue;
                         }
                         match ImageValidator::is_invalid_weibo_image(&data) {
-                            Ok(ImageStatus::Censored) => {
+                            ImageStatus::Censored => {
                                 println!("Censored image found: {}", path.display());
                             }
-                            Ok(ImageStatus::Unparseable) => {
+                            ImageStatus::Unparseable => {
                                 println!("Unparseable image found: {}", path.display());
                             }
-                            Ok(ImageStatus::Valid) => {
+                            ImageStatus::Valid => {
                                 // It's a valid image, do nothing.
-                            }
-                            Err(e) => {
-                                eprintln!("Error processing image {}: {}", path.display(), e);
                             }
                         }
                     }
