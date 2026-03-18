@@ -167,11 +167,22 @@ pub struct PaginatedPosts {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum AttachedImage {
+    #[serde(rename = "livephoto")]
+    LivePhoto { id: String, video_url: String },
+    #[serde(rename = "video_cover")]
+    VideoCover { id: String, video_url: String },
+    #[serde(rename = "normal")]
+    Normal { id: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostInfo {
     pub post: Post,
     pub avatar_id: Option<String>,
     pub emoji_map: HashMap<String, String>,
-    pub standalone_ids: Vec<String>,
+    pub standalone_pics: Vec<AttachedImage>,
     pub inline_map: HashMap<String, String>,
 }
 
