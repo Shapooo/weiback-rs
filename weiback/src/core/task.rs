@@ -173,6 +173,12 @@ pub enum AttachedImage {
     LivePhoto { id: String, video_url: String },
     #[serde(rename = "video_cover")]
     VideoCover { id: String, video_url: String },
+    #[serde(rename = "article_cover")]
+    ArticleCover {
+        id: String,
+        title: String,
+        url: String,
+    },
     #[serde(rename = "normal")]
     Normal { id: String },
 }
