@@ -25,10 +25,11 @@ import SyncIcon from '@mui/icons-material/Sync';
 import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import LinkIcon from '@mui/icons-material/Link';
 import ImageIcon from '@mui/icons-material/Image';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachedCache } from '../cache';
 import Emoji from './Emoji';
-import { PostInfo, UrlStructItem } from '../types';
+import { PostInfo, UrlStructItem, AttachedImage as AttachedImageData } from '../types';
 import { getPictureBlob, deletePost, rebackupPost } from '../lib/api';
 
 // --- Type Definitions are now in ../types.ts ---
@@ -84,15 +85,16 @@ const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
 const THUMBNAIL_SIZE = 70; // Define a consistent size for thumbnails
 
 interface AttachedImageProps {
-    imageId: string;
+    image: AttachedImageData;
     size: number;
     onClick: (id: string) => void;
 }
 
-const AttachedImage: React.FC<AttachedImageProps> = ({ imageId, size, onClick }) => {
+const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) => {
     type Status = 'loading' | 'loaded' | 'not-found' | 'error';
     const [status, setStatus] = useState<Status>('loading');
     const [imageUrl, setImageUrl] = useState<string>('');
+    const imageId = image.data.id;
 
     useEffect(() => {
         let isCancelled = false;
@@ -165,7 +167,11 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ imageId, size, onClick })
         <Box
             onClick={(e) => {
                 e.stopPropagation();
-                onClick(imageId);
+                if (image.type === 'video_cover' && image.data.video_url) {
+                    openUrl(image.data.video_url).catch(err => console.error('Failed to open video URL:', err));
+                } else {
+                    onClick(imageId);
+                }
             }}
             sx={{
                 ...commonSx,
@@ -173,29 +179,63 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ imageId, size, onClick })
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 cursor: 'pointer',
+                position: 'relative',
             }}
-        />
+        >
+            {image.type === 'livephoto' && (
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 4,
+                        left: 4,
+                        bgcolor: 'rgba(0, 0, 0, 0.5)',
+                        color: 'white',
+                        fontSize: '9px',
+                        px: 0.5,
+                        borderRadius: 0.5,
+                        fontWeight: 'bold',
+                        pointerEvents: 'none',
+                    }}
+                >
+                    LIVE
+                </Box>
+            )}
+            {image.type === 'video_cover' && (
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100%',
+                        height: '100%',
+                        bgcolor: 'rgba(0, 0, 0, 0.2)',
+                    }}
+                >
+                    <PlayArrowIcon sx={{ color: 'white', opacity: 0.8, fontSize: size / 2 }} />
+                </Box>
+            )}
+        </Box>
     );
 };
 
 interface AttachedImagesProps {
-    attachedIds: string[];
+    attachedImages: AttachedImageData[];
     onImageClick: (id: string) => void;
     maxImages?: number; // New prop to control the number of displayed images
 }
 
-const AttachedImages: React.FC<AttachedImagesProps> = ({ attachedIds, onImageClick, maxImages }) => {
-    if (!attachedIds || attachedIds.length === 0) {
+const AttachedImages: React.FC<AttachedImagesProps> = ({ attachedImages, onImageClick, maxImages }) => {
+    if (!attachedImages || attachedImages.length === 0) {
         return null;
     }
 
-    const displayedImages = maxImages !== undefined ? attachedIds.slice(0, maxImages) : attachedIds;
-    const remainingCount = attachedIds.length - displayedImages.length;
+    const displayedImages = maxImages !== undefined ? attachedImages.slice(0, maxImages) : attachedImages;
+    const remainingCount = attachedImages.length - displayedImages.length;
 
     return (
         <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-            {displayedImages.map(id => (
-                <AttachedImage key={id} imageId={id} size={THUMBNAIL_SIZE} onClick={onImageClick} />
+            {displayedImages.map(img => (
+                <AttachedImage key={img.data.id} image={img} size={THUMBNAIL_SIZE} onClick={onImageClick} />
             ))}
             {remainingCount > 0 && (
                 <Box
@@ -478,7 +518,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({ postInfo, onImageClick, maxAt
                             />
                         </Box>
                     )}
-                    <AttachedImages attachedIds={postInfo.standalone_ids} onImageClick={onImageClick} maxImages={maxAttachedImages} />
+                    <AttachedImages attachedImages={postInfo.standalone_pics} onImageClick={onImageClick} maxImages={maxAttachedImages} />
                 </CardContent>
             </Card>
             <Dialog

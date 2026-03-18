@@ -17,11 +17,16 @@ export interface Post {
     url_struct: UrlStructItem[] | null;
 }
 
+export type AttachedImage =
+    | { type: 'livephoto'; data: { id: string; video_url: string } }
+    | { type: 'video_cover'; data: { id: string; video_url: string } }
+    | { type: 'normal'; data: { id: string } };
+
 export interface PostInfo {
     post: Post;
     avatar_id: string | null;
     emoji_map: Record<string, string>;
-    standalone_ids: string[];
+    standalone_pics: AttachedImage[];
     inline_map: Record<string, string>,
 }
 

@@ -392,21 +392,20 @@ pub fn extract_standalone_images(post: &Post) -> Vec<AttachedImage> {
     }
 
     // 3. Process page_info
-    if let Some(p) = source.page_info.as_ref() {
-        if let Some(pic_info) = p.pic_info.as_ref()
-            && let Ok(url) = Url::parse(pic_info.pic_big.url.as_str())
-            && let Ok(id) = pic_url_to_id(&url)
+    if let Some(p) = source.page_info.as_ref()
+        && let Some(pic_info) = p.pic_info.as_ref()
+        && let Ok(url) = Url::parse(pic_info.pic_big.url.as_str())
+        && let Ok(id) = pic_url_to_id(&url)
+    {
+        if let Some(media_info) = p.media_info.as_ref()
+            && let Some(stream_url) = media_info.h5_url.as_ref()
         {
-            if let Some(media_info) = p.media_info.as_ref()
-                && let Some(stream_url) = media_info.h5_url.as_ref()
-            {
-                images.push(AttachedImage::VideoCover {
-                    id,
-                    video_url: stream_url.to_string(),
-                });
-            } else {
-                images.push(AttachedImage::Normal { id });
-            }
+            images.push(AttachedImage::VideoCover {
+                id,
+                video_url: stream_url.to_string(),
+            });
+        } else {
+            images.push(AttachedImage::Normal { id });
         }
     }
 
