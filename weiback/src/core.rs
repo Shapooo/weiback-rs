@@ -254,6 +254,12 @@ impl Core {
         self.task_handler.get_picture_blob(ctx, id).await
     }
 
+    /// Retrieves the raw video data (blob) for a given video URL.
+    pub async fn get_video_blob(&self, url: &str) -> Result<Option<Bytes>> {
+        let ctx = self.create_short_task_context();
+        self.task_handler.get_video_blob(ctx, url).await
+    }
+
     /// Export local posts to another format (e.g., HTML).
     pub async fn export_posts(&self, request: TaskRequest) -> Result<()> {
         let ctx = self.create_short_task_context();

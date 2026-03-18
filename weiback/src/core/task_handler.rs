@@ -18,6 +18,7 @@ use futures::{
 };
 use tokio::{fs, time::sleep};
 use tracing::{debug, error, info};
+use url::Url;
 
 use super::post_processer::PostProcesser;
 use super::task::{
@@ -27,7 +28,7 @@ use super::task::{
 };
 use super::task_manager::{TaskError, TaskErrorType};
 use crate::emoji_map::EmojiMap;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::exporter::Exporter;
 use crate::html_generator::HTMLGenerator;
 use crate::image_validator::{ImageStatus, ImageValidator};
@@ -115,6 +116,20 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
         }
         Ok(None)
+    }
+
+    /// Retrieves the binary data of a video from storage.
+    ///
+    /// # Arguments
+    /// * `ctx` - The task context.
+    /// * `url` - The video URL.
+    #[tracing::instrument(skip(self, ctx), fields(video_url = %url), level = "info")]
+    pub async fn get_video_blob(&self, ctx: Arc<TaskContext>, url: &str) -> Result<Option<Bytes>> {
+        let url = Url::parse(url).map_err(|e| {
+            error!("Failed to parse video URL: {}", e);
+            Error::FormatError(format!("Invalid video URL: {}", url))
+        })?;
+        self.storage.get_video_blob(ctx, &url).await
     }
 
     /// Persists user information to the database and downloads their high-definition avatar.
