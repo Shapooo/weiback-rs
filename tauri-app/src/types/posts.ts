@@ -20,6 +20,7 @@ export interface Post {
 export type AttachedImage =
     | { type: 'livephoto'; data: { id: string; video_url: string } }
     | { type: 'video_cover'; data: { id: string; video_url: string } }
+    | { type: 'article_cover'; data: { id: string; title: string; url: string } }
     | { type: 'normal'; data: { id: string } };
 
 export interface PostInfo {

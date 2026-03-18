@@ -26,6 +26,7 @@ import BrokenImageIcon from '@mui/icons-material/BrokenImage';
 import LinkIcon from '@mui/icons-material/Link';
 import ImageIcon from '@mui/icons-material/Image';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import ArticleIcon from '@mui/icons-material/Article';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { avatarCache, attachedCache } from '../cache';
 import Emoji from './Emoji';
@@ -169,6 +170,8 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) =
                 e.stopPropagation();
                 if (image.type === 'video_cover' && image.data.video_url) {
                     openUrl(image.data.video_url).catch(err => console.error('Failed to open video URL:', err));
+                } else if (image.type === 'article_cover' && image.data.url) {
+                    openUrl(image.data.url).catch(err => console.error('Failed to open article URL:', err));
                 } else {
                     onClick(image);
                 }
@@ -218,15 +221,158 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) =
     );
 };
 
+interface ArticleCoverProps {
+    image: Extract<AttachedImageData, { type: 'article_cover' }>;
+}
+
+const ArticleCover: React.FC<ArticleCoverProps> = ({ image }) => {
+    type Status = 'loading' | 'loaded' | 'not-found' | 'error';
+    const [status, setStatus] = useState<Status>('loading');
+    const [imageUrl, setImageUrl] = useState<string>('');
+    const imageId = image.data.id;
+    const title = image.data.title;
+    const url = image.data.url;
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        const fetchAndCacheImage = async () => {
+            setStatus('loading');
+            const cachedUrl = attachedCache.get(imageId);
+            if (cachedUrl) {
+                setImageUrl(cachedUrl);
+                setStatus('loaded');
+                return;
+            }
+
+            try {
+                const blob = await getPictureBlob(imageId);
+                if (isCancelled) return;
+
+                const imageBlob = new Blob([blob]);
+                const objectUrl = URL.createObjectURL(imageBlob);
+                attachedCache.set(imageId, objectUrl);
+                setImageUrl(objectUrl);
+                setStatus('loaded');
+            } catch (error) {
+                if (isCancelled) return;
+
+                if (error && typeof error === 'object' && 'kind' in error && (error as any).kind === 'NotFound') {
+                    setStatus('not-found');
+                } else {
+                    console.error(`Failed to fetch article cover ${imageId}: ${error}`);
+                    setStatus('error');
+                }
+            }
+        };
+
+        fetchAndCacheImage();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [imageId]);
+
+    if (status === 'loading') {
+        return (
+            <Box sx={{ width: '100%', height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.100', borderRadius: 1 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (status === 'not-found' || status === 'error') {
+        return (
+            <Box
+                sx={{
+                    width: '100%',
+                    height: 80,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'grey.200',
+                    borderRadius: 1,
+                    gap: 1,
+                }}
+            >
+                <BrokenImageIcon color="action" />
+                <Typography variant="body2" color="text.secondary">
+                    文章封面已失效
+                </Typography>
+            </Box>
+        );
+    }
+
+    return (
+        <Box
+            onClick={(e) => {
+                e.stopPropagation();
+                openUrl(url).catch(err => console.error('Failed to open article URL:', err));
+            }}
+            sx={{
+                width: '100%',
+                cursor: 'pointer',
+                position: 'relative',
+                borderRadius: 1,
+                overflow: 'hidden',
+                '&:hover': {
+                    opacity: 0.9,
+                },
+            }}
+        >
+            <Box
+                sx={{
+                    width: '100%',
+                    paddingBottom: '56.25%',
+                    position: 'relative',
+                    backgroundImage: `url(${imageUrl})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                }}
+            >
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)',
+                        color: 'white',
+                        p: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                    }}
+                >
+                    <ArticleIcon sx={{ fontSize: 20, opacity: 0.9 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 500, flex: 1 }}>
+                        {title}
+                    </Typography>
+                    <OpenInNewIcon sx={{ fontSize: 18, opacity: 0.7 }} />
+                </Box>
+            </Box>
+        </Box>
+    );
+};
+
 interface AttachedImagesProps {
     attachedImages: AttachedImageData[];
     onImageClick: (image: AttachedImageData) => void;
-    maxImages?: number; // New prop to control the number of displayed images
+    maxImages?: number;
 }
 
 const AttachedImages: React.FC<AttachedImagesProps> = ({ attachedImages, onImageClick, maxImages }) => {
     if (!attachedImages || attachedImages.length === 0) {
         return null;
+    }
+
+    const articleCover = attachedImages.find(img => img.type === 'article_cover');
+    if (articleCover) {
+        return (
+            <Box sx={{ mt: 1 }}>
+                <ArticleCover image={articleCover} />
+            </Box>
+        );
     }
 
     const displayedImages = maxImages !== undefined ? attachedImages.slice(0, maxImages) : attachedImages;
