@@ -25,7 +25,7 @@ use crate::models::{PicInfoType, Picture, PictureDefinition, PictureMeta, Post, 
 use crate::storage::Storage;
 use crate::utils::{
     extract_all_pic_metas, extract_emojis_from_text, extract_inline_pic_ids,
-    extract_standalone_pic_ids, pic_url_to_id,
+    extract_standalone_images, extract_standalone_pic_ids, pic_url_to_id,
 };
 
 /// A processor that handles media downloading and post data enrichment.
@@ -99,7 +99,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             None
         };
 
-        let standalone_ids = extract_standalone_pic_ids(&post);
+        let standalone_pics = extract_standalone_images(&post);
 
         let mut inline_map = HashMap::new();
         if let Some(url_struct) = &post.url_struct {
@@ -134,7 +134,7 @@ impl<A: ApiClient, S: Storage, D: MediaDownloader> PostProcesser<A, S, D> {
             post,
             avatar_id,
             emoji_map,
-            standalone_ids,
+            standalone_pics,
             inline_map,
         })
     }

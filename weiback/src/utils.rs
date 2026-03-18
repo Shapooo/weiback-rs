@@ -13,9 +13,10 @@ use regex::Regex;
 use tracing::error;
 use url::Url;
 
+use crate::core::task::AttachedImage;
 use crate::error::{Error, Result};
 use crate::models::{
-    HugeInfo, MixMediaInfoItem, PicInfoItem, PictureDefinition, PictureMeta, Post,
+    HugeInfo, MixMediaInfoItem, PicInfoItem, PicInfoType, PictureDefinition, PictureMeta, Post,
 };
 
 #[allow(unused_macros)]
@@ -333,41 +334,95 @@ pub fn extract_standalone_pic_metas(
     extract_current_standalone_pic_metas(source, definition)
 }
 
-/// Extracts standalone picture IDs from a post.
-pub fn extract_standalone_pic_ids(post: &Post) -> Vec<String> {
+/// Extracts standalone images from a post, including type information (LivePhoto, VideoCover, etc.).
+pub fn extract_standalone_images(post: &Post) -> Vec<AttachedImage> {
     let source = post.retweeted_status.as_deref().unwrap_or(post);
-    let mut ids = HashSet::new();
+    let mut images: Vec<AttachedImage> = Vec::new();
 
+    let pic_infos = source.pic_infos.as_ref();
+
+    // 1. Process pic_ids and pic_infos
     if let Some(pic_ids) = source.pic_ids.as_ref() {
-        ids.extend(pic_ids.iter().cloned());
+        for id in pic_ids {
+            let mut img = AttachedImage::Normal { id: id.clone() };
+            if let Some(info) = pic_infos.and_then(|infos| infos.get(id))
+                && let PicInfoType::Livephoto = info.r#type
+                && let Some(video_url) = info.video.as_ref().or(info.video_hd.as_ref())
+            {
+                img = AttachedImage::LivePhoto {
+                    id: id.clone(),
+                    video_url: video_url.to_string(),
+                };
+            }
+            images.push(img);
+        }
     }
 
+    // 2. Process mix_media_info
     if let Some(mmi) = source.mix_media_info.as_ref() {
         for item in mmi.items.iter() {
             match item {
-                MixMediaInfoItem::Pic { data, .. } => {
-                    ids.insert(data.pic_id.clone());
+                MixMediaInfoItem::Pic { id, data } => {
+                    let id = id.clone();
+                    let img = if let PicInfoType::Livephoto = data.r#type
+                        && let Some(video_url) = data.video.as_ref().or(data.video_hd.as_ref())
+                    {
+                        AttachedImage::LivePhoto {
+                            id,
+                            video_url: video_url.to_string(),
+                        }
+                    } else {
+                        AttachedImage::Normal { id }
+                    };
+                    images.push(img);
                 }
                 MixMediaInfoItem::Video { data, .. } => {
                     if let Ok(url) = Url::parse(data.page_pic.as_str())
                         && let Ok(id) = pic_url_to_id(&url)
+                        && let Some(video_url) = data.media_info.h5_url.as_ref()
                     {
-                        ids.insert(id);
+                        images.push(AttachedImage::VideoCover {
+                            id,
+                            video_url: video_url.to_string(),
+                        });
                     }
                 }
             }
         }
     }
 
-    if let Some(p) = source.page_info.as_ref()
-        && let Some(pic_info) = p.pic_info.as_ref()
-        && let Ok(url) = Url::parse(pic_info.pic_big.url.as_str())
-        && let Ok(id) = pic_url_to_id(&url)
-    {
-        ids.insert(id);
+    // 3. Process page_info
+    if let Some(p) = source.page_info.as_ref() {
+        if let Some(pic_info) = p.pic_info.as_ref()
+            && let Ok(url) = Url::parse(pic_info.pic_big.url.as_str())
+            && let Ok(id) = pic_url_to_id(&url)
+        {
+            if let Some(media_info) = p.media_info.as_ref()
+                && let Some(stream_url) = media_info.h5_url.as_ref()
+            {
+                images.push(AttachedImage::VideoCover {
+                    id,
+                    video_url: stream_url.to_string(),
+                });
+            } else {
+                images.push(AttachedImage::Normal { id });
+            }
+        }
     }
 
-    ids.into_iter().collect()
+    images
+}
+
+/// Extracts standalone picture IDs from a post.
+pub fn extract_standalone_pic_ids(post: &Post) -> Vec<String> {
+    extract_standalone_images(post)
+        .into_iter()
+        .map(|img| match img {
+            AttachedImage::LivePhoto { id, .. } => id,
+            AttachedImage::VideoCover { id, .. } => id,
+            AttachedImage::Normal { id } => id,
+        })
+        .collect()
 }
 
 /// Extracts inline picture IDs from a post's url_struct.
