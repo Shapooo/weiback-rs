@@ -1,272 +1,354 @@
-import React, { useEffect, useState } from 'react';
-import { useThemeContext } from '../ThemeContext';
+import React, { useEffect, useState } from 'react'
+import { useThemeContext } from '../ThemeContext'
 import {
-    Card, CardContent, Typography, FormControlLabel, Switch, Box, TextField,
-    Select, MenuItem, InputLabel, FormControl, InputAdornment, Accordion,
-    AccordionSummary, AccordionDetails
-} from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import Grid from '@mui/material/Grid';
-import { useTheme } from '@mui/material/styles';
-import { open } from '@tauri-apps/plugin-dialog';
-import { Button } from "@mui/material";
-import { SdkConfig, PictureDefinition, Config } from '../types/config';
-import { getConfig, setConfig } from '../lib/api';
+  Card,
+  CardContent,
+  Typography,
+  FormControlLabel,
+  Switch,
+  Box,
+  TextField,
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl,
+  InputAdornment,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+} from '@mui/material'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import Grid from '@mui/material/Grid'
+import { useTheme } from '@mui/material/styles'
+import { open } from '@tauri-apps/plugin-dialog'
+import { Button } from '@mui/material'
+import { SdkConfig, PictureDefinition, Config } from '../types/config'
+import { getConfig, setConfig } from '../lib/api'
 
 const pictureDefinitionMap = [
-    { value: PictureDefinition.RealOriginal, label: '原始尺寸' },
-    { value: PictureDefinition.Largest, label: '高' },
-    { value: PictureDefinition.Mw2000, label: '中高' },
-    { value: PictureDefinition.Original, label: '中' },
-    { value: PictureDefinition.Large, label: '中低' },
-    { value: PictureDefinition.Bmiddle, label: '低' },
-    { value: PictureDefinition.Thumbnail, label: '缩略图' },
-];
+  { value: PictureDefinition.RealOriginal, label: '原始尺寸' },
+  { value: PictureDefinition.Largest, label: '高' },
+  { value: PictureDefinition.Mw2000, label: '中高' },
+  { value: PictureDefinition.Original, label: '中' },
+  { value: PictureDefinition.Large, label: '中低' },
+  { value: PictureDefinition.Bmiddle, label: '低' },
+  { value: PictureDefinition.Thumbnail, label: '缩略图' },
+]
 
 const SettingsPage: React.FC = () => {
-    const { toggleColorMode } = useThemeContext();
-    const theme = useTheme();
-    const [config, setConfigState] = useState<Config | null>(null);
-    const [initialConfig, setInitialConfig] = useState<Config | null>(null);
+  const { toggleColorMode } = useThemeContext()
+  const theme = useTheme()
+  const [config, setConfigState] = useState<Config | null>(null)
+  const [initialConfig, setInitialConfig] = useState<Config | null>(null)
 
-    useEffect(() => {
-        getConfig()
-            .then(loadedConfig => {
-                setConfigState(loadedConfig);
-                setInitialConfig(loadedConfig);
-            })
-            .catch(console.error);
-    }, []);
+  useEffect(() => {
+    getConfig()
+      .then(loadedConfig => {
+        setConfigState(loadedConfig)
+        setInitialConfig(loadedConfig)
+      })
+      .catch(console.error)
+  }, [])
 
-    const handleSave = () => {
-        if (config) {
-            setConfig(config)
-                .then(() => {
-                    console.log('Settings saved');
-                    setInitialConfig(config);
-                })
-                .catch(console.error);
-        }
-    };
-
-    const handleReset = () => {
-        setConfigState(initialConfig);
+  const handleSave = () => {
+    if (config) {
+      setConfig(config)
+        .then(() => {
+          console.log('Settings saved')
+          setInitialConfig(config)
+        })
+        .catch(console.error)
     }
+  }
 
-    const handleSelectPath = async (field: 'picture_path' | 'video_path') => {
-        const selected = await open({
-            directory: true,
-            multiple: false,
-            title: `选择${field === 'picture_path' ? '图片' : '视频'}保存路径`,
-        });
-        if (typeof selected === 'string' && config) {
-            handleChange(field, selected);
-        }
-    };
+  const handleReset = () => {
+    setConfigState(initialConfig)
+  }
 
-    const handleChange = (field: keyof Config, value: any) => {
-        if (config) {
-            setConfigState({ ...config, [field]: value });
-        }
-    };
-
-    const handleSdkChange = (field: keyof SdkConfig, value: any) => {
-        if (config) {
-            setConfigState({ ...config, sdk_config: { ...config.sdk_config, [field]: value } });
-        }
-    };
-
-    if (!config) {
-        return <Typography>Loading settings...</Typography>;
+  const handleSelectPath = async (field: 'picture_path' | 'video_path') => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: `选择${field === 'picture_path' ? '图片' : '视频'}保存路径`,
+    })
+    if (typeof selected === 'string' && config) {
+      handleChange(field, selected)
     }
+  }
 
-    const isChanged = JSON.stringify(config) !== JSON.stringify(initialConfig);
+  const handleChange = (field: keyof Config, value: any) => {
+    if (config) {
+      setConfigState({ ...config, [field]: value })
+    }
+  }
 
-    return (
-        <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                设置
-            </Typography>
-            <Grid container justifyContent="center">
-                <Grid size={{ xs: 12, md: 10, lg: 8 }}>
-                    <Card sx={{ mt: 3 }}>
-                        <CardContent>
-                            <Box component="form" noValidate autoComplete="off" sx={{ '& .MuiTextField-root': { my: 1 }, '& .MuiFormControl-root': { my: 1 } }}>
-                                <Grid container spacing={2}>
-                                    <Grid size={{ xs: 12, sm: 6 }} >
-                                        <FormControlLabel
-                                            control={<Switch checked={theme.palette.mode === 'dark'} onChange={toggleColorMode} />}
-                                            label="暗色模式"
-                                        />
-                                    </Grid>
-                                    <Grid size={{ xs: 12, sm: 6 }} >
-                                        <FormControlLabel
-                                            control={<Switch checked={config.download_pictures} onChange={(e) => handleChange('download_pictures', e.target.checked)} />}
-                                            label="下载图片"
-                                        />
-                                    </Grid>
-                                    <Grid size={{ xs: 12, sm: 6 }}>
-                                        <FormControl fullWidth>
-                                            <InputLabel id="pic-def-label">图片清晰度</InputLabel>
-                                            <Select
-                                                labelId="pic-def-label"
-                                                value={config.picture_definition}
-                                                label="图片清晰度"
-                                                onChange={(e) => handleChange('picture_definition', e.target.value)}
-                                                renderValue={(selectedValue) => {
-                                                    const item = pictureDefinitionMap.find(i => i.value === selectedValue);
-                                                    return (
-                                                        <Box sx={{ display: 'flex', alignItems: 'baseline' }}>
-                                                            {item?.label ?? selectedValue}
-                                                            <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                                                                {item?.value}
-                                                            </Typography>
-                                                        </Box>
-                                                    );
-                                                }}
-                                            >
-                                                {pictureDefinitionMap.map((item) => (
-                                                    <MenuItem key={item.value} value={item.value}>
-                                                        {item.label}
-                                                        <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                                                            {item.value}
-                                                        </Typography>
-                                                    </MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-                                    </Grid>
-                                    <Grid size={{ xs: 12, sm: 6 }}>
-                                        <TextField fullWidth
-                                            label="每个 HTML 文件包含的微博数"
-                                            type="number"
-                                            value={config.posts_per_html}
-                                            onChange={(e) => handleChange('posts_per_html', parseInt(e.target.value, 10))}
-                                        />
-                                    </Grid>
-                                    <Grid size={{ xs: 12 }}>
-                                        <Accordion>
-                                            <AccordionSummary
-                                                expandIcon={<ExpandMoreIcon />}
-                                                aria-controls="advanced-settings-content"
-                                                id="advanced-settings-header"
-                                            >
-                                                <Box>
-                                                    <Typography variant="h6">高级设置</Typography>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        修改前确定你知道你在做什么，不当的设置可能会导致程序异常。
-                                                    </Typography>
-                                                </Box>
-                                            </AccordionSummary>
-                                            <AccordionDetails>
-                                                <Grid container spacing={2}>
-                                                    {/* Task Intervals */}
-                                                    <Grid size={{ xs: 12 }}>
-                                                        <Typography variant="h6" sx={{ mt: 2 }}>任务间隔 (秒)</Typography>
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12, sm: 6 }}>
-                                                        <TextField fullWidth
-                                                            label="备份任务间隔"
-                                                            type="number"
-                                                            value={config.backup_task_interval}
-                                                            onChange={(e) => handleChange('backup_task_interval', parseInt(e.target.value, 10))}
-                                                        />
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12, sm: 6 }}>
-                                                        <TextField fullWidth
-                                                            label="其他任务间隔"
-                                                            type="number"
-                                                            value={config.other_task_interval}
-                                                            onChange={(e) => handleChange('other_task_interval', parseInt(e.target.value, 10))}
-                                                        />
-                                                    </Grid>
+  const handleSdkChange = (field: keyof SdkConfig, value: any) => {
+    if (config) {
+      setConfigState({ ...config, sdk_config: { ...config.sdk_config, [field]: value } })
+    }
+  }
 
-                                                    <Grid size={{ xs: 12 }}>
-                                                        <TextField fullWidth
-                                                            label="单次抓取的微博数量"
-                                                            helperText="收藏和用户微博接口单次返回的数量"
-                                                            type="number"
-                                                            value={config.posts_count}
-                                                            onChange={(e) => handleChange('posts_count', parseInt(e.target.value, 10))}
-                                                        />
-                                                    </Grid>
+  if (!config) {
+    return <Typography>Loading settings...</Typography>
+  }
 
-                                                    <Grid size={{ xs: 12 }}>
-                                                        <Typography variant="h6" sx={{ mt: 2 }}>SDK 配置 (重启后生效)</Typography>
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12, sm: 6 }}>
-                                                        <TextField fullWidth
-                                                            label="接口重试次数"
-                                                            type="number"
-                                                            value={config.sdk_config.retry_times}
-                                                            onChange={(e) => handleSdkChange('retry_times', parseInt(e.target.value, 10))}
-                                                        />
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12, sm: 6 }}>
-                                                        <TextField fullWidth
-                                                            label="接口超时时间 (秒)"
-                                                            type="number"
-                                                            value={config.sdk_config.timeout}
-                                                            onChange={(e) => handleSdkChange('timeout', parseInt(e.target.value, 10))}
-                                                        />
-                                                    </Grid>
+  const isChanged = JSON.stringify(config) !== JSON.stringify(initialConfig)
 
-                                                    {/* Paths */}
-                                                    <Grid size={{ xs: 12 }}>
-                                                        <Typography variant="h6" sx={{ mt: 2 }}>路径</Typography>
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12 }}>
-                                                        <TextField fullWidth label="图片保存路径" value={config.picture_path}
-                                                            InputProps={{
-                                                                readOnly: true,
-                                                                endAdornment: (
-                                                                    <InputAdornment position="end">
-                                                                        <Button onClick={() => handleSelectPath('picture_path')}>
-                                                                            选择
-                                                                        </Button>
-                                                                    </InputAdornment>
-                                                                ),
-                                                            }}
-                                                        />
-                                                    </Grid>
-                                                    <Grid size={{ xs: 12 }}>
-                                                        <TextField fullWidth label="视频保存路径" value={config.video_path}
-                                                            InputProps={{
-                                                                readOnly: true,
-                                                                endAdornment: (
-                                                                    <InputAdornment position="end">
-                                                                        <Button onClick={() => handleSelectPath('video_path')}>
-                                                                            选择
-                                                                        </Button>
-                                                                    </InputAdornment>
-                                                                ),
-                                                            }} />
-                                                    </Grid>
-                                                    {config.dev_mode_out_dir &&
-                                                        <Grid size={{ xs: 12 }}>
-                                                            <TextField fullWidth label="开发者模式输出路径" value={config.dev_mode_out_dir} slotProps={{ htmlInput: { readOnly: true } }} />
-                                                        </Grid>
-                                                    }
-                                                </Grid>
-                                            </AccordionDetails>
-                                        </Accordion>
-                                    </Grid>
-                                </Grid>
-                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                                    <Button variant="outlined" onClick={handleReset} disabled={!isChanged} sx={{ mr: 1 }}>
-                                        重置
-                                    </Button>
-                                    <Button variant="contained" onClick={handleSave} disabled={!isChanged}>
-                                        保存
-                                    </Button>
-                                </Box>
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        设置
+      </Typography>
+      <Grid container justifyContent="center">
+        <Grid size={{ xs: 12, md: 10, lg: 8 }}>
+          <Card sx={{ mt: 3 }}>
+            <CardContent>
+              <Box
+                component="form"
+                noValidate
+                autoComplete="off"
+                sx={{
+                  '& .MuiTextField-root': { my: 1 },
+                  '& .MuiFormControl-root': { my: 1 },
+                }}
+              >
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={theme.palette.mode === 'dark'}
+                          onChange={toggleColorMode}
+                        />
+                      }
+                      label="暗色模式"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={config.download_pictures}
+                          onChange={e => handleChange('download_pictures', e.target.checked)}
+                        />
+                      }
+                      label="下载图片"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth>
+                      <InputLabel id="pic-def-label">图片清晰度</InputLabel>
+                      <Select
+                        labelId="pic-def-label"
+                        value={config.picture_definition}
+                        label="图片清晰度"
+                        onChange={e => handleChange('picture_definition', e.target.value)}
+                        renderValue={selectedValue => {
+                          const item = pictureDefinitionMap.find(i => i.value === selectedValue)
+                          return (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'baseline',
+                              }}
+                            >
+                              {item?.label ?? selectedValue}
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  ml: 1,
+                                  color: 'text.secondary',
+                                }}
+                              >
+                                {item?.value}
+                              </Typography>
                             </Box>
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
-        </Box>
-    );
-};
+                          )
+                        }}
+                      >
+                        {pictureDefinitionMap.map(item => (
+                          <MenuItem key={item.value} value={item.value}>
+                            {item.label}
+                            <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                              {item.value}
+                            </Typography>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="每个 HTML 文件包含的微博数"
+                      type="number"
+                      value={config.posts_per_html}
+                      onChange={e => handleChange('posts_per_html', parseInt(e.target.value, 10))}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Accordion>
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="advanced-settings-content"
+                        id="advanced-settings-header"
+                      >
+                        <Box>
+                          <Typography variant="h6">高级设置</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            修改前确定你知道你在做什么，不当的设置可能会导致程序异常。
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={2}>
+                          {/* Task Intervals */}
+                          <Grid size={{ xs: 12 }}>
+                            <Typography variant="h6" sx={{ mt: 2 }}>
+                              任务间隔 (秒)
+                            </Typography>
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                              fullWidth
+                              label="备份任务间隔"
+                              type="number"
+                              value={config.backup_task_interval}
+                              onChange={e =>
+                                handleChange('backup_task_interval', parseInt(e.target.value, 10))
+                              }
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                              fullWidth
+                              label="其他任务间隔"
+                              type="number"
+                              value={config.other_task_interval}
+                              onChange={e =>
+                                handleChange('other_task_interval', parseInt(e.target.value, 10))
+                              }
+                            />
+                          </Grid>
 
-export default SettingsPage;
+                          <Grid size={{ xs: 12 }}>
+                            <TextField
+                              fullWidth
+                              label="单次抓取的微博数量"
+                              helperText="收藏和用户微博接口单次返回的数量"
+                              type="number"
+                              value={config.posts_count}
+                              onChange={e =>
+                                handleChange('posts_count', parseInt(e.target.value, 10))
+                              }
+                            />
+                          </Grid>
+
+                          <Grid size={{ xs: 12 }}>
+                            <Typography variant="h6" sx={{ mt: 2 }}>
+                              SDK 配置 (重启后生效)
+                            </Typography>
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                              fullWidth
+                              label="接口重试次数"
+                              type="number"
+                              value={config.sdk_config.retry_times}
+                              onChange={e =>
+                                handleSdkChange('retry_times', parseInt(e.target.value, 10))
+                              }
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                              fullWidth
+                              label="接口超时时间 (秒)"
+                              type="number"
+                              value={config.sdk_config.timeout}
+                              onChange={e =>
+                                handleSdkChange('timeout', parseInt(e.target.value, 10))
+                              }
+                            />
+                          </Grid>
+
+                          {/* Paths */}
+                          <Grid size={{ xs: 12 }}>
+                            <Typography variant="h6" sx={{ mt: 2 }}>
+                              路径
+                            </Typography>
+                          </Grid>
+                          <Grid size={{ xs: 12 }}>
+                            <TextField
+                              fullWidth
+                              label="图片保存路径"
+                              value={config.picture_path}
+                              InputProps={{
+                                readOnly: true,
+                                endAdornment: (
+                                  <InputAdornment position="end">
+                                    <Button onClick={() => handleSelectPath('picture_path')}>
+                                      选择
+                                    </Button>
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12 }}>
+                            <TextField
+                              fullWidth
+                              label="视频保存路径"
+                              value={config.video_path}
+                              InputProps={{
+                                readOnly: true,
+                                endAdornment: (
+                                  <InputAdornment position="end">
+                                    <Button onClick={() => handleSelectPath('video_path')}>
+                                      选择
+                                    </Button>
+                                  </InputAdornment>
+                                ),
+                              }}
+                            />
+                          </Grid>
+                          {config.dev_mode_out_dir && (
+                            <Grid size={{ xs: 12 }}>
+                              <TextField
+                                fullWidth
+                                label="开发者模式输出路径"
+                                value={config.dev_mode_out_dir}
+                                slotProps={{
+                                  htmlInput: { readOnly: true },
+                                }}
+                              />
+                            </Grid>
+                          )}
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
+                  </Grid>
+                </Grid>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+                  <Button
+                    variant="outlined"
+                    onClick={handleReset}
+                    disabled={!isChanged}
+                    sx={{ mr: 1 }}
+                  >
+                    重置
+                  </Button>
+                  <Button variant="contained" onClick={handleSave} disabled={!isChanged}>
+                    保存
+                  </Button>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  )
+}
+
+export default SettingsPage

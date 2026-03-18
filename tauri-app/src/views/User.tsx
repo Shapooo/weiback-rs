@@ -1,11 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSnackbar } from 'notistack';
+import React, { useState, useEffect, useRef } from 'react'
+import { useSnackbar } from 'notistack'
 import {
-  Card, CardContent, Typography, TextField, Button, Box, Stack, Grid, Table, TableBody, TableRow, TableCell, Paper, TableContainer, CircularProgress, IconButton
-} from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useAuthStore } from '../stores/authStore';
-import { getSmsCode, login as apiLogin } from '../lib/api';
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  Stack,
+  Grid,
+  Table,
+  TableBody,
+  TableRow,
+  TableCell,
+  Paper,
+  TableContainer,
+  CircularProgress,
+  IconButton,
+} from '@mui/material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import { useAuthStore } from '../stores/authStore'
+import { getSmsCode, login as apiLogin } from '../lib/api'
 
 enum UserPageState {
   Phone,
@@ -14,86 +29,86 @@ enum UserPageState {
 }
 
 const UserPage: React.FC = () => {
-  const { enqueueSnackbar } = useSnackbar();
-  const { userInfo, isLoggedIn, isAuthLoading, login, logout, checkLoginState } = useAuthStore();
-  const [phone, setPhone] = useState('');
-  const [verificationCode, setVerificationCode] = useState(Array(6).fill(''));
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const { enqueueSnackbar } = useSnackbar()
+  const { userInfo, isLoggedIn, isAuthLoading, login, logout, checkLoginState } = useAuthStore()
+  const [phone, setPhone] = useState('')
+  const [verificationCode, setVerificationCode] = useState(Array(6).fill(''))
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
     // 切换到此页面时主动刷新登录状态
-    checkLoginState();
-  }, [checkLoginState]);
+    checkLoginState()
+  }, [checkLoginState])
 
   const [pageState, setPageState] = useState<UserPageState>(
     isLoggedIn ? UserPageState.LoggedIn : UserPageState.Phone
-  );
+  )
 
   useEffect(() => {
     // Synchronize local page state with global auth state
     if (isLoggedIn) {
-      setPageState(UserPageState.LoggedIn);
+      setPageState(UserPageState.LoggedIn)
     } else if (pageState === UserPageState.LoggedIn) {
       // Only reset to Phone if we were previously in LoggedIn state
-      setPageState(UserPageState.Phone);
-      setPhone('');
-      setVerificationCode(Array(6).fill(''));
+      setPageState(UserPageState.Phone)
+      setPhone('')
+      setVerificationCode(Array(6).fill(''))
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn])
 
   const handleGetCode = async () => {
     if (!/^1\d{10}$/.test(phone)) {
-      enqueueSnackbar('请输入有效的手机号码', { variant: 'error' });
-      return;
+      enqueueSnackbar('请输入有效的手机号码', { variant: 'error' })
+      return
     }
     try {
-      await getSmsCode(phone);
-      setPageState(UserPageState.Code);
-      enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' });
-      setTimeout(() => inputRefs.current[0]?.focus(), 0);
+      await getSmsCode(phone)
+      setPageState(UserPageState.Code)
+      enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' })
+      setTimeout(() => inputRefs.current[0]?.focus(), 0)
     } catch (e) {
-      enqueueSnackbar(`验证码请求失败: ${e}`, { variant: 'error' });
+      enqueueSnackbar(`验证码请求失败: ${e}`, { variant: 'error' })
     }
-  };
+  }
 
   const handleLogin = async () => {
-    const code = verificationCode.join('');
+    const code = verificationCode.join('')
     if (code.length !== 6 || !/^\d{6}$/.test(code)) {
-      enqueueSnackbar('请输入完整的6位验证码', { variant: 'error' });
-      return;
+      enqueueSnackbar('请输入完整的6位验证码', { variant: 'error' })
+      return
     }
     try {
-      const res = await apiLogin(code);
+      const res = await apiLogin(code)
       if (res) {
-        login(res);
-        enqueueSnackbar('登录成功！', { variant: 'success' });
+        login(res)
+        enqueueSnackbar('登录成功！', { variant: 'success' })
       } else {
-        enqueueSnackbar('登录失败，未获取到用户信息', { variant: 'error' });
+        enqueueSnackbar('登录失败，未获取到用户信息', { variant: 'error' })
       }
     } catch (e) {
-      enqueueSnackbar(`登录失败: ${e}`, { variant: 'error' });
+      enqueueSnackbar(`登录失败: ${e}`, { variant: 'error' })
     }
-  };
+  }
 
   const handleLogout = () => {
-    logout();
-    enqueueSnackbar('已退出登录', { variant: 'info' });
-  };
+    logout()
+    enqueueSnackbar('已退出登录', { variant: 'info' })
+  }
 
   const handleCodeInputChange = (index: number, value: string) => {
-    const newCode = [...verificationCode];
-    newCode[index] = value;
-    setVerificationCode(newCode);
+    const newCode = [...verificationCode]
+    newCode[index] = value
+    setVerificationCode(newCode)
     if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+      inputRefs.current[index + 1]?.focus()
     }
-  };
+  }
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+      inputRefs.current[index - 1]?.focus()
     }
-  };
+  }
 
   const renderContent = () => {
     if (isAuthLoading) {
@@ -101,7 +116,7 @@ const UserPage: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
-      );
+      )
     }
 
     switch (pageState) {
@@ -111,16 +126,27 @@ const UserPage: React.FC = () => {
             <TableContainer component={Paper}>
               <Table>
                 <TableBody>
-                  <TableRow><TableCell>UID</TableCell><TableCell>{userInfo.id}</TableCell></TableRow>
-                  <TableRow><TableCell>用户名</TableCell><TableCell>{userInfo.screen_name}</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell>UID</TableCell>
+                    <TableCell>{userInfo.id}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>用户名</TableCell>
+                    <TableCell>{userInfo.screen_name}</TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </TableContainer>
-            <Button variant="outlined" color="error" onClick={handleLogout} sx={{ width: '100%', mt: 2 }}>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleLogout}
+              sx={{ width: '100%', mt: 2 }}
+            >
               退出登录
             </Button>
           </Box>
-        ) : null;
+        ) : null
 
       case UserPageState.Phone:
         return (
@@ -129,13 +155,13 @@ const UserPage: React.FC = () => {
               fullWidth
               label="手机号"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={e => setPhone(e.target.value)}
             />
             <Button variant="contained" onClick={handleGetCode} fullWidth>
               获取验证码
             </Button>
           </Stack>
-        );
+        )
 
       case UserPageState.Code:
         return (
@@ -157,11 +183,16 @@ const UserPage: React.FC = () => {
               {verificationCode.map((digit, index) => (
                 <Grid size={{ xs: 2 }} key={index}>
                   <TextField
-                    inputRef={(el) => (inputRefs.current[index] = el)}
+                    inputRef={el => (inputRefs.current[index] = el)}
                     value={digit}
-                    onChange={(e) => handleCodeInputChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    slotProps={{ htmlInput: { maxLength: 1, style: { textAlign: 'center' } } }}
+                    onChange={e => handleCodeInputChange(index, e.target.value)}
+                    onKeyDown={e => handleKeyDown(index, e)}
+                    slotProps={{
+                      htmlInput: {
+                        maxLength: 1,
+                        style: { textAlign: 'center' },
+                      },
+                    }}
                   />
                 </Grid>
               ))}
@@ -170,9 +201,9 @@ const UserPage: React.FC = () => {
               登 录
             </Button>
           </Stack>
-        );
+        )
     }
-  };
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -194,7 +225,7 @@ const UserPage: React.FC = () => {
         </Grid>
       </Grid>
     </Box>
-  );
-};
+  )
+}
 
-export default UserPage;
+export default UserPage
