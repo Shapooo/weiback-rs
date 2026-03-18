@@ -4,13 +4,13 @@ import {
     Box,
 } from '@mui/material';
 import PostDisplay from './PostDisplay';
-import { PostInfo } from '../types';
+import { PostInfo, AttachedImage } from '../types';
 
 interface PostPreviewModalProps {
     postInfo: PostInfo | null;
     open: boolean;
     onClose: () => void;
-    onImageClick: (id: string) => void;
+    onImageClick: (image: AttachedImage) => void;
 }
 
 const PostPreviewModal: React.FC<PostPreviewModalProps> = ({ postInfo, open, onClose, onImageClick }) => {
