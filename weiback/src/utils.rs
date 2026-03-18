@@ -394,8 +394,8 @@ pub fn extract_standalone_images(post: &Post) -> Vec<AttachedImage> {
     // 3. Process page_info
     if let Some(p) = source.page_info.as_ref()
         && let Some(pic_info) = p.pic_info.as_ref()
-        && let Ok(url) = Url::parse(pic_info.pic_big.url.as_str())
-        && let Ok(id) = pic_url_to_id(&url)
+        && let Ok(pic_url) = Url::parse(pic_info.pic_big.url.as_str())
+        && let Ok(id) = pic_url_to_id(&pic_url)
     {
         if let Some(media_info) = p.media_info.as_ref()
             && let Some(stream_url) = media_info.h5_url.as_ref()
@@ -403,6 +403,14 @@ pub fn extract_standalone_images(post: &Post) -> Vec<AttachedImage> {
             images.push(AttachedImage::VideoCover {
                 id,
                 video_url: stream_url.to_string(),
+            });
+        } else if let Some(url) = p.page_url.as_ref()
+            && let Some(url) = parse_article_url(url)
+        {
+            images.push(AttachedImage::ArticleCover {
+                id,
+                title: p.content1.clone().unwrap_or_default(),
+                url,
             });
         } else {
             images.push(AttachedImage::Normal { id });
@@ -412,6 +420,15 @@ pub fn extract_standalone_images(post: &Post) -> Vec<AttachedImage> {
     images
 }
 
+fn parse_article_url(url: &str) -> Option<String> {
+    let url = url.replace("sinaweibo", "https");
+    let url = Url::parse(&url).ok()?;
+    url.query_pairs()
+        .collect::<HashMap<_, _>>()
+        .get("url")
+        .map(|s| s.to_string())
+}
+
 /// Extracts standalone picture IDs from a post.
 pub fn extract_standalone_pic_ids(post: &Post) -> Vec<String> {
     extract_standalone_images(post)
@@ -419,6 +436,7 @@ pub fn extract_standalone_pic_ids(post: &Post) -> Vec<String> {
         .map(|img| match img {
             AttachedImage::LivePhoto { id, .. } => id,
             AttachedImage::VideoCover { id, .. } => id,
+            AttachedImage::ArticleCover { id, .. } => id,
             AttachedImage::Normal { id } => id,
         })
         .collect()
