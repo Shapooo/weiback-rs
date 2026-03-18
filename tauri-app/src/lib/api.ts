@@ -54,6 +54,7 @@ export const exportPosts = (options: ExportJobOptions) => invoke('export_posts',
 
 // Pictures
 export const getPictureBlob = (id: string) => invoke<ArrayBuffer>('get_picture_blob', { id });
+export const getVideoBlob = (url: string) => invoke<ArrayBuffer>('get_video_blob', { url });
 export const cleanupPictures = (policy: ResolutionPolicy) => invoke('cleanup_pictures', { options: { policy } });
 export const cleanupInvalidAvatars = () => invoke('cleanup_invalid_avatars');
 export const cleanupInvalidPosts = (options: CleanupInvalidPostsOptions) => invoke('cleanup_invalid_posts', { options });

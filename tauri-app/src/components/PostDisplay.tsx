@@ -87,7 +87,7 @@ const THUMBNAIL_SIZE = 70; // Define a consistent size for thumbnails
 interface AttachedImageProps {
     image: AttachedImageData;
     size: number;
-    onClick: (id: string) => void;
+    onClick: (image: AttachedImageData) => void;
 }
 
 const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) => {
@@ -170,7 +170,7 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) =
                 if (image.type === 'video_cover' && image.data.video_url) {
                     openUrl(image.data.video_url).catch(err => console.error('Failed to open video URL:', err));
                 } else {
-                    onClick(imageId);
+                    onClick(image);
                 }
             }}
             sx={{
@@ -220,7 +220,7 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) =
 
 interface AttachedImagesProps {
     attachedImages: AttachedImageData[];
-    onImageClick: (id: string) => void;
+    onImageClick: (image: AttachedImageData) => void;
     maxImages?: number; // New prop to control the number of displayed images
 }
 
@@ -234,8 +234,8 @@ const AttachedImages: React.FC<AttachedImagesProps> = ({ attachedImages, onImage
 
     return (
         <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-            {displayedImages.map(img => (
-                <AttachedImage key={img.data.id} image={img} size={THUMBNAIL_SIZE} onClick={onImageClick} />
+            {displayedImages.map((img, idx) => (
+                <AttachedImage key={`${img.data.id}-${idx}`} image={img} size={THUMBNAIL_SIZE} onClick={onImageClick} />
             ))}
             {remainingCount > 0 && (
                 <Box
@@ -265,7 +265,7 @@ interface ProcessedTextProps {
     url_struct: UrlStructItem[] | null;
     maxLines?: number;
     inline_map?: Record<string, string>;
-    onImageClick?: (id: string) => void;
+    onImageClick?: (image: AttachedImageData) => void;
 }
 
 const URL_REGEX = /https?:\/\/[a-zA-Z0-9$%&~_#./\-:=,?]{5,280}/g;
@@ -323,7 +323,7 @@ const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_stru
                         variant="body2"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onImageClick(inlinePicId);
+                            onImageClick({ type: 'normal', data: { id: inlinePicId } });
                         }}
                         sx={{ verticalAlign: 'middle', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', border: 'none', background: 'none', p: 0 }}
                     >
@@ -397,7 +397,7 @@ const ProcessedText: React.FC<ProcessedTextProps> = ({ text, emoji_map, url_stru
 
 interface PostDisplayProps {
     postInfo: PostInfo;
-    onImageClick: (id: string) => void;
+    onImageClick: (image: AttachedImageData) => void;
     maxAttachedImages?: number; // Prop to limit displayed attached images
     onClick?: (postInfo: PostInfo) => void;
     maxLines?: number; // New prop for text truncation

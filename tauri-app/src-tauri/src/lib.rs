@@ -41,6 +41,13 @@ pub enum PictureError {
     Internal(String),
 }
 
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", content = "message")]
+pub enum VideoError {
+    NotFound,
+    Internal(String),
+}
+
 /// A reporter that forwards task events to the Tauri frontend via `emit`.
 struct TauriTaskEventListener {
     app_handle: tauri::AppHandle,
@@ -164,6 +171,27 @@ async fn get_picture_blob(
         Err(e) => {
             error!("get_picture_blob called: {e:?}");
             Err(PictureError::Internal(e.to_string()))
+        }
+    }
+}
+
+#[tauri::command(async)]
+async fn get_video_blob(
+    core: State<'_, Arc<Core>>,
+    url: String,
+) -> std::result::Result<Response, VideoError> {
+    match core.get_video_blob(&url).await {
+        Ok(Some(blob)) => {
+            debug!("get_video_blob called, url: {url}");
+            Ok(Response::new(blob.to_vec()))
+        }
+        Ok(None) => {
+            warn!("get_video_blob called: {url} not found");
+            Err(VideoError::NotFound)
+        }
+        Err(e) => {
+            error!("get_video_blob called: {e:?}");
+            Err(VideoError::Internal(e.to_string()))
         }
     }
 }
@@ -358,6 +386,7 @@ pub fn run() -> Result<()> {
             get_username_by_id,
             search_id_by_username_prefix,
             get_picture_blob,
+            get_video_blob,
             delete_post,
             rebackup_post,
             rebackup_posts,

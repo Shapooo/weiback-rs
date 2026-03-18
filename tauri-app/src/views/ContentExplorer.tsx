@@ -26,7 +26,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import FullSizeImage from '../components/FullSizeImage';
 import PostDisplay from '../components/PostDisplay';
-import { PostInfo, User, PostQuery, ExportJobOptions, TaskStatus } from '../types';
+import { PostInfo, User, PostQuery, ExportJobOptions, TaskStatus, AttachedImage } from '../types';
 import PostPreviewModal from '../components/PostPreviewModal';
 import { useTaskStore } from '../stores/taskStore';
 import UserSelector from '../components/UserSelector';
@@ -59,7 +59,7 @@ const ContentExplorerPage: React.FC = () => {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const [jumpPage, setJumpPage] = useState('');
-    const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
+    const [lightboxImage, setLightboxImage] = useState<AttachedImage | null>(null);
     const [hoveredPostInfo, setHoveredPostInfo] = useState<PostInfo | null>(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
 
@@ -77,12 +77,12 @@ const ContentExplorerPage: React.FC = () => {
         }
     };
 
-    const handleOpenLightbox = (imageId: string) => {
-        setLightboxImageId(imageId);
+    const handleOpenLightbox = (image: AttachedImage) => {
+        setLightboxImage(image);
     };
 
     const handleCloseLightbox = () => {
-        setLightboxImageId(null);
+        setLightboxImage(null);
     };
 
     const handlePostClick = useCallback((postInfo: PostInfo) => {
@@ -442,13 +442,13 @@ const ContentExplorerPage: React.FC = () => {
                 </Box>
 
                 <Modal
-                    open={!!lightboxImageId}
+                    open={!!lightboxImage}
                     onClose={handleCloseLightbox}
                     aria-labelledby="lightbox-image"
                     sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                     <Box sx={{ outline: 'none' }}>
-                        {lightboxImageId && <FullSizeImage imageId={lightboxImageId} onClose={handleCloseLightbox} />}
+                        {lightboxImage && <FullSizeImage image={lightboxImage} onClose={handleCloseLightbox} />}
                     </Box>
                 </Modal>
 
