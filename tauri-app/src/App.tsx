@@ -69,7 +69,7 @@ const App: React.FC = () => {
     const currentTask = useTaskStore((state) => state.currentTask);
     const isTaskRunning = currentTask?.status === 'InProgress';
 
-    const checkAndInitBackend = async () => {
+    const checkAndInitBackend = useCallback(async () => {
         setLoading(true);
         try {
             let status = await getBackendStatus();
@@ -92,7 +92,7 @@ const App: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [enqueueSnackbar]);
 
     // Start listening for global task events
     useTaskEvents(backendStatus.status === 'Running');
@@ -100,8 +100,8 @@ const App: React.FC = () => {
     useCompletionNotifier();
 
     useEffect(() => {
-        checkAndInitBackend();
-    }, []);
+        checkAndInitBackend()
+    }, [checkAndInitBackend]);
 
     if (backendStatus.status !== 'Running') {
         return (
