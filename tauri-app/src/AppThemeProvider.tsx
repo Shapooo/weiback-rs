@@ -1,11 +1,6 @@
-import React, { createContext, useState, useMemo, useContext } from 'react'
+import React, { useState, useMemo } from 'react'
 import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
-
-export const ThemeContext = createContext({
-  toggleColorMode: () => {},
-})
-
-export const useThemeContext = () => useContext(ThemeContext)
+import { ThemeContext } from './hooks/ThemeContext'
 
 export const AppThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mode, setMode] = useState<'light' | 'dark'>('light')

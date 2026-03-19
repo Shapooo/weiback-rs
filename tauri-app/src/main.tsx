@@ -5,7 +5,7 @@ import { SnackbarProvider, useSnackbar, SnackbarKey } from 'notistack'
 import CssBaseline from '@mui/material/CssBaseline'
 import IconButton from '@mui/material/IconButton'
 import CloseIcon from '@mui/icons-material/Close'
-import { AppThemeProvider } from './ThemeContext'
+import { AppThemeProvider } from './AppThemeProvider'
 import App from './App'
 
 import '@fontsource/roboto/300.css'
