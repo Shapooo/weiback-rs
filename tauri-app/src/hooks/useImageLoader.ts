@@ -1,69 +1,14 @@
-import { useState, useEffect } from 'react'
-import { LRUCache } from '../components/LRU'
+import { useCallback } from 'react'
+import { attachedCache } from '../cache'
 import { getPictureBlob } from '../lib/api'
-
-export type ImageLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
-
-interface UseImageLoaderResult {
-  status: ImageLoadStatus
-  imageUrl: string
-}
+import { useBlobLoader } from './useBlobLoader'
+import { LRUCache } from '../components/LRU'
 
 export function useImageLoader(
   imageId: string | null | undefined,
-  cache: LRUCache<string, string>
-): UseImageLoaderResult {
-  const [status, setStatus] = useState<ImageLoadStatus>('idle')
-  const [imageUrl, setImageUrl] = useState('')
-
-  useEffect(() => {
-    let isCancelled = false
-
-    const loadImage = async () => {
-      // Early return if imageId is null/undefined
-      if (!imageId) {
-        if (!isCancelled) {
-          setImageUrl('')
-          setStatus('idle')
-        }
-        return
-      }
-
-      if (!isCancelled) {
-        setStatus('loading')
-      }
-
-      // Check cache first
-      const cached = cache.get(imageId)
-      if (cached) {
-        if (!isCancelled) {
-          setImageUrl(cached)
-          setStatus('loaded')
-        }
-        return
-      }
-
-      try {
-        const blob = await getPictureBlob(imageId)
-        if (isCancelled) return
-
-        const objectUrl = URL.createObjectURL(new Blob([blob]))
-        cache.set(imageId, objectUrl)
-        setImageUrl(objectUrl)
-        setStatus('loaded')
-      } catch (error) {
-        if (isCancelled) return
-        console.error(`Failed to fetch image ${imageId}: ${error}`)
-        setStatus('error')
-        setImageUrl('')
-      }
-    }
-
-    loadImage()
-    return () => {
-      isCancelled = true
-    }
-  }, [imageId, cache])
-
-  return { status, imageUrl }
+  cache: LRUCache<string, string> = attachedCache
+) {
+  const fetcher = useCallback((id: string) => getPictureBlob(id), [])
+  const result = useBlobLoader(imageId, cache, fetcher, 'image/*')
+  return { ...result, imageUrl: result.blobUrl }
 }

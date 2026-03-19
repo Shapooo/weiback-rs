@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import { CircularProgress, Box } from '@mui/material'
-import { attachedCache } from '../cache'
-import { getVideoBlob } from '../lib/api'
 import { useImageLoader } from '../hooks/useImageLoader'
+import { useVideoLoader } from '../hooks/useVideoLoader'
 import { AttachedImage } from '../types'
 
 interface FullSizeImageProps {
@@ -12,10 +11,10 @@ interface FullSizeImageProps {
 
 const FullSizeImage: React.FC<FullSizeImageProps> = ({ image, onClose }) => {
   const imageId = image.data.id
-  const { status: imageStatus, imageUrl } = useImageLoader(imageId, attachedCache)
-  const [videoUrl, setVideoUrl] = useState<string>('')
-  const [showVideo, setShowVideo] = useState(false)
-  const [videoLoading, setVideoLoading] = useState(false)
+  const { status: imageStatus, imageUrl } = useImageLoader(imageId)
+  const { status: videoStatus, videoUrl } = useVideoLoader(
+    image.type === 'livephoto' ? image.data.video_url : undefined
+  )
   const [transform, setTransform] = useState({
     scale: 1,
     originX: '50%',
@@ -27,48 +26,8 @@ const FullSizeImage: React.FC<FullSizeImageProps> = ({ image, onClose }) => {
   const didDragRef = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Video loading with special cache key logic
-  useEffect(() => {
-    if (image.type !== 'livephoto' || !image.data.video_url) return
-
-    let isCancelled = false
-    setVideoLoading(true)
-    const videoCacheKey = `video-${image.data.video_url}`
-
-    const fetchVideo = async () => {
-      const cachedVideoUrl = attachedCache.get(videoCacheKey)
-      if (cachedVideoUrl) {
-        if (!isCancelled) {
-          setVideoUrl(cachedVideoUrl)
-          setShowVideo(true)
-          setVideoLoading(false)
-        }
-        return
-      }
-
-      try {
-        const blob = await getVideoBlob(image.data.video_url)
-        if (!isCancelled && blob.byteLength > 0) {
-          const videoBlob = new Blob([blob], { type: 'video/mp4' })
-          const objectUrl = URL.createObjectURL(videoBlob)
-          attachedCache.set(videoCacheKey, objectUrl)
-          setVideoUrl(objectUrl)
-          setShowVideo(true)
-        }
-      } catch (error) {
-        console.error(`Failed to fetch video ${image.data.video_url}: ${error}`)
-      } finally {
-        if (!isCancelled) setVideoLoading(false)
-      }
-    }
-
-    fetchVideo()
-    return () => {
-      isCancelled = true
-    }
-  }, [image])
-
-  const isLoading = imageStatus === 'idle' || imageStatus === 'loading' || videoLoading
+  const isLoading = imageStatus === 'idle' || imageStatus === 'loading'
+  const showVideo = image.type === 'livephoto' && image.data.video_url && videoStatus === 'loaded'
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
@@ -159,13 +118,7 @@ const FullSizeImage: React.FC<FullSizeImageProps> = ({ image, onClose }) => {
       }}
     >
       {showVideo ? (
-        <video
-          src={videoUrl}
-          style={commonStyle}
-          autoPlay
-          playsInline
-          onEnded={() => setShowVideo(false)}
-        />
+        <video src={videoUrl} style={commonStyle} autoPlay playsInline />
       ) : (
         <img src={imageUrl} alt="Lightbox" style={commonStyle} />
       )}
