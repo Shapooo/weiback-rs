@@ -39,6 +39,16 @@ export interface PaginatedPostInfo {
 
 export type SearchTerm = { Fuzzy: string } | { Strict: string }
 
+export interface PostFilter {
+  startDate: Date | null
+  endDate: Date | null
+  isFavorited: boolean
+  reverseOrder: boolean
+  searchTerm: string
+  searchMode: 'fuzzy' | 'strict'
+  userInput: User | string | null
+}
+
 export interface PostQuery {
   user_id?: number
   start_date?: number // Unix timestamp
