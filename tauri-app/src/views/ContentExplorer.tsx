@@ -105,38 +105,41 @@ const ContentExplorerPage: React.FC = () => {
     return undefined
   }
 
-  const buildQueryFromFilters = (
-    currentFilters: typeof appliedFilters,
-    currentPage: number,
-    isBatchOperation: boolean
-  ): PostQuery => {
-    const startDate = currentFilters.startDate ? new Date(currentFilters.startDate) : null
-    if (startDate) {
-      startDate.setHours(0, 0, 0, 0)
-    }
+  const buildQueryFromFilters = useCallback(
+    (
+      currentFilters: typeof appliedFilters,
+      currentPage: number,
+      isBatchOperation: boolean
+    ): PostQuery => {
+      const startDate = currentFilters.startDate ? new Date(currentFilters.startDate) : null
+      if (startDate) {
+        startDate.setHours(0, 0, 0, 0)
+      }
 
-    const endDate = currentFilters.endDate ? new Date(currentFilters.endDate) : null
-    if (endDate) {
-      endDate.setHours(23, 59, 59, 999)
-    }
+      const endDate = currentFilters.endDate ? new Date(currentFilters.endDate) : null
+      if (endDate) {
+        endDate.setHours(23, 59, 59, 999)
+      }
 
-    const userId = getUserId(currentFilters.userInput)
+      const userId = getUserId(currentFilters.userInput)
 
-    return {
-      page: isBatchOperation ? 1 : currentPage,
-      posts_per_page: isBatchOperation ? 1_000_000 : POSTS_PER_PAGE,
-      is_favorited: currentFilters.isFavorited,
-      reverse_order: currentFilters.reverseOrder,
-      user_id: userId,
-      start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
-      end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
-      search_term: currentFilters.searchTerm
-        ? currentFilters.searchMode === 'fuzzy'
-          ? { Fuzzy: currentFilters.searchTerm }
-          : { Strict: currentFilters.searchTerm }
-        : undefined,
-    }
-  }
+      return {
+        page: isBatchOperation ? 1 : currentPage,
+        posts_per_page: isBatchOperation ? 1_000_000 : POSTS_PER_PAGE,
+        is_favorited: currentFilters.isFavorited,
+        reverse_order: currentFilters.reverseOrder,
+        user_id: userId,
+        start_date: startDate ? Math.floor(startDate.getTime() / 1000) : undefined,
+        end_date: endDate ? Math.floor(endDate.getTime() / 1000) : undefined,
+        search_term: currentFilters.searchTerm
+          ? currentFilters.searchMode === 'fuzzy'
+            ? { Fuzzy: currentFilters.searchTerm }
+            : { Strict: currentFilters.searchTerm }
+          : undefined,
+      }
+    },
+    []
+  )
 
   const fetchPosts = useCallback(
     async (currentPage: number, currentFilters: typeof appliedFilters) => {
@@ -155,7 +158,7 @@ const ContentExplorerPage: React.FC = () => {
         setLoading(false)
       }
     },
-    [enqueueSnackbar]
+    [enqueueSnackbar, buildQueryFromFilters]
   )
 
   const handlePostDeleted = useCallback(() => {
@@ -497,7 +500,13 @@ const ContentExplorerPage: React.FC = () => {
           sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <Box sx={{ outline: 'none' }}>
-            {lightboxImage && <FullSizeImage image={lightboxImage} onClose={handleCloseLightbox} />}
+            {lightboxImage && (
+              <FullSizeImage
+                key={lightboxImage.data.id}
+                image={lightboxImage}
+                onClose={handleCloseLightbox}
+              />
+            )}
           </Box>
         </Modal>
 

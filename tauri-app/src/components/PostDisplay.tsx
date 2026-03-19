@@ -65,7 +65,7 @@ const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
           avatarCache.set(avatarId, objectUrl)
           setImageUrl(objectUrl)
         }
-      } catch (error) {
+      } catch (_error) {
         if (!isCancelled) {
           // Any error (NotFound, Internal) results in showing the default Avatar placeholder
           setImageUrl('')

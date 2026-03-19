@@ -10,7 +10,6 @@ interface FullSizeImageProps {
 }
 
 const FullSizeImage: React.FC<FullSizeImageProps> = ({ image, onClose }) => {
-  const imageId = image.data.id
   const [imageUrl, setImageUrl] = useState<string>('')
   const [videoUrl, setVideoUrl] = useState<string>('')
   const [showVideo, setShowVideo] = useState(false)
@@ -86,16 +85,9 @@ const FullSizeImage: React.FC<FullSizeImageProps> = ({ image, onClose }) => {
     onClose()
   }
 
-  // Reset transform when image changes
-  useEffect(() => {
-    setTransform({ scale: 1, originX: '50%', originY: '50%' })
-    setPosition({ x: 0, y: 0 })
-    setShowVideo(false)
-  }, [imageId])
-
   useEffect(() => {
     let isCancelled = false
-    setLoading(true)
+    let imageId = image.data.id
 
     const fetchMedia = async () => {
       // Fetch Image

@@ -44,18 +44,6 @@ const UserPage: React.FC = () => {
     isLoggedIn ? UserPageState.LoggedIn : UserPageState.Phone
   )
 
-  useEffect(() => {
-    // Synchronize local page state with global auth state
-    if (isLoggedIn) {
-      setPageState(UserPageState.LoggedIn)
-    } else if (pageState === UserPageState.LoggedIn) {
-      // Only reset to Phone if we were previously in LoggedIn state
-      setPageState(UserPageState.Phone)
-      setPhone('')
-      setVerificationCode(Array(6).fill(''))
-    }
-  }, [isLoggedIn])
-
   const handleGetCode = async () => {
     if (!/^1\d{10}$/.test(phone)) {
       enqueueSnackbar('请输入有效的手机号码', { variant: 'error' })
@@ -92,6 +80,9 @@ const UserPage: React.FC = () => {
 
   const handleLogout = () => {
     logout()
+    setPageState(UserPageState.Phone)
+    setPhone('')
+    setVerificationCode(Array(6).fill(''))
     enqueueSnackbar('已退出登录', { variant: 'info' })
   }
 

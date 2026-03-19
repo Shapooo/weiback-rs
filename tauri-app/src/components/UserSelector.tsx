@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Autocomplete,
   TextField,
@@ -36,6 +36,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
   const [inputValue, setInputValue] = useState('')
   const [options, setOptions] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
+  const timeoutIdRef = useRef<number | undefined>(undefined)
 
   // When the controlled value changes, update the internal input value
   useEffect(() => {
@@ -50,30 +51,33 @@ const UserSelector: React.FC<UserSelectorProps> = ({
     }
   }, [value])
 
-  const fetchUsers = useMemo(() => {
-    const debouncedFetch = (prefix: string) => {
-      if (prefix.trim() === '') {
-        setOptions([])
-        return
-      }
-      setLoading(true)
-      searchIdByUsernamePrefix(prefix)
-        .then(users => {
-          setOptions(users)
-        })
-        .catch(err => {
-          console.error('Failed to search users:', err)
-          setOptions([])
-        })
-        .finally(() => {
-          setLoading(false)
-        })
+  const fetchUsers = useCallback((prefix: string) => {
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current)
     }
 
-    let timeoutId: number
-    return (prefix: string) => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => debouncedFetch(prefix), 300)
+    if (prefix.trim() === '') {
+      setOptions([])
+      return
+    }
+
+    timeoutIdRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const users = await searchIdByUsernamePrefix(prefix)
+        setOptions(users)
+      } catch (err) {
+        console.error('Failed to search users:', err)
+        setOptions([])
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (timeoutIdRef.current) clearTimeout(timeoutIdRef.current)
     }
   }, [])
 
