@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useSnackbar } from 'notistack'
 import {
   Avatar,
@@ -29,9 +29,10 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import ArticleIcon from '@mui/icons-material/Article'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { avatarCache, attachedCache } from '../cache'
+import { useImageLoader } from '../hooks/useImageLoader'
 import Emoji from './Emoji'
 import { PostInfo, UrlStructItem, AttachedImage as AttachedImageData } from '../types'
-import { getPictureBlob, deletePost, rebackupPost } from '../lib/api'
+import { deletePost, rebackupPost } from '../lib/api'
 
 // --- Type Definitions are now in ../types.ts ---
 
@@ -40,45 +41,7 @@ interface AvatarImageProps {
 }
 
 const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
-  const [imageUrl, setImageUrl] = useState<string>('')
-
-  useEffect(() => {
-    let isCancelled = false
-
-    const fetchAndCacheAvatar = async () => {
-      if (!avatarId) {
-        setImageUrl('')
-        return
-      }
-
-      const cachedUrl = avatarCache.get(avatarId)
-      if (cachedUrl) {
-        setImageUrl(cachedUrl)
-        return
-      }
-
-      try {
-        const blob = await getPictureBlob(avatarId)
-        if (!isCancelled) {
-          const imageBlob = new Blob([blob])
-          const objectUrl = URL.createObjectURL(imageBlob)
-          avatarCache.set(avatarId, objectUrl)
-          setImageUrl(objectUrl)
-        }
-      } catch (_error) {
-        if (!isCancelled) {
-          // Any error (NotFound, Internal) results in showing the default Avatar placeholder
-          setImageUrl('')
-        }
-      }
-    }
-
-    fetchAndCacheAvatar()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [avatarId])
+  const { imageUrl } = useImageLoader(avatarId, avatarCache)
 
   return <Avatar src={imageUrl} />
 }
@@ -92,55 +55,8 @@ interface AttachedImageProps {
 }
 
 const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) => {
-  type Status = 'loading' | 'loaded' | 'not-found' | 'error'
-  const [status, setStatus] = useState<Status>('loading')
-  const [imageUrl, setImageUrl] = useState<string>('')
   const imageId = image.data.id
-
-  useEffect(() => {
-    let isCancelled = false
-
-    const fetchAndCacheImage = async () => {
-      setStatus('loading')
-      const cachedUrl = attachedCache.get(imageId)
-      if (cachedUrl) {
-        setImageUrl(cachedUrl)
-        setStatus('loaded')
-        return
-      }
-
-      try {
-        const blob = await getPictureBlob(imageId)
-        if (isCancelled) return
-
-        const imageBlob = new Blob([blob])
-        const objectUrl = URL.createObjectURL(imageBlob)
-        attachedCache.set(imageId, objectUrl)
-        setImageUrl(objectUrl)
-        setStatus('loaded')
-      } catch (error) {
-        if (isCancelled) return
-
-        if (
-          error &&
-          typeof error === 'object' &&
-          'kind' in error &&
-          (error as any).kind === 'NotFound'
-        ) {
-          setStatus('not-found')
-        } else {
-          console.error(`Failed to fetch attached image ${imageId}: ${error}`)
-          setStatus('error')
-        }
-      }
-    }
-
-    fetchAndCacheImage()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [imageId])
+  const { status, imageUrl } = useImageLoader(imageId, attachedCache)
 
   const commonSx = {
     width: size,
@@ -233,57 +149,10 @@ interface ArticleCoverProps {
 }
 
 const ArticleCover: React.FC<ArticleCoverProps> = ({ image }) => {
-  type Status = 'loading' | 'loaded' | 'not-found' | 'error'
-  const [status, setStatus] = useState<Status>('loading')
-  const [imageUrl, setImageUrl] = useState<string>('')
   const imageId = image.data.id
   const title = image.data.title
   const url = image.data.url
-
-  useEffect(() => {
-    let isCancelled = false
-
-    const fetchAndCacheImage = async () => {
-      setStatus('loading')
-      const cachedUrl = attachedCache.get(imageId)
-      if (cachedUrl) {
-        setImageUrl(cachedUrl)
-        setStatus('loaded')
-        return
-      }
-
-      try {
-        const blob = await getPictureBlob(imageId)
-        if (isCancelled) return
-
-        const imageBlob = new Blob([blob])
-        const objectUrl = URL.createObjectURL(imageBlob)
-        attachedCache.set(imageId, objectUrl)
-        setImageUrl(objectUrl)
-        setStatus('loaded')
-      } catch (error) {
-        if (isCancelled) return
-
-        if (
-          error &&
-          typeof error === 'object' &&
-          'kind' in error &&
-          (error as any).kind === 'NotFound'
-        ) {
-          setStatus('not-found')
-        } else {
-          console.error(`Failed to fetch article cover ${imageId}: ${error}`)
-          setStatus('error')
-        }
-      }
-    }
-
-    fetchAndCacheImage()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [imageId])
+  const { status, imageUrl } = useImageLoader(imageId, attachedCache)
 
   if (status === 'loading') {
     return (
