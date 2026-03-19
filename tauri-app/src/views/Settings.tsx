@@ -22,8 +22,26 @@ import Grid from '@mui/material/Grid'
 import { useTheme } from '@mui/material/styles'
 import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@mui/material'
-import { SdkConfig, PictureDefinition, Config } from '../types/config'
 import { getConfig, setConfig } from '../lib/api'
+import { SdkConfig, PictureDefinition, Config } from '../types/config'
+
+function configEqual(a: Config, b: Config): boolean {
+  return (
+    a.db_path === b.db_path &&
+    a.session_path === b.session_path &&
+    a.download_pictures === b.download_pictures &&
+    a.picture_definition === b.picture_definition &&
+    a.backup_task_interval === b.backup_task_interval &&
+    a.other_task_interval === b.other_task_interval &&
+    a.posts_per_html === b.posts_per_html &&
+    a.posts_count === b.posts_count &&
+    a.picture_path === b.picture_path &&
+    a.video_path === b.video_path &&
+    a.sdk_config.retry_times === b.sdk_config.retry_times &&
+    a.sdk_config.timeout === b.sdk_config.timeout &&
+    a.dev_mode_out_dir === b.dev_mode_out_dir
+  )
+}
 
 const pictureDefinitionMap = [
   { value: PictureDefinition.RealOriginal, label: '原始尺寸' },
@@ -92,7 +110,7 @@ const SettingsPage: React.FC = () => {
     return <Typography>Loading settings...</Typography>
   }
 
-  const isChanged = JSON.stringify(config) !== JSON.stringify(initialConfig)
+  const isChanged = initialConfig ? !configEqual(config, initialConfig) : true
 
   return (
     <Box sx={{ p: 3 }}>
