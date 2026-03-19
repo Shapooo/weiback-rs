@@ -40,11 +40,11 @@ interface AvatarImageProps {
   avatarId: string | null
 }
 
-const AvatarImage: React.FC<AvatarImageProps> = ({ avatarId }) => {
+const AvatarImage = React.memo(function AvatarImage({ avatarId }: AvatarImageProps) {
   const { imageUrl } = useImageLoader(avatarId, avatarCache)
 
   return <Avatar src={imageUrl} />
-}
+})
 
 const THUMBNAIL_SIZE = 70 // Define a consistent size for thumbnails
 
@@ -54,7 +54,11 @@ interface AttachedImageProps {
   onClick: (image: AttachedImageData) => void
 }
 
-const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) => {
+const AttachedImage = React.memo(function AttachedImage({
+  image,
+  size,
+  onClick,
+}: AttachedImageProps) {
   const imageId = image.data.id
   const { status, imageUrl } = useImageLoader(imageId, attachedCache)
 
@@ -142,13 +146,13 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) =
       )}
     </Box>
   )
-}
+})
 
 interface ArticleCoverProps {
   image: Extract<AttachedImageData, { type: 'article_cover' }>
 }
 
-const ArticleCover: React.FC<ArticleCoverProps> = ({ image }) => {
+const ArticleCover = React.memo(function ArticleCover({ image }: ArticleCoverProps) {
   const imageId = image.data.id
   const title = image.data.title
   const url = image.data.url
@@ -244,7 +248,7 @@ const ArticleCover: React.FC<ArticleCoverProps> = ({ image }) => {
       </Box>
     </Box>
   )
-}
+})
 
 interface AttachedImagesProps {
   attachedImages: AttachedImageData[]
@@ -252,11 +256,11 @@ interface AttachedImagesProps {
   maxImages?: number
 }
 
-const AttachedImages: React.FC<AttachedImagesProps> = ({
+const AttachedImages = React.memo(function AttachedImages({
   attachedImages,
   onImageClick,
   maxImages,
-}) => {
+}: AttachedImagesProps) {
   if (!attachedImages || attachedImages.length === 0) {
     return null
   }
@@ -304,7 +308,7 @@ const AttachedImages: React.FC<AttachedImagesProps> = ({
       )}
     </Stack>
   )
-}
+})
 
 interface ProcessedTextProps {
   text: string
@@ -326,14 +330,14 @@ const COMBINED_REGEX = new RegExp(
   'gu'
 )
 
-const ProcessedText: React.FC<ProcessedTextProps> = ({
+const ProcessedText = React.memo(function ProcessedText({
   text,
   emoji_map,
   url_struct,
   maxLines,
   inline_map,
   onImageClick,
-}) => {
+}: ProcessedTextProps) {
   const inPreviewMode = maxLines !== undefined
   const processedText = inPreviewMode ? text.replace(/\n/g, ' ') : text
 
@@ -487,7 +491,7 @@ const ProcessedText: React.FC<ProcessedTextProps> = ({
       {content}
     </Typography>
   )
-}
+})
 
 interface PostDisplayProps {
   postInfo: PostInfo
