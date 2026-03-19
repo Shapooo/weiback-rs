@@ -2,7 +2,8 @@ mod error;
 
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
 use tauri::{self, App, AppHandle, Emitter, Manager, State, ipc::Response};
 use tracing::{debug, error, info, warn};
 use weiback::builder::CoreBuilder;
@@ -52,20 +53,8 @@ impl TaskEventListener for TauriTaskEventListener {
 }
 
 /// A wrapper for Weibo IDs to handle conversion from string/number in Tauri commands.
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct WeiboId(i64);
-
-impl<'de> serde::Deserialize<'de> for WeiboId {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse::<i64>()
-            .map(WeiboId)
-            .map_err(serde::de::Error::custom)
-    }
-}
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub struct WeiboId(#[serde(deserialize_with = "deserialize_number_from_string")] i64);
 
 impl From<WeiboId> for i64 {
     fn from(id: WeiboId) -> Self {

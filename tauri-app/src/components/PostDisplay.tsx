@@ -525,7 +525,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
   const handleDeleteConfirm = async (e: React.MouseEvent) => {
     e.stopPropagation()
     try {
-      await deletePost(postInfo.post.id.toString())
+      await deletePost(postInfo.post.id)
       enqueueSnackbar('帖子已删除', { variant: 'success' })
       onPostDeleted?.()
     } catch (error) {
