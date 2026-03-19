@@ -1,9 +1,8 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   Box,
   Drawer,
   CssBaseline,
-  LinearProgress,
   Typography,
   Backdrop,
   CircularProgress,
@@ -17,70 +16,12 @@ import AppRouter from './router'
 import { useTaskEvents } from './hooks/useTaskEvents'
 import { useTaskStore } from './stores/taskStore'
 import { useAuthStore } from './stores/authStore'
-import { Task } from './types'
 import { getBackendStatus, initBackend, BackendStatus } from './lib/api'
+import GlobalTaskProgress from './components/GlobalTaskProgress'
+import useCompletionNotifier from './hooks/useCompletionNotifier'
 
 const drawerWidth = 200
-const taskProgressHeight = 80 // GlobalTaskProgress height + padding
-
-function useCompletionNotifier() {
-  const { enqueueSnackbar } = useSnackbar()
-  const task = useTaskStore(state => state.currentTask)
-  const prevTaskRef = useRef<Task | null>(null)
-
-  useEffect(() => {
-    const prevTask = prevTaskRef.current
-    // Check for task completion or failure by comparing previous and current state
-    if (prevTask && !task) {
-      // Task just finished (current is null, prev was not)
-      if (prevTask.status === 'Completed') {
-        enqueueSnackbar(`任务 "${prevTask.description}" 已完成！`, { variant: 'success' })
-      } else if (prevTask.status === 'Failed') {
-        enqueueSnackbar(`任务 "${prevTask.description}" 失败: ${prevTask.error || '未知错误'}`, {
-          variant: 'error',
-          persist: true,
-        })
-      }
-    }
-    // Update the ref for the next render
-    prevTaskRef.current = task
-  }, [task, enqueueSnackbar])
-}
-
-function GlobalTaskProgress() {
-  const task = useTaskStore(state => state.currentTask)
-
-  if (!task || task.status !== 'InProgress') {
-    return null // Don't show anything if there's no active task
-  }
-
-  const progress = task.total > 0 ? (task.progress / task.total) * 100 : 0
-
-  return (
-    <Box
-      sx={{
-        position: 'fixed',
-        bottom: 0,
-        left: drawerWidth, // Align with the main content area
-        width: `calc(100% - ${drawerWidth}px)`,
-        p: 2,
-        bgcolor: 'background.paper',
-        zIndex: theme => theme.zIndex.drawer + 1, // Appear above the drawer
-        borderTop: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      <Typography variant="body2" gutterBottom>
-        {task.description}
-      </Typography>
-      <LinearProgress variant="determinate" value={progress} />
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >{`${task.progress} / ${task.total}`}</Typography>
-    </Box>
-  )
-}
+const taskProgressHeight = 80
 
 const App: React.FC = () => {
   const { enqueueSnackbar } = useSnackbar()
