@@ -76,7 +76,7 @@ const AttachedImage: React.FC<AttachedImageProps> = ({ image, size, onClick }) =
     )
   }
 
-  if (status === 'not-found' || status === 'error') {
+  if (status === 'error') {
     return (
       <Box sx={{ ...commonSx, bgcolor: 'grey.200' }}>
         <BrokenImageIcon color="action" />
@@ -172,7 +172,7 @@ const ArticleCover: React.FC<ArticleCoverProps> = ({ image }) => {
     )
   }
 
-  if (status === 'not-found' || status === 'error') {
+  if (status === 'error') {
     return (
       <Box
         sx={{

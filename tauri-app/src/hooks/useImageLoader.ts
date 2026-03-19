@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { LRUCache } from '../components/LRU'
 import { getPictureBlob } from '../lib/api'
 
-export type ImageLoadStatus = 'idle' | 'loading' | 'loaded' | 'error' | 'not-found'
+export type ImageLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
 interface UseImageLoaderResult {
   status: ImageLoadStatus
@@ -53,17 +53,8 @@ export function useImageLoader(
         setStatus('loaded')
       } catch (error) {
         if (isCancelled) return
-        if (
-          error &&
-          typeof error === 'object' &&
-          'kind' in error &&
-          (error as any).kind === 'NotFound'
-        ) {
-          setStatus('not-found')
-        } else {
-          console.error(`Failed to fetch image ${imageId}: ${error}`)
-          setStatus('error')
-        }
+        console.error(`Failed to fetch image ${imageId}: ${error}`)
+        setStatus('error')
         setImageUrl('')
       }
     }

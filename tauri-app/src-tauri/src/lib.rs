@@ -15,7 +15,7 @@ use weiback::core::{
 };
 use weiback::models::User;
 
-use error::Result;
+use error::{Error, Result};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "status")]
@@ -32,20 +32,6 @@ pub enum BackendStatus {
 
 pub struct BackendState {
     pub status: Mutex<BackendStatus>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind", content = "message")]
-pub enum PictureError {
-    NotFound,
-    Internal(String),
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind", content = "message")]
-pub enum VideoError {
-    NotFound,
-    Internal(String),
 }
 
 /// A reporter that forwards task events to the Tauri frontend via `emit`.
@@ -141,24 +127,20 @@ fn init_backend(app_handle: AppHandle, state: State<'_, BackendState>) -> Result
 }
 
 #[tauri::command(async)]
-async fn get_current_task_status(
-    core: State<'_, Arc<Core>>,
-) -> std::result::Result<Option<Task>, String> {
-    core.get_current_task().await.map_err(|e| e.to_string())
+async fn get_current_task_status(core: State<'_, Arc<Core>>) -> Result<Option<Task>> {
+    core.get_current_task()
+        .await
+        .map_err(|e| Error(e.to_string()))
 }
 
 #[tauri::command(async)]
-async fn get_and_clear_task_errors(
-    core: State<'_, Arc<Core>>,
-) -> std::result::Result<Vec<TaskError>, String> {
-    core.get_and_clear_task_errors().map_err(|e| e.to_string())
+async fn get_and_clear_task_errors(core: State<'_, Arc<Core>>) -> Result<Vec<TaskError>> {
+    core.get_and_clear_task_errors()
+        .map_err(|e| Error(e.to_string()))
 }
 
 #[tauri::command(async)]
-async fn get_picture_blob(
-    core: State<'_, Arc<Core>>,
-    id: String,
-) -> std::result::Result<Response, PictureError> {
+async fn get_picture_blob(core: State<'_, Arc<Core>>, id: String) -> Result<Response> {
     match core.get_picture_blob(&id).await {
         Ok(Some(blob)) => {
             debug!("get_picture_blob called, id: {id}");
@@ -166,20 +148,17 @@ async fn get_picture_blob(
         }
         Ok(None) => {
             warn!("get_picture_blob called: {id} not found");
-            Err(PictureError::NotFound)
+            Err(Error("Picture not found".to_string()))
         }
         Err(e) => {
             error!("get_picture_blob called: {e:?}");
-            Err(PictureError::Internal(e.to_string()))
+            Err(Error(e.to_string()))
         }
     }
 }
 
 #[tauri::command(async)]
-async fn get_video_blob(
-    core: State<'_, Arc<Core>>,
-    url: String,
-) -> std::result::Result<Response, VideoError> {
+async fn get_video_blob(core: State<'_, Arc<Core>>, url: String) -> Result<Response> {
     match core.get_video_blob(&url).await {
         Ok(Some(blob)) => {
             debug!("get_video_blob called, url: {url}");
@@ -187,26 +166,26 @@ async fn get_video_blob(
         }
         Ok(None) => {
             warn!("get_video_blob called: {url} not found");
-            Err(VideoError::NotFound)
+            Err(Error("Video not found".to_string()))
         }
         Err(e) => {
             error!("get_video_blob called: {e:?}");
-            Err(VideoError::Internal(e.to_string()))
+            Err(Error(e.to_string()))
         }
     }
 }
 
 #[tauri::command]
-fn get_config_command() -> std::result::Result<Config, String> {
+fn get_config_command() -> Result<Config> {
     get_config()
         .read()
         .map(|guard| guard.clone())
-        .map_err(|err| err.to_string())
+        .map_err(|err| Error(err.to_string()))
 }
 
 #[tauri::command]
-fn set_config_command(config: Config) -> std::result::Result<(), String> {
-    weiback::config::save_config(&config).map_err(|e| e.to_string())
+fn set_config_command(config: Config) -> Result<()> {
+    weiback::config::save_config(&config).map_err(|e| Error(e.to_string()))
 }
 
 #[tauri::command]
@@ -307,24 +286,21 @@ async fn rebackup_missing_images(core: State<'_, Arc<Core>>, query: PostQuery) -
 }
 
 #[tauri::command]
-async fn get_username_by_id(
-    core: State<'_, Arc<Core>>,
-    uid: WeiboId,
-) -> std::result::Result<Option<String>, String> {
+async fn get_username_by_id(core: State<'_, Arc<Core>>, uid: WeiboId) -> Result<Option<String>> {
     core.get_username_by_id(uid.into())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| Error(e.to_string()))
 }
 
 #[tauri::command(async)]
 async fn search_id_by_username_prefix(
     core: State<'_, Arc<Core>>,
     prefix: String,
-) -> std::result::Result<Vec<User>, String> {
+) -> Result<Vec<User>> {
     info!("search_id_by_username_prefix called with prefix: {prefix}");
     core.search_users_by_screen_name_prefix(&prefix)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| Error(e.to_string()))
 }
 
 #[tauri::command]
