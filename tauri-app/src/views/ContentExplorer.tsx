@@ -39,6 +39,7 @@ import PostPreviewModal from '../components/PostPreviewModal'
 import { useTaskStore } from '../stores/taskStore'
 import UserSelector from '../components/UserSelector'
 import { queryLocalPosts, exportPosts, rebackupPosts, rebackupMissingImages } from '../lib/api'
+import { deepEqual } from '../utils'
 
 const POSTS_PER_PAGE = 12
 
@@ -194,12 +195,10 @@ const ContentExplorerPage: React.FC = () => {
     setUserInput(clearedUserInput)
     setFilters(clearedFilters)
 
-    if (
-      JSON.stringify(appliedFilters) !==
-      JSON.stringify({ ...clearedFilters, userInput: clearedUserInput })
-    ) {
+    const clearedWithUser = { ...clearedFilters, userInput: clearedUserInput }
+    if (!deepEqual(appliedFilters, clearedWithUser)) {
       setPage(1)
-      setAppliedFilters({ ...clearedFilters, userInput: clearedUserInput })
+      setAppliedFilters(clearedWithUser)
     }
   }
 
