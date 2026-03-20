@@ -553,7 +553,16 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
         <CardHeader
           avatar={<AvatarImage avatarId={postInfo.avatar_id} />}
           title={postInfo.post.user?.screen_name || '未知用户'}
-          subheader={new Date(postInfo.post.created_at).toLocaleString()}
+          subheader={
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="caption" color="text.secondary">
+                {new Date(postInfo.post.created_at).toLocaleString()}
+              </Typography>
+              <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+                id: {postInfo.post.id}
+              </Typography>
+            </Stack>
+          }
           action={
             <Stack direction="row" alignItems="center">
               {postInfo.post.id ? (
@@ -590,6 +599,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
               ) : null}
             </Stack>
           }
+          sx={{ pb: 0 }}
         />
         <CardContent>
           <ProcessedText
@@ -602,9 +612,14 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
           />
           {postInfo.post.retweeted_status && (
             <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
-              </Typography>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <Typography variant="subtitle2" color="text.secondary">
+                  @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
+                </Typography>
+                <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>
+                  id: {postInfo.post.retweeted_status.id}
+                </Typography>
+              </Stack>
               <ProcessedText
                 text={postInfo.post.retweeted_status.text}
                 emoji_map={postInfo.emoji_map}
