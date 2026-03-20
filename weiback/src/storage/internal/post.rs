@@ -536,6 +536,32 @@ where
         .await?)
 }
 
+/// Checks if a post has any children (is being retweeted by other posts).
+///
+/// # Arguments
+///
+/// * `executor` - A database executor.
+/// * `id` - The ID of the post to check.
+///
+/// # Returns
+///
+/// A `Result` containing `true` if the post has children, `false` otherwise.
+pub async fn has_retweets<'e, E>(executor: E, id: i64) -> Result<bool>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let (sql, values) = Query::select()
+        .column(PostIden::Id)
+        .from(PostIden::Table)
+        .and_where(Expr::col(PostIden::RetweetedId).eq(id))
+        .limit(1)
+        .build_sqlx(SqliteQueryBuilder);
+    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
+        .fetch_optional(executor)
+        .await?
+        .is_some())
+}
+
 /// Deletes a post and its corresponding entry in `favorited_posts` table from the database.
 ///
 /// # Arguments
@@ -1075,6 +1101,35 @@ mod local_tests {
 
         let ids = get_retweet_ids(&db, internal_original.id).await.unwrap();
         assert_eq!(ids, vec![internal_retweeted.id]);
+    }
+
+    #[tokio::test]
+    async fn test_has_retweets() {
+        let db = setup_db().await;
+        let posts = create_test_posts().await;
+
+        // Find an original post (no retweet) and a retweeted post
+        let original_post = posts.iter().find(|p| p.retweeted_status.is_none()).unwrap();
+        let mut retweeted_post = posts
+            .iter()
+            .find(|p| p.retweeted_status.is_some())
+            .unwrap()
+            .clone();
+        retweeted_post.retweeted_status = Some(Box::new(original_post.clone()));
+
+        let internal_original: PostInternal = original_post.clone().try_into().unwrap();
+        let internal_retweeted: PostInternal = retweeted_post.try_into().unwrap();
+
+        save_post(&db, &internal_original).await.unwrap();
+        save_post(&db, &internal_retweeted).await.unwrap();
+
+        // Original post has retweets
+        assert!(has_retweets(&db, internal_original.id).await.unwrap());
+        // Retweeted post has no retweets
+        assert!(!has_retweets(&db, internal_retweeted.id).await.unwrap());
+
+        // A post that doesn't exist returns false
+        assert!(!has_retweets(&db, 999999).await.unwrap());
     }
 
     #[tokio::test]

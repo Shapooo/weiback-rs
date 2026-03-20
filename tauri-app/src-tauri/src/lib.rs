@@ -10,7 +10,7 @@ use weiback::builder::CoreBuilder;
 use weiback::config::{Config, get_config};
 use weiback::core::{
     BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions, Core,
-    ExportJobOptions, PostQuery, TaskEventListener, TaskRequest,
+    DeletePostOptions, ExportJobOptions, PostQuery, TaskEventListener, TaskRequest,
     task::{BackupType, CleanupPicturesOptions, PaginatedPostInfo},
     task_manager::{Task, TaskError},
 };
@@ -247,9 +247,9 @@ async fn login_state(core: State<'_, Arc<Core>>) -> Result<Option<User>> {
 }
 
 #[tauri::command]
-async fn delete_post(core: State<'_, Arc<Core>>, id: WeiboId) -> Result<()> {
-    info!("delete_post called with id: {id:?}");
-    Ok(core.delete_post(id.into()).await?)
+async fn delete_post(core: State<'_, Arc<Core>>, options: DeletePostOptions) -> Result<()> {
+    info!("delete_post called with options: {options:?}");
+    Ok(core.delete_post(options).await?)
 }
 
 #[tauri::command]

@@ -9,6 +9,7 @@ import {
   BackupType,
   ResolutionPolicy,
   CleanupInvalidPostsOptions,
+  DeletePostOptions,
 } from '../types'
 import { Config } from '../types/config'
 
@@ -42,7 +43,7 @@ export const rebackupMissingImages = (query: PostQuery) =>
 // Posts
 export const queryLocalPosts = (query: PostQuery) =>
   invoke<PaginatedPostInfo>('query_local_posts', { query })
-export const deletePost = (id: number) => invoke('delete_post', { id })
+export const deletePost = (options: DeletePostOptions) => invoke('delete_post', { options })
 export const rebackupPost = (id: string) => invoke('rebackup_post', { id })
 
 // Users

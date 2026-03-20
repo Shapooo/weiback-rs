@@ -522,10 +522,10 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
     setDialogOpen(false)
   }
 
-  const handleDeleteConfirm = async (e: React.MouseEvent) => {
+  const handleDeleteConfirm = async (e: React.MouseEvent, deep: boolean) => {
     e.stopPropagation()
     try {
-      await deletePost(postInfo.post.id)
+      await deletePost({ id: postInfo.post.id, deep })
       enqueueSnackbar('帖子已删除', { variant: 'success' })
       onPostDeleted?.()
     } catch (error) {
@@ -645,13 +645,24 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
         <DialogTitle id="alert-dialog-title">{'确认删除'}</DialogTitle>
         <DialogContent>
           <DialogContentText id="alert-dialog-description">
-            删除会删除该post及该post的所有转发以及图片等资源，且无法撤回。你确定要删除吗？
+            {postInfo.post.retweeted_status ? (
+              <>
+                这是一条转发帖。深层删除会同时删除原帖及所有转发；浅层删除只会删除这条转发并将其从收藏中移除。
+              </>
+            ) : (
+              <>深层删除会删除这条帖子及所有转发；浅层删除只会删除这条帖子（如果无转发）。</>
+            )}
+            <br />
+            删除后无法撤回。
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDialogClose}>取消</Button>
-          <Button onClick={handleDeleteConfirm} color="error" autoFocus>
-            确认
+          <Button onClick={e => handleDeleteConfirm(e, false)} color="warning">
+            浅层删除
+          </Button>
+          <Button onClick={e => handleDeleteConfirm(e, true)} color="error" autoFocus>
+            深层删除
           </Button>
         </DialogActions>
       </Dialog>

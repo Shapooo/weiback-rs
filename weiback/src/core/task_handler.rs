@@ -23,8 +23,8 @@ use url::Url;
 use super::post_processer::PostProcesser;
 use super::task::{
     BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions,
-    CleanupPicturesOptions, ExportJobOptions, PaginatedPostInfo, PostQuery, ResolutionPolicy,
-    TaskContext,
+    CleanupPicturesOptions, DeletePostOptions, ExportJobOptions, PaginatedPostInfo, PostQuery,
+    ResolutionPolicy, TaskContext,
 };
 use super::task_manager::{TaskError, TaskErrorType};
 use crate::emoji_map::EmojiMap;
@@ -426,10 +426,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     ///
     /// # Arguments
     /// * `ctx` - The task context.
-    /// * `id` - The id of post to delete.
+    /// * `options` - The delete options including post id and deep/shallow mode.
     #[tracing::instrument(skip(self, ctx), level = "info")]
-    pub async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
-        self.storage.delete_post(ctx, id).await
+    pub async fn delete_post(
+        &self,
+        ctx: Arc<TaskContext>,
+        options: DeletePostOptions,
+    ) -> Result<()> {
+        self.storage
+            .delete_post(ctx, options.id, options.deep)
+            .await
     }
 
     /// Re-fetches a batch of posts from Weibo API and processes them.
@@ -642,7 +648,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         ctx.task_manager.update_progress(0, total)?;
 
         for id in ids {
-            if let Err(e) = self.storage.delete_post(ctx.clone(), id).await {
+            if let Err(e) = self.storage.delete_post(ctx.clone(), id, true).await {
                 error!("Failed to delete invalid post {}: {}", id, e);
                 ctx.task_manager.report_task_error(TaskError {
                     error_type: TaskErrorType::DownloadMedia(format!("delete post {}", id)),

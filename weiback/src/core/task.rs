@@ -74,6 +74,15 @@ pub struct CleanupInvalidPostsOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeletePostOptions {
+    /// The ID of the post to delete.
+    pub id: i64,
+    /// If true, perform deep delete (delete the post and all related posts in the tree).
+    /// If false, perform shallow delete (only delete the post itself if it has no children).
+    pub deep: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackupFavoritesOptions {
     pub num_pages: u32,
 }

@@ -15,6 +15,11 @@ export interface CleanupInvalidPostsOptions {
   clean_retweeted_invalid: boolean
 }
 
+export interface DeletePostOptions {
+  id: number
+  deep: boolean
+}
+
 export enum ResolutionPolicy {
   Highest = 'Highest',
   Lowest = 'Lowest',

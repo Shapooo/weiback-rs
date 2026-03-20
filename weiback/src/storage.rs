@@ -129,12 +129,21 @@ pub trait Storage: Send + Sync + Clone + 'static {
     /// A `Result` containing a vector of post IDs.
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>>;
 
-    /// Deletes a post and all its associated media from both the database and the file system.
+    /// Deletes a post and all its associated media.
     ///
     /// # Arguments
     /// * `ctx` - The task context containing configuration (like storage paths).
     /// * `id` - The ID of the post to delete.
-    async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()>;
+    /// * `deep` - If true, performs deep delete (see below). If false, performs shallow delete.
+    ///
+    /// Deep delete semantics:
+    /// - If the post retweets another post, finds the root and deletes root + ALL posts that retweet it.
+    /// - If the post is an original (no retweeted_id), deletes the post and ALL its retweets.
+    ///
+    /// Shallow delete semantics:
+    /// - If the post has children (is being retweeted), only removes it from favorited_posts.
+    /// - If the post has no children, deletes only the post itself.
+    async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64, deep: bool) -> Result<()>;
 
     /// Retrieves IDs of posts that are invalid (e.g., uid is NULL).
     ///
@@ -558,23 +567,20 @@ impl Storage for StorageImpl {
         picture::delete_picture_by_url(&self.db_pool, url).await
     }
 
-    async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64) -> Result<()> {
+    async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64, deep: bool) -> Result<()> {
         let picture_path = ctx.config.picture_path.clone();
         let video_path = ctx.config.video_path.clone();
+
         let Some(post) = post::get_post(&self.db_pool, id).await? else {
             return Ok(());
         };
-        if post.retweeted_id.is_some() {
-            self.pic_storage
-                .delete_post_pictures(&picture_path, &self.db_pool, id)
-                .await?;
-            self.video_storage
-                .delete_post_videos(&video_path, &self.db_pool, id)
-                .await?;
-            post::delete_post(&self.db_pool, id).await
-        } else {
-            let mut ids = post::get_retweet_ids(&self.db_pool, id).await?;
-            ids.push(id);
+
+        if deep {
+            // Deep delete: delete the root and all related posts in the tree
+            let root_id = post.retweeted_id.unwrap_or(post.id);
+            let mut ids = post::get_retweet_ids(&self.db_pool, root_id).await?;
+            ids.push(root_id);
+
             self.pic_storage
                 .batch_delete_posts_pictures(&picture_path, &self.db_pool, &ids)
                 .await?;
@@ -582,6 +588,22 @@ impl Storage for StorageImpl {
                 .batch_delete_posts_videos(&video_path, &self.db_pool, &ids)
                 .await?;
             post::batch_delete_posts(&self.db_pool, &ids).await
+        } else {
+            // Shallow delete: only delete if no children, otherwise just unfavorite
+            if post::has_retweets(&self.db_pool, id).await? {
+                // Post has children, only remove from favorited_posts
+                post::mark_post_unfavorited(&self.db_pool, id).await?;
+                return Ok(());
+            }
+
+            // Post has no children, delete only itself
+            self.pic_storage
+                .delete_post_pictures(&picture_path, &self.db_pool, id)
+                .await?;
+            self.video_storage
+                .delete_post_videos(&video_path, &self.db_pool, id)
+                .await?;
+            post::delete_post(&self.db_pool, id).await
         }
     }
 
@@ -597,6 +619,7 @@ mod local_tests {
         path::Path,
     };
 
+    use chrono::DateTime;
     use futures::TryStreamExt;
     use itertools::Itertools;
     use tempfile::TempDir;
@@ -960,7 +983,10 @@ mod local_tests {
         assert_eq!(infos[0].meta.url(), picture.meta.url());
 
         // Test delete_post
-        storage.delete_post(ctx.clone(), post.id).await.unwrap();
+        storage
+            .delete_post(ctx.clone(), post.id, true)
+            .await
+            .unwrap();
         assert!(storage.get_post(post.id).await.unwrap().is_none());
         // Check if picture is also deleted
         assert!(
@@ -1244,5 +1270,132 @@ mod local_tests {
             .delete_picture_by_url(ctx.clone(), &url)
             .await
             .unwrap();
+    }
+
+    /// Helper to create a simple post for testing.
+    fn make_post(id: i64, text: &str, retweeted_id: Option<Box<Post>>) -> Post {
+        Post {
+            id,
+            text: text.to_string(),
+            mblogid: format!("mblog_{}", id),
+            retweeted_status: retweeted_id,
+            created_at: DateTime::parse_from_rfc3339("2024-01-01T00:00:00+00:00").unwrap(),
+            ..Default::default()
+        }
+    }
+
+    /// Test shallow delete: deleting a root post (has children) only unfavorites it.
+    #[tokio::test]
+    async fn test_delete_post_shallow_root_with_children() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Create a root post
+        let root = make_post(100, "root post", None);
+        storage.save_post(&root).await.unwrap();
+
+        // Create a retweet of the root
+        let retweet = make_post(101, "retweet", Some(Box::new(root.clone())));
+        storage.save_post(&retweet).await.unwrap();
+
+        // Mark root as favorited
+        storage
+            .save_post(&Post {
+                favorited: true,
+                ..root.clone()
+            })
+            .await
+            .unwrap();
+
+        // Shallow delete on root with children — should only unfavorite
+        storage
+            .delete_post(ctx.clone(), root.id, false)
+            .await
+            .unwrap();
+
+        // Root should still exist (only unfavorited)
+        assert!(storage.get_post(root.id).await.unwrap().is_some());
+        // Retweet should still exist
+        assert!(storage.get_post(retweet.id).await.unwrap().is_some());
+    }
+
+    /// Test shallow delete: deleting a leaf post (no children) actually deletes it.
+    #[tokio::test]
+    async fn test_delete_post_shallow_leaf() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Create a root post
+        let root = make_post(200, "root post", None);
+        storage.save_post(&root).await.unwrap();
+
+        // Create a retweet of the root
+        let retweet = make_post(201, "retweet", Some(Box::new(root.clone())));
+        storage.save_post(&retweet).await.unwrap();
+
+        // Shallow delete on leaf (retweet) — should delete the retweet
+        storage
+            .delete_post(ctx.clone(), retweet.id, false)
+            .await
+            .unwrap();
+
+        // Retweet should be gone
+        assert!(storage.get_post(retweet.id).await.unwrap().is_none());
+        // Root should still exist
+        assert!(storage.get_post(root.id).await.unwrap().is_some());
+    }
+
+    /// Test deep delete: deleting a retweet should delete the root and all its retweets.
+    #[tokio::test]
+    async fn test_delete_post_deep_retweet() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        // Create a root post
+        let root = make_post(300, "root post", None);
+        storage.save_post(&root).await.unwrap();
+
+        // Create two retweets of the root
+        let retweet1 = make_post(301, "retweet 1", Some(Box::new(root.clone())));
+        let retweet2 = make_post(302, "retweet 2", Some(Box::new(root.clone())));
+        storage.save_post(&retweet1).await.unwrap();
+        storage.save_post(&retweet2).await.unwrap();
+
+        // Deep delete on retweet1 — should delete root + all retweets
+        storage
+            .delete_post(ctx.clone(), retweet1.id, true)
+            .await
+            .unwrap();
+
+        // All posts should be gone
+        assert!(storage.get_post(root.id).await.unwrap().is_none());
+        assert!(storage.get_post(retweet1.id).await.unwrap().is_none());
+        assert!(storage.get_post(retweet2.id).await.unwrap().is_none());
+    }
+
+    /// Test deep delete: deleting a root should delete root and all its retweets.
+    #[tokio::test]
+    async fn test_delete_post_deep_root() {
+        let storage = setup_storage().await;
+        let (ctx, _temp_dir) = setup_task_context().await;
+
+        let root = make_post(400, "root post", None);
+        storage.save_post(&root).await.unwrap();
+
+        let retweet1 = make_post(401, "retweet 1", Some(Box::new(root.clone())));
+        let retweet2 = make_post(402, "retweet 2", Some(Box::new(root.clone())));
+        storage.save_post(&retweet1).await.unwrap();
+        storage.save_post(&retweet2).await.unwrap();
+
+        // Deep delete on root
+        storage
+            .delete_post(ctx.clone(), root.id, true)
+            .await
+            .unwrap();
+
+        // All posts should be gone
+        assert!(storage.get_post(root.id).await.unwrap().is_none());
+        assert!(storage.get_post(retweet1.id).await.unwrap().is_none());
+        assert!(storage.get_post(retweet2.id).await.unwrap().is_none());
     }
 }

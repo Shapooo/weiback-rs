@@ -35,8 +35,8 @@ use crate::media_downloader::MediaDownloaderHandle;
 use crate::models::User;
 use crate::storage::StorageImpl;
 pub use task::{
-    BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions, ExportJobOptions,
-    PaginatedPostInfo, PostQuery, TaskContext, TaskRequest, UserPostFilter,
+    BackupFavoritesOptions, BackupUserPostsOptions, CleanupInvalidPostsOptions, DeletePostOptions,
+    ExportJobOptions, PaginatedPostInfo, PostQuery, TaskContext, TaskRequest, UserPostFilter,
 };
 pub use task_handler::TaskHandler;
 pub use task_manager::{Task, TaskError, TaskEventListener, TaskManager, TaskType};
@@ -237,9 +237,9 @@ impl Core {
     }
 
     /// Deletes a post from local storage.
-    pub async fn delete_post(&self, id: i64) -> Result<()> {
+    pub async fn delete_post(&self, options: DeletePostOptions) -> Result<()> {
         let ctx = self.create_short_task_context();
-        self.task_handler.delete_post(ctx, id).await
+        self.task_handler.delete_post(ctx, options).await
     }
 
     /// Re-fetches a single post from the Weibo API and updates local storage.
