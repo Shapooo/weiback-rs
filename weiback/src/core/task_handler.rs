@@ -203,7 +203,9 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             start,
             num_pages
         );
+        ctx.task_manager.update_progress(0, num_pages as u64)?;
 
+        let mut processed = 0;
         for page in start..end {
             let result = page_backup_fn(page).await;
 
@@ -216,7 +218,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         page - start + 1,
                         num_pages
                     );
-                    ctx.task_manager.update_progress(1, 0)?;
                 }
                 Err(e) => {
                     error!(
@@ -231,6 +232,9 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     })?;
                 }
             }
+            processed += 1;
+            ctx.task_manager
+                .update_progress(processed, num_pages as u64)?;
 
             if page != end {
                 sleep(task_interval).await;
@@ -335,6 +339,8 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let len = ids.len();
         info!("Found {len} posts to unfavorite");
         ctx.task_manager.update_progress(0, len as u64)?;
+
+        let mut processed: u64 = 0;
         for (i, id) in ids.into_iter().enumerate() {
             let result = self.api_client.favorites_destroy(id).await;
 
@@ -342,7 +348,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 Ok(_) => {
                     self.storage.mark_post_unfavorited(id).await?;
                     info!("Post {id} ({i}/{len})unfavorited successfully");
-                    ctx.task_manager.update_progress(1, 0)?;
                 }
                 Err(e) => {
                     error!("Failed to unfavorite post {id}: {e}");
@@ -350,9 +355,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         error_type: TaskErrorType::DownloadMedia(format!("unfavorite post {}", id)),
                         message: e.to_string(),
                     })?;
-                    ctx.task_manager.update_progress(1, 0)?;
                 }
             }
+            processed += 1;
+            ctx.task_manager.update_progress(processed, len as u64)?;
 
             if i < len - 1 {
                 tokio::time::sleep(task_interval).await;
@@ -409,13 +415,8 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
             processed += 1;
             if processed.is_multiple_of(10) {
-                ctx.task_manager.update_progress(10, 0)?;
+                ctx.task_manager.update_progress(processed, total_pages)?;
             }
-        }
-        // Report remaining progress
-        let remaining = processed % 10;
-        if remaining > 0 {
-            ctx.task_manager.update_progress(remaining, 0)?;
         }
         info!("Finished exporting from local");
         Ok(())
@@ -485,6 +486,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         ctx.task_manager.update_progress(0, total as u64)?;
 
         let task_interval = ctx.config.backup_task_interval;
+        let mut processed: u64 = 0;
         for (i, id) in ids.into_iter().enumerate() {
             let post_result = self.api_client.statuses_show(id).await;
             let process_result = match post_result {
@@ -503,7 +505,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             match process_result {
                 Ok(_) => {
                     info!("re-backed up post {} ({}/{})", id, i + 1, total);
-                    ctx.task_manager.update_progress(1, 0)?;
                 }
                 Err(e) => {
                     error!(
@@ -516,8 +517,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         error_type: TaskErrorType::DownloadMedia(format!("rebackup post {}", id)),
                         message: e.to_string(),
                     })?;
-                    ctx.task_manager.update_progress(1, 0)?;
                 }
+            }
+            processed += 1;
+            if processed.is_multiple_of(100) {
+                ctx.task_manager.update_progress(processed, total as u64)?;
             }
 
             if i < total - 1 {
@@ -589,16 +593,9 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
 
             processed += 1;
             if processed.is_multiple_of(100) {
-                ctx.task_manager.update_progress(100, 0)?;
+                ctx.task_manager.update_progress(processed, total)?;
             }
         }
-
-        // Report remaining progress
-        let remaining = processed % 100;
-        if remaining > 0 {
-            ctx.task_manager.update_progress(remaining, 0)?;
-        }
-
         info!("Finished cleanup pictures task");
         Ok(())
     }
@@ -653,16 +650,9 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
             processed += 1;
             if processed.is_multiple_of(100) {
-                ctx.task_manager.update_progress(100, 0)?;
+                ctx.task_manager.update_progress(processed, total)?;
             }
         }
-
-        // Report remaining progress
-        let remaining = processed % 100;
-        if remaining > 0 {
-            ctx.task_manager.update_progress(remaining, 0)?;
-        }
-
         info!("Finished cleanup invalid avatars task");
         Ok(())
     }
@@ -701,16 +691,9 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
             processed += 1;
             if processed.is_multiple_of(100) {
-                ctx.task_manager.update_progress(100, 0)?;
+                ctx.task_manager.update_progress(processed, total)?;
             }
         }
-
-        // Report remaining progress
-        let remaining = processed % 100;
-        if remaining > 0 {
-            ctx.task_manager.update_progress(remaining, 0)?;
-        }
-
         info!("Finished cleanup invalid posts task");
         Ok(())
     }
@@ -770,16 +753,12 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         )),
                         message: e.to_string(),
                     })?;
-                    processed += 1;
-                    if processed.is_multiple_of(100) {
-                        ctx.task_manager.update_progress(100, 0)?;
-                    }
                     info!("Scanned post {} ({}/{})", id, i + 1, total);
-                    continue;
+                    false
                 }
             };
 
-            let did_rebackup = if has_missing {
+            if has_missing {
                 info!("Post {id} has missing images, re-backing up...");
                 let fetch_result = self.api_client.statuses_show(id).await;
                 match fetch_result {
@@ -796,7 +775,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         }
                         // Sleep between API calls to avoid rate limiting
                         sleep(task_interval).await;
-                        true
                     }
                     Err(e) => {
                         error!("Failed to fetch post {} for re-backup: {}", id, e);
@@ -804,28 +782,14 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                             error_type: TaskErrorType::DownloadMedia(format!("fetch post {}", id)),
                             message: e.to_string(),
                         })?;
-                        false
                     }
                 }
-            } else {
-                false
-            };
-
+            }
             processed += 1;
-            // Report immediately after actual re-backup
-            if did_rebackup {
-                ctx.task_manager.update_progress(1, 0)?;
-            } else if processed.is_multiple_of(100) {
-                // Periodic batch report for items that didn't need re-backup
-                ctx.task_manager.update_progress(100, 0)?;
+            if processed.is_multiple_of(100) || has_missing {
+                ctx.task_manager.update_progress(processed, total as u64)?;
             }
             info!("Scanned post {} ({}/{})", id, i + 1, total);
-        }
-
-        // Report remaining progress
-        let remaining = processed % 100;
-        if remaining > 0 {
-            ctx.task_manager.update_progress(remaining, 0)?;
         }
 
         info!("Finished re-backup missing images task");
@@ -869,7 +833,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             }
             processed += 1;
             if processed.is_multiple_of(200) {
-                ctx.task_manager.update_progress(200, 0)?;
+                ctx.task_manager.update_progress(processed, total)?;
             }
         }
 

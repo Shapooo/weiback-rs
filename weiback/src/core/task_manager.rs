@@ -176,17 +176,17 @@ impl TaskManager {
     /// Updates the progress and total units of the currently active task.
     ///
     /// # Arguments
-    /// * `progress_increment` - Value to add to the current progress.
-    /// * `total_increment` - Value to add to the current total units.
+    /// * `progress` - The new progress value (absolute, not incremental).
+    /// * `total` - The new total units value (absolute, not incremental).
     ///
     /// # Errors
     /// Returns `Error::InconsistentTask` if no task is currently `InProgress`.
-    pub fn update_progress(&self, progress_increment: u64, total_increment: u64) -> Result<()> {
+    pub fn update_progress(&self, progress: u64, total: u64) -> Result<()> {
         let mut task_guard = self.current_task.lock()?;
         if let Some(task) = task_guard.as_mut() {
             if task.status == TaskStatus::InProgress {
-                task.progress += progress_increment;
-                task.total += total_increment;
+                task.progress = progress;
+                task.total = total;
                 let task_clone = task.clone();
                 if let Some(listener) = self.listener.lock()?.as_ref() {
                     listener.on_task_updated(&task_clone);
@@ -320,15 +320,15 @@ mod tests {
             .start_task(1, TaskType::BackupUser, "Test task".into(), 10)
             .unwrap();
 
-        manager.update_progress(5, 5).unwrap();
+        manager.update_progress(5, 10).unwrap();
         let task = manager.get_current().unwrap().unwrap();
         assert_eq!(task.progress, 5);
-        assert_eq!(task.total, 15);
+        assert_eq!(task.total, 10);
 
-        manager.update_progress(1, 0).unwrap();
+        manager.update_progress(6, 10).unwrap();
         let task = manager.get_current().unwrap().unwrap();
         assert_eq!(task.progress, 6);
-        assert_eq!(task.total, 15);
+        assert_eq!(task.total, 10);
     }
 
     #[test]
