@@ -775,6 +775,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let total = self.storage.count_pictures().await?;
         info!("Found {} pictures to check", total);
         ctx.task_manager.update_progress(0, total)?;
+        let mut count = 0;
 
         let mut deleted_count: u64 = 0;
         let storage = self.storage.clone();
@@ -791,8 +792,10 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             if deleted {
                 deleted_count += 1;
             }
-
-            ctx.task_manager.update_progress(1, 0)?;
+            count += 1;
+            if count % 200 == 0 {
+                ctx.task_manager.update_progress(200, 0)?;
+            }
         }
 
         info!(
