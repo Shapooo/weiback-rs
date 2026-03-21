@@ -85,18 +85,20 @@ impl<C: HttpClient> ApiClientImpl<C> {
 
         // If there's a retweeted post, fetch its full version.
         // This also handles the long text of the retweeted post.
-        if let Some(mut retweeted_box) = post.retweeted_status.take() {
-            let full_retweet = self.statuses_show_internal(retweeted_box.id).await?;
-            *retweeted_box = full_retweet;
+        if let Some(retweeted_status) = post.retweeted_status.as_ref()
+            && retweeted_status.user.is_some()
+        {
+            let retweeted_id = retweeted_status.id;
+            let mut retweeted_status = self.statuses_show_internal(retweeted_id).await?;
+            // *retweeted_box = full_retweet;
 
-            if let Some(long_text) = retweeted_box.long_text.take() {
-                retweeted_box.text = long_text.content;
-            } else if retweeted_box.is_long_text {
+            if let Some(long_text) = retweeted_status.long_text.take() {
+                retweeted_status.text = long_text.content;
+            } else if retweeted_status.is_long_text {
                 // workaround wrongly set is_long_text
-                let id = retweeted_box.id;
-                warn!("retweeted post {id} is_long_text without long_text");
+                warn!("retweeted post {retweeted_id} is_long_text without long_text");
             }
-            post.retweeted_status = Some(retweeted_box);
+            post.retweeted_status = Some(Box::new(retweeted_status));
         }
 
         post.try_into()
