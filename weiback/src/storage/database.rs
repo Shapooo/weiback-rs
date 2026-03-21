@@ -68,7 +68,7 @@ pub async fn create_db_pool_with_url(db_url: &str) -> Result<SqlitePool> {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use super::*;
     use tempfile::tempdir;
 
