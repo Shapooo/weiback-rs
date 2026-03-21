@@ -775,6 +775,7 @@ where
 
 #[cfg(test)]
 mod local_tests {
+    use std::collections::HashSet;
     use std::path::Path;
 
     use sqlx::SqlitePool;
@@ -916,11 +917,11 @@ mod local_tests {
     async fn test_get_favorited_sum() {
         let db = setup_db().await;
         let posts = create_test_posts().await;
-        let mut favorited_count = 0;
+        let mut favorited_set = HashSet::new();
         for post in posts {
             let internal_post: PostInternal = post.try_into().unwrap();
             if internal_post.favorited {
-                favorited_count += 1;
+                favorited_set.insert(internal_post.id);
             }
             save_post(&db, &internal_post).await.unwrap();
         }
@@ -936,7 +937,7 @@ mod local_tests {
             posts_per_page: 2,
         };
         let (_, sum) = query_posts(&db, query).await.unwrap();
-        assert_eq!(sum, favorited_count);
+        assert_eq!(sum, favorited_set.len() as u64);
     }
 
     #[tokio::test]
@@ -954,6 +955,7 @@ mod local_tests {
 
         let ids = get_posts_id_to_unfavorite(&db).await.unwrap();
         ids_to_unfavorite.sort();
+        ids_to_unfavorite.dedup();
         let mut ids_sorted = ids;
         ids_sorted.sort();
         assert_eq!(ids_sorted, ids_to_unfavorite);
@@ -1002,10 +1004,18 @@ mod local_tests {
             .iter()
             .find_map(|p| p.user.as_ref().map(|u| u.id))
             .unwrap();
-        let ones_posts_num = posts
+        let mut ones_post_ids = posts
             .iter()
-            .filter(|p| p.user.is_some() && p.user.as_ref().unwrap().id == uid)
-            .count();
+            .filter_map(|p| {
+                if p.user.is_some() && p.user.as_ref().unwrap().id == uid {
+                    Some(p.id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        ones_post_ids.sort();
+        ones_post_ids.dedup();
         for post in posts.clone() {
             let internal_post: PostInternal = post.try_into().unwrap();
             save_post(&db, &internal_post).await.unwrap();
@@ -1017,18 +1027,24 @@ mod local_tests {
             end_date: None,
             search_term: None,
             is_favorited: false,
-            reverse_order: false,
+            reverse_order: true,
             page: 1,
-            posts_per_page: ones_posts_num as u32,
+            posts_per_page: ones_post_ids.len() as u32,
         };
         let (fetched_posts, sum) = query_posts(&db, query.clone()).await.unwrap();
-        assert_eq!(fetched_posts.len(), ones_posts_num);
-        assert_eq!(sum as usize, ones_posts_num);
+        let fetched_ids = fetched_posts.into_iter().map(|p| p.id).collect::<Vec<_>>();
+        assert_eq!(fetched_ids, ones_post_ids);
+        assert_eq!(sum as usize, ones_post_ids.len());
 
-        query.reverse_order = true;
+        query.reverse_order = false;
+        ones_post_ids.reverse();
         let (fetched_posts_rev, sum) = query_posts(&db, query).await.unwrap();
-        assert_eq!(fetched_posts_rev.len(), ones_posts_num);
-        assert_eq!(sum as usize, ones_posts_num);
+        let fetched_ids_rev = fetched_posts_rev
+            .into_iter()
+            .map(|p| p.id)
+            .collect::<Vec<_>>();
+        assert_eq!(fetched_ids_rev, ones_post_ids);
+        assert_eq!(sum as usize, ones_post_ids.len());
     }
 
     #[tokio::test]

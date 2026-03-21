@@ -842,15 +842,21 @@ mod local_tests {
     async fn test_get_ones_posts() {
         let storage = setup_storage().await;
         let posts = create_test_posts().await;
-        let uid = 1786055427;
-        let ones_posts_num = posts
-            .iter()
-            .filter(|p| {
-                p.user.is_some() && p.user.as_ref().unwrap().id == uid
-                    || p.retweeted_status.is_some()
-                        && p.retweeted_status.as_ref().unwrap().id == uid
-            })
-            .count();
+        let uid = 1401527553;
+        let mut ones_post_ids = HashSet::new();
+        for post in posts.iter() {
+            if let Some(user) = post.user.as_ref()
+                && user.id == uid
+            {
+                ones_post_ids.insert(post.id);
+            }
+            if let Some(rs) = post.retweeted_status.as_ref()
+                && let Some(user) = rs.user.as_ref()
+                && user.id == uid
+            {
+                ones_post_ids.insert(rs.id);
+            }
+        }
 
         for post in posts.iter() {
             storage.save_post(post).await.unwrap();
@@ -864,14 +870,14 @@ mod local_tests {
             is_favorited: false,
             reverse_order: false,
             page: 1,
-            posts_per_page: ones_posts_num as u32,
+            posts_per_page: ones_post_ids.len() as u32,
         };
         let fetched_posts = storage.query_posts(query.clone()).await.unwrap();
-        assert_eq!(fetched_posts.posts.len(), ones_posts_num);
+        assert_eq!(fetched_posts.posts.len(), ones_post_ids.len());
 
         query.reverse_order = true;
         let fetched_posts_rev = storage.query_posts(query).await.unwrap();
-        assert_eq!(fetched_posts_rev.posts.len(), ones_posts_num);
+        assert_eq!(fetched_posts_rev.posts.len(), ones_post_ids.len());
     }
 
     #[tokio::test]
@@ -879,13 +885,13 @@ mod local_tests {
         let storage = setup_storage().await;
         let posts = create_test_posts().await;
 
-        let mut favorited = 0;
-        let mut not_favorited = vec![];
+        let mut favorited = HashSet::new();
+        let mut not_favorited = HashSet::new();
         for post in posts {
             if post.favorited {
-                favorited += 1;
+                favorited.insert(post.id);
             } else {
-                not_favorited.push(post.id);
+                not_favorited.insert(post.id);
             }
             storage.save_post(&post).await.unwrap();
         }
@@ -901,27 +907,27 @@ mod local_tests {
             posts_per_page: 2,
         };
         let paginated_posts = storage.query_posts(query).await.unwrap();
-        assert_eq!(paginated_posts.total_items, favorited);
+        assert_eq!(paginated_posts.total_items, favorited.len() as u64);
 
         let to_unfav = storage.get_posts_id_to_unfavorite().await.unwrap();
-        assert_eq!(to_unfav.len(), favorited as usize);
+        assert_eq!(to_unfav.len(), favorited.len());
 
         for id in to_unfav.iter().take(to_unfav.len() / 3) {
             storage.mark_post_unfavorited(*id).await.unwrap();
         }
 
         assert_eq!(
-            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
-            favorited - favorited / 3
+            storage.get_posts_id_to_unfavorite().await.unwrap().len(),
+            favorited.len() - favorited.len() / 3
         );
 
-        for id in not_favorited.iter().take(to_unfav.len() / 3) {
+        for id in not_favorited.iter().take(not_favorited.len() / 3) {
             storage.mark_post_favorited(*id).await.unwrap();
         }
 
         assert_eq!(
-            storage.get_posts_id_to_unfavorite().await.unwrap().len() as u64,
-            favorited - favorited / 3 + not_favorited.len() as u64 / 3
+            storage.get_posts_id_to_unfavorite().await.unwrap().len(),
+            favorited.len() - favorited.len() / 3 + not_favorited.len() / 3
         );
     }
 

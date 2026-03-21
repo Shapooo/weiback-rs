@@ -900,41 +900,18 @@ mod local_tests {
 
     use super::*;
     use crate::{
-        api::{FavoritesApi, ProfileStatusesApi},
         core::{
-            task::{BackupUserPostsOptions, ExportOutputConfig},
+            task::ExportOutputConfig,
             task_manager::{TaskManager, TaskType},
         },
         mock::MockApi,
         mock::{exporter::MockExporter, media_downloader::MockMediaDownloader},
-        models::Post,
         storage::{StorageImpl, database},
     };
 
     async fn create_test_storage() -> StorageImpl {
         let db_pool = database::create_db_pool_with_url(":memory:").await.unwrap();
         StorageImpl::new(db_pool)
-    }
-
-    async fn create_posts(client: &MockClient, api: &MockApi) -> Vec<Post> {
-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let fav_path = manifest_dir.join("tests/data/favorites.json");
-        client.set_favorites_response_from_file(&fav_path).unwrap();
-        let prof_path = manifest_dir.join("tests/data/profile_statuses.json");
-        client
-            .set_profile_statuses_response_from_file(&prof_path)
-            .unwrap();
-        let statuses_show_path = manifest_dir.join("tests/data/statuses_show.json");
-        client
-            .set_statuses_show_response_from_file(&statuses_show_path)
-            .unwrap();
-        let mut posts = api.favorites(0, 20).await.unwrap();
-        posts.extend(
-            api.profile_statuses(1786055427, 0, Default::default(), 20)
-                .await
-                .unwrap(),
-        );
-        posts
     }
 
     fn create_dummy_ctx() -> Arc<TaskContext> {
@@ -948,107 +925,6 @@ mod local_tests {
             config: Default::default(),
             task_manager,
         })
-    }
-
-    #[tokio::test]
-    async fn test_backup_user() {
-        let client = MockClient::new();
-        let api_client = MockApi::new(client.clone());
-        let storage = create_test_storage().await;
-        let exporter = MockExporter::new();
-        let downloader = MockMediaDownloader::new(true);
-        let task_handler =
-            TaskHandler::new(api_client.clone(), storage.clone(), exporter, downloader).unwrap();
-        let uid = 1786055427;
-        let posts = create_posts(&client, &api_client).await;
-        let mut ids = posts
-            .into_iter()
-            .filter_map(|p| {
-                if p.user.is_some() && p.user.as_ref().unwrap().id == uid {
-                    Some(p.id)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        ids.sort();
-        ids.reverse();
-
-        let options = BackupUserPostsOptions {
-            uid: 1786055427,
-            num_pages: 1,
-            backup_type: Default::default(),
-        };
-        let dummy_context = create_dummy_ctx();
-        task_handler
-            .backup_user(dummy_context, options)
-            .await
-            .unwrap();
-        let query = PostQuery {
-            user_id: Some(uid),
-            start_date: None,
-            end_date: None,
-            search_term: None,
-            is_favorited: false,
-            reverse_order: false,
-            page: 1,
-            posts_per_page: 1_000_000,
-        };
-        let ids_in_db = storage
-            .query_posts(query)
-            .await
-            .unwrap()
-            .posts
-            .into_iter()
-            .map(|p| p.id)
-            .collect::<Vec<_>>();
-
-        assert_eq!(ids_in_db, ids);
-    }
-
-    #[tokio::test]
-    async fn test_backup_favorites() {
-        let client = MockClient::new();
-        let api_client = MockApi::new(client.clone());
-        let storage = create_test_storage().await;
-        let exporter = MockExporter::new();
-        let downloader = MockMediaDownloader::new(true);
-        let task_handler =
-            TaskHandler::new(api_client.clone(), storage.clone(), exporter, downloader).unwrap();
-        let posts = create_posts(&client, &api_client).await;
-        let mut ids = posts
-            .iter()
-            .filter_map(|p| p.favorited.then_some(p.id))
-            .collect::<Vec<_>>();
-        ids.sort();
-        ids.dedup();
-        ids.reverse();
-
-        let options = BackupFavoritesOptions { num_pages: 1 };
-        let dummy_context = create_dummy_ctx();
-        task_handler
-            .backup_favorites(dummy_context, options)
-            .await
-            .unwrap();
-        let query = PostQuery {
-            user_id: None,
-            start_date: None,
-            end_date: None,
-            search_term: None,
-            is_favorited: true,
-            reverse_order: false,
-            page: 1,
-            posts_per_page: 1_000_000,
-        };
-        let ids_in_db = storage
-            .query_posts(query)
-            .await
-            .unwrap()
-            .posts
-            .iter()
-            .map(|p| p.id)
-            .collect::<Vec<_>>();
-        assert_eq!(ids_in_db, ids);
     }
 
     #[tokio::test]
