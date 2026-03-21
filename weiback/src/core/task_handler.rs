@@ -374,8 +374,20 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         options: ExportJobOptions,
     ) -> Result<()> {
         let posts_per_page = crate::config::get_config().read()?.posts_per_html;
-        let mut query = options.query;
+        let mut query = options.query.clone();
         query.posts_per_page = posts_per_page;
+
+        // Get total count for progress tracking
+        let mut count_query = options.query.clone();
+        count_query.posts_per_page = 1;
+        count_query.page = 1;
+        let total_items = self.storage.query_posts(count_query).await?.total_items;
+        let total_pages = total_items.div_ceil(posts_per_page as u64);
+        info!(
+            "Exporting {} posts total, {} pages",
+            total_items, total_pages
+        );
+        ctx.task_manager.update_progress(0, total_pages)?;
 
         for page_index in 1.. {
             query.page = page_index;
@@ -393,6 +405,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             self.exporter
                 .export_page(html, &page_name, &options.output.export_dir)
                 .await?;
+            ctx.task_manager.update_progress(1, 0)?;
         }
         info!("Finished exporting from local");
         Ok(())

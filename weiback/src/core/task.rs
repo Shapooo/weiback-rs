@@ -39,7 +39,7 @@ pub enum TaskRequest {
     /// Clean up redundant images or enforce resolution policies.
     CleanupPictures(CleanupPicturesOptions),
     /// Clean up invalid or outdated user avatars.
-    CleanupAvatars,
+    CleanupOutdatedAvatars,
     /// Clean up invalid posts (e.g., user is None).
     CleanupInvalidPosts(CleanupInvalidPostsOptions),
     /// Re-backup posts based on a query.
@@ -58,7 +58,7 @@ impl TaskRequest {
             TaskRequest::UnfavoritePosts => 1,
             TaskRequest::Export(_) => 1,
             TaskRequest::CleanupPictures(_) => 0,
-            TaskRequest::CleanupAvatars => 0,
+            TaskRequest::CleanupOutdatedAvatars => 0,
             TaskRequest::CleanupInvalidPosts(_) => 0,
             TaskRequest::RebackupPosts(_) => 0,
             TaskRequest::RebackupMissingImages(_) => 0,

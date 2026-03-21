@@ -260,11 +260,21 @@ impl Core {
         self.task_handler.get_video_blob(ctx, url).await
     }
 
+    // ========================= long tasks =========================
+
     /// Export local posts to another format (e.g., HTML).
     pub async fn export_posts(&self, request: TaskRequest) -> Result<()> {
-        let ctx = self.create_short_task_context();
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
         if let TaskRequest::Export(options) = request {
-            self.task_handler.export_posts(ctx, options).await
+            self.task_manager
+                .start_task(id, TaskType::Export, "导出帖子".into(), 0)?;
+            spawn(handle_task_request(
+                self.task_handler.clone(),
+                ctx,
+                TaskRequest::Export(options),
+            ));
+            Ok(())
         } else {
             Err(crate::error::Error::InconsistentTask(
                 "Invalid task request for export_posts".into(),
@@ -274,9 +284,21 @@ impl Core {
 
     /// Clean up redundant or low-resolution images.
     pub async fn cleanup_pictures(&self, request: TaskRequest) -> Result<()> {
-        let ctx = self.create_short_task_context();
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
         if let TaskRequest::CleanupPictures(options) = request {
-            self.task_handler.cleanup_pictures(ctx, options).await
+            self.task_manager.start_task(
+                id,
+                TaskType::CleanupPictures,
+                "清理重复图片".into(),
+                0,
+            )?;
+            spawn(handle_task_request(
+                self.task_handler.clone(),
+                ctx,
+                TaskRequest::CleanupPictures(options),
+            ));
+            Ok(())
         } else {
             Err(crate::error::Error::InconsistentTask(
                 "Invalid task request for cleanup_pictures".into(),
@@ -286,23 +308,41 @@ impl Core {
 
     /// Clean up invalid or outdated avatars.
     pub async fn cleanup_outdated_avatars(&self) -> Result<()> {
-        let ctx = self.create_short_task_context();
-        self.task_handler.cleanup_outdated_avatars(ctx).await
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
+        self.task_manager
+            .start_task(id, TaskType::CleanupAvatars, "清理失效头像".into(), 0)?;
+        spawn(handle_task_request(
+            self.task_handler.clone(),
+            ctx,
+            TaskRequest::CleanupOutdatedAvatars,
+        ));
+        Ok(())
     }
 
     /// Clean up invalid posts.
     pub async fn cleanup_invalid_posts(&self, request: TaskRequest) -> Result<()> {
-        let ctx = self.create_short_task_context();
+        let ctx = self.create_long_task_context();
+        let id = ctx.task_id.unwrap();
         if let TaskRequest::CleanupInvalidPosts(options) = request {
-            self.task_handler.cleanup_invalid_posts(ctx, options).await
+            self.task_manager.start_task(
+                id,
+                TaskType::CleanupInvalidPosts,
+                "清理失效帖子".into(),
+                0,
+            )?;
+            spawn(handle_task_request(
+                self.task_handler.clone(),
+                ctx,
+                TaskRequest::CleanupInvalidPosts(options),
+            ));
+            Ok(())
         } else {
             Err(crate::error::Error::InconsistentTask(
                 "Invalid task request for cleanup_invalid_posts".into(),
             ))
         }
     }
-
-    // ========================= long tasks =========================
 
     /// Starts a long-running task to backup a user's posts.
     pub async fn backup_user(&self, request: TaskRequest) -> Result<()> {
@@ -424,12 +464,17 @@ async fn handle_task_request(task_handler: Arc<TH>, ctx: Arc<TaskContext>, reque
         TaskRequest::CleanupInvalidPictures => {
             task_handler.cleanup_invalid_pictures(ctx.clone()).await
         }
-        _ => {
-            error!("Unexpected TaskRequest for long task: {:?}", request);
-            Err(crate::error::Error::InconsistentTask(format!(
-                "Unexpected TaskRequest: {:?}",
-                request
-            )))
+        TaskRequest::Export(options) => task_handler.export_posts(ctx.clone(), options).await,
+        TaskRequest::CleanupPictures(options) => {
+            task_handler.cleanup_pictures(ctx.clone(), options).await
+        }
+        TaskRequest::CleanupOutdatedAvatars => {
+            task_handler.cleanup_outdated_avatars(ctx.clone()).await
+        }
+        TaskRequest::CleanupInvalidPosts(options) => {
+            task_handler
+                .cleanup_invalid_posts(ctx.clone(), options)
+                .await
         }
     };
 
