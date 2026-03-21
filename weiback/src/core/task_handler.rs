@@ -17,7 +17,7 @@ use futures::{
     stream::{self, StreamExt, TryStreamExt},
 };
 use tokio::{fs, time::sleep};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use super::post_processer::PostProcesser;
@@ -389,6 +389,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         );
         ctx.task_manager.update_progress(0, total_pages)?;
 
+        let mut processed: u64 = 0;
         for page_index in 1.. {
             query.page = page_index;
             let local_posts = self.storage.query_posts(query.clone()).await?;
@@ -405,7 +406,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             self.exporter
                 .export_page(html, &page_name, &options.output.export_dir)
                 .await?;
-            ctx.task_manager.update_progress(1, 0)?;
+
+            processed += 1;
+            if processed.is_multiple_of(10) {
+                ctx.task_manager.update_progress(10, 0)?;
+            }
+        }
+        // Report remaining progress
+        let remaining = processed % 10;
+        if remaining > 0 {
+            ctx.task_manager.update_progress(remaining, 0)?;
         }
         info!("Finished exporting from local");
         Ok(())
@@ -538,10 +548,11 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         info!("Found {} duplicate picture IDs", total);
         ctx.task_manager.update_progress(0, total)?;
 
+        let mut processed: u64 = 0;
         for id in ids {
             let mut pictures = self.storage.get_pictures_by_id(&id).await?;
             if pictures.len() <= 1 {
-                ctx.task_manager.update_progress(1, 0)?;
+                processed += 1;
                 continue;
             }
 
@@ -576,7 +587,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 }
             }
 
-            ctx.task_manager.update_progress(1, 0)?;
+            processed += 1;
+            if processed.is_multiple_of(100) {
+                ctx.task_manager.update_progress(100, 0)?;
+            }
+        }
+
+        // Report remaining progress
+        let remaining = processed % 100;
+        if remaining > 0 {
+            ctx.task_manager.update_progress(remaining, 0)?;
         }
 
         info!("Finished cleanup pictures task");
@@ -600,6 +620,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             .filter_map(|u| pic_url_to_id(&u.avatar_hd).ok().map(|id| (u.id, id)))
             .collect();
 
+        let mut processed: u64 = 0;
         for user_id in duplicate_uids {
             let current_id = avatar_map.get(&user_id);
             if let Some(current_id) = current_id {
@@ -630,7 +651,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     }
                 }
             }
-            ctx.task_manager.update_progress(1, 0)?;
+            processed += 1;
+            if processed.is_multiple_of(100) {
+                ctx.task_manager.update_progress(100, 0)?;
+            }
+        }
+
+        // Report remaining progress
+        let remaining = processed % 100;
+        if remaining > 0 {
+            ctx.task_manager.update_progress(remaining, 0)?;
         }
 
         info!("Finished cleanup invalid avatars task");
@@ -660,6 +690,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         info!("Found {} invalid posts to clean up", total);
         ctx.task_manager.update_progress(0, total)?;
 
+        let mut processed: u64 = 0;
         for id in ids {
             if let Err(e) = self.storage.delete_post(ctx.clone(), id, true).await {
                 error!("Failed to delete invalid post {}: {}", id, e);
@@ -668,7 +699,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     message: e.to_string(),
                 })?;
             }
-            ctx.task_manager.update_progress(1, 0)?;
+            processed += 1;
+            if processed.is_multiple_of(100) {
+                ctx.task_manager.update_progress(100, 0)?;
+            }
+        }
+
+        // Report remaining progress
+        let remaining = processed % 100;
+        if remaining > 0 {
+            ctx.task_manager.update_progress(remaining, 0)?;
         }
 
         info!("Finished cleanup invalid posts task");
@@ -703,13 +743,14 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         ctx.task_manager.update_progress(0, total as u64)?;
 
         let task_interval = ctx.config.backup_task_interval;
+        let mut processed: u64 = 0;
         for (i, id) in ids.into_iter().enumerate() {
             let post_opt = self.storage.get_post(id).await?;
             let post = match post_opt {
                 Some(p) => p,
                 None => {
-                    ctx.task_manager.update_progress(1, 0)?;
-                    info!("Post {} not found, skipping ({}/{})", id, i + 1, total);
+                    processed += 1;
+                    warn!("Post {} not found, skipping ({}/{})", id, i + 1, total);
                     continue;
                 }
             };
@@ -729,13 +770,16 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         )),
                         message: e.to_string(),
                     })?;
-                    ctx.task_manager.update_progress(1, 0)?;
+                    processed += 1;
+                    if processed.is_multiple_of(100) {
+                        ctx.task_manager.update_progress(100, 0)?;
+                    }
                     info!("Scanned post {} ({}/{})", id, i + 1, total);
                     continue;
                 }
             };
 
-            if has_missing {
+            let did_rebackup = if has_missing {
                 info!("Post {id} has missing images, re-backing up...");
                 let fetch_result = self.api_client.statuses_show(id).await;
                 match fetch_result {
@@ -752,6 +796,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         }
                         // Sleep between API calls to avoid rate limiting
                         sleep(task_interval).await;
+                        true
                     }
                     Err(e) => {
                         error!("Failed to fetch post {} for re-backup: {}", id, e);
@@ -759,11 +804,28 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                             error_type: TaskErrorType::DownloadMedia(format!("fetch post {}", id)),
                             message: e.to_string(),
                         })?;
+                        false
                     }
                 }
+            } else {
+                false
+            };
+
+            processed += 1;
+            // Report immediately after actual re-backup
+            if did_rebackup {
+                ctx.task_manager.update_progress(1, 0)?;
+            } else if processed.is_multiple_of(100) {
+                // Periodic batch report for items that didn't need re-backup
+                ctx.task_manager.update_progress(100, 0)?;
             }
-            ctx.task_manager.update_progress(1, 0)?;
             info!("Scanned post {} ({}/{})", id, i + 1, total);
+        }
+
+        // Report remaining progress
+        let remaining = processed % 100;
+        if remaining > 0 {
+            ctx.task_manager.update_progress(remaining, 0)?;
         }
 
         info!("Finished re-backup missing images task");
@@ -788,7 +850,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let total = self.storage.count_pictures().await?;
         info!("Found {} pictures to check", total);
         ctx.task_manager.update_progress(0, total)?;
-        let mut count = 0;
+        let mut processed: u64 = 0;
 
         let mut deleted_count: u64 = 0;
         let storage = self.storage.clone();
@@ -805,8 +867,8 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             if deleted {
                 deleted_count += 1;
             }
-            count += 1;
-            if count % 200 == 0 {
+            processed += 1;
+            if processed.is_multiple_of(200) {
                 ctx.task_manager.update_progress(200, 0)?;
             }
         }
