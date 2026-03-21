@@ -285,9 +285,9 @@ impl Core {
     }
 
     /// Clean up invalid or outdated avatars.
-    pub async fn cleanup_invalid_avatars(&self) -> Result<()> {
+    pub async fn cleanup_outdated_avatars(&self) -> Result<()> {
         let ctx = self.create_short_task_context();
-        self.task_handler.cleanup_invalid_avatars(ctx).await
+        self.task_handler.cleanup_outdated_avatars(ctx).await
     }
 
     /// Clean up invalid posts.

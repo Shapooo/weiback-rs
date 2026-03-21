@@ -19,7 +19,7 @@ import { useTaskStore } from '../stores/taskStore'
 import { TaskStatus, ResolutionPolicy } from '../types'
 import {
   cleanupPictures,
-  cleanupInvalidAvatars,
+  cleanupOutdatedAvatars,
   cleanupInvalidPosts,
   cleanupInvalidPictures,
 } from '../lib/api'
@@ -44,7 +44,7 @@ const DataManage: React.FC = () => {
 
   const handleCleanupAvatars = async () => {
     try {
-      await cleanupInvalidAvatars()
+      await cleanupOutdatedAvatars()
       enqueueSnackbar('失效头像清理任务已启动', { variant: 'success' })
       fetchCurrentTask()
     } catch (e) {

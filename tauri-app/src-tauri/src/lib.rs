@@ -304,9 +304,9 @@ async fn cleanup_pictures(
 }
 
 #[tauri::command]
-async fn cleanup_invalid_avatars(core: State<'_, Arc<Core>>) -> Result<()> {
+async fn cleanup_outdated_avatars(core: State<'_, Arc<Core>>) -> Result<()> {
     info!("cleanup_invalid_avatars called");
-    Ok(core.cleanup_invalid_avatars().await?)
+    Ok(core.cleanup_outdated_avatars().await?)
 }
 
 #[tauri::command]
@@ -359,7 +359,7 @@ pub fn run() -> Result<()> {
             get_current_task_status,
             get_and_clear_task_errors,
             cleanup_pictures,
-            cleanup_invalid_avatars,
+            cleanup_outdated_avatars,
             cleanup_invalid_posts,
             cleanup_invalid_pictures
         ])

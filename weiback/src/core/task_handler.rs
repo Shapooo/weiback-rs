@@ -575,7 +575,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
     /// # Arguments
     /// * `ctx` - The task context.
     #[tracing::instrument(skip(self, ctx), level = "info")]
-    pub(super) async fn cleanup_invalid_avatars(&self, ctx: Arc<TaskContext>) -> Result<()> {
+    pub(super) async fn cleanup_outdated_avatars(&self, ctx: Arc<TaskContext>) -> Result<()> {
         info!("Starting cleanup invalid avatars task");
         let duplicate_uids = self.storage.get_users_with_duplicate_avatars().await?;
         let total = duplicate_uids.len() as u64;

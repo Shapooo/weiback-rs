@@ -59,7 +59,7 @@ export const getPictureBlob = (id: string) => invoke<ArrayBuffer>('get_picture_b
 export const getVideoBlob = (url: string) => invoke<ArrayBuffer>('get_video_blob', { url })
 export const cleanupPictures = (policy: ResolutionPolicy) =>
   invoke('cleanup_pictures', { options: { policy } })
-export const cleanupInvalidAvatars = () => invoke('cleanup_invalid_avatars')
+export const cleanupOutdatedAvatars = () => invoke('cleanup_outdated_avatars')
 export const cleanupInvalidPosts = (options: CleanupInvalidPostsOptions) =>
   invoke('cleanup_invalid_posts', { options })
 export const cleanupInvalidPictures = () => invoke('cleanup_invalid_pictures')
