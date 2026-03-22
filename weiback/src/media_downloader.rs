@@ -9,14 +9,21 @@
 //!
 //! This architecture ensures that media downloads (which can be slow or unreliable)
 //! do not block the main application flow and can be easily monitored.
+//!
+//! ## Concurrency
+//!
+//! The downloader supports concurrent downloads (up to [`MAX_CONCURRENT_DOWNLOADS`]
+//! simultaneous downloads) using `tokio::select!` with `FuturesUnordered` to multiplex
+//! between multiple in-flight download tasks.
 
 #![allow(async_fn_in_trait)]
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
+use futures::stream::{FuturesUnordered, StreamExt};
 use reqwest::Client;
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -27,15 +34,16 @@ use super::core::task::TaskContext;
 use super::core::task_manager::{TaskError, TaskErrorType};
 use crate::error::Result;
 
+/// Maximum number of concurrent downloads.
+pub const MAX_CONCURRENT_DOWNLOADS: usize = 5;
+
 /// The status of the media downloader.
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloaderStatus {
-    /// The URL currently being downloaded, if any.
-    pub current_url: Option<String>,
-    /// The number of items waiting in the queue.
+    /// URLs currently being downloaded (up to MAX_CONCURRENT_DOWNLOADS).
+    pub active_downloads: Vec<String>,
+    /// Number of items waiting in the queue.
     pub queue_length: usize,
-    /// Whether a download is currently in progress.
-    pub is_processing: bool,
 }
 
 /// A trait for receiving downloader status updates.
@@ -80,25 +88,24 @@ struct DownloadTask {
 /// Internal state for tracking downloader status.
 #[derive(Debug)]
 pub struct DownloaderStatusState {
-    pub current_url: Mutex<Option<String>>,
+    /// URLs of currently active downloads.
+    pub active_downloads: Mutex<Vec<String>>,
+    /// Number of items waiting in the queue.
     pub queue_length: AtomicUsize,
-    pub is_processing: AtomicBool,
 }
 
 impl DownloaderStatusState {
     fn new() -> Self {
         Self {
-            current_url: Mutex::new(None),
+            active_downloads: Mutex::new(Vec::new()),
             queue_length: AtomicUsize::new(0),
-            is_processing: AtomicBool::new(false),
         }
     }
 
     fn get_status(&self) -> DownloaderStatus {
         DownloaderStatus {
-            current_url: self.current_url.lock().unwrap().clone(),
+            active_downloads: self.active_downloads.lock().unwrap().clone(),
             queue_length: self.queue_length.load(Ordering::Relaxed),
-            is_processing: self.is_processing.load(Ordering::Relaxed),
         }
     }
 }
@@ -209,39 +216,66 @@ impl DownloaderWorker {
     /// is closed. It should be spawned onto a background executor.
     pub async fn run(mut self) {
         info!("Media downloader actor started.");
-        while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
-            // Decrement queue length since we've dequeued this task
-            self.status.queue_length.fetch_sub(1, Ordering::Relaxed);
+        let mut workers: FuturesUnordered<JoinHandle<(String, Result<()>)>> =
+            FuturesUnordered::new();
 
-            // Update status: now processing this URL
-            {
-                let mut current_url = self.status.current_url.lock().unwrap();
-                *current_url = Some(url.to_string());
-            }
-            self.status.is_processing.store(true, Ordering::Relaxed);
-            self.notify_status();
+        loop {
+            tokio::select! {
+                // 只有当 workers 数量小于上限时，才去 poll receiver
+                opt = self.receiver.recv(), if workers.len() < MAX_CONCURRENT_DOWNLOADS => {
+                    match opt {
+                        Some(task) => {
+                            self.status.queue_length.fetch_sub(1, Ordering::Relaxed);
+                            let url = task.url.to_string();
+                            let ctx = task.ctx.clone();
+                            let client = self.client.clone();
+                            let url_for_spawn = url.clone();
 
-            debug!("Downloading media from {url}");
-            let result = self.process_task(ctx.clone(), &url, callback).await;
+                            // 更新活跃列表
+                            {
+                                let mut active = self.status.active_downloads.lock().unwrap();
+                                active.push(url.clone());
+                            }
+                            self.notify_status();
 
-            // Update status: finished processing
-            {
-                let mut current_url = self.status.current_url.lock().unwrap();
-                *current_url = None;
-            }
-            self.status.is_processing.store(false, Ordering::Relaxed);
-            self.notify_status();
+                            debug!("Starting download: {url}");
+                            workers.push(tokio::spawn(async move {
+                                let result = Self::do_process_task(&client, ctx.clone(), &url_for_spawn, task.callback).await;
 
-            if let Err(err) = result {
-                let task_err = TaskError {
-                    error_type: TaskErrorType::DownloadMedia(url.to_string()),
-                    message: err.to_string(),
-                };
-                if let Err(e) = ctx.task_manager.report_task_error(task_err) {
-                    error!("Failed to add task error: {}", e);
+                                if let Err(err) = &result {
+                                    let task_err = TaskError {
+                                        error_type: TaskErrorType::DownloadMedia(url_for_spawn.clone()),
+                                        message: err.to_string(),
+                                    };
+                                    if let Err(e) = ctx.task_manager.report_task_error(task_err) {
+                                        error!("Failed to add task error: {}", e);
+                                    }
+                                }
+
+                                (url_for_spawn, result)
+                            }));
+                        }
+                        None => {
+                            // channel 关了
+                            if workers.is_empty() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 监听已有的任务完成
+                Some(res) = workers.next(), if !workers.is_empty() => {
+                    // 某个任务结束了，从活跃列表移除
+                    if let Ok((url, _)) = res {
+                        let mut active = self.status.active_downloads.lock().unwrap();
+                        active.retain(|u| u != &url);
+                    }
+                    self.notify_status();
                 }
             }
         }
+
         info!("Media downloader actor finished.");
     }
 
@@ -253,16 +287,18 @@ impl DownloaderWorker {
     }
 
     /// Performs the HTTP request and handles the response.
-    #[tracing::instrument(skip(self, ctx, callback), fields(url = %url))]
-    async fn process_task(
-        &self,
+    #[tracing::instrument(skip(client, ctx, callback), fields(url = %url))]
+    async fn do_process_task(
+        client: &Client,
         ctx: Arc<TaskContext>,
-        url: &Url,
+        url: &str,
         callback: AsyncDownloadCallback,
     ) -> Result<()> {
-        let response = self
-            .client
-            .get(url.to_owned())
+        let url = Url::parse(url).inspect_err(|e| {
+            error!("Failed to parse URL {url}: {e}");
+        })?;
+        let response = client
+            .get(url.clone())
             .send()
             .await
             .and_then(|r| r.error_for_status())
@@ -278,6 +314,8 @@ impl DownloaderWorker {
         (callback)(ctx, body).await
     }
 }
+
+use tokio::task::JoinHandle;
 
 #[cfg(test)]
 mod local_tests {

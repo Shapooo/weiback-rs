@@ -3,21 +3,34 @@ import { Box, Typography, Tooltip } from '@mui/material'
 import { useTaskStore } from '../stores/taskStore'
 
 const MediaDownloaderStatus: React.FC = () => {
-  const { current_url, queue_length, is_processing } = useTaskStore(state => state.downloaderStatus)
+  const { active_downloads, queue_length } = useTaskStore(state => state.downloaderStatus)
 
   // Truncate URL: show first 20 chars + "..." + last 20 chars
-  const formatUrl = (url: string | null): string => {
-    if (!url) return ''
+  const formatUrl = (url: string): string => {
     if (url.length <= 45) return url
     return url.substring(0, 20) + '...' + url.substring(url.length - 20)
   }
 
-  if (!is_processing && queue_length === 0) {
+  if (active_downloads.length === 0 && queue_length === 0) {
     return null
   }
 
+  const isProcessing = active_downloads.length > 0
+
   return (
-    <Tooltip title={current_url || '等待下载'} placement="right" arrow>
+    <Tooltip
+      title={
+        isProcessing
+          ? active_downloads.map((url, i) => (
+              <Box key={i} component="span">
+                {url}
+              </Box>
+            ))
+          : '等待下载'
+      }
+      placement="right"
+      arrow
+    >
       <Box
         sx={{
           px: 1.5,
@@ -33,8 +46,8 @@ const MediaDownloaderStatus: React.FC = () => {
               width: 6,
               height: 6,
               borderRadius: '50%',
-              bgcolor: is_processing ? 'primary.main' : 'warning.main',
-              ...(is_processing && {
+              bgcolor: isProcessing ? 'primary.main' : 'warning.main',
+              ...(isProcessing && {
                 animation: 'bounce 1s infinite',
                 '@keyframes bounce': {
                   '0%, 100%': { transform: 'translateY(0)' },
@@ -56,22 +69,27 @@ const MediaDownloaderStatus: React.FC = () => {
           </Typography>
         </Box>
 
-        <Typography
-          variant="caption"
-          sx={{
-            display: 'block',
-            fontFamily: 'monospace',
-            fontSize: '0.65rem',
-            color: 'text.primary',
-            lineHeight: 1.3,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '170px',
-          }}
-        >
-          {is_processing && current_url ? formatUrl(current_url) : '等待中'}
-        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.1 }}>
+          {active_downloads.map((url, i) => (
+            <Typography
+              key={i}
+              variant="caption"
+              sx={{
+                display: 'block',
+                fontFamily: 'monospace',
+                fontSize: '0.6rem',
+                color: 'text.primary',
+                lineHeight: 1.2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '170px',
+              }}
+            >
+              {formatUrl(url)}
+            </Typography>
+          ))}
+        </Box>
 
         <Typography
           variant="caption"
@@ -80,7 +98,7 @@ const MediaDownloaderStatus: React.FC = () => {
             color: 'text.secondary',
           }}
         >
-          {queue_length > 0 ? `剩余 ${queue_length}` : '完成'}
+          {queue_length > 0 ? `队列 ${queue_length}` : '完成'}
         </Typography>
       </Box>
     </Tooltip>
