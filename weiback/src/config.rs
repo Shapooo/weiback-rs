@@ -74,6 +74,8 @@ pub struct Config {
     pub posts_per_html: u32,
     /// Number of posts to fetch per API request (for both favorites and profile).
     pub posts_count: u32,
+    /// Whether to generate static HTML pages without JavaScript interactions.
+    pub static_html: bool,
     /// Base path for storing downloaded pictures.
     pub picture_path: PathBuf,
     /// Base path for storing downloaded videos.
@@ -102,6 +104,7 @@ impl Default for Config {
             other_task_interval: Duration::from_secs(1),
             posts_per_html: 200,
             posts_count: 20,
+            static_html: false,
             picture_path: data_dir.join("pictures"),
             video_path: data_dir.join("videos"),
             sdk_config: Default::default(),
