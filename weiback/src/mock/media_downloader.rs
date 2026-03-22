@@ -30,9 +30,6 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct MockMediaDownloader {
     inner: Arc<Mutex<Inner>>,
-    /// If `true`, any un-mocked download request will succeed with dummy data.
-    /// If `false`, it will fail.
-    default_succ: bool,
 }
 
 /// Internal state for `MockMediaDownloader`.
@@ -47,10 +44,9 @@ impl MockMediaDownloader {
     ///
     /// # Arguments
     /// * `default_succ` - Determines the behavior for URLs that are not explicitly mocked.
-    pub fn new(default_succ: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             inner: Default::default(),
-            default_succ,
         }
     }
 
@@ -92,13 +88,7 @@ impl MediaDownloader for MockMediaDownloader {
         let result = match response {
             Some(Ok(data)) => (callback)(ctx.clone(), data).await,
             Some(Err(e)) => Err(e),
-            None => {
-                if self.default_succ {
-                    (callback)(ctx.clone(), Bytes::from("default media")).await
-                } else {
-                    Err(Error::InconsistentTask(format!("URL not mocked: {}", url)))
-                }
-            }
+            None => Err(Error::InconsistentTask(format!("URL not mocked: {}", url))),
         };
 
         if let Err(err) = result {
@@ -120,7 +110,7 @@ mod local_tests {
 
     #[tokio::test]
     async fn test_download_media_success() {
-        let mock_downloader = MockMediaDownloader::new(true);
+        let mock_downloader = MockMediaDownloader::new();
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
         let expected_data = Bytes::from_static(b"picture data");
         mock_downloader.add_response(url.clone(), Ok(expected_data.clone()));
@@ -151,7 +141,7 @@ mod local_tests {
 
     #[tokio::test]
     async fn test_download_media_error() {
-        let mock_downloader = MockMediaDownloader::new(true);
+        let mock_downloader = MockMediaDownloader::new();
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
         let error = Error::Io(io::Error::new(io::ErrorKind::NotFound, "not found"));
         mock_downloader.add_response(url.clone(), Err(error));
@@ -185,7 +175,7 @@ mod local_tests {
 
     #[tokio::test]
     async fn test_download_media_not_mocked() {
-        let mock_downloader = MockMediaDownloader::new(false);
+        let mock_downloader = MockMediaDownloader::new();
         let url = Url::parse("http://example.com/pic.jpg").unwrap();
 
         let callback = Box::new(

@@ -933,7 +933,7 @@ mod local_tests {
         let api_client = MockApi::new(client.clone());
         let storage = create_test_storage().await;
         let exporter = MockExporter::new();
-        let downloader = MockMediaDownloader::new(true);
+        let downloader = MockMediaDownloader::new();
         let task_handler = TaskHandler::new(api_client, storage, exporter, downloader).unwrap();
         let export_dir = Path::new("export_dir").into();
         let task_name = "test".to_string();
