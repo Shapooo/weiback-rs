@@ -13,10 +13,12 @@
 #![allow(async_fn_in_trait)]
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use reqwest::Client;
+use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 use url::Url;
@@ -24,6 +26,23 @@ use url::Url;
 use super::core::task::TaskContext;
 use super::core::task_manager::{TaskError, TaskErrorType};
 use crate::error::Result;
+
+/// The status of the media downloader.
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloaderStatus {
+    /// The URL currently being downloaded, if any.
+    pub current_url: Option<String>,
+    /// The number of items waiting in the queue.
+    pub queue_length: usize,
+    /// Whether a download is currently in progress.
+    pub is_processing: bool,
+}
+
+/// A trait for receiving downloader status updates.
+pub trait MediaDownloaderStatusListener: Send + Sync {
+    /// Called when the downloader status changes.
+    fn on_status_updated(&self, status: &DownloaderStatus);
+}
 
 /// A trait for high-level media downloading capabilities.
 pub trait MediaDownloader: Clone + Send + Sync + 'static {
@@ -58,17 +77,47 @@ struct DownloadTask {
     callback: AsyncDownloadCallback,
 }
 
+/// Internal state for tracking downloader status.
+#[derive(Debug)]
+pub struct DownloaderStatusState {
+    pub current_url: Mutex<Option<String>>,
+    pub queue_length: AtomicUsize,
+    pub is_processing: AtomicBool,
+}
+
+impl DownloaderStatusState {
+    fn new() -> Self {
+        Self {
+            current_url: Mutex::new(None),
+            queue_length: AtomicUsize::new(0),
+            is_processing: AtomicBool::new(false),
+        }
+    }
+
+    fn get_status(&self) -> DownloaderStatus {
+        DownloaderStatus {
+            current_url: self.current_url.lock().unwrap().clone(),
+            queue_length: self.queue_length.load(Ordering::Relaxed),
+            is_processing: self.is_processing.load(Ordering::Relaxed),
+        }
+    }
+}
+
 /// The worker that runs in a background task and performs actual downloads.
 #[must_use = "The worker must be spawned to process download requests"]
 pub struct DownloaderWorker {
     receiver: mpsc::Receiver<DownloadTask>,
     client: Client,
+    status_listener: Arc<Mutex<Option<Box<dyn MediaDownloaderStatusListener>>>>,
+    status: Arc<DownloaderStatusState>,
 }
 
 /// A thread-safe handle for communicating with the [`DownloaderWorker`].
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MediaDownloaderHandle {
     sender: mpsc::Sender<DownloadTask>,
+    status: Arc<DownloaderStatusState>,
+    status_listener: Arc<Mutex<Option<Box<dyn MediaDownloaderStatusListener>>>>,
 }
 
 /// Initializes a new media downloader system.
@@ -85,8 +134,20 @@ pub fn create_downloader(
     client: Client,
 ) -> (MediaDownloaderHandle, DownloaderWorker) {
     let (sender, receiver) = mpsc::channel(buffer);
-    let handle = MediaDownloaderHandle { sender };
-    let worker = DownloaderWorker { receiver, client };
+    let status = Arc::new(DownloaderStatusState::new());
+    let status_listener = Arc::new(Mutex::new(None));
+
+    let handle = MediaDownloaderHandle {
+        sender,
+        status: status.clone(),
+        status_listener: status_listener.clone(),
+    };
+    let worker = DownloaderWorker {
+        receiver,
+        client,
+        status_listener,
+        status,
+    };
     (handle, worker)
 }
 
@@ -109,6 +170,8 @@ impl MediaDownloader for MediaDownloaderHandle {
             url: url.to_owned(),
             callback,
         };
+        self.status.queue_length.fetch_add(1, Ordering::Relaxed);
+        self.notify_status();
         Ok(self.sender.send(task).await.map_err(|e| {
             error!("Failed to send download task to worker: {e}");
             e
@@ -116,7 +179,30 @@ impl MediaDownloader for MediaDownloaderHandle {
     }
 }
 
+impl MediaDownloaderHandle {
+    /// Sets a listener for downloader status updates.
+    pub fn set_status_listener(&self, listener: Box<dyn MediaDownloaderStatusListener>) {
+        let mut guard = self.status_listener.lock().unwrap();
+        *guard = Some(listener);
+    }
+
+    /// Notifies the listener of the current status.
+    fn notify_status(&self) {
+        if let Some(listener) = self.status_listener.lock().unwrap().as_ref() {
+            listener.on_status_updated(&self.status.get_status());
+        }
+    }
+}
+
 impl DownloaderWorker {
+    /// Sets a listener for downloader status updates.
+    ///
+    /// This should be called before spawning the worker.
+    pub fn set_status_listener(&mut self, listener: Box<dyn MediaDownloaderStatusListener>) {
+        let mut guard = self.status_listener.lock().unwrap();
+        *guard = Some(listener);
+    }
+
     /// Starts the worker's processing loop.
     ///
     /// This method will run indefinitely until the handle is dropped or the channel
@@ -124,8 +210,29 @@ impl DownloaderWorker {
     pub async fn run(mut self) {
         info!("Media downloader actor started.");
         while let Some(DownloadTask { ctx, url, callback }) = self.receiver.recv().await {
+            // Decrement queue length since we've dequeued this task
+            self.status.queue_length.fetch_sub(1, Ordering::Relaxed);
+
+            // Update status: now processing this URL
+            {
+                let mut current_url = self.status.current_url.lock().unwrap();
+                *current_url = Some(url.to_string());
+            }
+            self.status.is_processing.store(true, Ordering::Relaxed);
+            self.notify_status();
+
             debug!("Downloading media from {url}");
-            if let Err(err) = self.process_task(ctx.clone(), &url, callback).await {
+            let result = self.process_task(ctx.clone(), &url, callback).await;
+
+            // Update status: finished processing
+            {
+                let mut current_url = self.status.current_url.lock().unwrap();
+                *current_url = None;
+            }
+            self.status.is_processing.store(false, Ordering::Relaxed);
+            self.notify_status();
+
+            if let Err(err) = result {
                 let task_err = TaskError {
                     error_type: TaskErrorType::DownloadMedia(url.to_string()),
                     message: err.to_string(),
@@ -136,6 +243,13 @@ impl DownloaderWorker {
             }
         }
         info!("Media downloader actor finished.");
+    }
+
+    /// Notifies the listener of the current status.
+    fn notify_status(&self) {
+        if let Some(listener) = self.status_listener.lock().unwrap().as_ref() {
+            listener.on_status_updated(&self.status.get_status());
+        }
     }
 
     /// Performs the HTTP request and handles the response.

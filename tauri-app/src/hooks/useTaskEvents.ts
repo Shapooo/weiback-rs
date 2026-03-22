@@ -3,7 +3,7 @@ import { useSnackbar } from 'notistack'
 import { listen } from '@tauri-apps/api/event'
 import { useTaskStore } from '../stores/taskStore'
 import { getCurrentTaskStatus } from '../lib/api'
-import { Task, TaskError } from '../types/tasks'
+import { Task, TaskError, DownloaderStatus } from '../types/tasks'
 
 /**
  * A custom hook that listens for real-time task events from the backend
@@ -14,11 +14,13 @@ import { Task, TaskError } from '../types/tasks'
  */
 export function useTaskEvents(isBackendRunning: boolean) {
   const setCurrentTask = useTaskStore(state => state.setCurrentTask)
+  const setDownloaderStatus = useTaskStore(state => state.setDownloaderStatus)
   const { enqueueSnackbar } = useSnackbar()
 
   useEffect(() => {
     let unlistenTask: (() => void) | null = null
     let unlistenError: (() => void) | null = null
+    let unlistenDownloader: (() => void) | null = null
 
     const setupListeners = async () => {
       // 1. Listen for task updates (progress, status changes)
@@ -37,6 +39,11 @@ export function useTaskEvents(isBackendRunning: boolean) {
           persist: true,
         })
       })
+
+      // 3. Listen for downloader status updates
+      unlistenDownloader = await listen<DownloaderStatus>('downloader-status', event => {
+        setDownloaderStatus(event.payload)
+      })
     }
 
     setupListeners()
@@ -44,8 +51,9 @@ export function useTaskEvents(isBackendRunning: boolean) {
     return () => {
       if (unlistenTask) unlistenTask()
       if (unlistenError) unlistenError()
+      if (unlistenDownloader) unlistenDownloader()
     }
-  }, [setCurrentTask, enqueueSnackbar])
+  }, [setCurrentTask, setDownloaderStatus, enqueueSnackbar])
 
   // Sync initial task status when backend becomes running
   useEffect(() => {

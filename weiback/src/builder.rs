@@ -16,7 +16,7 @@ use crate::{
     core::{Core, task_handler::TaskHandler},
     error::Result,
     exporter::ExporterImpl,
-    media_downloader::create_downloader,
+    media_downloader::{DownloaderWorker, create_downloader},
     storage::{StorageImpl, database},
 };
 use tokio::runtime::Runtime;
@@ -46,13 +46,17 @@ impl CoreBuilder {
     /// 1. Reads the global configuration.
     /// 2. Initializes the database pool and [`StorageImpl`].
     /// 3. Sets up the [`ExporterImpl`].
-    /// 4. Configures the [`HttpClient`] and spawns the [`MediaDownloader`] worker thread/task.
+    /// 4. Configures the [`HttpClient`] and returns the downloader worker (caller must spawn it).
     /// 5. Initializes the appropriate API client (Standard or DevMode).
     /// 6. Assembles the [`TaskHandler`] and finally the [`Core`] service.
     ///
+    /// # Returns
+    /// A tuple of `(Arc<Core>, DownloaderWorker)`. The worker **must** be spawned
+    /// into a task (e.g., using `tokio::spawn(worker.run())`) to function.
+    ///
     /// # Errors
     /// Returns a [`Result`] if any component fails to initialize (e.g., database connection error).
-    pub fn build(self) -> Result<Arc<Core>> {
+    pub fn build(self) -> Result<(Arc<Core>, DownloaderWorker)> {
         info!("CoreBuilder: Building Core service...");
         let main_config = get_config();
         let main_config_read_guard = main_config.read()?;
@@ -79,21 +83,7 @@ impl CoreBuilder {
 
         let (handle, worker) =
             create_downloader(DOWNLOADER_BUFFER_SIZE, http_client.main_client().clone());
-
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            debug!("Spawning downloader worker on current tokio handle");
-            handle.spawn(worker.run());
-        } else {
-            debug!("Spawning downloader worker on a new background thread");
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("build async runtime failed in core builder");
-                rt.block_on(worker.run());
-            });
-        }
-        info!("MediaDownloader initialized and worker spawned");
+        info!("MediaDownloader created (worker must be spawned by caller)");
 
         #[cfg(feature = "dev-mode")]
         let (sdk_api_client, api_client) = {
@@ -118,7 +108,7 @@ impl CoreBuilder {
         let core = Arc::new(Core::new(task_handler, sdk_api_client)?);
         info!("Core service built successfully.");
 
-        Ok(core)
+        Ok((core, worker))
     }
 }
 

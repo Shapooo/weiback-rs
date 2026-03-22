@@ -18,6 +18,7 @@ import { useTaskStore } from './stores/taskStore'
 import { useAuthStore } from './stores/authStore'
 import { getBackendStatus, initBackend, BackendStatus } from './lib/api'
 import GlobalTaskProgress from './components/GlobalTaskProgress'
+import MediaDownloaderStatus from './components/MediaDownloaderStatus'
 import useCompletionNotifier from './hooks/useCompletionNotifier'
 
 const drawerWidth = 200
@@ -117,8 +118,11 @@ const App: React.FC = () => {
           [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: 'border-box' },
         }}
       >
-        <Box sx={{ overflow: 'auto' }}>
+        <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column', height: '100%' }}>
           <MainListItems />
+          <Box sx={{ mt: 'auto' }}>
+            <MediaDownloaderStatus />
+          </Box>
         </Box>
       </Drawer>
       <Box

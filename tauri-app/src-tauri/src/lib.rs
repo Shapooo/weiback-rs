@@ -14,6 +14,7 @@ use weiback::core::{
     task::{BackupType, CleanupPicturesOptions, PaginatedPostInfo},
     task_manager::{Task, TaskError},
 };
+use weiback::media_downloader::{DownloaderStatus, MediaDownloaderStatusListener};
 use weiback::models::User;
 
 use error::{Error, Result};
@@ -52,6 +53,13 @@ impl TaskEventListener for TauriTaskEventListener {
     }
 }
 
+impl MediaDownloaderStatusListener for TauriTaskEventListener {
+    fn on_status_updated(&self, status: &DownloaderStatus) {
+        debug!("emit downloader-status to frontend: {status:?}");
+        let _ = self.app_handle.emit("downloader-status", status);
+    }
+}
+
 /// A wrapper for Weibo IDs to handle conversion from string/number in Tauri commands.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct WeiboId(#[serde(deserialize_with = "deserialize_number_from_string")] i64);
@@ -84,11 +92,18 @@ fn perform_init_backend(app_handle: &AppHandle, state: &BackendState) -> Backend
     }
 
     match CoreBuilder::new().build() {
-        Ok(core) => {
+        Ok((core, mut worker)) => {
             let listener = Box::new(TauriTaskEventListener {
                 app_handle: app_handle.clone(),
             });
-            if let Err(e) = core.set_task_event_listener(listener) {
+            worker.set_status_listener(listener);
+
+            // Spawn the downloader worker
+            tauri::async_runtime::spawn(async move { worker.run().await });
+
+            if let Err(e) = core.set_task_event_listener(Box::new(TauriTaskEventListener {
+                app_handle: app_handle.clone(),
+            })) {
                 error!("Failed to set task event listener: {e}");
             }
 
