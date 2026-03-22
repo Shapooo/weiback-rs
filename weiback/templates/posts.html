@@ -11,8 +11,8 @@
         </div>
         {% endif %}
         <div class="bk-post-text bk-content">{{post.text}}</div>
-        {% if post.pics is defined %}
-        <div class="bk-post-media bk-content">{% for pic in post.pics %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{%
+        {% if post.pic_paths is defined %}
+        <div class="bk-post-media bk-content">{% for pic in post.pic_paths %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{%
             endfor %}</div>
         {% endif %}
         {% if post.user is object and post.user.id is defined %}
@@ -29,8 +29,8 @@
                 post.retweeted_status.region_name is defined and post.retweeted_status.region_name is string
                 %}&nbsp&nbsp{{post.retweeted_status.region_name}}{% endif %}</p>
         </div>{% endif %}<div class="bk-retweet-text bk-content">{{post.retweeted_status.text}}​​​</div>{% if
-        post.retweet_status.pics is defined %}<div class="bk-retweet-media bk-content">{% for pic in
-            post.retweeted_status.pics %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{% endfor %}</div>
+        post.retweeted_status.pic_paths is defined %}<div class="bk-retweet-media bk-content">{% for pic in
+            post.retweeted_status.pic_paths %}<img class="bk-pic" alt="[图片]" src="{{pic}}">{% endfor %}</div>
         {% endif %}
         {% if post.retweeted_status.user is object and post.retweeted_status.user.id is defined %}<a
             href="{{'https://weibo.com/'~post.retweeted_status.user.id~'/'~post.retweeted_status.id}}"

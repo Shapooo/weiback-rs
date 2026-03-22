@@ -28,6 +28,7 @@ use url::Url;
 
 use crate::core::task::{PaginatedPosts, PostQuery, TaskContext};
 use crate::models::{Picture, PictureMeta, Post, User, Video};
+use crate::utils::pic_url_to_db_key;
 use crate::{
     error::{Error, Result},
     storage::video_storage::FileSystemVideoStorage,
@@ -473,6 +474,7 @@ impl Storage for StorageImpl {
     }
 
     async fn get_picture_path(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<PathBuf>> {
+        let url = &pic_url_to_db_key(url);
         let path = picture::get_picture_path(&self.db_pool, url).await?;
         Ok(path.map(|p| ctx.config.picture_path.join(p)))
     }
