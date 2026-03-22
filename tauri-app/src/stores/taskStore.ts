@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Task } from '../types'
+import { Task, DownloaderStatus } from '../types'
 import { getCurrentTaskStatus } from '../lib/api'
 
 interface TaskState {
@@ -8,7 +8,12 @@ interface TaskState {
   fetchCurrentTask: () => Promise<void>
 }
 
-export const useTaskStore = create<TaskState>(set => ({
+interface DownloaderState {
+  downloaderStatus: DownloaderStatus
+  setDownloaderStatus: (status: DownloaderStatus) => void
+}
+
+export const useTaskStore = create<TaskState & DownloaderState>(set => ({
   currentTask: null,
   setCurrentTask: task => set({ currentTask: task }),
   fetchCurrentTask: async () => {
@@ -20,4 +25,6 @@ export const useTaskStore = create<TaskState>(set => ({
       set({ currentTask: null })
     }
   },
+  downloaderStatus: { current_url: null, queue_length: 0, is_processing: false },
+  setDownloaderStatus: status => set({ downloaderStatus: status }),
 }))

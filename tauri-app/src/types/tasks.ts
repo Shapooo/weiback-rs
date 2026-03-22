@@ -62,3 +62,10 @@ export enum BackupType {
   Video = 'Video',
   Article = 'Article',
 }
+
+// --- Downloader Status ---
+export interface DownloaderStatus {
+  current_url: string | null
+  queue_length: number
+  is_processing: boolean
+}
