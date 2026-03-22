@@ -31,6 +31,10 @@ lazy_static! {
             .unwrap();
         tera.add_raw_template("posts.html", include_str!("../templates/posts.html"))
             .unwrap();
+        tera.add_raw_template("page_static.html", include_str!("../templates/page_static.html"))
+            .unwrap();
+        tera.add_raw_template("posts_static.html", include_str!("../templates/posts_static.html"))
+            .unwrap();
         tera.autoescape_on(Vec::new());
         tera
     };
@@ -62,6 +66,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
     /// * `posts` - The list of posts to render.
     /// * `page_name` - The base name for the generated page (used for resource folder).
     /// * `pic_quality` - The desired picture definition to use for images in the HTML.
+    /// * `static_html` - If true, uses static templates without JavaScript interactions.
     ///
     /// # Returns
     /// A `Result` containing the rendered HTML string.
@@ -70,6 +75,7 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
         posts: Vec<Post>,
         page_name: &str,
         pic_quality: PictureDefinition,
+        static_html: bool,
     ) -> Result<String> {
         let emoji_map = self.emoji_map.get_or_try_init().await.ok();
         info!("Generating page for {} posts", posts.len());
@@ -81,11 +87,18 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
 
         let mut posts_context = Context::new();
         posts_context.insert("posts", &post_views);
-        let posts_html = TEMPLATES.render("posts.html", &posts_context)?;
+
+        let (posts_template, page_template) = if static_html {
+            ("posts_static.html", "page_static.html")
+        } else {
+            ("posts.html", "page.html")
+        };
+
+        let posts_html = TEMPLATES.render(posts_template, &posts_context)?;
 
         let mut page_context = Context::new();
         page_context.insert("html", &posts_html);
-        let html = TEMPLATES.render("page.html", &page_context)?;
+        let html = TEMPLATES.render(page_template, &page_context)?;
         info!("Successfully generated page");
         Ok(html)
     }
@@ -138,7 +151,9 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
             "Found {} pictures to export from local storage.",
             pictures_to_export.len()
         );
-        let content = self.generate_page(posts, page_name, pic_quality).await?;
+        let content = self
+            .generate_page(posts, page_name, pic_quality, ctx.config.static_html)
+            .await?;
         info!("HTML content generated successfully.");
         Ok(HTMLPage {
             html: content,
@@ -248,7 +263,7 @@ mod local_tests {
         let generator = create_generator(&api).await;
         let definition = PictureDefinition::Original;
         generator
-            .generate_page(posts, "test_page", definition)
+            .generate_page(posts, "test_page", definition, false)
             .await
             .unwrap();
     }

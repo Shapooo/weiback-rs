@@ -23,6 +23,7 @@ export interface Config {
   other_task_interval: number // same
   posts_per_html: number
   posts_count: number
+  static_html: boolean
   picture_path: string
   video_path: string
   sdk_config: SdkConfig

@@ -187,6 +187,17 @@ const SettingsPage: React.FC = () => {
                       onChange={e => handleChange('posts_per_html', parseInt(e.target.value, 10))}
                     />
                   </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={config.static_html}
+                          onChange={e => handleChange('static_html', e.target.checked)}
+                        />
+                      }
+                      label="生成纯静态 HTML（无点击放大等功能）"
+                    />
+                  </Grid>
                   <Grid size={{ xs: 12 }}>
                     <Accordion>
                       <AccordionSummary
