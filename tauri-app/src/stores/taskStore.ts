@@ -25,6 +25,6 @@ export const useTaskStore = create<TaskState & DownloaderState>(set => ({
       set({ currentTask: null })
     }
   },
-  downloaderStatus: { current_url: null, queue_length: 0, is_processing: false },
+  downloaderStatus: { active_downloads: [], queue_length: 0 },
   setDownloaderStatus: status => set({ downloaderStatus: status }),
 }))
