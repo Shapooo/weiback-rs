@@ -91,15 +91,17 @@ const MediaDownloaderStatus: React.FC = () => {
           ))}
         </Box>
 
-        <Typography
-          variant="caption"
-          sx={{
-            fontSize: '0.6rem',
-            color: 'text.secondary',
-          }}
-        >
-          {queue_length > 0 ? `队列 ${queue_length}` : '完成'}
-        </Typography>
+        {queue_length > 0 && (
+          <Typography
+            variant="caption"
+            sx={{
+              fontSize: '0.6rem',
+              color: 'text.secondary',
+            }}
+          >
+            队列 {queue_length}
+          </Typography>
+        )}
       </Box>
     </Tooltip>
   )
