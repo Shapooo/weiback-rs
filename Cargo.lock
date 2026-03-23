@@ -5394,7 +5394,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -5995,7 +5995,7 @@ checksum = "f17aaa1c6e3dc22b1da4b6bba97d066e354c7945cac2f7852d4e4e7ca7a6b56d"
 
 [[package]]
 name = "tools"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -6692,7 +6692,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "weiback"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
