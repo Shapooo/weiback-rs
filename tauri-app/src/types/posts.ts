@@ -9,6 +9,7 @@ export interface UrlStructItem {
 
 export interface Post {
   id: number
+  idstr: string
   text: string
   favorited: boolean
   created_at: string

@@ -436,7 +436,7 @@ const ContentExplorerPage: React.FC = () => {
                   }}
                 >
                   {postInfos.map(postInfo => (
-                    <Box key={postInfo.post.id} sx={{ breakInside: 'avoid-column', mb: 3 }}>
+                    <Box key={postInfo.post.idstr} sx={{ breakInside: 'avoid-column', mb: 3 }}>
                       <PostDisplay
                         postInfo={postInfo}
                         onImageClick={handleOpenLightbox}

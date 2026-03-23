@@ -18,6 +18,7 @@ pub struct Post {
     pub favorited: bool,
     pub geo: Option<Value>,
     pub id: i64,
+    pub idstr: String,
     pub mblogid: String,
     pub mix_media_ids: Option<Vec<String>>,
     pub mix_media_info: Option<MixMediaInfo>,

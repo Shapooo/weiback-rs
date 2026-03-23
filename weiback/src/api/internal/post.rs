@@ -37,6 +37,7 @@ pub struct PostInternal {
     pub favorited: bool,
     pub geo: Option<Value>,
     pub id: i64,
+    pub idstr: String,
     #[serde(default, rename = "isLongText")]
     pub is_long_text: bool,
     #[serde(default, rename = "longText")]
@@ -81,6 +82,7 @@ impl TryFrom<PostInternal> for Post {
             favorited: value.favorited,
             geo: value.geo,
             id: value.id,
+            idstr: value.idstr,
             mblogid: value.mblogid,
             mix_media_ids: value.mix_media_ids,
             mix_media_info: value.mix_media_info,

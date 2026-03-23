@@ -190,6 +190,7 @@ impl TryInto<Post> for PostInternal {
             favorited: self.favorited,
             geo: self.geo,
             id: self.id,
+            idstr: self.id.to_string(),
             mblogid: self.mblogid,
             mix_media_ids: self.mix_media_ids.map(from_value).transpose()?,
             mix_media_info: self.mix_media_info.map(from_value).transpose()?,

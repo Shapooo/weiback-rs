@@ -16,7 +16,7 @@ export interface CleanupInvalidPostsOptions {
 }
 
 export interface DeletePostOptions {
-  id: number
+  id: string
   deep: boolean
 }
 

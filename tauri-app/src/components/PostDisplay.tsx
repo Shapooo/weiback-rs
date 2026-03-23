@@ -525,7 +525,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
   const handleDeleteConfirm = async (e: React.MouseEvent, deep: boolean) => {
     e.stopPropagation()
     try {
-      await deletePost({ id: postInfo.post.id, deep })
+      await deletePost({ id: postInfo.post.idstr, deep })
       enqueueSnackbar('帖子已删除', { variant: 'success' })
       onPostDeleted?.()
     } catch (error) {
@@ -539,7 +539,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
   const handleRebackupClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
     try {
-      await rebackupPost(postInfo.post.id.toString())
+      await rebackupPost(postInfo.post.idstr)
       enqueueSnackbar('已加入重新备份队列', { variant: 'info' })
     } catch (error) {
       console.error('Failed to re-backup post:', error)
@@ -559,22 +559,22 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
                 {new Date(postInfo.post.created_at).toLocaleString()}
               </Typography>
               <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
-                id: {postInfo.post.id}
+                id: {postInfo.post.idstr}
               </Typography>
             </Stack>
           }
           action={
             <Stack direction="row" alignItems="center">
-              {postInfo.post.id ? (
+              {postInfo.post.idstr ? (
                 <Tooltip title="重新备份" enterDelay={500} arrow>
                   <IconButton aria-label="re-backup post" onClick={handleRebackupClick}>
                     <SyncIcon />
                   </IconButton>
                 </Tooltip>
               ) : null}
-              {postInfo.post.user?.id && postInfo.post.id ? (
+              {postInfo.post.user?.id && postInfo.post.idstr ? (
                 <Tooltip
-                  title={`https://weibo.com/${postInfo.post.user.id}/${postInfo.post.id}`}
+                  title={`https://weibo.com/${postInfo.post.user.id}/${postInfo.post.idstr}`}
                   enterDelay={500}
                   arrow
                 >
@@ -582,7 +582,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
                     aria-label="open original post"
                     onClick={e => {
                       e.stopPropagation()
-                      const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.id}`
+                      const url = `https://weibo.com/${postInfo.post.user!.id}/${postInfo.post.idstr}`
                       openUrl(url).catch(e => console.error('Failed to open URL:', e))
                     }}
                   >
@@ -590,7 +590,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
                   </IconButton>
                 </Tooltip>
               ) : null}
-              {postInfo.post.id ? (
+              {postInfo.post.idstr ? (
                 <Tooltip title="删除" enterDelay={500} arrow>
                   <IconButton aria-label="delete post" onClick={handleDeleteClick}>
                     <DeleteIcon />
@@ -617,7 +617,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
                   @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                 </Typography>
                 <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>
-                  id: {postInfo.post.retweeted_status.id}
+                  id: {postInfo.post.retweeted_status.idstr}
                 </Typography>
               </Stack>
               <ProcessedText
