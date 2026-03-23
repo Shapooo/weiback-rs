@@ -381,7 +381,9 @@ impl StorageImpl {
             .into_iter()
             .partition_result();
 
-        warn!("{} posts constructed failed", errs.len());
+        if !errs.is_empty() {
+            warn!("{} posts constructed failed", errs.len());
+        }
         for (id, err) in errs {
             warn!("{id} cons failed: {err}");
         }

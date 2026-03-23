@@ -129,7 +129,9 @@ where {
             .into_iter()
             .filter(|r| r.is_err())
             .count();
-        warn! {"{fail_sum} pictures exports failed"}
+        if fail_sum > 0 {
+            warn!("{fail_sum} pictures exports failed");
+        }
         info!("Finished exporting page for task '{page_name}'");
         Ok(())
     }
