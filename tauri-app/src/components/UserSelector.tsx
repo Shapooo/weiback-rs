@@ -137,8 +137,12 @@ const UserSelector: React.FC<UserSelectorProps> = ({
             placeholder={searchMode === 'username' ? placeholderUsername : placeholderId}
             slotProps={{
               input: {
-                // These are props for the InputBase component, which is the 'input' slot
-                ...InputProps, // Spread the original InputProps from Autocomplete here
+                ...InputProps,
+                onBlur: (_e: React.FocusEvent<HTMLInputElement>) => {
+                  if (searchMode === 'id' && inputValue.trim()) {
+                    onChange(inputValue.trim())
+                  }
+                },
                 startAdornment: (
                   <InputAdornment position="start">
                     <Select
