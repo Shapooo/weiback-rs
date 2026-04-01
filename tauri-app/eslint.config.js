@@ -38,6 +38,7 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+      'react/prop-types': ['error', { ignore: ['key'] }],
       'react/react-in-jsx-scope': 'off',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [

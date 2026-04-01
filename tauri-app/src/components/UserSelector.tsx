@@ -116,16 +116,19 @@ const UserSelector: React.FC<UserSelectorProps> = ({
         }
         return option.screen_name
       }}
-      renderOption={(props, option) => (
-        <Box component="li" {...props}>
-          <Typography variant="body1">
-            {option.screen_name}{' '}
-            <Typography variant="caption" color="textSecondary">
-              ({option.id})
+      renderOption={(props, option) => {
+        const { key, ...rest } = props
+        return (
+          <Box component="li" key={key} {...rest}>
+            <Typography variant="body1">
+              {option.screen_name}{' '}
+              <Typography variant="caption" color="textSecondary">
+                ({option.id})
+              </Typography>
             </Typography>
-          </Typography>
-        </Box>
-      )}
+          </Box>
+        )
+      }}
       renderInput={params => {
         const { InputProps, ...otherParams } = params // Extract InputProps from params
 
