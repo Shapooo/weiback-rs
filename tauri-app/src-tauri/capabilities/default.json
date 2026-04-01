@@ -8,7 +8,10 @@
     "opener:allow-open-url",
     "dialog:default",
     "dialog:allow-open",
-    "core:event:allow-listen", 
-    "core:event:default"
+    "dialog:allow-ask",
+    "core:event:allow-listen",
+    "core:event:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy"
   ]
 }

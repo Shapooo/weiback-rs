@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Box,
   Drawer,
@@ -20,6 +20,8 @@ import { getBackendStatus, initBackend, BackendStatus } from './lib/api'
 import GlobalTaskProgress from './components/GlobalTaskProgress'
 import MediaDownloaderStatus from './components/MediaDownloaderStatus'
 import useCompletionNotifier from './hooks/useCompletionNotifier'
+import CloseConfirmDialog from './components/CloseConfirmDialog'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const drawerWidth = 200
 const taskProgressHeight = 80
@@ -30,6 +32,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const currentTask = useTaskStore(state => state.currentTask)
   const isTaskRunning = currentTask?.status === 'InProgress'
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false)
+  const userConfirmedCloseRef = useRef(false)
 
   const checkAndInitBackend = useCallback(async () => {
     setLoading(true)
@@ -60,6 +64,38 @@ const App: React.FC = () => {
   useTaskEvents(backendStatus.status === 'Running')
   // Enable global notifications for task completion/failure
   useCompletionNotifier()
+
+  const handleCloseConfirm = useCallback(async () => {
+    setCloseDialogOpen(false)
+    userConfirmedCloseRef.current = true
+    await getCurrentWindow().close()
+  }, [])
+
+  const handleCloseCancel = useCallback(() => {
+    setCloseDialogOpen(false)
+  }, [])
+
+  useEffect(() => {
+    const setupCloseListener = async () => {
+      const appWindow = getCurrentWindow()
+      const unlisten = await appWindow.onCloseRequested(event => {
+        const task = useTaskStore.getState()
+        const hasRunning =
+          task.currentTask?.status === 'InProgress' ||
+          task.downloaderStatus.active_downloads.length > 0
+        if (hasRunning && !userConfirmedCloseRef.current) {
+          event.preventDefault()
+          setCloseDialogOpen(true)
+        }
+      })
+      return unlisten
+    }
+
+    const unlistenPromise = setupCloseListener()
+    return () => {
+      unlistenPromise.then(unlisten => unlisten())
+    }
+  }, [])
 
   useEffect(() => {
     checkAndInitBackend()
@@ -137,6 +173,11 @@ const App: React.FC = () => {
         <AppRouter />
       </Box>
       <GlobalTaskProgress />
+      <CloseConfirmDialog
+        open={closeDialogOpen}
+        onConfirm={handleCloseConfirm}
+        onCancel={handleCloseCancel}
+      />
     </Box>
   )
 }
