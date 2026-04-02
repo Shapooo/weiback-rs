@@ -10,6 +10,7 @@ const ContentExplorer = React.lazy(() => import('./views/ContentExplorer'))
 const Settings = React.lazy(() => import('./views/Settings'))
 const User = React.lazy(() => import('./views/User'))
 const DataManage = React.lazy(() => import('./views/DataManage'))
+const About = React.lazy(() => import('./views/About'))
 
 const AppRouter: React.FC = () => (
   <Suspense
@@ -33,6 +34,7 @@ const AppRouter: React.FC = () => (
       <Route path="/manage" element={<DataManage />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/user" element={<User />} />
+      <Route path="/about" element={<About />} />
     </Routes>
   </Suspense>
 )

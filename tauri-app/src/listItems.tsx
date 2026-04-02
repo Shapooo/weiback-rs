@@ -8,6 +8,7 @@ import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
 import StorageOutlined from '@mui/icons-material/StorageOutlined'
+import InfoOutlined from '@mui/icons-material/InfoOutlined'
 
 const menuItems = [
   {
@@ -20,6 +21,7 @@ const menuItems = [
   { key: '/manage', label: '数据维护', icon: <StorageOutlined />, path: '/manage' },
   { key: '/user', label: '用 户', icon: <PersonOutlined />, path: '/user' },
   { key: '/settings', label: '设 置', icon: <SettingsOutlined />, path: '/settings' },
+  { key: '/about', label: '关 于', icon: <InfoOutlined />, path: '/about' },
 ]
 
 export const MainListItems = () => {

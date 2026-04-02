@@ -6,12 +6,15 @@
   "permissions": [
     "opener:allow-default-urls",
     "opener:allow-open-url",
-    "dialog:default",
-    "dialog:allow-open",
     "dialog:allow-ask",
-    "core:event:allow-listen",
+    "dialog:allow-open",
+    "core:app:allow-version",
     "core:event:default",
     "core:window:allow-close",
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://api.github.com/*" }]
+    }
   ]
 }

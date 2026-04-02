@@ -21,6 +21,9 @@ import GlobalTaskProgress from './components/GlobalTaskProgress'
 import MediaDownloaderStatus from './components/MediaDownloaderStatus'
 import useCompletionNotifier from './hooks/useCompletionNotifier'
 import CloseConfirmDialog from './components/CloseConfirmDialog'
+import UpdateBanner from './components/UpdateBanner'
+import { checkLatestRelease } from './lib/updateApi'
+import { useUpdateStore } from './stores/updateStore'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 const drawerWidth = 200
@@ -52,6 +55,13 @@ const App: React.FC = () => {
           })
         }
         useAuthStore.getState().checkLoginState()
+
+        // Check for updates silently after backend is ready
+        const release = await checkLatestRelease()
+        if (release) {
+          useUpdateStore.getState().setLatestRelease(release)
+          useUpdateStore.getState().setLastChecked(Date.now())
+        }
       }
     } catch (e) {
       setBackendStatus({ status: 'Error', message: String(e) })
@@ -178,6 +188,7 @@ const App: React.FC = () => {
         onConfirm={handleCloseConfirm}
         onCancel={handleCloseCancel}
       />
+      <UpdateBanner />
     </Box>
   )
 }
