@@ -611,7 +611,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
             onImageClick={onImageClick}
           />
           {postInfo.post.retweeted_status && (
-            <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.100', borderRadius: 1 }}>
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <Typography variant="subtitle2" color="text.secondary">
                   @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
