@@ -7,6 +7,15 @@ export interface UrlStructItem {
   url_title: string
 }
 
+export interface TagStructItem {
+  tag_name: string
+  url_type_pic: string
+  otype?: string
+  tag_hidden?: number
+  ori_url?: string
+  desc?: string
+}
+
 export interface Post {
   id: number
   idstr: string
@@ -16,6 +25,7 @@ export interface Post {
   user: User | null
   retweeted_status?: Post | null
   url_struct: UrlStructItem[] | null
+  tag_struct?: TagStructItem[] | null
 }
 
 export type AttachedImage =

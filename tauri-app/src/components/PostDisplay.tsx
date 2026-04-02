@@ -31,7 +31,12 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { avatarCache, attachedCache } from '../cache'
 import { useImageLoader } from '../hooks/useImageLoader'
 import Emoji from './Emoji'
-import { PostInfo, UrlStructItem, AttachedImage as AttachedImageData } from '../types'
+import {
+  PostInfo,
+  UrlStructItem,
+  AttachedImage as AttachedImageData,
+  TagStructItem,
+} from '../types'
 import { deletePost, rebackupPost } from '../lib/api'
 
 // --- Type Definitions are now in ../types.ts ---
@@ -246,6 +251,33 @@ const ArticleCover = React.memo(function ArticleCover({ image }: ArticleCoverPro
           <OpenInNewIcon sx={{ fontSize: 18, opacity: 0.7 }} />
         </Box>
       </Box>
+    </Box>
+  )
+})
+
+interface TagBadgeProps {
+  tagStruct: TagStructItem[]
+}
+
+const TagBadge = React.memo(function TagBadge({ tagStruct }: TagBadgeProps) {
+  const tagName = tagStruct[0]?.tag_name
+  if (!tagName) return null
+  return (
+    <Box
+      sx={{
+        display: 'inline-block',
+        mt: 1,
+        px: 1,
+        py: 0.25,
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: 'divider',
+        fontSize: '0.7rem',
+        color: 'text.secondary',
+        userSelect: 'none',
+      }}
+    >
+      {tagName}
     </Box>
   )
 })
@@ -626,6 +658,36 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
                 url_struct={postInfo.post.retweeted_status.url_struct}
                 maxLines={maxLines}
               />
+              {postInfo.post.retweeted_status.tag_struct && (
+                <TagBadge tagStruct={postInfo.post.retweeted_status.tag_struct} />
+              )}
+              {postInfo.post.retweeted_status.retweeted_status && (
+                <Box sx={{ mt: 1, pl: 2, borderLeft: '2px solid', borderColor: 'divider' }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      @
+                      {(postInfo.post.retweeted_status.retweeted_status as any).user?.screen_name ||
+                        '未知用户'}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>
+                      id: {(postInfo.post.retweeted_status.retweeted_status as any).idstr}
+                    </Typography>
+                  </Stack>
+                  <ProcessedText
+                    text={(postInfo.post.retweeted_status.retweeted_status as any).text}
+                    emoji_map={postInfo.emoji_map}
+                    url_struct={(postInfo.post.retweeted_status.retweeted_status as any).url_struct}
+                    maxLines={maxLines}
+                  />
+                  {(postInfo.post.retweeted_status.retweeted_status as any).tag_struct && (
+                    <TagBadge
+                      tagStruct={
+                        (postInfo.post.retweeted_status.retweeted_status as any).tag_struct
+                      }
+                    />
+                  )}
+                </Box>
+              )}
             </Box>
           )}
           <AttachedImages
@@ -633,6 +695,9 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
             onImageClick={onImageClick}
             maxImages={maxAttachedImages}
           />
+          {!postInfo.post.retweeted_status && postInfo.post.tag_struct && (
+            <TagBadge tagStruct={postInfo.post.tag_struct} />
+          )}
         </CardContent>
       </Card>
       <Dialog
