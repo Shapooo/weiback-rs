@@ -41,6 +41,22 @@ pub use task::{
 pub use task_handler::TaskHandler;
 pub use task_manager::{Task, TaskError, TaskEventListener, TaskManager, TaskType};
 
+/// Runs a short-lived task and logs the error if it fails.
+///
+/// This provides consistent error logging for short tasks, mirroring the pattern
+/// used by long tasks in [`handle_task_request`].
+macro_rules! run_short_task {
+    ($self:expr, $task_name:expr, $expr:expr) => {{
+        match $expr.await {
+            Ok(ret) => Ok(ret),
+            Err(e) => {
+                error!(concat!($task_name, " failed: {}"), e);
+                Err(e)
+            }
+        }
+    }};
+}
+
 #[cfg(not(feature = "dev-mode"))]
 type TH = TaskHandler<DefaultApiClient, StorageImpl, ExporterImpl, MediaDownloaderHandle>;
 #[cfg(feature = "dev-mode")]
@@ -233,31 +249,51 @@ impl Core {
     /// Queries local posts based on the provided search and filter criteria.
     pub async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPostInfo> {
         let ctx = self.create_short_task_context();
-        self.task_handler.query_posts(ctx, query).await
+        run_short_task!(
+            self,
+            "query_posts",
+            self.task_handler.query_posts(ctx, query)
+        )
     }
 
     /// Deletes a post from local storage.
     pub async fn delete_post(&self, options: DeletePostOptions) -> Result<()> {
         let ctx = self.create_short_task_context();
-        self.task_handler.delete_post(ctx, options).await
+        run_short_task!(
+            self,
+            "delete_post",
+            self.task_handler.delete_post(ctx, options)
+        )
     }
 
     /// Re-fetches a single post from the Weibo API and updates local storage.
     pub async fn rebackup_post(&self, id: i64) -> Result<()> {
         let ctx = self.create_short_task_context();
-        self.task_handler.rebackup_post(ctx, id).await
+        run_short_task!(
+            self,
+            "rebackup_post",
+            self.task_handler.rebackup_post(ctx, id)
+        )
     }
 
     /// Retrieves the raw image data (blob) for a given picture ID.
     pub async fn get_picture_blob(&self, id: &str) -> Result<Option<Bytes>> {
         let ctx = self.create_short_task_context();
-        self.task_handler.get_picture_blob(ctx, id).await
+        run_short_task!(
+            self,
+            "get_picture_blob",
+            self.task_handler.get_picture_blob(ctx, id)
+        )
     }
 
     /// Retrieves the raw video data (blob) for a given video URL.
     pub async fn get_video_blob(&self, url: &str) -> Result<Option<Bytes>> {
         let ctx = self.create_short_task_context();
-        self.task_handler.get_video_blob(ctx, url).await
+        run_short_task!(
+            self,
+            "get_video_blob",
+            self.task_handler.get_video_blob(ctx, url)
+        )
     }
 
     // ========================= long tasks =========================
