@@ -61,7 +61,10 @@ impl FileSystemVideoStorage {
                 );
                 Ok(None)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => {
+                error!("read video file {:?} failed: {e}", absolute_path);
+                Err(e.into())
+            }
         }
     }
 
@@ -88,19 +91,26 @@ impl FileSystemVideoStorage {
         E: Executor<'e, Database = Sqlite>,
     {
         let url = video.meta.url();
-        let relative_path = PathBuf::from(livephoto_video_url_to_path_str(url)?);
+        let relative_path =
+            PathBuf::from(livephoto_video_url_to_path_str(url).inspect_err(|e| {
+                error!("convert livephoto video URL to path failed: {e}");
+            })?);
         let absolute_path = video_path.join(&relative_path);
-        create_dir_all(
-            absolute_path
-                .parent()
-                .ok_or(Error::Io(std::io::Error::other(
-                    "cannot get parent of video path",
-                )))?,
-        )?;
+        create_dir_all(absolute_path.parent().ok_or_else(|| {
+            let msg = "cannot get parent of video path".to_string();
+            error!("save_video failed: {msg}");
+            Error::Io(std::io::Error::other(msg))
+        })?)?;
         if let Some(parent) = absolute_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            tokio::fs::create_dir_all(parent).await.inspect_err(|e| {
+                error!("create parent directory {:?} for video failed: {e}", parent);
+            })?;
         }
-        tokio::fs::write(&absolute_path, &video.blob).await?;
+        tokio::fs::write(&absolute_path, &video.blob)
+            .await
+            .inspect_err(|e| {
+                error!("write video file {:?} failed: {e}", absolute_path);
+            })?;
         video::save_video_meta(executor, url, video.meta.post_id, relative_path.as_path()).await?;
         debug!("video {} saved to {:?}", video.meta.url(), absolute_path);
         Ok(())

@@ -49,7 +49,7 @@ use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, to_value};
 use sqlx::{Acquire, Executor, FromRow, Sqlite};
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::core::task::{PostQuery, SearchTerm};
 use crate::error::{Error, Result};
@@ -669,14 +669,22 @@ fn build_common_query(query: &PostQuery) -> Result<sea_query::SelectStatement> {
 
     if let Some(start_date) = query.start_date {
         let dt = DateTime::from_timestamp(start_date, 0)
-            .ok_or(Error::FormatError("无效的开始时间".to_string()))?
+            .ok_or_else(|| {
+                let msg = "无效的开始时间".to_string();
+                error!("{msg}");
+                Error::FormatError(msg)
+            })?
             .to_rfc3339();
         posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).gte(dt));
     }
 
     if let Some(end_date) = query.end_date {
         let dt = DateTime::from_timestamp(end_date, 0)
-            .ok_or(Error::FormatError("无效的结束时间".to_string()))?
+            .ok_or_else(|| {
+                let msg = "无效的结束时间".to_string();
+                error!("{msg}");
+                Error::FormatError(msg)
+            })?
             .to_rfc3339();
         posts_query.and_where(Expr::col((PostIden::Table, PostIden::CreatedAt)).lte(dt));
     }

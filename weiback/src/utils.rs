@@ -31,31 +31,31 @@ pub static NEWLINE_EXPR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n").unwrap());
 /// Matches generic URLs.
 pub static URL_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(http|https)://[a-zA-Z0-9$%&~_#/.\-:=,?]{5,280}")
-        .map_err(|e| error!("Regex init failed: {e}"))
+        .inspect_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 /// Matches `@` mentions.
 pub static AT_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"@[\u4e00-\u9fa5|\uE7C7-\uE7F3|\w_\-·]+")
-        .map_err(|e| error!("Regex init failed: {e}"))
+        .inspect_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 /// Matches emoji text like `[doge]`.
 pub static EMOJI_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(\[.*?\])")
-        .map_err(|e| error!("Regex init failed: {e}"))
+        .inspect_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 /// Matches email addresses.
 pub static EMAIL_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[A-Za-z0-9]+([_.][A-Za-z0-9]+)*@([A-Za-z0-9-]+\.)+[A-Za-z]{2,6}")
-        .map_err(|e| error!("Regex init failed: {e}"))
+        .inspect_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 /// Matches topic hashtags like `#topic#`.
 pub static TOPIC_EXPR: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"#([^#]+)#")
-        .map_err(|e| error!("Regex init failed: {e}"))
+        .inspect_err(|e| error!("Regex init failed: {e}"))
         .unwrap()
 });
 
@@ -163,7 +163,7 @@ pub fn extract_all_pic_metas(
     let emoji_metas = posts.iter().flat_map(|post| {
         extract_emoji_urls(&post.text, emoji_map).filter_map(|url| {
             PictureMeta::other(url)
-                .map_err(|e| error!("cannot parse {url} {e}"))
+                .inspect_err(|e| error!("cannot parse {url} {e}"))
                 .ok()
         })
     });
@@ -237,7 +237,7 @@ fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
         .as_ref()
         .and_then(|user| {
             PictureMeta::avatar(user.avatar_hd.as_str(), user.id)
-                .map_err(|e| error!("cannot parse {} {e}", user.avatar_hd.as_str()))
+                .inspect_err(|e| error!("cannot parse {} {e}", user.avatar_hd.as_str()))
                 .ok()
         })
         .into_iter();
@@ -248,7 +248,7 @@ fn extract_avatar_metas(post: &Post) -> impl Iterator<Item = PictureMeta> + '_ {
         .and_then(|re| re.user.as_ref())
         .and_then(|u| {
             PictureMeta::avatar(u.avatar_hd.as_str(), u.id)
-                .map_err(|e| error!("cannot parse {} {e}", u.avatar_hd.as_str()))
+                .inspect_err(|e| error!("cannot parse {} {e}", u.avatar_hd.as_str()))
                 .ok()
         })
         .into_iter();
@@ -284,13 +284,13 @@ fn extract_current_standalone_pic_metas(
     let pic_info_handler = move |pic_info_item: &PicInfoItem| {
         let url = pic_info_item.get_pic_url(definition);
         PictureMeta::attached(url.as_str(), post_id, definition)
-            .map_err(|e| error!("cannot parse {url} {e}"))
+            .inspect_err(|e| error!("cannot parse {url} {e}"))
             .ok()
     };
     let huge_info_handler = move |huge_info: &HugeInfo| {
         let url = huge_info.page_pic.as_str();
         PictureMeta::cover(url, post_id)
-            .map_err(|e| error!("cannot parse {url} {e}"))
+            .inspect_err(|e| error!("cannot parse {url} {e}"))
             .ok()
     };
 
@@ -313,7 +313,7 @@ fn extract_current_standalone_pic_metas(
         .filter_map(move |p| {
             let url = p.pic_big.url.as_str();
             PictureMeta::cover(url, post_id)
-                .map_err(|e| error!("cannot parse {url} {e}"))
+                .inspect_err(|e| error!("cannot parse {url} {e}"))
                 .ok()
         });
 

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use futures::stream::{self, StreamExt};
 use lazy_static::lazy_static;
 use tera::{Context, Tera};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::api::EmojiUpdateApi;
 use crate::core::task::TaskContext;
@@ -94,11 +94,19 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
             ("posts.html", "page.html")
         };
 
-        let posts_html = TEMPLATES.render(posts_template, &posts_context)?;
+        let posts_html = TEMPLATES
+            .render(posts_template, &posts_context)
+            .inspect_err(|e| {
+                error!("render posts template '{}' failed: {e}", posts_template);
+            })?;
 
         let mut page_context = Context::new();
         page_context.insert("html", &posts_html);
-        let html = TEMPLATES.render(page_template, &page_context)?;
+        let html = TEMPLATES
+            .render(page_template, &page_context)
+            .inspect_err(|e| {
+                error!("render page template '{}' failed: {e}", page_template);
+            })?;
         info!("Successfully generated page");
         Ok(html)
     }
@@ -178,7 +186,9 @@ impl<E: EmojiUpdateApi, S: Storage> HTMLGenerator<E, S> {
     ) -> Result<Option<PictureExport>> {
         let url = pic_meta.url();
         if let Some(source_path) = self.storage.get_picture_path(ctx, url).await? {
-            let target_file_name = pic_url_to_filename(url)?;
+            let target_file_name = pic_url_to_filename(url).inspect_err(|e| {
+                error!("get picture filename for url {} failed: {e}", url);
+            })?;
             Ok(Some(PictureExport {
                 source_path,
                 target_file_name,

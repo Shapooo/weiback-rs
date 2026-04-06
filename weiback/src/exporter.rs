@@ -82,7 +82,9 @@ where {
         dir_builder.recursive(true);
         if !export_dir.exists() {
             debug!("Creating export directory at {export_dir:?}",);
-            dir_builder.create(export_dir).await?
+            dir_builder.create(export_dir).await.inspect_err(|e| {
+                error!("create export directory {:?} failed: {e}", export_dir);
+            })?
         } else if !export_dir.is_dir() {
             error!("Export path {} is not a directory", export_dir.display());
             return Err(std::io::Error::new(
@@ -94,14 +96,29 @@ where {
         let html_file_name = make_html_file_name(page_name);
         let html_file_path = export_dir.join(html_file_name);
         debug!("Writing HTML to file: {html_file_path:?}");
-        let mut html_file = File::create(&html_file_path).await?;
-        html_file.write_all(page.html.as_bytes()).await?;
+        let mut html_file = File::create(&html_file_path).await.inspect_err(|e| {
+            error!("create HTML file {:?} failed: {e}", html_file_path);
+        })?;
+        html_file
+            .write_all(page.html.as_bytes())
+            .await
+            .inspect_err(|e| {
+                error!("write HTML content to {:?} failed: {e}", html_file_path);
+            })?;
         debug!("Successfully wrote HTML to {html_file_path:?}");
 
         let resources_dir_name = make_resource_dir_name(page_name);
         let resources_dir_path = export_dir.join(resources_dir_name);
         if !resources_dir_path.exists() && !page.pictures_to_export.is_empty() {
-            dir_builder.create(&resources_dir_path).await?;
+            dir_builder
+                .create(&resources_dir_path)
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "create resources directory {:?} failed: {e}",
+                        resources_dir_path
+                    );
+                })?;
         }
         let pic_output_dir = resources_dir_path.as_path();
         debug!(
@@ -113,12 +130,11 @@ where {
             let dest_path = pic_output_dir.join(pic.target_file_name.clone());
             tokio::fs::copy(&pic.source_path, &dest_path)
                 .await
-                .map_err(|e| {
+                .inspect_err(|e| {
                     error!(
                         "Failed to copy picture from {:?} to {:?}: {}",
                         pic.source_path, dest_path, e
                     );
-                    e
                 })?;
             Result::<_>::Ok(())
         });

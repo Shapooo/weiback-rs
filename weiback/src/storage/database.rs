@@ -45,7 +45,9 @@ pub async fn create_db_pool_with_url(db_url: &str) -> Result<SqlitePool> {
                 && !parent.exists()
             {
                 info!("Creating parent directory for database: {parent:?}");
-                tokio::fs::create_dir_all(parent).await?;
+                tokio::fs::create_dir_all(parent).await.inspect_err(|e| {
+                    error!("create database parent directory {:?} failed: {e}", parent);
+                })?;
             }
 
             Sqlite::create_database(db_url).await?;

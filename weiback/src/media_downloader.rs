@@ -179,9 +179,8 @@ impl MediaDownloader for MediaDownloaderHandle {
         };
         self.status.queue_length.fetch_add(1, Ordering::Relaxed);
         self.notify_status();
-        Ok(self.sender.send(task).await.map_err(|e| {
+        Ok(self.sender.send(task).await.inspect_err(|e| {
             error!("Failed to send download task to worker: {e}");
-            e
         })?)
     }
 }
@@ -302,13 +301,11 @@ impl DownloaderWorker {
             .send()
             .await
             .and_then(|r| r.error_for_status())
-            .map_err(|e| {
+            .inspect_err(|e| {
                 error!("Failed to send request when download media file from {url}: {e}");
-                e
             })?;
-        let body = response.bytes().await.map_err(|e| {
+        let body = response.bytes().await.inspect_err(|e| {
             error!("Failed to read bytes from response for {url}: {e}");
-            e
         })?;
         debug!("Successfully downloaded media file from {url}");
         (callback)(ctx, body).await

@@ -46,10 +46,7 @@ impl<W: EmojiUpdateApi> EmojiMap<W> {
         self.emoji_map
             .get_or_try_init(async || self.api_client.emoji_update().await)
             .await
-            .map_err(|e| {
-                warn!("{e}");
-                e
-            })
+            .inspect_err(|e| warn!("{e}"))
     }
 }
 

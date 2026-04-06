@@ -60,8 +60,15 @@ impl<C: HttpClient> ApiClientImpl<C> {
     pub(super) async fn statuses_show_internal(&self, id: i64) -> Result<PostInternal> {
         debug!("getting long text, id: {id}");
 
-        let response = self.client.statuses_show(id).await?;
-        let res = response.json::<StatusesShowResponse>().await?;
+        let response = self.client.statuses_show(id).await.inspect_err(|e| {
+            error!("statuses_show({id}) SDK call failed: {e}");
+        })?;
+        let res = response
+            .json::<StatusesShowResponse>()
+            .await
+            .inspect_err(|e| {
+                error!("parse StatusesShowResponse for post {id} failed: {e}");
+            })?;
         match res {
             StatusesShowResponse::Succ(statuses_show) => {
                 debug!("got statuses success");

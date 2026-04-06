@@ -5,7 +5,10 @@
 //! templating, including rendering the text with appropriate HTML tags for
 //! links, mentions, topics, and emojis, and preparing local paths for media.
 
-use std::borrow::Cow::{self, Borrowed, Owned};
+use std::borrow::{
+    Cow::{self, Borrowed, Owned},
+    ToOwned,
+};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -250,13 +253,11 @@ fn extract_avatar_path(post: &Post, pic_folder: &Path) -> Option<String> {
                 pic_folder
                     .join(&name)
                     .to_str()
-                    .ok_or(Error::FormatError(format!(
-                        "invalid path {pic_folder:?}/{name}"
-                    )))
-                    .map(ToString::to_string)
-                    .map_err(|e| {
-                        tracing::info!("{e}");
-                        e
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| {
+                        let msg = format!("invalid path {pic_folder:?}/{name}");
+                        tracing::error!("{msg}");
+                        Error::FormatError(msg)
                     })
             })
         })

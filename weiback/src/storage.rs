@@ -313,29 +313,34 @@ impl StorageImpl {
         Box::pin(async move {
             debug!("Saving post with id: {}", post.id);
             if let Some(user) = &post.user {
-                user::save_user(&self.db_pool, user).await?;
+                user::save_user(&self.db_pool, user)
+                    .await
+                    .inspect_err(|e| {
+                        error!("save_user for uid={} failed: {e}", user.id);
+                    })?;
             }
             if let Some(ret_post) = post.retweeted_status.as_deref() {
                 self._save_post(ret_post.clone()).await?;
             }
-            let post_storage: PostInternal = post.try_into()?;
-            match post::save_post(&self.db_pool, &post_storage).await {
-                Ok(()) => {
-                    debug!("Post with id: {} saved successfully", post_storage.id);
-                    Ok(())
-                }
-                Err(e) => {
-                    error!("Failed to save post with id: {}: {:?}", post_storage.id, e);
-                    Err(e)
-                }
-            }
+            let post_storage: PostInternal = post.try_into().inspect_err(|e| {
+                error!("convert Post to PostInternal failed: {e}");
+            })?;
+            post::save_post(&self.db_pool, &post_storage)
+                .await
+                .inspect_err(|e| {
+                    error!("save_post id={} failed: {e}", post_storage.id);
+                })?;
+            debug!("Post with id: {} saved successfully", post_storage.id);
+            Ok(())
         })
     }
 
     /// Retrieves a post and hydrates it with user and retweeted post.
     fn get_post(&self, id: i64) -> Pin<Box<dyn Future<Output = Result<Option<Post>>> + Send + '_>> {
         Box::pin(async move {
-            if let Some(post) = post::get_post(&self.db_pool, id).await? {
+            if let Some(post) = post::get_post(&self.db_pool, id).await.inspect_err(|e| {
+                error!("get_post(id={}) failed: {e}", id);
+            })? {
                 self.hydrate_post(post).await.map(Some)
             } else {
                 Ok(None)
@@ -347,22 +352,30 @@ impl StorageImpl {
     /// fetching the associated user and retweeted post from the database.
     async fn hydrate_post(&self, post: PostInternal) -> Result<Post> {
         let user = if let Some(uid) = post.uid {
-            user::get_user(&self.db_pool, uid).await?
+            user::get_user(&self.db_pool, uid).await.inspect_err(|e| {
+                error!("get_user(uid={}) failed: {e}", uid);
+            })?
         } else {
             None
         };
 
         let retweeted_status = if let Some(retweeted_id) = post.retweeted_id {
-            Some(Box::new(self.get_post(retweeted_id).await?.ok_or(
-                Error::DbError(format!(
-                    "there's inconsistent data base status, cannot find post {}'s retweeted post {}",
-                    post.id, retweeted_id
-                )),
+            Some(Box::new(self.get_post(retweeted_id).await?.ok_or_else(
+                || {
+                    let msg = format!(
+                        "inconsistent database: post {}'s retweeted post {} not found",
+                        post.id, retweeted_id
+                    );
+                    error!("hydrate_post failed: {msg}");
+                    Error::DbError(msg)
+                },
             )?))
         } else {
             None
         };
-        let mut post: Post = post.try_into()?;
+        let mut post: Post = post.try_into().inspect_err(|e| {
+            error!("convert PostInternal to Post failed: {e}");
+        })?;
         post.retweeted_status = retweeted_status;
         post.user = user;
         Ok(post)
@@ -394,15 +407,28 @@ impl StorageImpl {
 #[async_trait]
 impl Storage for StorageImpl {
     async fn get_user(&self, uid: i64) -> Result<Option<User>> {
-        user::get_user(&self.db_pool, uid).await
+        user::get_user(&self.db_pool, uid).await.inspect_err(|e| {
+            error!("get_user(uid={}) failed: {e}", uid);
+        })
     }
 
     async fn get_users_by_ids(&self, ids: &[i64]) -> Result<Vec<User>> {
-        user::get_users_by_ids(&self.db_pool, ids).await
+        user::get_users_by_ids(&self.db_pool, ids)
+            .await
+            .inspect_err(|e| {
+                error!("get_users_by_ids(ids.len={}) failed: {e}", ids.len());
+            })
     }
 
     async fn search_users_by_screen_name_prefix(&self, prefix: &str) -> Result<Vec<User>> {
-        user::search_users_by_screen_name_prefix(&self.db_pool, prefix).await
+        user::search_users_by_screen_name_prefix(&self.db_pool, prefix)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    "search_users_by_screen_name_prefix(prefix={}) failed: {e}",
+                    prefix
+                );
+            })
     }
 
     async fn save_post(&self, post: &Post) -> Result<()> {
@@ -414,99 +440,171 @@ impl Storage for StorageImpl {
     }
 
     async fn query_posts(&self, query: PostQuery) -> Result<PaginatedPosts> {
-        let (posts_internal, total_items) = post::query_posts(&self.db_pool, query).await?;
+        let (posts_internal, total_items) = post::query_posts(&self.db_pool, query)
+            .await
+            .inspect_err(|e| {
+                error!("query_posts failed: {e}");
+            })?;
         let posts = self.hydrate_posts(posts_internal).await;
         Ok(PaginatedPosts { posts, total_items })
     }
 
     async fn query_all_post_ids(&self, query: PostQuery) -> Result<Vec<i64>> {
-        post::query_all_post_ids(&self.db_pool, query).await
+        post::query_all_post_ids(&self.db_pool, query)
+            .await
+            .inspect_err(|e| {
+                error!("query_all_post_ids failed: {e}");
+            })
     }
 
     async fn save_user(&self, user: &User) -> Result<()> {
-        user::save_user(&self.db_pool, user).await
+        user::save_user(&self.db_pool, user).await.inspect_err(|e| {
+            error!("save_user(uid={}) failed: {e}", user.id);
+        })
     }
 
     async fn mark_post_unfavorited(&self, id: i64) -> Result<()> {
-        post::mark_post_unfavorited(&self.db_pool, id).await
+        post::mark_post_unfavorited(&self.db_pool, id)
+            .await
+            .inspect_err(|e| {
+                error!("mark_post_unfavorited(id={}) failed: {e}", id);
+            })
     }
 
     async fn mark_post_favorited(&self, id: i64) -> Result<()> {
-        post::mark_post_favorited(&self.db_pool, id).await
+        post::mark_post_favorited(&self.db_pool, id)
+            .await
+            .inspect_err(|e| {
+                error!("mark_post_favorited(id={}) failed: {e}", id);
+            })
     }
 
     async fn get_posts_id_to_unfavorite(&self) -> Result<Vec<i64>> {
-        post::get_posts_id_to_unfavorite(&self.db_pool).await
+        post::get_posts_id_to_unfavorite(&self.db_pool)
+            .await
+            .inspect_err(|e| {
+                error!("get_posts_id_to_unfavorite failed: {e}");
+            })
     }
 
     async fn get_picture_blob(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<Bytes>> {
         self.pic_storage
             .get_picture_blob(&ctx.config.picture_path, &self.db_pool, url)
             .await
+            .inspect_err(|e| {
+                error!("get_picture_blob(url={}) failed: {e}", url);
+            })
     }
 
     async fn save_picture(&self, ctx: Arc<TaskContext>, picture: &Picture) -> Result<()> {
         self.pic_storage
             .save_picture(&ctx.config.picture_path, &self.db_pool, picture)
             .await
+            .inspect_err(|e| {
+                error!("save_picture(url={}) failed: {e}", picture.meta.url());
+            })
     }
 
     async fn picture_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool> {
         self.pic_storage
             .picture_saved(&ctx.config.picture_path, &self.db_pool, url)
             .await
+            .inspect_err(|e| {
+                error!("picture_saved(url={}) failed: {e}", url);
+            })
     }
 
     async fn get_video_blob(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<Bytes>> {
         self.video_storage
             .get_video_blob(&ctx.config.video_path, &self.db_pool, url)
             .await
+            .inspect_err(|e| {
+                error!("get_video_blob(url={}) failed: {e}", url);
+            })
     }
 
     async fn save_video(&self, ctx: Arc<TaskContext>, video: &Video) -> Result<()> {
         self.video_storage
             .save_video(&ctx.config.video_path, &self.db_pool, video)
             .await
+            .inspect_err(|e| {
+                error!("save_video(url={}) failed: {e}", video.meta.url());
+            })
     }
 
     async fn video_saved(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<bool> {
         self.video_storage
             .video_saved(&ctx.config.video_path, &self.db_pool, url)
             .await
+            .inspect_err(|e| {
+                error!("video_saved(url={}) failed: {e}", url);
+            })
     }
 
     async fn get_picture_path(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<Option<PathBuf>> {
         let url = &pic_url_to_db_key(url);
-        let path = picture::get_picture_path(&self.db_pool, url).await?;
+        let path = picture::get_picture_path(&self.db_pool, url)
+            .await
+            .inspect_err(|e| {
+                error!("get_picture_path(url={}) failed: {e}", url);
+            })?;
         Ok(path.map(|p| ctx.config.picture_path.join(p)))
     }
 
     async fn get_attached_infos(&self, post_id: i64) -> Result<Vec<PictureInfo>> {
-        picture::get_pictures_by_post_id(&self.db_pool, post_id).await
+        picture::get_pictures_by_post_id(&self.db_pool, post_id)
+            .await
+            .inspect_err(|e| {
+                error!("get_attached_infos(post_id={}) failed: {e}", post_id);
+            })
     }
 
     async fn get_avatar_info(&self, user_id: i64) -> Result<Option<PictureInfo>> {
-        picture::get_avatar_by_user_id(&self.db_pool, user_id).await
+        picture::get_avatar_by_user_id(&self.db_pool, user_id)
+            .await
+            .inspect_err(|e| {
+                error!("get_avatar_info(user_id={}) failed: {e}", user_id);
+            })
     }
 
     async fn get_avatar_infos(&self, user_id: i64) -> Result<Vec<PictureInfo>> {
-        picture::get_avatars_by_user_id(&self.db_pool, user_id).await
+        picture::get_avatars_by_user_id(&self.db_pool, user_id)
+            .await
+            .inspect_err(|e| {
+                error!("get_avatar_infos(user_id={}) failed: {e}", user_id);
+            })
     }
 
     async fn get_users_with_duplicate_avatars(&self) -> Result<Vec<i64>> {
-        picture::get_users_with_duplicate_avatars(&self.db_pool).await
+        picture::get_users_with_duplicate_avatars(&self.db_pool)
+            .await
+            .inspect_err(|e| {
+                error!("get_users_with_duplicate_avatars failed: {e}");
+            })
     }
 
     async fn get_pictures_by_ids(&self, ids: &[String]) -> Result<Vec<PictureInfo>> {
-        picture::get_pictures_by_ids(&self.db_pool, ids).await
+        picture::get_pictures_by_ids(&self.db_pool, ids)
+            .await
+            .inspect_err(|e| {
+                error!("get_pictures_by_ids(ids.len={}) failed: {e}", ids.len());
+            })
     }
 
     async fn get_pictures_by_id(&self, id: &str) -> Result<Vec<PictureInfo>> {
-        picture::get_pictures_by_id(&self.db_pool, id).await
+        picture::get_pictures_by_id(&self.db_pool, id)
+            .await
+            .inspect_err(|e| {
+                error!("get_pictures_by_id(id={}) failed: {e}", id);
+            })
     }
 
     async fn get_duplicate_pic_ids(&self) -> Result<Vec<String>> {
-        picture::get_duplicate_pic_ids(&self.db_pool).await
+        picture::get_duplicate_pic_ids(&self.db_pool)
+            .await
+            .inspect_err(|e| {
+                error!("get_duplicate_pic_ids failed: {e}");
+            })
     }
 
     fn get_all_pictures(&self) -> impl Stream<Item = Result<PictureInfo>> + Send + '_ {
@@ -550,69 +648,150 @@ impl Storage for StorageImpl {
     }
 
     async fn count_pictures(&self) -> Result<u64> {
-        picture::count_pictures(&self.db_pool).await
+        picture::count_pictures(&self.db_pool)
+            .await
+            .inspect_err(|e| {
+                error!("count_pictures failed: {e}");
+            })
     }
 
     async fn delete_picture(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()> {
         self.pic_storage
             .delete_picture(&ctx.config.picture_path, &self.db_pool, url)
             .await
+            .inspect_err(|e| {
+                error!("delete_picture(url={}) failed: {e}", url);
+            })
     }
 
     async fn delete_picture_by_url(&self, ctx: Arc<TaskContext>, url: &Url) -> Result<()> {
         let picture_path = &ctx.config.picture_path;
         // Get the relative path from database
-        if let Some(relative_path) = picture::get_picture_path(&self.db_pool, url).await? {
+        if let Some(relative_path) = picture::get_picture_path(&self.db_pool, url)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    "delete_picture_by_url get_picture_path(url={}) failed: {e}",
+                    url
+                );
+            })?
+        {
             let absolute_path = picture_path.join(relative_path);
             // Try to delete the file, tolerate if it doesn't exist
             let _ = tokio::fs::remove_file(&absolute_path).await;
         }
         // Delete from database
-        picture::delete_picture_by_url(&self.db_pool, url).await
+        picture::delete_picture_by_url(&self.db_pool, url)
+            .await
+            .inspect_err(|e| {
+                error!("delete_picture_by_url(url={}) failed: {e}", url);
+            })
     }
 
     async fn delete_post(&self, ctx: Arc<TaskContext>, id: i64, deep: bool) -> Result<()> {
         let picture_path = ctx.config.picture_path.clone();
         let video_path = ctx.config.video_path.clone();
 
-        let Some(post) = post::get_post(&self.db_pool, id).await? else {
+        let Some(post) = post::get_post(&self.db_pool, id).await.inspect_err(|e| {
+            error!("delete_post(id={}, deep={}) get_post failed: {e}", id, deep);
+        })?
+        else {
             return Ok(());
         };
 
         if deep {
             // Deep delete: delete the root and all related posts in the tree
             let root_id = post.retweeted_id.unwrap_or(post.id);
-            let mut ids = post::get_retweet_ids(&self.db_pool, root_id).await?;
+            let mut ids = post::get_retweet_ids(&self.db_pool, root_id)
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "delete_post deep get_retweet_ids(root_id={}) failed: {e}",
+                        root_id
+                    );
+                })?;
             ids.push(root_id);
 
             self.pic_storage
                 .batch_delete_posts_pictures(&picture_path, &self.db_pool, &ids)
-                .await?;
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "delete_post deep batch_delete_posts_pictures(ids={:?}) failed: {e}",
+                        ids
+                    );
+                })?;
             self.video_storage
                 .batch_delete_posts_videos(&video_path, &self.db_pool, &ids)
-                .await?;
-            post::batch_delete_posts(&self.db_pool, &ids).await
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "delete_post deep batch_delete_posts_videos(ids={:?}) failed: {e}",
+                        ids
+                    );
+                })?;
+            post::batch_delete_posts(&self.db_pool, &ids)
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "delete_post deep batch_delete_posts ids={:?} failed: {e}",
+                        ids
+                    );
+                })
         } else {
             // Shallow delete: only delete if no children, otherwise just unfavorite
-            if post::has_retweets(&self.db_pool, id).await? {
+            if post::has_retweets(&self.db_pool, id)
+                .await
+                .inspect_err(|e| {
+                    error!("delete_post shallow has_retweets(id={}) failed: {e}", id);
+                })?
+            {
                 // Post has children, only remove from favorited_posts
-                post::mark_post_unfavorited(&self.db_pool, id).await?;
+                post::mark_post_unfavorited(&self.db_pool, id)
+                    .await
+                    .inspect_err(|e| {
+                        error!(
+                            "delete_post shallow mark_post_unfavorited(id={}) failed: {e}",
+                            id
+                        );
+                    })?;
                 return Ok(());
             }
 
             // Post has no children, delete only itself
             self.pic_storage
                 .delete_post_pictures(&picture_path, &self.db_pool, id)
-                .await?;
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "delete_post shallow delete_post_pictures(id={}) failed: {e}",
+                        id
+                    );
+                })?;
             self.video_storage
                 .delete_post_videos(&video_path, &self.db_pool, id)
-                .await?;
-            post::delete_post(&self.db_pool, id).await
+                .await
+                .inspect_err(|e| {
+                    error!(
+                        "delete_post shallow delete_post_videos(id={}) failed: {e}",
+                        id
+                    );
+                })?;
+            post::delete_post(&self.db_pool, id).await.inspect_err(|e| {
+                error!("delete_post shallow delete_post(id={}) failed: {e}", id);
+            })
         }
     }
 
     async fn get_invalid_posts_ids(&self, clean_retweeted_invalid: bool) -> Result<Vec<i64>> {
-        post::get_invalid_posts_ids(&self.db_pool, clean_retweeted_invalid).await
+        post::get_invalid_posts_ids(&self.db_pool, clean_retweeted_invalid)
+            .await
+            .inspect_err(|e| {
+                error!(
+                    "get_invalid_posts_ids(clean_retweeted_invalid={}) failed: {e}",
+                    clean_retweeted_invalid
+                );
+            })
     }
 }
 

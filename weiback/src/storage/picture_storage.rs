@@ -58,7 +58,10 @@ impl FileSystemPictureStorage {
                 warn!("picture has db entry, but file not found at {:?}", path);
                 Ok(None)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => {
+                error!("read picture file {:?} failed: {e}", path);
+                Err(e.into())
+            }
         }
     }
 
@@ -87,17 +90,24 @@ impl FileSystemPictureStorage {
         let url = picture.meta.url();
         let relative_path = pic_url_to_path_str(url);
         let absolute_path = picture_path.join(&relative_path);
-        create_dir_all(
-            absolute_path
-                .parent()
-                .ok_or(Error::Io(std::io::Error::other(
-                    "cannot get parent of picture path",
-                )))?,
-        )?;
+        create_dir_all(absolute_path.parent().ok_or_else(|| {
+            let msg = "cannot get parent of picture path".to_string();
+            error!("save_picture failed: {msg}");
+            Error::Io(std::io::Error::other(msg))
+        })?)?;
         if let Some(parent) = absolute_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            tokio::fs::create_dir_all(parent).await.inspect_err(|e| {
+                error!(
+                    "create parent directory {:?} for picture failed: {e}",
+                    parent
+                );
+            })?;
         }
-        tokio::fs::write(&absolute_path, &picture.blob).await?;
+        tokio::fs::write(&absolute_path, &picture.blob)
+            .await
+            .inspect_err(|e| {
+                error!("write picture file {:?} failed: {e}", absolute_path);
+            })?;
         picture::save_picture_meta(executor, &picture.meta, Some(relative_path.as_str())).await?;
         debug!(
             "picture {} saved to {:?}",
@@ -166,7 +176,11 @@ impl FileSystemPictureStorage {
         if let Some(relative_path) = picture::get_picture_path(&mut *conn, url).await? {
             let absolute_path = picture_path.join(relative_path);
             if absolute_path.exists() {
-                tokio::fs::remove_file(&absolute_path).await?;
+                tokio::fs::remove_file(&absolute_path)
+                    .await
+                    .inspect_err(|e| {
+                        error!("remove picture file {:?} failed: {e}", absolute_path);
+                    })?;
             }
             picture::delete_picture_by_url(&mut *conn, url).await?;
         }

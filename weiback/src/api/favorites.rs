@@ -122,8 +122,19 @@ impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
     /// A `Result` containing a vector of `Post` objects.
     async fn favorites(&self, page: u32, count: u32) -> Result<Vec<Post>> {
         info!("getting favorites, page: {page}, count: {count}");
-        let response = self.client.favorites(page, count).await?;
-        let posts: Vec<PostInternal> = response.json::<FavoritesResponse>().await?.try_into()?;
+        let response = self.client.favorites(page, count).await.inspect_err(|e| {
+            error!("favorites API call failed: {e}");
+        })?;
+        let posts: Vec<PostInternal> = response
+            .json::<FavoritesResponse>()
+            .await
+            .inspect_err(|e| {
+                error!("parse FavoritesResponse failed: {e}");
+            })?
+            .try_into()
+            .inspect_err(|e| {
+                error!("convert FavoritesResponse to Vec<PostInternal> failed: {e}");
+            })?;
         let posts = stream::iter(posts)
             .map(|post| self.process_post(post))
             .buffer_unordered(2)
@@ -142,7 +153,9 @@ impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
     /// A `Result` indicating success or failure of the unfavorite operation.
     async fn favorites_destroy(&self, id: i64) -> Result<()> {
         info!("destroying favorite, id: {id}");
-        self.client.favorites_destroy(id).await?;
+        self.client.favorites_destroy(id).await.inspect_err(|e| {
+            error!("favorites_destroy({id}) API call failed: {e}");
+        })?;
         debug!("favorite {id} destroyed");
         Ok(())
     }

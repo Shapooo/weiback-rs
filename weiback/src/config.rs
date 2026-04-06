@@ -13,7 +13,7 @@ use std::{
 
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use weibosdk_rs::config::Config as SdkConfig;
 
 use crate::error::Result;
@@ -189,12 +189,22 @@ pub fn save_config(config: &Config) -> Result<()> {
             .unwrap_or_default()
             .join("weiback/config.toml");
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).inspect_err(|e| {
+                error!("create config parent directory {:?} failed: {e}", parent);
+            })?;
         }
         path
     };
 
-    fs::write(&config_path, toml::to_string_pretty(config)?)?;
+    fs::write(
+        &config_path,
+        toml::to_string_pretty(config).inspect_err(|e| {
+            error!("serialize config to toml failed: {e}");
+        })?,
+    )
+    .inspect_err(|e| {
+        error!("write config file {:?} failed: {e}", config_path);
+    })?;
     debug!("Configuration file saved at: {config_path:?}");
 
     if let Some(g_config) = CONFIG.get()
@@ -215,8 +225,13 @@ fn load_from_files() -> Result<Option<Config>> {
     let Some(config_path) = find_config_file()? else {
         return Ok(None);
     };
-    let content = fs::read_to_string(config_path)?;
-    Ok(toml::from_str(&content)?)
+    let content = fs::read_to_string(config_path).inspect_err(|e| {
+        error!("read config file failed: {e}");
+    })?;
+    let cfg = toml::from_str::<Config>(&content).inspect_err(|e| {
+        error!("parse config file failed: {e}");
+    })?;
+    Ok(Some(cfg))
 }
 
 /// Attempts to load the configuration from a file. If no configuration file is found,
@@ -228,8 +243,12 @@ fn load_from_files() -> Result<Option<Config>> {
 /// Returns an `Error` if loading fails or if writing the default config fails.
 fn load_or_create() -> Result<Config> {
     if let Some(path) = find_config_file()? {
-        let content = fs::read_to_string(path)?;
-        return Ok(toml::from_str(&content)?);
+        let content = fs::read_to_string(path).inspect_err(|e| {
+            error!("read config file failed: {e}");
+        })?;
+        return Ok(toml::from_str(&content).inspect_err(|e| {
+            error!("parse config file failed: {e}");
+        })?);
     }
 
     // No config file found, create and write default config
@@ -239,9 +258,17 @@ fn load_or_create() -> Result<Config> {
         .join("weiback/config.toml");
 
     if let Some(parent) = config_local_path.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent).inspect_err(|e| {
+            error!("create config parent directory {:?} failed: {e}", parent);
+        })?;
     }
-    fs::write(&config_local_path, toml::to_string_pretty(&config)?)?;
+    fs::write(
+        &config_local_path,
+        toml::to_string_pretty(&config).inspect_err(|e| {
+            error!("serialize config to toml failed: {e}");
+        })?,
+    )
+    .inspect_err(|e| error!("config file write failed: {e}"))?;
     debug!("Default configuration file created at: {config_local_path:?}",);
 
     Ok(config)
@@ -256,7 +283,9 @@ fn load_or_create() -> Result<Config> {
 /// A `Result` containing `Some(PathBuf)` if a config file is found, or `None` otherwise.
 /// Returns an `Error` if the current executable path cannot be determined.
 fn find_config_file() -> Result<Option<PathBuf>> {
-    let exe_path = std::env::current_exe()?;
+    let exe_path = std::env::current_exe().inspect_err(|e| {
+        error!("get current executable path failed: {e}");
+    })?;
     let exe_dir = exe_path.parent().unwrap_or(&exe_path);
 
     let paths = [

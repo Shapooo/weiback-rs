@@ -149,7 +149,10 @@ impl Core {
     /// * `phone_number` - The phone number to send the code to (e.g., "13800138000").
     pub async fn get_sms_code(&self, phone_number: String) -> Result<()> {
         info!("send_code called for phone number: {phone_number}");
-        self.sdk_api_client.get_sms_code(phone_number).await?;
+        self.sdk_api_client
+            .get_sms_code(phone_number)
+            .await
+            .inspect_err(|e| error!("get_sms_code failed: {e}"))?;
         Ok(())
     }
 
@@ -168,17 +171,26 @@ impl Core {
         match self.sdk_api_client.login_state() {
             LoginState::WaitingForCode { .. } => {
                 info!("Attempting to login with SMS code.");
-                self.sdk_api_client.login(&sms_code).await?;
+                self.sdk_api_client
+                    .login(&sms_code)
+                    .await
+                    .inspect_err(|e| error!("SDK login failed: {e}"))?;
                 info!("Login successful.");
                 let session_path = get_config()
                     .read()
                     .expect("config lock failed")
                     .session_path
                     .clone();
-                let session = self.sdk_api_client.session()?;
-                session.save(session_path)?;
+                let session = self.sdk_api_client.session().inspect_err(|e| {
+                    error!("get session after login failed: {e}");
+                })?;
+                session.save(session_path).inspect_err(|e| {
+                    error!("save session to disk failed: {e}");
+                })?;
 
-                let user: User = serde_json::from_value(session.user)?;
+                let user: User = serde_json::from_value(session.user.clone()).inspect_err(|e| {
+                    error!("parse user from session failed: {e}");
+                })?;
                 let user_id = user.id;
 
                 let th = self.task_handler.clone();
@@ -195,8 +207,12 @@ impl Core {
             }
             LoginState::LoggedIn { .. } => {
                 warn!("Already logged in, skipping login.");
-                let session = self.sdk_api_client.session()?;
-                let user: User = serde_json::from_value(session.user)?;
+                let session = self.sdk_api_client.session().inspect_err(|e| {
+                    error!("get session in AlreadyLoggedIn branch failed: {e}");
+                })?;
+                let user: User = serde_json::from_value(session.user).inspect_err(|e| {
+                    error!("parse user from session in AlreadyLoggedIn branch failed: {e}");
+                })?;
                 Ok(user)
             }
             LoginState::Init => {
@@ -215,7 +231,11 @@ impl Core {
             .sdk_api_client
             .session()
             .ok()
-            .map(|s| serde_json::from_value(s.user))
+            .map(|s| {
+                serde_json::from_value(s.user.clone()).inspect_err(|e| {
+                    error!("parse user from session failed: {e}");
+                })
+            })
             .transpose()?)
     }
 

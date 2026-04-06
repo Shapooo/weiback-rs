@@ -220,12 +220,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     );
                 }
                 Err(e) => {
-                    error!(
-                        "Failed to backup page {} for task {}: {}",
-                        page,
-                        ctx.task_id.unwrap(),
-                        e
-                    );
                     ctx.task_manager.report_task_error(TaskError {
                         error_type: TaskErrorType::DownloadMedia(format!("page {}", page)),
                         message: e.to_string(),
@@ -350,7 +344,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     info!("Post {id} ({i}/{len})unfavorited successfully");
                 }
                 Err(e) => {
-                    error!("Failed to unfavorite post {id}: {e}");
                     ctx.task_manager.report_task_error(TaskError {
                         error_type: TaskErrorType::DownloadMedia(format!("unfavorite post {}", id)),
                         message: e.to_string(),
@@ -473,14 +466,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         ctx: Arc<TaskContext>,
         query: PostQuery,
     ) -> Result<()> {
-        let ids = self.storage.query_all_post_ids(query).await.map_err(|e| {
-            error!(
-                "Failed to query post IDs for task {}: {}",
-                ctx.task_id.unwrap(),
-                e
-            );
-            e
-        })?;
+        let ids = self.storage.query_all_post_ids(query).await?;
         let total = ids.len();
         info!("Found {} posts to re-backup", total);
         ctx.task_manager.update_progress(0, total as u64)?;
@@ -491,15 +477,7 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
             let post_result = self.api_client.statuses_show(id).await;
             let process_result = match post_result {
                 Ok(post) => self.processer.process(ctx.clone(), vec![post]).await,
-                Err(e) => {
-                    error!(
-                        "Failed to fetch post {} for task {}: {}",
-                        id,
-                        ctx.task_id.unwrap(),
-                        e
-                    );
-                    Err(e)
-                }
+                Err(e) => Err(e),
             };
 
             match process_result {
@@ -507,12 +485,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     info!("re-backed up post {} ({}/{})", id, i + 1, total);
                 }
                 Err(e) => {
-                    error!(
-                        "Failed to process re-backed up post {} for task {}: {}",
-                        id,
-                        ctx.task_id.unwrap(),
-                        e
-                    );
                     ctx.task_manager.report_task_error(TaskError {
                         error_type: TaskErrorType::DownloadMedia(format!("rebackup post {}", id)),
                         message: e.to_string(),
@@ -579,11 +551,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                     .delete_picture(ctx.clone(), pic.meta.url())
                     .await
                 {
-                    error!(
-                        "Failed to delete redundant picture {}: {}",
-                        pic.meta.url(),
-                        e
-                    );
                     ctx.task_manager.report_task_error(TaskError {
                         error_type: TaskErrorType::DownloadMedia(pic.meta.url().to_string()),
                         message: e.to_string(),
@@ -637,7 +604,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                             .delete_picture(ctx.clone(), info.meta.url())
                             .await
                         {
-                            error!("Failed to delete invalid avatar {}: {}", pic_id, e);
                             ctx.task_manager.report_task_error(TaskError {
                                 error_type: TaskErrorType::DownloadMedia(
                                     info.meta.url().to_string(),
@@ -683,7 +649,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
         let mut processed: u64 = 0;
         for id in ids {
             if let Err(e) = self.storage.delete_post(ctx.clone(), id, true).await {
-                error!("Failed to delete invalid post {}: {}", id, e);
                 ctx.task_manager.report_task_error(TaskError {
                     error_type: TaskErrorType::DownloadMedia(format!("delete post {}", id)),
                     message: e.to_string(),
@@ -764,7 +729,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                 match fetch_result {
                     Ok(post) => {
                         if let Err(e) = self.processer.process(ctx.clone(), vec![post]).await {
-                            error!("Failed to process re-backed up post {}: {}", id, e);
                             ctx.task_manager.report_task_error(TaskError {
                                 error_type: TaskErrorType::DownloadMedia(format!(
                                     "rebackup post {}",
@@ -777,7 +741,6 @@ impl<A: ApiClient, S: Storage, E: Exporter, D: MediaDownloader> TaskHandler<A, S
                         sleep(task_interval).await;
                     }
                     Err(e) => {
-                        error!("Failed to fetch post {} for re-backup: {}", id, e);
                         ctx.task_manager.report_task_error(TaskError {
                             error_type: TaskErrorType::DownloadMedia(format!("fetch post {}", id)),
                             message: e.to_string(),

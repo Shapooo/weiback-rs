@@ -98,8 +98,16 @@ impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
         let response = self
             .client
             .profile_statuses(uid, page, containter_type, count)
-            .await?;
-        let response = response.json::<ProfileStatusesResponse>().await?;
+            .await
+            .inspect_err(|e| {
+                error!("profile_statuses(uid={uid}, page={page}) SDK call failed: {e}");
+            })?;
+        let response = response
+            .json::<ProfileStatusesResponse>()
+            .await
+            .inspect_err(|e| {
+                error!("parse ProfileStatusesResponse failed: {e}");
+            })?;
         match response {
             ProfileStatusesResponse::Succ(ProfileStatusesSucc { cards }) => {
                 let posts_iterator = cards.into_iter().filter_map(|card| card.mblog);

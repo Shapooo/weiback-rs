@@ -75,8 +75,12 @@ impl<C: HttpClient> ApiClientImpl<C> {
     /// A `Result` containing a `HashMap` of emoji phrases to URLs on success, or an `Error` on failure.
     async fn fetch_from_web_api(&self) -> Result<HashMap<String, Url>> {
         debug!("fetch emoticon");
-        let res = self.client.fetch_from_web_api().await?;
-        let mut json: Value = res.json().await?;
+        let res = self.client.fetch_from_web_api().await.inspect_err(|e| {
+            error!("fetch_from_web_api failed: {e}");
+        })?;
+        let mut json: Value = res.json().await.inspect_err(|e| {
+            error!("parse web emoticon response failed: {e}");
+        })?;
         if json["ok"] != 1 {
             let err_res = ErrResponse {
                 errmsg: json["url"].as_str().unwrap_or_default().to_string(),
@@ -113,7 +117,9 @@ impl<C: HttpClient> ApiClientImpl<C> {
                             "the format of emoticon is unexpected".to_string(),
                         ));
                     };
-                    let url = Url::parse(&url)?;
+                    let url = Url::parse(&url).inspect_err(|e| {
+                        error!("parse emoji url '{}' failed: {e}", url);
+                    })?;
                     res.insert(phrase, url);
                 }
             }
@@ -128,8 +134,15 @@ impl<C: HttpClient> ApiClientImpl<C> {
     /// # Returns
     /// A `Result` containing a `HashMap` of emoji phrases to URLs on success, or an `Error` on failure.
     async fn fetch_from_mobile_api(&self) -> Result<HashMap<String, Url>> {
-        let response = self.client.fetch_from_mobile_api().await?;
-        let res = response.json::<EmojiUpdateResponse>().await?;
+        let response = self.client.fetch_from_mobile_api().await.inspect_err(|e| {
+            error!("fetch_from_mobile_api failed: {e}");
+        })?;
+        let res = response
+            .json::<EmojiUpdateResponse>()
+            .await
+            .inspect_err(|e| {
+                error!("parse EmojiUpdateResponse failed: {e}");
+            })?;
         match res {
             EmojiUpdateResponse::Succ(data) => {
                 let mut emoji_map = HashMap::new();
