@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1] - 2026-04-06
+
+### Changed
+- **错误处理改进**: 重构 API 响应结构，将 `untagged` enum 改为 `flatten` struct，保留反序列化过程中的错误信息
+- **serde 重构**: 使用 `serde_with` 替代 `serde-aux`，简化 serde 解析函数及模块
+
+### Fixed
+- 暗色模式下内层 Post 文字颜色导致的可读性问题
+- CSS 导入报错
+- `page_info.pic_big` 图片 URL 可能为空导致的解析问题
+- React key prop 未正确传入组件导致的运行时报错
+
+### Added
+- **About 页面**: 显示版本信息及检测最新版本
+- **Post Tag 显示**: 界面上增加 Post 标签显示
+- **退出确认弹窗**: 任务未完成时退出应用会弹出确认框
+- 短任务日志支持
+- 用户 ID 输入后自动更新筛选选项，无需手动回车
+
 ## [v0.3.0] - 2026-03-23
 
 ### Added

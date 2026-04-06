@@ -1,7 +1,7 @@
 {
   "name": "weiback-rs",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,15 +21,15 @@
     "@mui/system": "^7.3.9",
     "@mui/x-date-pickers": "^8.27.2",
     "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-dialog": "^2.6.0",
-    "@tauri-apps/plugin-http": "^2.5.7",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-http": "^2.5.8",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "compare-versions": "^6.1.1",
     "date-fns": "^4.1.0",
     "notistack": "^3.0.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.2",
+    "react-router-dom": "^7.14.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
@@ -40,7 +40,7 @@
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
     "@vitejs/plugin-react": "^6.0.1",
-    "eslint": "^10.1.0",
+    "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -48,7 +48,7 @@
     "globals": "^17.4.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",
-    "vite": "^8.0.3"
+    "vite": "^8.0.5"
   },
   "packageManager": "yarn@4.12.0"
 }
