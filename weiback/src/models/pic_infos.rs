@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
-use serde_aux::prelude::*;
+use serde_with::{NoneAsEmptyString, serde_as};
 use url::Url;
 
 use super::{PicInfoDetail, PictureDefinition};
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoItem {
     pub bmiddle: PicInfoDetail,
@@ -13,7 +14,8 @@ pub struct PicInfoItem {
     pub largest: PicInfoDetail,
     pub mw2000: PicInfoDetail,
     pub original: PicInfoDetail,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub object_id: Option<String>,
     #[serde(default)]
     pub photo_tag: i32,
@@ -22,10 +24,12 @@ pub struct PicInfoItem {
     pub pic_status: i32,
     pub r#type: PicInfoType,
     pub thumbnail: PicInfoDetail,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub video: Option<Url>,
     pub video_object_id: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub video_hd: Option<Url>,
 }
 

@@ -5,7 +5,7 @@
 //! or specific formats in the API responses. It also provides a conversion
 //! from `UserInternal` to the public `User` model.
 use serde::Deserialize;
-use serde_aux::prelude::*;
+use serde_with::{NoneAsEmptyString, serde_as};
 use url::Url;
 
 use crate::models::User;
@@ -15,11 +15,14 @@ use crate::models::User;
 /// This struct is used for deserialization and contains many optional fields
 /// due to the varied nature of Weibo API responses. It includes custom deserializers
 /// for specific data types.
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UserInternal {
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub avatar_hd: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub avatar_large: Option<Url>,
     #[serde(default)]
     pub domain: String,
@@ -29,7 +32,8 @@ pub struct UserInternal {
     pub follow_me: bool,
     #[serde(default)]
     pub id: i64,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub profile_image_url: Option<Url>,
     #[serde(default)]
     pub screen_name: String,

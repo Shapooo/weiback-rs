@@ -9,7 +9,6 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Deserializer};
-use serde_aux::prelude::*;
 use serde_json::Value;
 
 use super::{page_info::PageInfoInternal, url_struct::UrlStructInternal, user::UserInternal};
@@ -143,4 +142,30 @@ where
 {
     let created_at = Cow::<'_, str>::deserialize(deserializer)?;
     DateTime::parse_from_str(&created_at, "%a %b %d %T %z %Y").map_err(serde::de::Error::custom)
+}
+
+pub fn deserialize_bool_from_anything<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Anything {
+        Bool(bool),
+        Int(i64),
+        String(String),
+    }
+
+    match Anything::deserialize(deserializer)? {
+        Anything::Bool(b) => Ok(b),
+        Anything::Int(i) => Ok(i != 0),
+        Anything::String(s) => match s.to_lowercase().as_str() {
+            "true" | "1" | "yes" | "on" => Ok(true),
+            "false" | "0" | "no" | "off" | "" => Ok(false),
+            _ => Err(serde::de::Error::custom(format!(
+                "invalid bool string: {}",
+                s
+            ))),
+        },
+    }
 }

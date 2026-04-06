@@ -3,7 +3,7 @@ mod error;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use serde_aux::prelude::*;
+use serde_with::{DisplayFromStr, serde_as};
 use tauri::{self, App, AppHandle, Emitter, Manager, State, ipc::Response};
 use tracing::{debug, error, info, warn};
 use weiback::builder::CoreBuilder;
@@ -61,8 +61,9 @@ impl MediaDownloaderStatusListener for TauriTaskEventListener {
 }
 
 /// A wrapper for Weibo IDs to handle conversion from string/number in Tauri commands.
+#[serde_as]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-pub struct WeiboId(#[serde(deserialize_with = "deserialize_number_from_string")] i64);
+pub struct WeiboId(#[serde_as(as = "DisplayFromStr")] i64);
 
 impl From<WeiboId> for i64 {
     fn from(id: WeiboId) -> Self {

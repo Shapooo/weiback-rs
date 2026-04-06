@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::result::Result;
 
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_aux::prelude::*;
 use serde_json::Value;
+use serde_with::{NoneAsEmptyString, serde_as};
 use url::Url;
 
 use crate::error::Error;
@@ -112,9 +112,11 @@ impl From<PicInfosForStatusItem> for PicInfoItem {
 ///
 /// This struct holds details about a URL, including its short and long forms, associated
 /// page information, and custom deserializers for `pic_ids` and `pic_infos`.
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UrlStructItemInternal {
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub long_url: Option<String>,
     pub object_type: Option<String>,
     pub ori_url: String,
@@ -123,7 +125,8 @@ pub struct UrlStructItemInternal {
     pub url_title: String,
     #[serde(default)]
     pub url_type: UrlType,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub url_type_pic: Option<Url>,
     #[serde(default, deserialize_with = "deserialize_pic_ids")]
     pub pic_ids: Option<String>,

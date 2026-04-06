@@ -5,18 +5,20 @@
 //! and an enum for video orientation (`Orientation`). These models are primarily used
 //! for deserializing complex API responses.
 use serde::{Deserialize, Serialize};
-use serde_aux::prelude::*;
+use serde_with::{DefaultOnError, DisplayFromStr, NoneAsEmptyString, PickFirst, serde_as};
 use url::Url;
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PicInfoDetail {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub height: i32,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
     pub width: i32,
     pub url: Url,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct HugeInfo {
     pub author_id: String,
@@ -39,6 +41,7 @@ pub struct HugeInfo {
     pub warn: String,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct VideoInfo {
     pub author_mid: Option<String>,
@@ -46,28 +49,38 @@ pub struct VideoInfo {
     pub big_pic_info: Option<PicInfoItemSimple>,
     pub duration: Option<i32>,
     pub format: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub h265_mp4_hd: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub h265_mp4_ld: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub h5_url: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub hevc_mp4_720p: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub inch_4_mp4_hd: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub inch_5_5_mp4_hd: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub inch_5_mp4_hd: Option<Url>,
     pub is_short_video: Option<i32>,
     pub kol_title: Option<String>,
     pub media_id: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub mp4_720p_mp4: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub mp4_hd_url: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub mp4_sd_url: Option<Url>,
     pub name: Option<String>,
     pub next_title: Option<String>,
@@ -75,11 +88,14 @@ pub struct VideoInfo {
     pub online_users_number: Option<i32>,
     pub origin_total_bitrate: Option<i32>,
     pub prefetch_size: Option<i32>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub stream_url: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub stream_url_hd: Option<Url>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "DefaultOnError")]
+    #[serde(default)]
     pub video_orientation: Option<Orientation>,
     pub video_publish_time: Option<i32>,
 }

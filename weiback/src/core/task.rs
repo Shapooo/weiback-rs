@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use serde_aux::prelude::*;
+use serde_with::{DisplayFromStr, serde_as};
 
 use super::task_manager::TaskManager;
 use crate::{api::ContainerType, config::Config, models::Post};
@@ -74,10 +74,11 @@ pub struct CleanupInvalidPostsOptions {
     pub clean_retweeted_invalid: bool,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeletePostOptions {
     /// The ID of the post to delete.
-    #[serde(deserialize_with = "deserialize_number_from_string")]
+    #[serde_as(as = "DisplayFromStr")]
     pub id: i64,
     /// If true, perform deep delete (delete the post and all related posts in the tree).
     /// If false, perform shallow delete (only delete the post itself if it has no children).

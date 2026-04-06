@@ -4,8 +4,8 @@
 //! and a conversion into the public `PageInfo` model, handling complex scenarios
 //! like nested page information.
 use serde::Deserialize;
-use serde_aux::prelude::*;
 use serde_json::Value;
+use serde_with::{DisplayFromStr, NoneAsEmptyString, PickFirst, serde_as};
 use url::Url;
 
 use crate::models::{
@@ -31,9 +31,11 @@ macro_rules! merge_optional_fields {
 ///
 /// This struct handles the deserialization of various optional fields which might
 /// be nested or have specific deserialization requirements (e.g., numbers from strings, URLs).
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct PageInfoInternal {
-    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    #[serde_as(as = "Option<PickFirst<(_, DisplayFromStr)>>")]
+    #[serde(default)]
     pub author_id: Option<i64>,
     pub card_info: Option<Value>,
     /// Nested `PageInfoInternal` cards, used for merging information.
@@ -45,22 +47,28 @@ pub struct PageInfoInternal {
     pub media_info: Option<VideoInfo>,
     pub object_id: Option<String>,
     pub object_type: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    #[serde_as(as = "Option<PickFirst<(_, DisplayFromStr)>>")]
+    #[serde(default)]
     pub oid: Option<i64>,
     pub page_desc: Option<String>,
     pub page_id: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub page_pic: Option<Url>,
     pub page_title: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub page_url: Option<String>,
     pub pic_info: Option<PagePicInfo>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub short_url: Option<String>,
     pub source_type: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_option_number_from_string")]
+    #[serde_as(as = "Option<PickFirst<(_, DisplayFromStr)>>")]
+    #[serde(default)]
     pub r#type: Option<i64>,
-    #[serde(default, deserialize_with = "deserialize_to_type_or_none")]
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
     pub type_icon: Option<Url>,
     pub user: Option<Value>,
 }
