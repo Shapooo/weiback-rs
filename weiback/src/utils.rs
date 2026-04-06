@@ -311,7 +311,7 @@ fn extract_current_standalone_pic_metas(
         .into_iter()
         .flat_map(|p| p.pic_info.as_ref())
         .filter_map(move |p| {
-            let url = p.pic_big.url.as_str();
+            let url = p.pic_big.url.as_ref()?.as_str();
             PictureMeta::cover(url, post_id)
                 .inspect_err(|e| error!("cannot parse {url} {e}"))
                 .ok()
@@ -394,7 +394,8 @@ pub fn extract_standalone_images(post: &Post) -> Vec<AttachedImage> {
     // 3. Process page_info
     if let Some(p) = source.page_info.as_ref()
         && let Some(pic_info) = p.pic_info.as_ref()
-        && let Ok(pic_url) = Url::parse(pic_info.pic_big.url.as_str())
+        && let Some(pic_url) = pic_info.pic_big.url.as_ref()
+        && let Ok(pic_url) = Url::parse(pic_url.as_str())
         && let Ok(id) = pic_url_to_id(&pic_url)
     {
         if let Some(media_info) = p.media_info.as_ref()

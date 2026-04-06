@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::{DisplayFromStr, NoneAsEmptyString, PickFirst, serde_as};
 use url::Url;
-
-use crate::models::PicInfoDetail;
 
 use super::common::VideoInfo;
 
@@ -34,6 +33,19 @@ pub struct PageInfo {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct PagePicInfo {
     pub pic_big: PicInfoDetail,
+}
+
+/// pic_info struct for page_info only, which url maybe empty
+#[serde_as]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct PicInfoDetail {
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
+    pub height: i32,
+    #[serde_as(as = "PickFirst<(_, DisplayFromStr)>")]
+    pub width: i32,
+    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default)]
+    pub url: Option<Url>,
 }
 
 #[cfg(test)]
