@@ -25,12 +25,12 @@ pub struct EditConfig {
 
 /// An enum representing the possible responses from the statuses show API endpoint,
 /// which can either be a successful `PostInternal` data payload or an `ErrResponse`.
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum StatusesShowResponse {
-    Succ(PostInternal),
-    Fail(ErrResponse),
+struct StatusesShowResponse {
+    #[serde(flatten)]
+    body: Option<PostInternal>,
+    #[serde(flatten)]
+    error: Option<ErrResponse>,
 }
 
 /// Trait for API clients that can fetch detailed information about a Weibo status.
@@ -69,15 +69,18 @@ impl<C: HttpClient> ApiClientImpl<C> {
             .inspect_err(|e| {
                 error!("parse StatusesShowResponse for post {id} failed: {e}");
             })?;
-        match res {
-            StatusesShowResponse::Succ(statuses_show) => {
-                debug!("got statuses success");
-                Ok(statuses_show)
-            }
-            StatusesShowResponse::Fail(err) => {
-                error!("failed to get long text: {err:?}");
-                Err(Error::ApiError(err))
-            }
+        if let Some(statuses_show) = res.body {
+            debug!("got statuses success");
+            Ok(statuses_show)
+        } else if let Some(err) = res.error {
+            error!("failed to get long text: {err:?}");
+            Err(Error::ApiError(err))
+        } else {
+            error!("cannot convert StatusesShowResponse to PostInternal: {res:?}");
+            Err(Error::ApiError(ErrResponse {
+                errmsg: format!("unexpected empty StatusesShowResponse for id {id}"),
+                ..Default::default()
+            }))
         }
     }
 }

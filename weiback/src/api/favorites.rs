@@ -25,10 +25,13 @@ pub(crate) struct FavoritesPost {
 /// An enum representing the possible responses from the favorites API endpoint,
 /// which can either be a successful data payload or an error.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-enum FavoritesResponse {
-    Succ(FavoritesSucc),
-    Fail(ErrResponse),
+struct FavoritesResponse {
+    pub favorites: Option<Vec<FavoritesPost>>,
+    #[serde(default)]
+    #[allow(unused)]
+    pub total_number: i32,
+    #[serde(flatten)]
+    error: Option<ErrResponse>,
 }
 
 /// Represents the successful response structure for fetching favorites.
@@ -53,19 +56,23 @@ impl TryFrom<FavoritesResponse> for Vec<PostInternal> {
     /// A `Result` containing a `Vec<PostInternal>` on success, or an `Error` if the API
     /// returned an error or the format was unexpected.
     fn try_from(value: FavoritesResponse) -> Result<Self> {
-        match value {
-            FavoritesResponse::Succ(FavoritesSucc { favorites, .. }) => {
-                debug!("got {} favorites", favorites.len());
-                let posts = favorites
-                    .into_iter()
-                    .map(|post| post.status)
-                    .collect::<Vec<PostInternal>>();
-                Ok(posts)
-            }
-            FavoritesResponse::Fail(err) => {
-                error!("failed to get favorites: {err:?}");
-                Err(Error::ApiError(err))
-            }
+        if let Some(favorites) = value.favorites {
+            debug!("got {} favorites", favorites.len());
+            let posts = favorites
+                .into_iter()
+                .map(|post| post.status)
+                .collect::<Vec<PostInternal>>();
+            Ok(posts)
+        } else if let Some(err) = value.error {
+            error!("failed to get favorites: {err:?}");
+            Err(Error::ApiError(err))
+        } else {
+            let msg = format!("cannot convert FavoritesResponse to Vec<PostInternal>: {value:?}");
+            error!("{msg}");
+            Err(Error::ApiError(ErrResponse {
+                errmsg: msg,
+                ..Default::default()
+            }))
         }
     }
 }

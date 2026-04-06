@@ -29,19 +29,13 @@ struct EmojiData {
     card: Vec<Emoji>,
 }
 
-/// Represents the successful response structure from the mobile emoji update API.
-#[derive(Debug, Clone, Deserialize)]
-struct EmojiUpdateResponseInner {
-    data: EmojiData,
-}
-
 /// An enum representing the possible responses from the mobile emoji update API,
 /// which can either be a successful data payload or an error.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-enum EmojiUpdateResponse {
-    Succ(EmojiUpdateResponseInner),
-    Fail(ErrResponse),
+struct EmojiUpdateResponse {
+    data: Option<EmojiData>,
+    #[serde(flatten)]
+    error: Option<ErrResponse>,
 }
 
 /// Trait for API clients that can fetch and update emoji data.
@@ -143,18 +137,21 @@ impl<C: HttpClient> ApiClientImpl<C> {
             .inspect_err(|e| {
                 error!("parse EmojiUpdateResponse failed: {e}");
             })?;
-        match res {
-            EmojiUpdateResponse::Succ(data) => {
-                let mut emoji_map = HashMap::new();
-                for emoji in data.data.card {
-                    emoji_map.insert(emoji.key, emoji.url);
-                }
-                Ok(emoji_map)
+        if let Some(data) = res.data {
+            let mut emoji_map = HashMap::new();
+            for emoji in data.card {
+                emoji_map.insert(emoji.key, emoji.url);
             }
-            EmojiUpdateResponse::Fail(err) => {
-                error!("emoji update failed: {err:?}");
-                Err(Error::ApiError(err))
-            }
+            Ok(emoji_map)
+        } else if let Some(err) = res.error {
+            error!("emoji update failed: {err:?}");
+            Err(Error::ApiError(err))
+        } else {
+            error!("cannot convert EmojiUpdateResponse to HashMap: {res:?}", );
+            Err(Error::ApiError(ErrResponse {
+                errmsg: "unexpected empty EmojiUpdateResponse".to_string(),
+                ..Default::default()
+            }))
         }
     }
 }

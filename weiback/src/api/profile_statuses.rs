@@ -17,8 +17,7 @@ pub use weibosdk_rs::profile_statuses::ContainerType;
 use super::{ApiClientImpl, internal::post::PostInternal};
 use crate::{
     error::{Error, Result},
-    models::Post,
-    models::err_response::ErrResponse,
+    models::{Post, err_response::ErrResponse},
 };
 
 /// Represents a single card in the profile statuses API response.
@@ -36,10 +35,10 @@ pub struct Card {
 /// An enum representing the possible responses from the profile statuses API endpoint,
 /// which can either be a successful data payload or an error.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-enum ProfileStatusesResponse {
-    Succ(ProfileStatusesSucc),
-    Fail(ErrResponse),
+struct ProfileStatusesResponse {
+    cards: Option<Vec<Card>>,
+    #[serde(flatten)]
+    error: Option<ErrResponse>,
 }
 
 /// Represents the successful response structure for fetching profile statuses.
@@ -108,26 +107,30 @@ impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
             .inspect_err(|e| {
                 error!("parse ProfileStatusesResponse failed: {e}");
             })?;
-        match response {
-            ProfileStatusesResponse::Succ(ProfileStatusesSucc { cards }) => {
-                let posts_iterator = cards.into_iter().filter_map(|card| card.mblog);
 
-                let posts = posts_iterator
-                    .filter(|post| post.user.as_ref().is_none_or(|u| u.id == uid))
-                    .collect::<Vec<PostInternal>>();
-                let posts = stream::iter(posts)
-                    .map(|post| self.process_post(post))
-                    .buffer_unordered(2)
-                    .collect::<Vec<_>>()
-                    .await;
-                let (oks, _errs): (Vec<_>, Vec<_>) = posts.into_iter().partition_result(); // TODO
-                debug!("got {} posts", oks.len());
-                Ok(oks)
-            }
-            ProfileStatusesResponse::Fail(err) => {
-                error!("failed to get profile statuses: {err:?}");
-                Err(Error::ApiError(err))
-            }
+        if let Some(cards) = response.cards {
+            let posts_iterator = cards.into_iter().filter_map(|card| card.mblog);
+
+            let posts = posts_iterator
+                .filter(|post| post.user.as_ref().is_none_or(|u| u.id == uid))
+                .collect::<Vec<PostInternal>>();
+            let posts = stream::iter(posts)
+                .map(|post| self.process_post(post))
+                .buffer_unordered(2)
+                .collect::<Vec<_>>()
+                .await;
+            let (oks, _errs): (Vec<_>, Vec<_>) = posts.into_iter().partition_result(); // TODO
+            debug!("got {} posts", oks.len());
+            Ok(oks)
+        } else if let Some(err) = response.error {
+            error!("failed to get profile statuses: {err:?}");
+            Err(Error::ApiError(err))
+        } else {
+            error!("cannot convert ProfileStatusesResponse to Vec<Post>: {response:?}");
+            Err(Error::ApiError(ErrResponse {
+                errmsg: "unexpected empty ProfileStatusesResponse".to_string(),
+                ..Default::default()
+            }))
         }
     }
 }
