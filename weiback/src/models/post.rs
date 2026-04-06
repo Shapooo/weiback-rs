@@ -10,7 +10,6 @@ use super::{MixMediaInfo, PageInfo, PicInfoItem, TagStruct, UrlStruct, User};
 pub struct Post {
     pub attitudes_count: Option<i64>,
     pub attitudes_status: i64,
-    #[serde(with = "datetime")]
     pub created_at: DateTime<FixedOffset>,
     pub comments_count: Option<i64>,
     pub deleted: bool,
@@ -35,28 +34,6 @@ pub struct Post {
     pub text: String,
     pub url_struct: Option<UrlStruct>,
     pub user: Option<User>,
-}
-
-mod datetime {
-    use std::borrow::Cow;
-
-    use chrono::{DateTime, FixedOffset};
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(dt: &DateTime<FixedOffset>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&dt.to_rfc3339())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<FixedOffset>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let created_at = Cow::<'_, str>::deserialize(deserializer)?;
-        DateTime::parse_from_rfc3339(&created_at).map_err(serde::de::Error::custom)
-    }
 }
 
 #[cfg(test)]

@@ -128,8 +128,12 @@ pub fn deserialize_ids<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    let ids = Option::<Vec<String>>::deserialize(deserializer)?;
-    Ok(ids.and_then(|ids| if ids.is_empty() { None } else { Some(ids) }))
+    let ids = Vec::<String>::deserialize(deserializer)?;
+    if ids.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(ids))
+    }
 }
 
 /// Custom deserializer for `created_at` timestamps.

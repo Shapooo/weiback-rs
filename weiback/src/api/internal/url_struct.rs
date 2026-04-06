@@ -202,7 +202,7 @@ where
         S(String),
         V(Vec<String>),
     }
-    let res = Option::<StrOrVec>::deserialize(deserializer)?.and_then(|sv| match sv {
+    let res = match StrOrVec::deserialize(deserializer)? {
         StrOrVec::V(v) => {
             if v.is_empty() {
                 None
@@ -211,7 +211,7 @@ where
             }
         }
         StrOrVec::S(s) => Some(s),
-    });
+    };
     Ok(res)
 }
 

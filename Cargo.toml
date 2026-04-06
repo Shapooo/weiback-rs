@@ -10,7 +10,7 @@ edition = "2024"
 anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1"
-chrono = { version = "0.4", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 futures = "0.3"
