@@ -132,9 +132,11 @@ impl<C: HttpClient> FavoritesApi for ApiClientImpl<C> {
         let response = self.client.favorites(page, count).await.inspect_err(|e| {
             error!("favorites API call failed: {e}");
         })?;
-        let posts: Vec<PostInternal> = response
-            .json::<FavoritesResponse>()
+        let bytes = response
+            .bytes()
             .await
+            .inspect_err(|e| error!("fetch response failed: {e}"))?;
+        let posts: Vec<PostInternal> = serde_json::from_slice::<FavoritesResponse>(&bytes)
             .inspect_err(|e| {
                 error!("parse FavoritesResponse failed: {e}");
             })?

@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use serde::Deserialize;
+use serde_json::from_slice;
 use tracing::{debug, error, info};
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
 
@@ -101,14 +102,15 @@ impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
             .inspect_err(|e| {
                 error!("profile_statuses(uid={uid}, page={page}) SDK call failed: {e}");
             })?;
-        let response = response
-            .json::<ProfileStatusesResponse>()
-            .await
-            .inspect_err(|e| {
+        let bytes = response.bytes().await.inspect_err(|e| {
+            error!("fetch ProfileStatusesResponse failed: {e}");
+        })?;
+        let parsed =
+            serde_json::from_slice::<ProfileStatusesResponse>(&bytes).inspect_err(|e| {
                 error!("parse ProfileStatusesResponse failed: {e}");
             })?;
 
-        if let Some(cards) = response.cards {
+        if let Some(cards) = parsed.cards {
             let posts_iterator = cards.into_iter().filter_map(|card| card.mblog);
 
             let posts = posts_iterator
@@ -122,11 +124,14 @@ impl<C: HttpClient> ProfileStatusesApi for ApiClientImpl<C> {
             let (oks, _errs): (Vec<_>, Vec<_>) = posts.into_iter().partition_result(); // TODO
             debug!("got {} posts", oks.len());
             Ok(oks)
-        } else if let Some(err) = response.error {
+        } else if let Some(err) = parsed.error {
             error!("failed to get profile statuses: {err:?}");
             Err(Error::ApiError(err))
         } else {
-            error!("cannot convert ProfileStatusesResponse to Vec<Post>: {response:?}");
+            error!(
+                "cannot convert ProfileStatusesResponse to Vec<Post>: {:?}",
+                from_slice::<serde_json::Value>(&bytes)
+            );
             Err(Error::ApiError(ErrResponse {
                 errmsg: "unexpected empty ProfileStatusesResponse".to_string(),
                 ..Default::default()

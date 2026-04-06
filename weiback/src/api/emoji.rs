@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, from_slice};
 use tracing::{debug, error, info};
 use url::Url;
 use weibosdk_rs::http_client::{HttpClient, HttpResponse};
@@ -72,7 +72,10 @@ impl<C: HttpClient> ApiClientImpl<C> {
         let res = self.client.fetch_from_web_api().await.inspect_err(|e| {
             error!("fetch_from_web_api failed: {e}");
         })?;
-        let mut json: Value = res.json().await.inspect_err(|e| {
+        let bytes = res.bytes().await.inspect_err(|e| {
+            error!("fetch web emoticon response failed: {e}");
+        })?;
+        let mut json: Value = serde_json::from_slice(&bytes).inspect_err(|e| {
             error!("parse web emoticon response failed: {e}");
         })?;
         if json["ok"] != 1 {
@@ -131,23 +134,26 @@ impl<C: HttpClient> ApiClientImpl<C> {
         let response = self.client.fetch_from_mobile_api().await.inspect_err(|e| {
             error!("fetch_from_mobile_api failed: {e}");
         })?;
-        let res = response
-            .json::<EmojiUpdateResponse>()
-            .await
-            .inspect_err(|e| {
-                error!("parse EmojiUpdateResponse failed: {e}");
-            })?;
-        if let Some(data) = res.data {
+        let bytes = response.bytes().await.inspect_err(|e| {
+            error!("fetch EmojiUpdateResponse failed: {e}");
+        })?;
+        let parsed = serde_json::from_slice::<EmojiUpdateResponse>(&bytes).inspect_err(|e| {
+            error!("parse EmojiUpdateResponse failed: {e}");
+        })?;
+        if let Some(data) = parsed.data {
             let mut emoji_map = HashMap::new();
             for emoji in data.card {
                 emoji_map.insert(emoji.key, emoji.url);
             }
             Ok(emoji_map)
-        } else if let Some(err) = res.error {
+        } else if let Some(err) = parsed.error {
             error!("emoji update failed: {err:?}");
             Err(Error::ApiError(err))
         } else {
-            error!("cannot convert EmojiUpdateResponse to HashMap: {res:?}", );
+            error!(
+                "cannot convert EmojiUpdateResponse to HashMap: {:?}",
+                from_slice::<serde_json::Value>(&bytes)
+            );
             Err(Error::ApiError(ErrResponse {
                 errmsg: "unexpected empty EmojiUpdateResponse".to_string(),
                 ..Default::default()

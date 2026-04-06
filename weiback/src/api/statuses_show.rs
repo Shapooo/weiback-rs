@@ -4,6 +4,7 @@
 //! and potentially nested retweeted status, by its unique ID.
 use async_trait::async_trait;
 use serde::Deserialize;
+use serde_json::from_slice;
 use tracing::{debug, error};
 use weibosdk_rs::http_client::HttpResponse;
 
@@ -63,20 +64,23 @@ impl<C: HttpClient> ApiClientImpl<C> {
         let response = self.client.statuses_show(id).await.inspect_err(|e| {
             error!("statuses_show({id}) SDK call failed: {e}");
         })?;
-        let res = response
-            .json::<StatusesShowResponse>()
-            .await
-            .inspect_err(|e| {
-                error!("parse StatusesShowResponse for post {id} failed: {e}");
-            })?;
-        if let Some(statuses_show) = res.body {
+        let bytes = response.bytes().await.inspect_err(|e| {
+            error!("fetch StatusesShowResponse for post {id} failed: {e}");
+        })?;
+        let parsed = serde_json::from_slice::<StatusesShowResponse>(&bytes).inspect_err(|e| {
+            error!("parse StatusesShowResponse for post {id} failed: {e}");
+        })?;
+        if let Some(statuses_show) = parsed.body {
             debug!("got statuses success");
             Ok(statuses_show)
-        } else if let Some(err) = res.error {
+        } else if let Some(err) = parsed.error {
             error!("failed to get long text: {err:?}");
             Err(Error::ApiError(err))
         } else {
-            error!("cannot convert StatusesShowResponse to PostInternal: {res:?}");
+            error!(
+                "cannot convert StatusesShowResponse to PostInternal: {:?}",
+                from_slice::<serde_json::Value>(&bytes)
+            );
             Err(Error::ApiError(ErrResponse {
                 errmsg: format!("unexpected empty StatusesShowResponse for id {id}"),
                 ..Default::default()
