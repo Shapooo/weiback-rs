@@ -33,16 +33,20 @@ const UserPage: React.FC = () => {
   const { userInfo, isLoggedIn, isAuthLoading, login, logout, checkLoginState } = useAuthStore()
   const [phone, setPhone] = useState('')
   const [verificationCode, setVerificationCode] = useState(Array(6).fill(''))
+  const [showCodeInput, setShowCodeInput] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  // pageState 依赖 isLoggedIn 和 showCodeInput，派生自 store
+  const pageState = isLoggedIn
+    ? UserPageState.LoggedIn
+    : showCodeInput
+      ? UserPageState.Code
+      : UserPageState.Phone
 
   useEffect(() => {
     // 切换到此页面时主动刷新登录状态
     checkLoginState()
   }, [checkLoginState])
-
-  const [pageState, setPageState] = useState<UserPageState>(
-    isLoggedIn ? UserPageState.LoggedIn : UserPageState.Phone
-  )
 
   const handleGetCode = async () => {
     if (!/^1\d{10}$/.test(phone)) {
@@ -51,7 +55,7 @@ const UserPage: React.FC = () => {
     }
     try {
       await getSmsCode(phone)
-      setPageState(UserPageState.Code)
+      setShowCodeInput(true)
       enqueueSnackbar(`验证码已发送至 ${phone}`, { variant: 'success' })
       setTimeout(() => inputRefs.current[0]?.focus(), 0)
     } catch (e) {
@@ -80,7 +84,7 @@ const UserPage: React.FC = () => {
 
   const handleLogout = () => {
     logout()
-    setPageState(UserPageState.Phone)
+    setShowCodeInput(false)
     setPhone('')
     setVerificationCode(Array(6).fill(''))
     enqueueSnackbar('已退出登录', { variant: 'info' })
@@ -160,7 +164,7 @@ const UserPage: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <IconButton
                 size="small"
-                onClick={() => setPageState(UserPageState.Phone)}
+                onClick={() => setShowCodeInput(false)}
                 sx={{ mr: 1 }}
                 title="返回修改手机号"
               >
