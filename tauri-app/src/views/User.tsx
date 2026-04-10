@@ -174,7 +174,7 @@ const UserPage: React.FC = () => {
                 验证码已发送至 {phone}
               </Typography>
             </Box>
-            <Grid container spacing={1} justifyContent="center">
+            <Grid container spacing={1} sx={{ justifyContent: 'center' }}>
               {verificationCode.map((digit, index) => (
                 <Grid size={{ xs: 2 }} key={index}>
                   <TextField
@@ -205,7 +205,7 @@ const UserPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         用户账号管理
       </Typography>
-      <Grid container justifyContent="center">
+      <Grid container sx={{ justifyContent: 'center' }}>
         <Grid size={{ xs: 12, md: 8, lg: 6 }}>
           <Card sx={{ mt: 5 }}>
             <CardContent>

@@ -100,7 +100,7 @@ const SettingsPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         设置
       </Typography>
-      <Grid container justifyContent="center">
+      <Grid container sx={{ justifyContent: 'center' }}>
         <Grid size={{ xs: 12, md: 10, lg: 8 }}>
           <Card sx={{ mt: 3 }}>
             <CardContent>
@@ -295,15 +295,17 @@ const SettingsPage: React.FC = () => {
                               fullWidth
                               label="图片保存路径"
                               value={config.picture_path}
-                              InputProps={{
-                                readOnly: true,
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    <Button onClick={() => handleSelectPath('picture_path')}>
-                                      选择
-                                    </Button>
-                                  </InputAdornment>
-                                ),
+                              slotProps={{
+                                htmlInput: { readOnly: true },
+                                input: {
+                                  endAdornment: (
+                                    <InputAdornment position="end">
+                                      <Button onClick={() => handleSelectPath('picture_path')}>
+                                        选择
+                                      </Button>
+                                    </InputAdornment>
+                                  ),
+                                },
                               }}
                             />
                           </Grid>
@@ -312,15 +314,17 @@ const SettingsPage: React.FC = () => {
                               fullWidth
                               label="视频保存路径"
                               value={config.video_path}
-                              InputProps={{
-                                readOnly: true,
-                                endAdornment: (
-                                  <InputAdornment position="end">
-                                    <Button onClick={() => handleSelectPath('video_path')}>
-                                      选择
-                                    </Button>
-                                  </InputAdornment>
-                                ),
+                              slotProps={{
+                                htmlInput: { readOnly: true },
+                                input: {
+                                  endAdornment: (
+                                    <InputAdornment position="end">
+                                      <Button onClick={() => handleSelectPath('video_path')}>
+                                        选择
+                                      </Button>
+                                    </InputAdornment>
+                                  ),
+                                },
                               }}
                             />
                           </Grid>

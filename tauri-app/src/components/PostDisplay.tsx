@@ -554,7 +554,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
           avatar={<AvatarImage avatarId={postInfo.avatar_id} />}
           title={postInfo.post.user?.screen_name || '未知用户'}
           subheader={
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Typography variant="caption" color="text.secondary">
                 {new Date(postInfo.post.created_at).toLocaleString()}
               </Typography>
@@ -564,7 +564,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
             </Stack>
           }
           action={
-            <Stack direction="row" alignItems="center">
+            <Stack direction="row" sx={{ alignItems: 'center' }}>
               {postInfo.post.idstr ? (
                 <Tooltip title="重新备份" enterDelay={500} arrow>
                   <IconButton aria-label="re-backup post" onClick={handleRebackupClick}>
@@ -612,7 +612,7 @@ const PostDisplay: React.FC<PostDisplayProps> = ({
           />
           {postInfo.post.retweeted_status && (
             <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Typography variant="subtitle2" color="text.secondary">
                   @{postInfo.post.retweeted_status.user?.screen_name || '未知用户'}
                 </Typography>

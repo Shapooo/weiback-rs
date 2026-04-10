@@ -130,17 +130,23 @@ const UserSelector: React.FC<UserSelectorProps> = ({
         )
       }}
       renderInput={params => {
-        const { InputProps, ...otherParams } = params // Extract InputProps from params
-
+        const { id, disabled, fullWidth, size } = params
+        const { ref: inputRef, className, onMouseDown } = params.slotProps.input
         return (
           <TextField
-            {...otherParams} // Spread the rest of the TextField params
+            id={id}
+            disabled={disabled}
+            fullWidth={fullWidth}
+            size={size}
             label={label}
             type={searchMode === 'id' ? 'number' : 'text'}
             placeholder={searchMode === 'username' ? placeholderUsername : placeholderId}
             slotProps={{
+              htmlInput: params.slotProps.htmlInput,
               input: {
-                ...InputProps,
+                ref: inputRef,
+                className,
+                onMouseDown,
                 onBlur: (_e: React.FocusEvent<HTMLInputElement>) => {
                   if (searchMode === 'id' && inputValue.trim()) {
                     onChange(inputValue.trim())
@@ -162,7 +168,6 @@ const UserSelector: React.FC<UserSelectorProps> = ({
                 endAdornment: (
                   <React.Fragment>
                     {loading ? <CircularProgress color="inherit" size={20} /> : null}
-                    {InputProps.endAdornment} {/* Keep Autocomplete's endAdornment if any */}
                   </React.Fragment>
                 ),
               },

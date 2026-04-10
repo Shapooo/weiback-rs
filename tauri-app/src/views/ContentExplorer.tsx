@@ -276,7 +276,7 @@ const ContentExplorerPage: React.FC = () => {
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
                   筛选
                 </Typography>
-                <Grid container spacing={2} alignItems="center">
+                <Grid container spacing={2} sx={{ alignItems: 'center' }}>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <UserSelector value={userInput} onChange={setUserInput} />
                   </Grid>
@@ -296,26 +296,28 @@ const ContentExplorerPage: React.FC = () => {
                           handleSearch()
                         }
                       }}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Select
-                              variant="standard"
-                              value={filters.searchMode}
-                              onChange={e =>
-                                setFilters(f => ({
-                                  ...f,
-                                  searchMode: e.target.value as 'fuzzy' | 'strict',
-                                }))
-                              }
-                              disableUnderline
-                              sx={{ fontSize: '0.875rem' }}
-                            >
-                              <MenuItem value="fuzzy">模糊</MenuItem>
-                              <MenuItem value="strict">严格</MenuItem>
-                            </Select>
-                          </InputAdornment>
-                        ),
+                      slotProps={{
+                        input: {
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Select
+                                variant="standard"
+                                value={filters.searchMode}
+                                onChange={e =>
+                                  setFilters(f => ({
+                                    ...f,
+                                    searchMode: e.target.value as 'fuzzy' | 'strict',
+                                  }))
+                                }
+                                disableUnderline
+                                sx={{ fontSize: '0.875rem' }}
+                              >
+                                <MenuItem value="fuzzy">模糊</MenuItem>
+                                <MenuItem value="strict">严格</MenuItem>
+                              </Select>
+                            </InputAdornment>
+                          ),
+                        },
                       }}
                     />
                   </Grid>
@@ -469,7 +471,7 @@ const ContentExplorerPage: React.FC = () => {
                     onChange={handlePageChange}
                     color="primary"
                   />
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <TextField
                       size="small"
                       label="跳至"

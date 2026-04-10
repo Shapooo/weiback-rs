@@ -53,7 +53,7 @@ const AboutPage: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         关于
       </Typography>
-      <Grid container justifyContent="center">
+      <Grid container sx={{ justifyContent: 'center' }}>
         <Grid size={{ xs: 12, md: 10, lg: 8 }}>
           <Card sx={{ mt: 3 }}>
             <CardContent>

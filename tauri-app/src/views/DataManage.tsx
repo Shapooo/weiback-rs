@@ -180,7 +180,10 @@ const DataManage: React.FC = () => {
                   }
                   label={<strong>深度清理模式</strong>}
                 />
-                <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 4 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', color: 'text.secondary', ml: 4 }}
+                >
                   {cleanRetweetedInvalid ? (
                     <span>
                       <strong>当前模式：</strong>{' '}
