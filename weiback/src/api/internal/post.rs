@@ -116,7 +116,7 @@ where
     D: Deserializer<'de>,
 {
     let user = Option::<UserInternal>::deserialize(deserializer)?;
-    Ok(user.and_then(|u| if u.id == 0 { None } else { Some(u) }))
+    Ok(user.filter(|u| u.id != 0))
 }
 
 /// Custom deserializer for `Vec<String>` IDs that converts empty vectors to `None`.

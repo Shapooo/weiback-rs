@@ -36,7 +36,7 @@ async fn start() -> Result<()> {
         return Ok(());
     }
 
-    let backup_db_url = format!("sqlite:{}", &backup_db_path.to_string_lossy());
+    let backup_db_url = format!("sqlite:{}", backup_db_path.to_string_lossy());
     let old_db_pool = SqlitePool::connect(&backup_db_url).await?;
     info!(
         "Successfully connected to backup database '{}'.",
