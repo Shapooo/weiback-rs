@@ -21,8 +21,8 @@
 use std::path::PathBuf;
 
 use sea_query::{Asterisk, Expr, ExprTrait, Func, OnConflict, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
-use sqlx::{Executor, Sqlite};
+use sea_query_sqlx::SqlxBinder;
+use sqlx::{AssertSqlSafe, Executor, Sqlite};
 use url::Url;
 
 use crate::error::{Error, Result};
@@ -165,7 +165,9 @@ where
                 .to_owned(),
         )
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -188,7 +190,7 @@ where
         .from(PictureIden::Table)
         .and_where(Expr::col(PictureIden::Url).eq(url.as_str()))
         .build_sqlx(SqliteQueryBuilder);
-    let raw_res = sqlx::query_scalar_with::<_, String, _>(&sql, values)
+    let raw_res = sqlx::query_scalar_with::<_, String, _>(AssertSqlSafe(sql), values)
         .fetch_optional(executor)
         .await?;
     Ok(raw_res.map(PathBuf::from))
@@ -214,7 +216,7 @@ where
         .group_by_col(PictureIden::UserId)
         .and_having(Expr::col(PictureIden::UserId).count().gt(1))
         .build_sqlx(SqliteQueryBuilder);
-    let ids = sqlx::query_scalar_with(&sql, values)
+    let ids = sqlx::query_scalar_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     Ok(ids)
@@ -263,7 +265,7 @@ where
         .and_where(Expr::col(PictureIden::PostId).is_in(post_ids.iter().cloned()))
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
-    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
@@ -290,7 +292,7 @@ where
         .and_where(Expr::col(PictureIden::PostId).is_null())
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
-    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
@@ -319,7 +321,7 @@ where
         .and_where(Expr::col(PictureIden::PostId).is_null())
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
-    let record: Option<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+    let record: Option<PictureDbRecord> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_optional(executor)
         .await?;
     record.map(PictureInfo::try_from).transpose()
@@ -349,7 +351,7 @@ where
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
 
-    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
 
@@ -379,7 +381,7 @@ where
         .and_where(Expr::col(PictureIden::Id).eq(id))
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
-    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
@@ -423,7 +425,9 @@ where
         .from_table(PictureIden::Table)
         .and_where(Expr::col(PictureIden::PostId).is_in(post_ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -449,7 +453,7 @@ where
         .group_by_col(PictureIden::Id)
         .and_having(Expr::col(PictureIden::Id).count().gt(1))
         .build_sqlx(SqliteQueryBuilder);
-    let ids = sqlx::query_scalar_with(&sql, values)
+    let ids = sqlx::query_scalar_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     Ok(ids)
@@ -473,7 +477,9 @@ where
         .from_table(PictureIden::Table)
         .and_where(Expr::col(PictureIden::Url).eq(url.as_str()))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -507,7 +513,7 @@ where
         .offset(offset)
         .limit(limit)
         .build_sqlx(SqliteQueryBuilder);
-    let records: Vec<PictureDbRecord> = sqlx::query_as_with(&sql, values)
+    let records: Vec<PictureDbRecord> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     records.into_iter().map(PictureInfo::try_from).collect()
@@ -531,7 +537,7 @@ where
         .from(PictureIden::Table)
         .and_where(Expr::col(PictureIden::Path).is_not_null())
         .build_sqlx(SqliteQueryBuilder);
-    let count: u64 = sqlx::query_scalar_with(&sql, values)
+    let count: u64 = sqlx::query_scalar_with(AssertSqlSafe(sql), values)
         .fetch_one(executor)
         .await?;
     Ok(count)

@@ -17,9 +17,9 @@
 //!
 //! The `id` column serves as the primary key for uniqueness.
 
-use sea_query::{Asterisk, Expr, OnConflict, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
-use sqlx::{Executor, FromRow, Sqlite};
+use sea_query::{Asterisk, Expr, ExprTrait, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_sqlx::SqlxBinder;
+use sqlx::{AssertSqlSafe, Executor, FromRow, Sqlite};
 use url::Url;
 
 use crate::error::{Error, Result};
@@ -109,7 +109,7 @@ where
         .from(UserIden::Table)
         .and_where(Expr::col(UserIden::Id).eq(id))
         .build_sqlx(SqliteQueryBuilder);
-    let user = sqlx::query_as_with::<_, UserInternal, _>(&sql, values)
+    let user = sqlx::query_as_with::<_, UserInternal, _>(AssertSqlSafe(sql), values)
         .fetch_optional(executor)
         .await?;
     user.map(|u| u.try_into()).transpose()
@@ -167,7 +167,9 @@ where
                 .to_owned(),
         )
         .build_sqlx(SqliteQueryBuilder);
-    let _ = sqlx::query_with(&sql, values).execute(executor).await?;
+    let _ = sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -194,7 +196,7 @@ where
         .and_where(Expr::col(UserIden::Id).is_in(ids.iter().copied()))
         .build_sqlx(SqliteQueryBuilder);
 
-    let records = sqlx::query_as_with::<_, UserInternal, _>(&sql, values)
+    let records = sqlx::query_as_with::<_, UserInternal, _>(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     records.into_iter().map(|u| u.try_into()).collect()
@@ -223,7 +225,7 @@ where
         .and_where(Expr::col(UserIden::ScreenName).like(format!("{}%", prefix)))
         .limit(20)
         .build_sqlx(SqliteQueryBuilder);
-    let users: Vec<UserInternal> = sqlx::query_as_with(&sql, values)
+    let users: Vec<UserInternal> = sqlx::query_as_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     users.into_iter().map(|u| u.try_into()).collect()

@@ -14,9 +14,9 @@
 
 use std::path::{Path, PathBuf};
 
-use sea_query::{Expr, OnConflict, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
-use sqlx::{Executor, Sqlite};
+use sea_query::{Expr, ExprTrait, OnConflict, Query, SqliteQueryBuilder};
+use sea_query_sqlx::SqlxBinder;
+use sqlx::{AssertSqlSafe, Executor, Sqlite};
 use url::Url;
 
 use crate::error::Result;
@@ -72,7 +72,7 @@ where
         .from(VideoIden::Table)
         .and_where(Expr::col(VideoIden::PostId).is_in(post_ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
-    let paths: Vec<String> = sqlx::query_scalar_with(&sql, values)
+    let paths: Vec<String> = sqlx::query_scalar_with(AssertSqlSafe(sql), values)
         .fetch_all(executor)
         .await?;
     Ok(paths.into_iter().map(PathBuf::from).collect())
@@ -116,7 +116,9 @@ where
         .from_table(VideoIden::Table)
         .and_where(Expr::col(VideoIden::PostId).is_in(post_ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -149,7 +151,9 @@ where
         )
         .build_sqlx(SqliteQueryBuilder);
 
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -172,7 +176,7 @@ where
         .from(VideoIden::Table)
         .and_where(Expr::col(VideoIden::Url).eq(url.as_str()))
         .build_sqlx(SqliteQueryBuilder);
-    let raw_res: Option<String> = sqlx::query_scalar_with(&sql, values)
+    let raw_res: Option<String> = sqlx::query_scalar_with(AssertSqlSafe(sql), values)
         .fetch_optional(executor)
         .await?;
     Ok(raw_res.map(PathBuf::from))
@@ -196,7 +200,9 @@ where
         .from_table(VideoIden::Table)
         .and_where(Expr::col(VideoIden::Url).eq(url.as_str()))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 

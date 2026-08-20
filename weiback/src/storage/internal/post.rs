@@ -44,11 +44,13 @@
 //! | `unfavorited` | `BOOLEAN` | True if the post has been unfavorited.            |
 
 use chrono::DateTime;
-use sea_query::{Asterisk, Expr, Func, Iden, OnConflict, Order, Query, SqliteQueryBuilder};
-use sea_query_binder::SqlxBinder;
+use sea_query::{
+    Asterisk, Expr, ExprTrait, Func, Iden, OnConflict, Order, Query, SqliteQueryBuilder,
+};
+use sea_query_sqlx::SqlxBinder;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value, to_value};
-use sqlx::{Acquire, Executor, FromRow, Sqlite};
+use sqlx::{Acquire, AssertSqlSafe, Executor, FromRow, Sqlite};
 use tracing::{debug, error};
 
 use crate::core::task::{PostQuery, SearchTerm};
@@ -232,9 +234,11 @@ where
         .from(FavoritedPostIden::Table)
         .and_where(Expr::col(FavoritedPostIden::Id).eq(id))
         .build_sqlx(SqliteQueryBuilder);
-    Ok(sqlx::query_scalar_with::<Sqlite, bool, _>(&sql, values)
-        .fetch_optional(executor)
-        .await?)
+    Ok(
+        sqlx::query_scalar_with::<Sqlite, bool, _>(AssertSqlSafe(sql), values)
+            .fetch_optional(executor)
+            .await?,
+    )
 }
 
 /// Retrieves a single post by its ID.
@@ -256,9 +260,11 @@ where
         .from(PostIden::Table)
         .and_where(Expr::col(PostIden::Id).eq(id))
         .build_sqlx(SqliteQueryBuilder);
-    Ok(sqlx::query_as_with::<Sqlite, PostInternal, _>(&sql, values)
-        .fetch_optional(executor)
-        .await?)
+    Ok(
+        sqlx::query_as_with::<Sqlite, PostInternal, _>(AssertSqlSafe(sql), values)
+            .fetch_optional(executor)
+            .await?,
+    )
 }
 
 /// Saves a post's data into the database.
@@ -377,7 +383,9 @@ where
         )
         .build_sqlx(SqliteQueryBuilder);
 
-    sqlx::query_with(&sql, values).execute(&mut *conn).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(&mut *conn)
+        .await?;
 
     if post.favorited {
         mark_post_favorited(&mut *conn, post.id).await?;
@@ -405,7 +413,9 @@ where
         .values([(FavoritedPostIden::Unfavorited, true.into())])
         .and_where(Expr::col(FavoritedPostIden::Id).eq(id))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -435,7 +445,9 @@ where
                 .to_owned(),
         )
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(executor).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(executor)
+        .await?;
     Ok(())
 }
 
@@ -458,9 +470,11 @@ where
         .from(FavoritedPostIden::Table)
         .and_where(Expr::col(FavoritedPostIden::Unfavorited).eq(false))
         .build_sqlx(SqliteQueryBuilder);
-    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
-        .fetch_all(executor)
-        .await?)
+    Ok(
+        sqlx::query_scalar_with::<Sqlite, i64, _>(AssertSqlSafe(sql), values)
+            .fetch_all(executor)
+            .await?,
+    )
 }
 
 /// Retrieves the IDs of posts that are invalid.
@@ -508,9 +522,11 @@ where
     }
 
     let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
-    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
-        .fetch_all(executor)
-        .await?)
+    Ok(
+        sqlx::query_scalar_with::<Sqlite, i64, _>(AssertSqlSafe(sql), values)
+            .fetch_all(executor)
+            .await?,
+    )
 }
 
 /// Retrieves the IDs of posts that retweet a given original post.
@@ -532,9 +548,11 @@ where
         .from(PostIden::Table)
         .and_where(Expr::col(PostIden::RetweetedId).eq(id))
         .build_sqlx(SqliteQueryBuilder);
-    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
-        .fetch_all(executor)
-        .await?)
+    Ok(
+        sqlx::query_scalar_with::<Sqlite, i64, _>(AssertSqlSafe(sql), values)
+            .fetch_all(executor)
+            .await?,
+    )
 }
 
 /// Checks if a post has any children (is being retweeted by other posts).
@@ -557,10 +575,12 @@ where
         .and_where(Expr::col(PostIden::RetweetedId).eq(id))
         .limit(1)
         .build_sqlx(SqliteQueryBuilder);
-    Ok(sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
-        .fetch_optional(executor)
-        .await?
-        .is_some())
+    Ok(
+        sqlx::query_scalar_with::<Sqlite, i64, _>(AssertSqlSafe(sql), values)
+            .fetch_optional(executor)
+            .await?
+            .is_some(),
+    )
 }
 
 /// Deletes a post and its corresponding entry in `favorited_posts` table from the database.
@@ -602,13 +622,17 @@ where
         .from_table(PostIden::Table)
         .and_where(Expr::col(PostIden::Id).is_in(ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(&mut *conn).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(&mut *conn)
+        .await?;
 
     let (sql, values) = Query::delete()
         .from_table(FavoritedPostIden::Table)
         .and_where(Expr::col(FavoritedPostIden::Id).is_in(ids.iter().cloned()))
         .build_sqlx(SqliteQueryBuilder);
-    sqlx::query_with(&sql, values).execute(&mut *conn).await?;
+    sqlx::query_with(AssertSqlSafe(sql), values)
+        .execute(&mut *conn)
+        .await?;
     Ok(())
 }
 
@@ -732,7 +756,7 @@ where
 
     let (sql, values) = count_query.build_sqlx(SqliteQueryBuilder);
     let mut conn = acquirer.acquire().await?;
-    let total_items: u64 = sqlx::query_scalar_with(&sql, values)
+    let total_items: u64 = sqlx::query_scalar_with(AssertSqlSafe(sql), values)
         .fetch_one(&mut *conn)
         .await?;
 
@@ -748,7 +772,7 @@ where
         .offset((query.page.saturating_sub(1) * query.posts_per_page) as u64);
 
     let (sql, values) = posts_query.build_sqlx(SqliteQueryBuilder);
-    let posts = sqlx::query_as_with::<Sqlite, PostInternal, _>(&sql, values)
+    let posts = sqlx::query_as_with::<Sqlite, PostInternal, _>(AssertSqlSafe(sql), values)
         .fetch_all(&mut *conn)
         .await?;
 
@@ -775,7 +799,7 @@ where
 
     let (sql, values) = posts_query.build_sqlx(SqliteQueryBuilder);
     let mut conn = acquirer.acquire().await?;
-    let ids = sqlx::query_scalar_with::<Sqlite, i64, _>(&sql, values)
+    let ids = sqlx::query_scalar_with::<Sqlite, i64, _>(AssertSqlSafe(sql), values)
         .fetch_all(&mut *conn)
         .await?;
 

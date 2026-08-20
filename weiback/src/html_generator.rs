@@ -35,7 +35,7 @@ lazy_static! {
             .unwrap();
         tera.add_raw_template("posts_static.html", include_str!("../templates/posts_static.html"))
             .unwrap();
-        tera.autoescape_on(Vec::new());
+        tera.autoescape_on(Vec::<&str>::new());
         tera
     };
 }
