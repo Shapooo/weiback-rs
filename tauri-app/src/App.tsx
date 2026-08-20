@@ -38,37 +38,52 @@ const App: React.FC = () => {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false)
   const userConfirmedCloseRef = useRef(false)
 
-  const checkAndInitBackend = useCallback(async () => {
-    setLoading(true)
-    try {
-      let status = await getBackendStatus()
-      if (status.status === 'Uninitialized' || status.status === 'Error') {
-        status = await initBackend()
-      }
+  const [initAttempt, setInitAttempt] = useState(0)
 
-      setBackendStatus(status)
-      if (status.status === 'Running') {
-        if (status.warning) {
-          enqueueSnackbar(`配置文件加载失败，已使用默认配置。错误详情: ${status.warning}`, {
-            variant: 'warning',
-            persist: true,
-          })
-        }
-        useAuthStore.getState().checkLoginState()
+  const handleRetry = useCallback(() => {
+    setInitAttempt(attempt => attempt + 1)
+  }, [])
 
-        // Check for updates silently after backend is ready
-        const release = await checkLatestRelease()
-        if (release) {
-          useUpdateStore.getState().setLatestRelease(release)
-          useUpdateStore.getState().setLastChecked(Date.now())
+  useEffect(() => {
+    let cancelled = false
+    const init = async () => {
+      setLoading(true)
+      try {
+        let status = await getBackendStatus()
+        if (status.status === 'Uninitialized' || status.status === 'Error') {
+          status = await initBackend()
         }
+        if (cancelled) return
+
+        setBackendStatus(status)
+        if (status.status === 'Running') {
+          if (status.warning) {
+            enqueueSnackbar(`配置文件加载失败，已使用默认配置。错误详情: ${status.warning}`, {
+              variant: 'warning',
+              persist: true,
+            })
+          }
+          useAuthStore.getState().checkLoginState()
+
+          // Check for updates silently after backend is ready
+          const release = await checkLatestRelease()
+          if (cancelled) return
+          if (release) {
+            useUpdateStore.getState().setLatestRelease(release)
+            useUpdateStore.getState().setLastChecked(Date.now())
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setBackendStatus({ status: 'Error', message: String(e) })
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-    } catch (e) {
-      setBackendStatus({ status: 'Error', message: String(e) })
-    } finally {
-      setLoading(false)
     }
-  }, [enqueueSnackbar])
+    init()
+    return () => {
+      cancelled = true
+    }
+  }, [initAttempt, enqueueSnackbar])
 
   // Start listening for global task events
   useTaskEvents(backendStatus.status === 'Running')
@@ -107,10 +122,6 @@ const App: React.FC = () => {
     }
   }, [])
 
-  useEffect(() => {
-    checkAndInitBackend()
-  }, [checkAndInitBackend])
-
   if (backendStatus.status !== 'Running') {
     return (
       <Backdrop
@@ -131,7 +142,7 @@ const App: React.FC = () => {
             <Alert
               severity="error"
               action={
-                <Button color="inherit" size="small" onClick={checkAndInitBackend}>
+                <Button color="inherit" size="small" onClick={handleRetry}>
                   重试
                 </Button>
               }

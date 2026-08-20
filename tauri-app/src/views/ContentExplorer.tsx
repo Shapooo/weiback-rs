@@ -117,7 +117,8 @@ const ContentExplorerPage: React.FC = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false)
 
   // State for loading indicators
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const handleJump = () => {
     const pageNum = parseInt(jumpPage, 10)
@@ -147,34 +148,37 @@ const ContentExplorerPage: React.FC = () => {
     setHoveredPostInfo(null)
   }, [])
 
-  const fetchPosts = useCallback(
-    async (currentPage: number, currentFilters: PostFilter) => {
-      setLoading(true)
-      try {
-        const query = buildQueryFromFilters(currentFilters, currentPage, false)
-
-        const result = await queryLocalPosts(query)
-        setPostInfos(result.posts)
-        setTotalPages(Math.ceil(result.total_items / POSTS_PER_PAGE))
-      } catch (e) {
-        enqueueSnackbar(`查询帖子失败: ${e}`, { variant: 'error' })
-        setPostInfos([])
-        setTotalPages(0)
-      } finally {
-        setLoading(false)
-      }
-    },
-    [enqueueSnackbar]
-  )
-
   const handlePostDeleted = useCallback(() => {
-    fetchPosts(page, appliedFilters)
-  }, [fetchPosts, page, appliedFilters])
+    setRefreshKey(key => key + 1)
+  }, [])
 
   // Fetch posts when page or applied filters change
   useEffect(() => {
-    fetchPosts(page, appliedFilters)
-  }, [page, appliedFilters, fetchPosts])
+    let cancelled = false
+    const fetchData = async () => {
+      setLoading(true)
+      try {
+        const query = buildQueryFromFilters(appliedFilters, page, false)
+
+        const result = await queryLocalPosts(query)
+        if (cancelled) return
+        setPostInfos(result.posts)
+        setTotalPages(Math.ceil(result.total_items / POSTS_PER_PAGE))
+      } catch (e) {
+        if (!cancelled) {
+          enqueueSnackbar(`查询帖子失败: ${e}`, { variant: 'error' })
+          setPostInfos([])
+          setTotalPages(0)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchData()
+    return () => {
+      cancelled = true
+    }
+  }, [page, appliedFilters, refreshKey, enqueueSnackbar])
 
   const handleSearch = () => {
     setPage(1) // Reset to first page on new search

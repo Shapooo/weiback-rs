@@ -24,6 +24,16 @@ interface UserSelectorProps {
   fullWidth?: boolean
 }
 
+const valueToInput = (v: User | string | null): string => {
+  if (typeof v === 'object' && v) {
+    return v.screen_name
+  }
+  if (typeof v === 'string') {
+    return v
+  }
+  return ''
+}
+
 const UserSelector: React.FC<UserSelectorProps> = ({
   value,
   onChange,
@@ -33,23 +43,17 @@ const UserSelector: React.FC<UserSelectorProps> = ({
   fullWidth = true,
 }) => {
   const [searchMode, setSearchMode] = useState<SearchMode>('username')
-  const [inputValue, setInputValue] = useState('')
+  const [prevValue, setPrevValue] = useState(value)
+  const [inputValue, setInputValue] = useState(() => valueToInput(value))
   const [options, setOptions] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const timeoutIdRef = useRef<number | undefined>(undefined)
 
   // When the controlled value changes, update the internal input value
-  useEffect(() => {
-    if (value) {
-      if (typeof value === 'object') {
-        setInputValue(value.screen_name)
-      } else {
-        setInputValue(value)
-      }
-    } else {
-      setInputValue('')
-    }
-  }, [value])
+  if (prevValue !== value) {
+    setPrevValue(value)
+    setInputValue(valueToInput(value))
+  }
 
   const fetchUsers = useCallback((prefix: string) => {
     if (timeoutIdRef.current) {
@@ -81,19 +85,28 @@ const UserSelector: React.FC<UserSelectorProps> = ({
     }
   }, [])
 
-  useEffect(() => {
-    if (searchMode === 'username' && inputValue) {
-      fetchUsers(inputValue)
-    } else {
-      setOptions([])
-    }
-  }, [inputValue, searchMode, fetchUsers])
-
   const handleModeChange = (event: SelectChangeEvent<SearchMode>) => {
     // Used SelectChangeEvent
     const newMode = event.target.value as SearchMode
     setSearchMode(newMode)
     onChange(null) // Clear value when changing mode
+    if (newMode === 'username') {
+      fetchUsers(inputValue)
+    } else {
+      setOptions([])
+    }
+  }
+
+  const handleInputChange = (
+    _event: React.SyntheticEvent<Element, Event>,
+    newInputValue: string
+  ) => {
+    setInputValue(newInputValue)
+    if (searchMode === 'username') {
+      fetchUsers(newInputValue)
+    } else {
+      setOptions([])
+    }
   }
 
   return (
@@ -105,9 +118,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
         onChange(newValue)
       }}
       inputValue={inputValue}
-      onInputChange={(_event, newInputValue) => {
-        setInputValue(newInputValue)
-      }}
+      onInputChange={handleInputChange}
       options={options}
       loading={loading}
       getOptionLabel={option => {
