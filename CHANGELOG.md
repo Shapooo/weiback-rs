@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.2-beta] - 2026-08-20
+
+### Added
+- **项目 Logo 与应用图标**: 新增项目专属 logo，并将应用图标更新为自定义 logo
+
+### Changed
+- **后端依赖升级**: 升级 `sqlx` 至 0.9、`sea-query` 至 1.0，适配新 API（内部查询改用 `AssertSqlSafe` 包装、`sea-query-binder` 更名、补充 `ExprTrait` 导入等）
+- **前端依赖升级**: 升级 MUI、Tauri 插件、React、Router、Vite、ESLint 等依赖组件版本
+
+### Fixed
+- 用户登录界面登录状态更新不及时的问题
+- `react-hooks/set-state-in-effect` lint 报错
+- 根据 clippy 建议简化代码（去除多余的借用、简化过滤逻辑）
+
 ## [v0.3.1] - 2026-04-06
 
 ### Changed
